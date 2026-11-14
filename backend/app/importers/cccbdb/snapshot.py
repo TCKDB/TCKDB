@@ -1,7 +1,7 @@
 """CCCBDB snapshot archive.
 
 Fetches an explicit allowlist of CCCBDB pages, saves the raw HTML by
-content hash, runs the Phase 1 parser, optionally runs the Phase 2a
+content hash, runs the parser, optionally runs the
 builder, and writes a deterministic ``manifest.json``. The archive is
 the durable source of truth for CCCBDB-derived data: the website can
 change or disappear and TCKDB payloads can still be regenerated from
@@ -154,7 +154,7 @@ class HttpFetcher:
 class RecordResult:
     """One target's per-record outcome, written to the manifest.
 
-    Phase 5a additions (species_all_data only; defaults are safe for
+    Fields set for species_all_data only (defaults are safe for
     every other page kind):
 
     * ``final_url``: URL the response was served from after redirects.
@@ -448,7 +448,7 @@ def _snapshot_one(
     result.cache_hit = cache_hit
 
     # ----- Classification gate (species_all_data only) -----------------
-    # The direct-CAS resolver path (Phase 5a) has known silent-failure
+    # The direct-CAS resolver path has known silent-failure
     # modes — most importantly, ``alldata2x.asp?casno=...`` sometimes
     # 302s to the formula-entry form, returning HTTP 200 with HTML
     # that *looks* fine until you read it. We refuse to save such
@@ -534,8 +534,8 @@ def _snapshot_one(
 
     # --- Build (optional) ----------------------------------------------
     # Builders are species-page-specific. Cross-species property
-    # tables stop at parsed JSON for now — molecular_property_observation
-    # is still a schema gap (see docs/specs/cccbdb_importer.md §7 Gap 1).
+    # tables stop at parsed JSON here; their payloads come from the
+    # property-table builder.
     # Molecule-catalog snapshots are identity universe only and never
     # produce TCKDB upload payloads.
     if (

@@ -96,7 +96,7 @@ def reaction_kinetics(
     ``reaction_entry.id`` or a public ref starting with ``rxe_``. A
     ``chem_reaction.id`` (or any other prefix) returns 422 / 404.
     Provenance keys are always present; TS-chain fields are populated
-    only for TS-backed records (Phase 2.2). Default sort is review
+    only for TS-backed records. Default sort is review
     status, then newest, then id (temperature coverage and evidence are
     reported per record, not ranked). ``sort=`` is rejected (v0). See ``docs/specs/browse_order.md``
     §Endpoint 3 and ``docs/specs/public_identifier_policy.md``.

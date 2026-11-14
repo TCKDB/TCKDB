@@ -1,6 +1,6 @@
 """Allowlisted CCCBDB URLs for the snapshot archive.
 
-The Phase 0 spec (``backend/docs/specs/cccbdb_importer.md``) restricts
+The spec (``backend/docs/specs/cccbdb_importer.md``) restricts
 the importer to an explicit allowlist. No discovered link is followed,
 no formula is auto-fetched, and no rate-limit-busting expansion is
 performed by the snapshot command.
@@ -11,7 +11,7 @@ URL contract
 CCCBDB does **not** expose stable per-species GET URLs for
 experimental data. The single-molecule data flow (``exp1x.asp``) is a
 POST form whose results are served via server-side session state, not
-a query string. Empirical confirmation (May 2026):
+a query string. Observed behaviour:
 
 * ``exp1x.asp?formula=H2O`` — returns the form page, not the data.
 * ``exp1x.asp?casno=7732185`` — same; Cloudflare emits a 1015 for
@@ -25,17 +25,16 @@ passed, to avoid tripping the upstream rate limiter again.
 Reaching real per-species data requires one of:
 
 1. A session-aware fetcher (POST the formula form, follow cookies to
-   the resulting data page). Out of scope for Phase 2b's polite
-   single-GET runner.
+   the resulting data page). Out of scope for the polite
+   single-GET snapshot runner.
 2. Cross-species property tables such as ``xp1x.asp?prop=1`` (enthalpy
    of formation for all species). These are stable GET URLs but
-   represent a *different* page kind that the current Phase 1
+   represent a *different* page kind that the
    experimental-species parser does not handle.
 
 Tests use the bundled hand-authored fixtures via ``FixtureFetcher`` and
 never touch these URLs. Extending the list to the full pilot set
-(~14 species) is intentional future work tied to fixing the URL
-strategy above.
+is tied to fixing the URL strategy above.
 """
 
 from __future__ import annotations
@@ -59,7 +58,7 @@ class CrawlTarget:
         (``"h2"``, ``"h2o"``, ``"benzene"``). Must be filesystem-safe.
     :param source_url: Exact URL the snapshot will fetch.
     :param page_kind: CCCBDB page family. Only
-        ``"experimental_species"`` is supported in Phase 2b.
+        ``"experimental_species"`` is supported.
     :param is_validated_url: ``True`` only when the URL is known to
         resolve to per-species data without session state. CCCBDB's
         ``exp1x.asp`` family does *not* — see module docstring for
@@ -207,17 +206,14 @@ EXPERIMENTAL_PROPERTIES_PILOT: tuple[CrawlTarget, ...] = (
 )
 
 
-# Per-species pages via direct CAS URLs. The live resolver diagnostic
-# (Phase 5a) found ``alldata2x.asp?casno=<digits>`` returns
-# ``molecule_data_page`` for 4 of 5 pilot molecules — promising
-# enough to be the current per-species path, but the snapshot runner
-# *must* gate on the classifier verdict because the failure mode for
-# the 5th molecule is a silent redirect to the formula-entry form.
+# Per-species pages via direct CAS URLs. ``alldata2x.asp?casno=<digits>``
+# can return ``molecule_data_page`` and is the current per-species path,
+# but the snapshot runner *must* gate on the classifier verdict because
+# the same URL can silently redirect to the formula-entry form.
 #
-# Form POST resolvers stay deferred: the live diagnostic showed
-# ``exp1x_form_post`` triggering ``rate_limit_or_error_page`` for all
-# 5 pilot molecules, presumably because Cloudflare treats programmatic
-# form POSTs as bot traffic.
+# Form POST resolvers are not used: ``exp1x_form_post`` triggered
+# ``rate_limit_or_error_page`` in the live diagnostic, presumably
+# because Cloudflare treats programmatic form POSTs as bot traffic.
 SPECIES_ALLDATA_CAS_PILOT: tuple[CrawlTarget, ...] = (
     CrawlTarget(
         species_key="h2o",

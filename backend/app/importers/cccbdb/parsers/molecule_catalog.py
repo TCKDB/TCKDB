@@ -7,7 +7,7 @@ CRITICAL POLICY (also documented in
   preserved as ``raw_href`` for audit/debugging but are NEVER trusted
   as data-page URLs.
 * ``CCCBDBCatalogEntry.trusted_property_url`` and
-  ``.trusted_species_url`` are always ``None`` in Phase 3b. A future
+  ``.trusted_species_url`` are always ``None``. A future
   search/form resolver may populate them; this parser does not.
 * The catalog must never be joined to property-table rows by formula
   alone as a hard identity match. Use
@@ -158,9 +158,8 @@ class _CatalogTableExtractor(HTMLParser):
         occasionally times out mid-response — the server emits the
         full menu, then dumps ~1800 ``<tr>`` rows of the catalog
         table, then bails with an "ASP 0113 Script timed out" page
-        WITHOUT closing the data ``<table>``. With the table-end
-        path being the only place :attr:`tables` was previously
-        appended to, the entire catalog table was silently dropped.
+        WITHOUT closing the data ``<table>``. Without the flush below,
+        that table would never be appended to :attr:`tables`.
 
         This close-time flush recovers from that truncation: any
         in-flight cell / row / table is finalized into

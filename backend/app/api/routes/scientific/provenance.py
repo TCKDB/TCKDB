@@ -55,8 +55,8 @@ def reaction_full(
     Path handle accepts an integer ``reaction_entry.id`` or a public ref
     starting with ``rxe_``. Joins species, kinetics, transition states,
     calculations, and review summary into one document. Top-level filters
-    apply per joined sub-array (Phase 2.1). Non-TS-backed kinetics surface
-    in ``kinetics`` with null TS-chain provenance fields (Phase 2.2).
+    apply per joined sub-array. Non-TS-backed kinetics surface
+    in ``kinetics`` with null TS-chain provenance fields.
     Sub-arrays sort deterministically; client-supplied ``sort=`` is
     rejected. See ``docs/specs/browse_order.md`` §Endpoint 5 and
     ``docs/specs/public_identifier_policy.md``.

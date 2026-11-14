@@ -1,7 +1,7 @@
 """Catalog-based identity-enrichment candidates for CCCBDB property rows.
 
 This module is **candidate-proposal**, not identity resolution. Given
-one row from a Phase 3a property table and the Phase 3b molecule
+one row from a property table and the molecule
 catalog, :func:`propose_catalog_matches` returns a list of
 :class:`CCCBDBCatalogMatch` records — every plausible catalog entry
 that could correspond to that row, each with a confidence score and

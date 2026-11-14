@@ -161,7 +161,7 @@ def _migrate_password_hash(session: Session, user: AppUser, plain: str) -> None:
 
     Login is the only moment the plaintext is available, so it is the
     only moment a stored hash can be upgraded — users migrate off the
-    legacy PBKDF2 scheme (or off stale scrypt parameters) as they come
+    PBKDF2 scheme (or off stale scrypt parameters) as they come
     back, with no password reset and no bulk job.
 
     Call this **only after a successful verification**. A failure here
@@ -330,7 +330,7 @@ def logout(
     # The cookie is cleared on the Response that is returned. FastAPI merges
     # an injected ``response`` stub's headers only when the route returns a
     # non-Response value, so clearing the stub and returning a fresh
-    # ``Response`` sent no ``Set-Cookie`` at all (#628).
+    # ``Response`` sent no ``Set-Cookie`` at all.
     cleared = Response(status_code=204)
     _clear_session_cookie(cleared)
     return cleared

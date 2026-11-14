@@ -1,9 +1,9 @@
-# CCCBDB importer (Phase 1)
+# CCCBDB importer
 
-Fixture-driven parser prototype for NIST CCCBDB experimental species
-pages.
+Parser, payload builders, snapshot archive and DB import workflow for
+NIST CCCBDB experimental data.
 
-## What Phase 1 does
+## Species-page parser
 
 - Parses sanitized HTML fixtures of CCCBDB experimental species pages
   with the Python stdlib `html.parser`.
@@ -20,19 +20,18 @@ pages.
 - Tolerates missing optional sections by emitting structured
   `warnings` instead of raising.
 
-## What Phase 1 deliberately does **not** do
+## Species-page parser limits
 
-- No database writes. No upload routes. No TCKDB workflow integration.
+- The parser itself performs no database writes.
 - No live CCCBDB crawling in tests. Live smoke tests exist but are
   gated behind `TCKDB_CCCBDB_LIVE_TESTS=1` and are not part of CI.
 - No RDKit-based structural canonicalization. SMILES / InChI strings
-  are whitespace-stripped only; structural normalization is a Phase 2
-  builder concern.
+  are whitespace-stripped only; structural normalization is not done in the parser.
 - No mode-level experimental frequency persistence model. Mode-level
   frequencies are produced by the parser but their final destination
   depends on Schema Gap 2 in
   `backend/docs/specs/cccbdb_importer.md`.
-- No computed method/basis page parsing — Phase 3.
+- No computed method/basis page parsing.
 
 ## How to run the tests
 
@@ -71,9 +70,9 @@ local parser-drift checking, not for reproducible CI validation.
 4. **Reproducibility.** A fixture's SHA256 is a stable identity. A
    live page's identity drifts with NIST's release schedule.
 
-## Phase 2a — payload builders
+## Payload builders
 
-Phase 2a adds [builders/](builders/) that map Phase 1 records onto
+[builders/](builders/) map parsed species records onto
 existing TCKDB upload schemas. Builders are pure: no DB writes, no
 network, no ORM dependencies.
 
@@ -95,7 +94,7 @@ result = build_experimental_species_payload(record)
 
 ### What maps to first-class TCKDB fields
 
-| Phase 1 value             | First-class TCKDB field                            |
+| Parsed value              | First-class TCKDB field                            |
 |---------------------------|----------------------------------------------------|
 | `identity.smiles`         | `SpeciesEntryIdentityPayload.smiles`               |
 | `identity.charge`         | `SpeciesEntryIdentityPayload.charge`               |
@@ -116,7 +115,7 @@ Every product payload is stamped with `scientific_origin = "experimental"`.
 
 ### What remains as metadata/warnings
 
-These Phase 1 values have no clean first-class home on the existing
+These parsed values have no clean first-class home on the existing
 upload schemas. The builder preserves each in
 `result.external_source.unparsed` and emits a corresponding
 `result.warnings` entry pointing at the side-channel key:
@@ -127,7 +126,7 @@ upload schemas. The builder preserves each in
   `calc_freq_mode`: that table is calculation-scoped, and creating a
   placeholder `Calculation` row just to host experimental data would
   violate the spec's "no fake calculations" rule.
-- `statmech.rotational_constants` — the A/B/C values now map to the
+- `statmech.rotational_constants` — the A/B/C values map to the
   first-class `statmech.rotational_constant_{a,b,c}_cm1` columns
   (converted GHz→cm⁻¹); only the raw GHz values, units, and per-value
   reference remain in the side-channel (no columns for those).
@@ -136,16 +135,13 @@ upload schemas. The builder preserves each in
 Per-value reference labels (`Gurvich`, `TRC`, `Pedley`, …) also have
 no per-value home on `ThermoUploadRequest`/`ThermoPointCreate`, so
 they are kept in `result.external_source.per_value_references`,
-keyed by the Phase 1 `property_kind` token.
+keyed by the parsed `property_kind` token.
 
-### Why no DB writes yet
+### Builders do not write to the database
 
-The schema gaps above need to be closed before some imported values
-have first-class destinations. Until they are, the builders produce
-*validated* dicts for the parts that fit cleanly and *structured
-side-channel* data for the rest. A future upload-workflow step can
-consume the dicts; the side-channel data informs the schema-gap
-migrations.
+The builders produce *validated* dicts for the parts that fit cleanly
+and *structured side-channel* data for the rest; persistence is the DB
+import workflow's job.
 
 ### How to run builder tests
 
@@ -159,7 +155,7 @@ the real `ThermoUploadRequest`, `StatmechUploadRequest`, and
 upload schemas ever drift away from what the importer produces,
 those tests fail loudly.
 
-## Phase 2b — snapshot archive
+## Snapshot archive
 
 The hand-authored fixtures under [fixtures/](fixtures/) are great for
 unit tests but they are *our* tables, not NIST's. The
@@ -174,14 +170,14 @@ CCCBDB page  ─→  raw_html/*.html    ←── content-addressed by SHA256;
                                         the immutable artifact NIST
                                         actually served us.
 
-raw_html  ─→  parsed/*.json         ←── Phase 1 parser output;
+raw_html  ─→  parsed/*.json         ←── parser output;
                                         regeneratable from raw_html.
 
-parsed    ─→  payloads/*.json       ←── Phase 2a builder output;
+parsed    ─→  payloads/*.json       ←── builder output;
                                         regeneratable from parsed.
 
-payloads  ─→  TCKDB DB rows         ←── Phase 3+ upload workflow
-                                        (does not exist yet).
+payloads  ─→  TCKDB DB rows         ←── DB import workflow
+                                        (see below).
 ```
 
 Each downstream artifact is **regeneratable** from the previous one.
@@ -229,8 +225,8 @@ conda run -n tckdb_env python -m scripts.cccbdb_snapshot \
     --write-payloads
 ```
 
-The runner re-hashes the cached HTML, re-runs the Phase 1 parser and
-Phase 2a builder, and rewrites `parsed/` and `payloads/` (and the
+The runner re-hashes the cached HTML, re-runs the parser and
+builder, and rewrites `parsed/` and `payloads/` (and the
 manifest) with the latest parser/builder versions.
 
 ### Manifest shape
@@ -280,18 +276,17 @@ unless ``--allow-unverified-urls`` is passed, returning exit code 2
 with a precise error listing each offending target. Tests with
 injected ``FixtureFetcher`` bypass the guard.
 
-The ``experimental-properties`` pilot (Phase 3a, below) sidesteps this
+The ``experimental-properties`` pilot (below) sidesteps this
 problem entirely by using cross-species flat-table URLs that don't
 need session state, so its targets are marked
 ``is_validated_url=True`` and run unguarded.
 
-## Phase 3a — cross-species property tables
+## Cross-species property tables
 
 [crawl_plan.py](crawl_plan.py) exposes a second pilot,
 ``experimental-properties``, that targets CCCBDB's flat property-table
 pages (one URL = one wide table = many species rows for one
-property). These URLs are empirically verified single-GET resources
-(WebFetch survey, May 2026):
+property). These URLs are empirically verified single-GET resources:
 
 | URL | property_kind | Units | Columns |
 |---|---|---|---|
@@ -334,25 +329,21 @@ components, ωexe / Be / De / αe for diatomics, the DOI column on
 and ``.reference`` so downstream code can lift them later without
 re-fetching.
 
-### Why property-table payloads aren't built yet
+### Property-table payload destination
 
-Phase 2a payload builders target per-species `Thermo` / `Statmech` /
-`Geometry` upload schemas. Cross-species property rows need a
-different upload destination — a ``molecular_property_observation``
-table that's still a Schema Gap (see [Phase 0 spec §7](../../../docs/specs/cccbdb_importer.md#schema-gaps)).
-Until that lands, the property-table snapshot **stops at parsed JSON**:
-running with ``--write-payloads`` skips builder generation for these
-targets and records a ``builder_warnings`` entry pointing at the gap.
+Cross-species property rows target `molecular_property_observation`
+rather than the per-species `Thermo` / `Statmech` / `Geometry` upload
+schemas. The property-table snapshot **stops at parsed JSON**; payloads
+come from the property-table builder (below).
 
-### Why session-aware POST is deferred
+### Why property tables avoid session-aware POST
 
 Reaching CCCBDB's per-species data would require a session-aware
 fetcher (POST the formula form, follow `Set-Cookie` headers, GET the
 data page). That's significant work and the property tables already
 give us most of the high-value experimental data we need without it.
-Per-species POST fetching is intentionally deferred to a later phase.
 
-## Phase 3b — molecule catalog (identity universe)
+## Molecule catalog (identity universe)
 
 `inchix.asp` lists every molecule CCCBDB knows about with
 formula / name / InChI / InChIKey / SMILES / CAS identifiers. It is
@@ -381,13 +372,12 @@ entries are not TCKDB upload payloads. Manifest records
 but the importer never trusts that href as a data URL.
 
 - `trusted_property_url` and `trusted_species_url` on
-  `CCCBDBCatalogEntry` are **always `None`** in Phase 3b. They are
-  reserved for a future search/form resolver.
-- The Phase 2b confirmation that `exp1x.asp?casno=…` URL patterns
-  don't resolve still stands. Constructing a property URL from a
+  `CCCBDBCatalogEntry` are **always `None`**. They are
+  reserved for a search/form resolver.
+- `exp1x.asp?casno=…` URL patterns don't resolve. Constructing a property URL from a
   catalog href would just produce another Cloudflare 1015.
 - Actual data retrieval continues to use either (a) the cross-species
-  property-table URLs from Phase 3a, or (b) a future search/form
+  property-table URLs, or (b) a search/form
   resolver (placeholder in `parsers/molecule_catalog.py` —
   `resolve_species_data_page_from_search` deliberately raises
   `NotImplementedError`).
@@ -433,10 +423,10 @@ Catalog entries are identifiers, not science. They have no
 identity-resolution decisions for *other* records that do produce
 upload payloads.
 
-## Phase 4a — `molecular_property_observation` + property-table builder
+## `molecular_property_observation` + property-table builder
 
-Phase 4a closes CCCBDB **Schema Gap 1**. The new
-`molecular_property_observation` table is the first-class home for
+`molecular_property_observation` closes CCCBDB **Schema Gap 1**. The
+table is the first-class home for
 scalar / vector / tensor molecular properties — dipoles, IE/EA/PA,
 HOMO/LUMO, atomization energies, enthalpies of formation,
 spectroscopic constants, etc. These do **not** belong on
@@ -469,7 +459,7 @@ Key design choices:
 
 ### Property-kind mapping
 
-| Phase 3a `property_kind` | `MolecularPropertyKind` |
+| Property-table `property_kind` | `MolecularPropertyKind` |
 |---|---|
 | `hf_0` | `enthalpy_of_formation` ⚠ NOT `atomization_energy` |
 | `hf_0_with_uncertainty` | `enthalpy_of_formation` |
@@ -485,7 +475,7 @@ atomization energy would be a real scientific bug. Unknown
 ### Identity enrichment policy
 
 `build_molecular_property_payloads_from_property_table(table, catalog=...)`
-calls the Phase 3b enrichment helper. Identity gets surfaced *only*
+calls the catalog enrichment helper. Identity gets surfaced *only*
 when the catalog produces an unambiguous match:
 
 - **Unambiguous match**: identity hint (formula/name/InChI/InChIKey/
@@ -500,26 +490,22 @@ when the catalog produces an unambiguous match:
 - **No match**: identity stays at `formula` / `name` in the raw
   payload; identity hint is `None`.
 
-`raw_href` from catalog entries is **never** used. Phase 3b's policy
+`raw_href` from catalog entries is **never** used. The catalog-only policy
 applies all the way through.
 
-### Why no upload route yet
+### Builder output
 
-Phase 4a ships the schema, the Pydantic model, and the
-property-table → payload builder. It does **not** add an upload
-route or persist anything. The builder returns
+The builder does not persist anything. It returns
 `CCCBDBMolecularPropertyBuildResult.payload` (a
 `MolecularPropertyObservationCreate` ready for the workflow layer)
-plus identity hints and warnings; an upload service is a separate
-Phase 4b decision.
+plus identity hints and warnings.
 
-## Phase 5a — direct-CAS per-species snapshots
+## Direct-CAS per-species snapshots
 
-The resolver diagnostic (previous section) found that
-`alldata2x.asp?casno=<digits>` returns a real `molecule_data_page`
-for **4 of 5** pilot molecules, while form-POST strategies all hit
-Cloudflare. The Phase 5a snapshot mode exploits that finding —
-carefully.
+The resolver diagnostic found that
+`alldata2x.asp?casno=<digits>` can return a real `molecule_data_page`,
+while form-POST strategies hit Cloudflare. The snapshot mode exploits
+that finding — carefully.
 
 Run with:
 
@@ -576,34 +562,32 @@ directions.
 
 ### Parser scope
 
-The Phase 5a parser is **triage-only**: title, ordered section
+The species-page parser is **triage-only**: title, ordered section
 headings, and any InChI / InChIKey / SMILES / formula / molecule
 name the regex sniffs can find in the body text. Full thermochemistry
-/ geometry / vibrational extraction is deferred. The durable artifact
+/ geometry / vibrational extraction is not done. The durable artifact
 is the raw HTML; the parsed JSON is a fast-lookup convenience and a
 record of what the parser could see.
 
 ### Policy contract
 
-- `inchix.asp` hyperlinks remain catalog-only and untrusted
-  (Phase 3b).
-- Session-aware form POST stays deferred: the live diagnostic showed
-  `exp1x_form_post` triggering rate-limit responses on every pilot
-  molecule.
+- `inchix.asp` hyperlinks remain catalog-only and untrusted.
+- Session-aware form POST is not used in this mode: `exp1x_form_post`
+  triggered rate-limit responses in the live diagnostic.
 - The direct-CAS URL is only used when an explicit `cas_number` is
   supplied on the `CrawlTarget`.
 - Catalog `raw_href` values are never used to construct
   `species_all_data` URLs.
 - `species_all_data` snapshots are raw archival inputs, not TCKDB
   upload payloads. No `MolecularPropertyObservationCreate` (or
-  any other upload schema) is built from them in this phase.
+  any other upload schema) is built from them.
 
 ## Browser-assisted species-page import
 
 Scripted CCCBDB fetches don't reliably reach per-species data:
 
 - `alldata2x.asp?casno=...` may serve the formula-entry form
-  (the bug the Phase 5b classifier hardening protects against).
+  (the classifier gate rejects these).
 - `exp1x.asp` / `alldata1x.asp` are themselves the form pages.
 - `getformx.asp` is the real form workflow but Python `requests`
   triggers Cloudflare rate-limit / bot-detection behavior.
@@ -672,7 +656,7 @@ already-rendered HTML keeps the archive's classifier gate +
 provenance discipline while sidestepping the request layer
 entirely.
 
-### Classifier-hardening note (Phase 5b)
+### Classifier rules
 
 CCCBDB's formula-entry page carries a deceptively-similar title:
 
@@ -682,22 +666,21 @@ CCCBDB's formula-entry page carries a deceptively-similar title:
 <FORM ACTION = "getformx.asp" METHOD="post">
 ```
 
-An earlier Phase 5a classifier accepted this page as
-`molecule_data_page` because the heading + the bare word "CAS"
-appearing in menu/form labels was enough. That bug is fixed:
+The classifier does not accept this page as `molecule_data_page`,
+even though it carries the heading and the bare word "CAS" in
+menu/form labels:
 
 - Formula-entry signals (any of `select a species by entering a
   chemical formula`, `getformx.asp`, `name="formula"`, `rules for
   chemical formula`) **outrank** molecule-data signals.
-- `molecule_data_page` now requires evidence of a **populated
+- `molecule_data_page` requires evidence of a **populated
   identifier value** in the body — a real `InChI=…` string, a real
   InChIKey (14-10-1 caps), or a real CAS-number pattern
-  (`\d{2,7}-\d{2}-\d`). The bare label "CAS" no longer fires.
+  (`\d{2,7}-\d{2}-\d`). The bare label "CAS" does not count.
 
 #### Finding bad archived pages
 
-If a snapshot was run before the hardening landed, contaminated
-`raw_html/` pages may exist. Manual sweep:
+Contaminated `raw_html/` pages may exist in older archives. Manual sweep:
 
 ```bash
 # Find raw species_alldata pages that are actually formula-entry forms
@@ -710,7 +693,7 @@ grep -RIl "getformx.asp" \
 ```
 
 Any match is a bad archive — delete or move out, then re-run the
-snapshot. The fixed classifier will route it to `rejected_html/`
+snapshot. The classifier routes it to `rejected_html/`
 (or drop it entirely without `--save-rejected-html`).
 
 
@@ -718,7 +701,7 @@ snapshot. The fixed classifier will route it to `rejected_html/`
 
 CCCBDB's per-species data flow is not what its URL patterns suggest:
 
-- `inchix.asp` hyperlinks are catalog metadata only — Phase 3b
+- `inchix.asp` hyperlinks are catalog metadata only — the catalog parser
   preserves them as `raw_href` for audit and forbids using them as
   data URLs.
 - `alldata2x.asp?casno=…` URLs look like direct per-species GETs but
@@ -779,10 +762,10 @@ whose code is whose. The archive lives next to the repo, not inside it.
 
 ## Dry-run payload exporter
 
-The Phase 5c façade (`PropertyTableFetcher` + `PropertyTableParser` +
+The property-table façade (`PropertyTableFetcher` + `PropertyTableParser` +
 `PropertyTableIngestor`) gives you a path from raw HTML to
 `MolecularPropertyObservationCreate` payloads, but it doesn't write
-them anywhere. **Phase 5d adds a dry-run exporter** that runs the
+them anywhere. The **dry-run exporter** runs the
 pipeline end-to-end and dumps the payloads as JSON for offline
 inspection:
 
@@ -830,9 +813,8 @@ kinds need attention.
 
 The dry-run **never writes to TCKDB**. Every emitted payload is a
 `MolecularPropertyObservationCreate` dict that has round-tripped
-through `model_dump(mode="json")` → `model_validate(...)`. A future
-upload service can consume these dicts; persistence is a separate
-concern. If a row's payload fails validation, the dry-run records
+through `model_dump(mode="json")` → `model_validate(...)`. The DB import workflow
+consumes these dicts; persistence is a separate concern. If a row's payload fails validation, the dry-run records
 the row in `invalid_payload_count` + a warning and continues — it
 never crashes the whole run.
 
@@ -898,11 +880,9 @@ jq -r '.warnings[]' \
 
 ## Class-shaped property-table ingestion façade
 
-Phase 3a shipped the cross-species property-table parser. Phase 4a
-shipped the `molecular_property_observation` schema + the row → upload
-builder. Phase 5c adds a small **façade module** that exposes the
-three steps as composable classes — easier to plug into a pipeline,
-easier to swap one step in a test:
+A small **façade module** exposes fetch, parse and ingest as
+composable classes — easier to plug into a pipeline, easier to swap
+one step in a test:
 
 ```python
 from app.importers.cccbdb.property_table_ingest import (
@@ -922,7 +902,7 @@ from app.importers.cccbdb.property_table_ingest import (
 
 ### Property-kind inventory
 
-The allowlist now covers **6 cross-species experimental tables**:
+The allowlist covers these cross-species experimental tables:
 
 | `property_kind` | URL | Units | `MolecularPropertyKind` | `workflow_ready` |
 |---|---|---|---|---|
@@ -930,8 +910,8 @@ The allowlist now covers **6 cross-species experimental tables**:
 | `hf_0_with_uncertainty` | `goodlistx.asp` | kJ/mol (+ unc) | `enthalpy_of_formation` | true |
 | `dipole` | `diplistx.asp` | Debye | `dipole_moment` | true |
 | `diatomic_spectroscopic` | `expdiatomicsx.asp` | cm⁻¹ | `spectroscopic_constant` | true |
-| `polarizability_iso` | `pollistx.asp` *(live-verified in 5d)* | Bohr³ | `polarizability_iso` | true |
-| `quadrupole_moment` | `quadlistx.asp` *(new in 5e)* | Debye·Å | `quadrupole_moment` | **false** (parsed-only) |
+| `polarizability_iso` | `pollistx.asp` | Bohr³ | `polarizability_iso` | true |
+| `quadrupole_moment` | `quadlistx.asp` | Debye·Å | `quadrupole_moment` | **false** (parsed-only) |
 
 #### Parsed-only (tensor-only) targets
 
@@ -985,9 +965,8 @@ Verified-flat but not yet configured (future work):
 
 The live `pollistx.asp` page header is
 `Molecule | name | State | Conformation | alpha | squib | commment`
-— the earlier Phase 5c inferred shape (`xx | yy | zz | iso | …`) was
-extrapolated from the `diplistx.asp` sibling and was wrong. The
-configured `value_column` is now `alpha`. If a live fetch reveals a
+— not the `xx | yy | zz | iso | …` shape of the `diplistx.asp`
+sibling. The configured `value_column` is `alpha`. If a live fetch reveals a
 different column header again, update
 [`PROPERTY_CONFIGS["polarizability_iso"]`](parsers/experimental_property_table.py)
 — the parser itself is column-name-driven and doesn't need to change.
@@ -999,19 +978,18 @@ duplicates:
 
 | Target | Source | Coverage | Uncertainty |
 |---|---|---|---|
-| `hf_0` | `hf0kx.asp` | all species CCCBDB has at 0 K (~450 rows) | none |
-| `hf_0_with_uncertainty` | `goodlistx.asp` | "well-known" curated subset (~31 rows) | yes |
+| `hf_0` | `hf0kx.asp` | all species CCCBDB has at 0 K | none |
+| `hf_0_with_uncertainty` | `goodlistx.asp` | "well-known" curated subset | yes |
 
 The goodlist is a curated subset of `hf_0`, not a superset — dropping
 either target loses information. Both feed
 `molecular_property_observation` as `enthalpy_of_formation` payloads;
 the goodlist subset is distinguishable downstream by a non-null
-`scalar_uncertainty`. (This decision is pinned by tests in
+`scalar_uncertainty`. (Pinned by tests in
 [`tests/importers/cccbdb/test_property_payload_dryrun.py::TestHfZeroOutcome`](../../../tests/importers/cccbdb/test_property_payload_dryrun.py).)
 
-A May 2026 cache-lookup bug caused `hf_0` to silently parse against
-the goodlist's HTML (the glob `property_hf_0_*.html` matched
-`property_hf_0_with_uncertainty_*.html`); see the regex anchor in
+The cache lookup matches file names exactly, so `hf_0` does not match
+`property_hf_0_with_uncertainty_*.html`; see the regex anchor in
 [`snapshot._find_cached_raw_html`](snapshot.py).
 
 ## Experimental index discovery (`exp2x.asp` / `exp1x.asp`)
@@ -1052,7 +1030,7 @@ The audit is a diagnostic only; it never fails the run.
 
 ### Interpreting dry-run health
 
-Each target's per-JSON file now carries a `health` field with one of
+Each target's per-JSON file carries a `health` field with one of
 four values:
 
 | `health` | meaning |
@@ -1084,13 +1062,13 @@ A `workflow_ready=False` target with `parsed_row_count > 0` and
 `quarantined`, not `unhealthy`. Only flip `workflow_ready=True`
 when the builder's emitted payloads are scientifically correct.
 
-## Phase 6 — session-aware form-page resolver
+## Session-aware form-page resolver
 
 The flat property-table importer cannot reach CCCBDB's form-only
 experimental pages (`ea1x.asp`, `exprot1x.asp`, `expvibs1x.asp`, …).
 Those pages POST to ``getformx.asp`` and require session cookies
-from the entry-page GET to return data. Phase 6 adds a separate,
-conservative resolver to drive that flow programmatically.
+from the entry-page GET to return data. A separate,
+conservative resolver drives that flow programmatically.
 
 ### Flat property pages vs form-only pages
 
@@ -1204,7 +1182,7 @@ Each catalog row carries a `raw_href` field pointing at the
 The parser preserves these verbatim, but **they are NEVER fetched
 as data URLs**. They exist for human audit. The "trusted" URL
 fields (`trusted_property_url`, `trusted_species_url`) are
-permanently `None` in this phase. The form-queue generator
+always `None`. The form-queue generator
 explicitly refuses to copy `raw_href` into the queue's
 `entry_url` field — the maintainer-supplied URL (e.g.
 `ea1x.asp`) is the only data endpoint the queue points at.
@@ -1212,9 +1190,9 @@ explicitly refuses to copy `raw_href` into the queue's
 ### Queue generation needs parsed JSON
 
 The queue generator (`scripts/cccbdb_generate_form_queue.py`)
-consumes the **parsed JSON**, not the raw HTML. If you ran the
-snapshot before this phase landed, re-run it (or re-parse the
-existing raw HTML) so the parsed JSON has populated `entries`:
+consumes the **parsed JSON**, not the raw HTML. If the parsed JSON
+lacks populated `entries`, re-run the snapshot (or re-parse the
+existing raw HTML):
 
 ```bash
 conda run -n tckdb_env python -c "
@@ -1354,7 +1332,7 @@ both match.
 
 Selecting by formula alone would always grab the first candidate
 when CCCBDB serves multiple isomers — silently picking the wrong
-molecule. Phase 7 enforces this at the matcher layer: even with
+molecule. The matcher layer enforces this: even with
 `--selection-policy exact-match`, a queue record without a name /
 CAS / InChIKey rejects on every `choosex.asp` page.
 
@@ -1450,7 +1428,7 @@ metadata (whether accepted or rejected):
 
 ### Why geometry / vibrations / rotational constants are parsed-only
 
-Phase 6 supports exactly one `target_kind`:
+The resolver supports exactly one `target_kind`:
 
 ```text
 atomization_energy
@@ -1464,16 +1442,16 @@ schema home arrives (tensor channel for vibrations + rotational
 constants, geometry sub-payload for structural data), each will get
 its own per-target parser in `parsers/form_result.py`.
 
-For now: if the resolver is asked for one of these `target_kind`s
+If the resolver is asked for one of these `target_kind`s
 and the page is accepted, the raw HTML is archived but no
 `parsed/...json` file is written, and the manifest carries a
 `parser_warnings` entry naming the unsupported target.
 
-## Phase 8 — form-result payload builder
+## Form-result payload builder
 
 The form resolver writes per-target parsed JSON files under
-``parsed/form_<target_kind>_<species_key>_<sha>.json``. Phase 8 adds a
-builder that converts those parsed files into
+``parsed/form_<target_kind>_<species_key>_<sha>.json``. A
+builder converts those parsed files into
 ``MolecularPropertyObservationCreate`` payloads — closing the loop
 from form workflow to the same observation channel the flat
 property-table builder feeds.
@@ -1482,7 +1460,7 @@ property-table builder feeds.
 
 ```
 ea1x.asp form workflow
-  → form resolver (Phase 6)
+  → form resolver
   → parsed/form_atomization_energy_<key>_<sha>.json
   → cccbdb_form_payload_dryrun.py
   → form_payloads_dryrun/atomization_energy.json
@@ -1490,7 +1468,7 @@ ea1x.asp form workflow
 ```
 
 The builder ([form_payload_builder.py](form_payload_builder.py))
-exposes one supported target_kind in Phase 8:
+exposes one supported target_kind:
 
 * ``atomization_energy`` (CCCBDB ``ea2x.asp``)
 
@@ -1575,7 +1553,7 @@ Shape:
 
 ### Why ``species_entry_id`` remains ``null``
 
-Phase 8 stops short of identity resolution. Every emitted payload
+The builder stops short of identity resolution. Every emitted payload
 sets ``species_entry_id=None`` and surfaces identity hints inside
 ``raw_payload_json["identity_hint"]``:
 
@@ -1588,7 +1566,7 @@ sets ``species_entry_id=None`` and surfaces identity hints inside
 }
 ```
 
-The workflow layer (a separate phase) resolves these hints against
+The workflow layer resolves these hints against
 ``species_entry`` rows in the database, gated on existing-row
 dedup. Doing identity resolution inside the importer would
 quietly create or mis-attach species rows — explicitly out of
@@ -1608,9 +1586,9 @@ Each skipped row contributes a per-target ``warnings`` entry in
 ``atomization_energy.json``; the dry-run health gate marks the
 target ``unhealthy`` if every parsed file produces only skips.
 
-## Phase 9 — DB import workflow
+## DB import workflow
 
-The first CCCBDB phase that touches the database. Reads validated
+This stage touches the database. Reads validated
 ``MolecularPropertyObservationCreate`` payloads from both dry-run
 lanes (flat property-table + form-result) and persists them
 idempotently with conservative identity resolution.
@@ -1810,11 +1788,11 @@ exact paths haven't been verified as flat single-fetch resources.
 Add them following the recipe above when a maintainer has time to
 verify each URL.
 
-## Phase 2c — disk-payload round-trip validation
+## Disk-payload round-trip validation
 
-Phase 2c adds round-trip integration tests at
+Round-trip integration tests at
 [backend/tests/importers/cccbdb/test_snapshot_payload_roundtrip.py](../../../tests/importers/cccbdb/test_snapshot_payload_roundtrip.py)
-that run the snapshot end-to-end with `write_payloads=True`, read the
+run the snapshot end-to-end with `write_payloads=True`, read the
 manifest from the temporary archive, open each `payload_json_path`
 from disk, and validate the sub-payloads against the real upload
 models:
@@ -1851,31 +1829,7 @@ identity-resolution layer (InChIKey-based matching, manual SMILES
 backfill, …) can re-build the payload from the parsed JSON without
 re-fetching.
 
-### Drift caught by the round-trip
-
-The round-trip already caught two real issues during its first run:
-
-1. The geometry builder shipped a `natoms` extra field that
-   `GeometryPayload` (`extra="forbid"`) rejects. Fixed: atom count
-   now lives only on line 0 of the XYZ block.
-2. The thermo/statmech builders embedded a partial `species_entry`
-   for species without SMILES, which produced a `ThermoUploadRequest`
-   that fails validation. Fixed by adding `thermo_payload_is_valid`
-   / `statmech_payload_is_valid` flags so the contract is explicit.
-
-Both bugs were invisible to the Phase 2a in-memory tests because
-those tests indexed into the built dicts directly. The on-disk
-boundary catches what in-memory access skips.
-
-### Where future builder/upload code goes
-
-Phase 3 may add:
-
-```text
-backend/app/importers/cccbdb/builders/
-    calculation_payload.py    # computed method/basis -> calculation upload
-    property_payload.py       # dipole/IE/EA/PA/... (needs Schema Gap 1)
-```
+### Target layout
 
 See `backend/docs/specs/cccbdb_importer.md` §9 for the full target
 layout, and Schema Gaps §7 for the tables that need to land before

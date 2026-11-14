@@ -138,22 +138,11 @@ def scientific_reactions_browse(
         ReactionDirectionQuery.forward,
         description=(
             "Which stored orientation(s) ``reactant_smiles`` / "
-            "``product_smiles`` are matched against. **Behaviour change "
-            "(2026-09):** the default is ``forward`` -- "
-            "``reactant_smiles`` matches only the stored reactant side "
-            "and ``product_smiles`` only the stored product side. "
-            "Before this parameter existed, the service always matched "
-            "with the equivalent of ``either``, so ``reactant_smiles`` "
-            "could match a species that is only ever a stored *product*, "
-            "reached through the reverse orientation of a reversible "
-            "reaction -- a caller asking for a species 'as a reactant' "
-            "could get back exclusively reactions where it is a product. "
-            "That is why the default changed: existing callers relying "
-            "on the old either-direction default for ``reactant_smiles`` "
-            "or ``product_smiles`` will see a different (narrower) "
-            "result set now. Pass ``direction=either`` explicitly to "
-            "restore the old matching behaviour -- every returned record "
-            "still carries ``matched_direction`` saying which "
+            "``product_smiles`` are matched against. The default is "
+            "``forward``: ``reactant_smiles`` matches only the stored "
+            "reactant side and ``product_smiles`` only the stored product "
+            "side. ``direction=either`` matches both orientations; every "
+            "returned record carries ``matched_direction`` saying which "
             "orientation actually matched. ``direction=reverse`` swaps "
             "the single orientation tried (``reactant_smiles`` against "
             "stored products, ``product_smiles`` against stored "
@@ -198,19 +187,9 @@ def scientific_reactions_browse(
     descriptions and
     :func:`app.services.scientific_read.reactions.browse_reactions`.
 
-    **Behaviour change (2026-09), stated plainly:** ``direction``
-    defaults to ``forward``. Previously this route matched
-    ``reactant_smiles`` / ``product_smiles`` with the equivalent of
-    ``direction=either`` unconditionally, so ``reactant_smiles=[H]``
-    could -- and, in the archive that exposed this, exclusively did --
-    return reactions where ``[H]`` is a stored *product*, reached in
-    reverse. A parameter named ``reactant_smiles`` returning only
-    reactions where the species is not a stored reactant was a
-    correctness defect, not a documented feature; ``forward`` is now the
-    default so the field means what it says. Existing callers depending
-    on the old either-direction default must add ``direction=either``
-    explicitly to keep receiving that broader, reverse-inclusive result
-    set; ``matched_direction`` on each record still reports which
+    ``direction`` defaults to ``forward``; pass ``direction=either`` to
+    match ``reactant_smiles`` / ``product_smiles`` against both stored
+    orientations. ``matched_direction`` on each record reports which
     orientation matched.
     """
     request = caller_input(

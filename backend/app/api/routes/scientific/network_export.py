@@ -9,7 +9,7 @@ a choice the decision does not allow, an inexact representation choice and any f
 that no longer matches is never silently refreshed: it needs a fresh selection.
 
 Like the selection endpoints this reads only what the caller's read profile can already read, so it asks for no
-elevated role; the legacy curator-only ``/export/chemkin`` is a different, reaction-seeded surface.
+elevated role; the curator-only ``/export/chemkin`` is a different, reaction-seeded surface.
 """
 
 from __future__ import annotations

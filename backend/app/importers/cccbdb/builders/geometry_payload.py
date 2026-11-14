@@ -2,14 +2,14 @@
 
 The existing ``tckdb_schemas.fragments.geometry.GeometryPayload`` has a
 single required field, ``xyz_text``. This builder serializes the
-Phase 1 atom list into canonical XYZ text:
+parsed atom list into canonical XYZ text:
 
     <natoms>
     CCCBDB experimental geometry (<source_url>)
     <element> <x> <y> <z>
     ...
 
-Coordinates are already in ångström at Phase 1 (the parser converts
+Coordinates are already in ångström (the parser converts
 through :mod:`app.importers.cccbdb.normalizers.units`), so the builder
 only formats them.
 """

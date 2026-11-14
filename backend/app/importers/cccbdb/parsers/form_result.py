@@ -6,7 +6,7 @@ Each ``target_kind`` (``atomization_energy``, ``rotational_constant``,
 …) returns a different page shape, so the parser dispatches on the
 target kind and returns a uniform :class:`CCCBDBFormResultTable`.
 
-This module supports **only** ``atomization_energy`` in Phase 6.
+This module supports **only** ``atomization_energy``.
 Other targets (geometry, vibrations, rotation) are surfaced as
 "unsupported target" parse errors so the resolver still archives the
 raw HTML for later parsing.

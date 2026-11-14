@@ -7,9 +7,7 @@ test in isolation.
 The ``ExternalSourceMetadata`` model carries CCCBDB-level provenance
 in the structured side-channel the existing TCKDB upload schemas do
 not expose directly (per-value reference labels, raw page kind,
-content hash). Phase 3 / schema-gap work may promote these into a
-real ``external_source_record`` table; until then the builder output
-preserves them verbatim alongside the validated payload sections.
+content hash). The builder output preserves them verbatim alongside the validated payload sections.
 """
 
 from __future__ import annotations
@@ -94,7 +92,7 @@ class BuildResult(BaseModel):
 
     Each ``*_payload`` field is a dict ready to be wrapped in / fed to
     the corresponding upload-workflow request model, or ``None`` if
-    Phase 1 did not capture enough data to populate it. The
+    the parsed record lacks the data to populate it. The
     ``warnings`` list records parsed values that the builder
     deliberately chose not to map into the validated payload (e.g.
     experimental vibrational modes, rotational constants).

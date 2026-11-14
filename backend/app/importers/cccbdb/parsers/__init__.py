@@ -1,4 +1,4 @@
-"""CCCBDB HTML parsers (Phase 1: experimental species pages only)."""
+"""CCCBDB HTML parsers."""
 
 from app.importers.cccbdb.parsers.experimental_index import (
     EXPERIMENTAL_INDEX_URLS,

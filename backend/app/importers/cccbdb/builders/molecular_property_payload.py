@@ -1,11 +1,11 @@
 """Builder: CCCBDB property-table rows → ``MolecularPropertyObservationCreate``.
 
-Closes the loop from Phase 3a (cross-species property-table parsing)
-to Phase 4a (``molecular_property_observation``). Each row of a
+Closes the loop from cross-species property-table parsing to
+``molecular_property_observation``. Each row of a
 :class:`CCCBDBExperimentalPropertyTable` becomes one
 :class:`MolecularPropertyObservationCreate` payload.
 
-Identity resolution policy (per Phase 3b prompt + Phase 4a prompt):
+Identity resolution policy:
 
 * If a catalog is supplied AND the row produces an unambiguous catalog
   match, identity hints (InChI/InChIKey/SMILES) are surfaced in
@@ -16,10 +16,10 @@ Identity resolution policy (per Phase 3b prompt + Phase 4a prompt):
 * If only ambiguous matches exist, the candidate list is preserved in
   ``raw_payload_json["catalog_candidates"]`` with a warning naming
   each isomer.
-* Raw CCCBDB hrefs are *never* promoted — see the Phase 3b README and
+* Raw CCCBDB hrefs are *never* promoted — see the importer README and
   the ``CCCBDBCatalogEntry`` docstring.
 
-Property-kind mapping (Phase 3a names → MolecularPropertyKind):
+Property-kind mapping (property-table names → MolecularPropertyKind):
 
     ``hf_0``                       → ``enthalpy_of_formation``
     ``hf_0_with_uncertainty``      → ``enthalpy_of_formation``
@@ -56,7 +56,7 @@ from app.schemas.entities.molecular_property_observation import (
     MolecularPropertyObservationCreate,
 )
 
-# Mapping from Phase 3a property_kind tokens to MolecularPropertyKind +
+# Mapping from property-table property_kind tokens to MolecularPropertyKind +
 # an optional property_label override. Unknown kinds fall through to
 # MolecularPropertyKind.other with the raw property_kind preserved as
 # the label so a downstream maintainer can see what arrived.
@@ -111,9 +111,9 @@ def build_molecular_property_payloads_from_property_table(
     :param catalog: Optional molecule catalog for scored identity
         enrichment. When omitted, no identity hints are produced;
         scalar science still flows through unchanged.
-    :param scientific_origin: Defaults to ``experimental`` since all
-        Phase 3a tables are experimental. Computed CCCBDB pages
-        (Phase 5+) will pass ``computed``.
+    :param scientific_origin: Defaults to ``experimental`` since the
+        property tables are experimental. Computed CCCBDB pages
+        pass ``computed``.
     :returns: One :class:`CCCBDBMolecularPropertyBuildResult` per row,
         in row order. The builder does **not** drop rows that fail
         to produce a payload; failure is reported per-row.
@@ -139,7 +139,7 @@ def build_molecular_property_payloads_from_property_table(
 def _resolve_property_kind(
     raw_kind: str,
 ) -> tuple[MolecularPropertyKind, str | None]:
-    """Map a Phase 3a ``property_kind`` token onto
+    """Map a property-table ``property_kind`` token onto
     :class:`MolecularPropertyKind`. Unknown kinds fall through to
     ``other`` with the raw token preserved as ``property_label``."""
 

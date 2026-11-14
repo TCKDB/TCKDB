@@ -97,7 +97,7 @@ def reaction_search_post(
     """JSON-body variant of reaction search for complex reactant/product lists.
 
     All search fields, filters, includes, offset, and limit live in
-    the body. Query-string parameters are rejected (per Phase 2.1 patch),
+    the body. Query-string parameters are rejected,
     except for any infrastructure-level params that may be added later. Body
     field ``sort`` is rejected by the service layer (v0 sort policy).
     """

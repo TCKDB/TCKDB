@@ -158,7 +158,7 @@ def _count_solve_children(
 def _state_energy_reads(
     session: Session, solve_id: int, rows: list[NetworkSolveStateEnergy]
 ) -> list[NetworkSolveStateEnergyRead]:
-    """State energies with their per-participant sources and ``partial_sources`` (#678)."""
+    """State energies with their per-participant sources and ``partial_sources``."""
     participants: dict[int, set[int]] = {}
     coefficient: dict[tuple[int, int], int] = {}
     state_ids = [row.state_id for row in rows]

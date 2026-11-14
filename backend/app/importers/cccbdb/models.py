@@ -1,7 +1,7 @@
 """Pydantic v2 intermediate models for the CCCBDB importer.
 
-These are **importer-local** records, not TCKDB upload schemas. Phase 2
-builder code will translate them into workflow-layer upload payloads.
+These are **importer-local** records, not TCKDB upload schemas. The
+builder code translates them into workflow-layer upload payloads.
 
 Design notes:
 
@@ -305,18 +305,16 @@ class CCCBDBExperimentalPropertyTable(BaseModel):
 # are preserved as raw audit metadata but MUST NOT be trusted as
 # data-page URLs:
 #
-#   * Phase 2b confirmed that `exp1x.asp?casno=...` URL patterns do
-#     not resolve.
-#   * The actual data path is the cross-species property-table family
-#     (Phase 3a, ``xp1x.asp``-style flat tables).
+#   * `exp1x.asp?casno=...` URL patterns do not resolve.
+#   * The data path is the cross-species property-table family
+#     (``xp1x.asp``-style flat tables).
 #   * A future search/form resolver may eventually translate a catalog
 #     entry into a real data URL via CCCBDB's POST flow — but that
 #     resolver does not exist yet.
 #
 # Therefore ``trusted_property_url`` / ``trusted_species_url`` on
-# ``CCCBDBCatalogEntry`` are deliberately typed ``None`` and the
-# Phase 3b parser never populates them. Future resolver work will set
-# them; until then, ``raw_href`` is debug data only.
+# ``CCCBDBCatalogEntry`` are typed ``None`` and the catalog parser
+# never populates them; ``raw_href`` is debug data only.
 
 
 class CCCBDBCatalogEntry(BaseModel):
@@ -330,7 +328,7 @@ class CCCBDBCatalogEntry(BaseModel):
     ``raw_href`` is preserved verbatim for audit/debugging but is NOT
     trusted as a data-page URL. ``trusted_property_url`` and
     ``trusted_species_url`` are reserved for a future resolver and
-    are always ``None`` in Phase 3b.
+    are always ``None``.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -403,7 +401,7 @@ class CCCBDBCatalogMatchConfidence(str, Enum):
 
 
 # ---------------------------------------------------------------------------
-# Per-species "all data" pages (Phase 5a)
+# Per-species "all data" pages
 # ---------------------------------------------------------------------------
 
 
@@ -427,11 +425,10 @@ class CCCBDBSpeciesAllDataSourceMetadata(BaseModel):
 class CCCBDBSpeciesAllDataRecord(BaseModel):
     """Minimal parsed view of one CCCBDB per-species page.
 
-    Phase 5a deliberately ships a *small* parser: enough to make the
-    archive useful for triage (title, section headings, any
-    identifiers we can pluck from the body via regex) but not a full
-    property extractor. The raw HTML is the durable artifact; richer
-    parsing is a later phase.
+    The parser is deliberately *small*: enough to make the archive
+    useful for triage (title, section headings, any identifiers we can
+    pluck from the body via regex) but not a full property extractor.
+    The raw HTML is the durable artifact.
     """
 
     model_config = ConfigDict(extra="forbid")

@@ -20,7 +20,7 @@ class Classification(str, Enum):
     property_table_page = "property_table_page"
     rate_limit_or_error_page = "rate_limit_or_error_page"
     redirect_landing_page = "redirect_landing_page"
-    # Phase 6: shapes the form-page resolver produces.
+    # Shapes the form-page resolver produces.
     form_result_data_page = "form_result_data_page"
     """
     A page reached via ``getformx.asp`` that carries one
@@ -64,17 +64,16 @@ _RATE_LIMIT_PATTERNS = (
     "captcha",
 )
 
-# Hallmarks of CCCBDB's formula-entry form (Phase 2b WebFetch survey).
+# Hallmarks of CCCBDB's formula-entry form.
 _FORMULA_ENTRY_PATTERNS = (
     "please enter the chemical formula",
     "enter a sequence of element symbols followed by numbers",
 )
 
-# Phase 5b: *strong* formula-entry signals. These outrank every
+# *Strong* formula-entry signals. These outrank every
 # molecule-data heading (including the deceptive
 # ``<TITLE>CCCBDB All data for one molecule</TITLE>`` on the form
-# page itself, which was the bug this hardening fixes). Any of
-# these substrings is sufficient on its own.
+# page itself). Any of these substrings is sufficient on its own.
 #
 # Each pattern is matched against the lowercased HTML body. We
 # include both the literal form-attribute and the form-text idioms
@@ -130,7 +129,7 @@ _FORM_RESULT_HEADINGS = (
     "experimental atomization energies",
 )
 
-# Property-table hallmarks (Phase 3a-style cross-species pages).
+# Property-table hallmarks (cross-species pages).
 _PROPERTY_TABLE_HEADINGS = (
     "experimental dipoles",
     "species with enthalpy of formation",
@@ -204,7 +203,7 @@ def classify_html(
     # 2b) Form-result data page: a per-species result returned via
     # CCCBDB's getformx.asp flow. The heading list is intentionally
     # narrow — only shapes the form-result parser supports today
-    # (atomization_energy in Phase 6). The check runs BEFORE
+    # (atomization_energy). The check runs BEFORE
     # formula-entry detection because the form-result page's menu
     # sidebar still contains the ``getformx.asp`` anchor that would
     # otherwise mis-fire the formula-entry classifier.
@@ -256,9 +255,8 @@ def classify_html(
 
     # 4) Molecule data page: a per-species heading AND evidence of
     # populated identifier *values* (real InChI, real InChIKey, real
-    # CAS number pattern). The previous check accepted bare labels
-    # like "CAS" or "InChIKey" — that fired on the form page's menu
-    # and was the bug this hardening fixes.
+    # CAS number pattern). Bare labels like "CAS" or "InChIKey"
+    # do not count: they appear on the form page's menu.
     has_data_heading = _contains_any(lowered, _MOLECULE_DATA_HEADINGS)
     has_real_inchi = bool(_REAL_INCHI_RE.search(html))
     has_real_inchikey = bool(_REAL_INCHIKEY_RE.search(html))

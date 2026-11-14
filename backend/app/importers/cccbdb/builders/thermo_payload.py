@@ -1,6 +1,6 @@
 """Builder: CCCBDB thermo record → ``ThermoUploadRequest`` dict.
 
-Field mapping from Phase 1 ``property_kind`` tokens:
+Field mapping from parsed ``property_kind`` tokens:
 
 * ``hf_298``            → ``thermo.h298_kj_mol``
 * ``hf_298 uncertainty`` → ``thermo.h298_uncertainty_kj_mol``
@@ -14,7 +14,7 @@ Field mapping from Phase 1 ``property_kind`` tokens:
 Per-value references (``Gurvich``, ``TRC``, ``Pedley``, …) have no
 first-class home on ``ThermoUploadRequest`` or ``ThermoPointCreate``,
 so the builder hands them back through ``external_source.per_value_references``
-keyed by the Phase 1 ``property_kind`` token.
+keyed by the parsed ``property_kind`` token.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ def build_thermo_payload(
 ) -> dict[str, Any] | None:
     """Build a ``ThermoUploadRequest``-compatible dict.
 
-    Returns ``None`` if Phase 1 produced no thermo values at all.
+    Returns ``None`` if the record has no thermo values at all.
     """
 
     if not record.thermo.values:

@@ -1,5 +1,4 @@
-"""Calculation read endpoints — Phase 1 (Tier A + B) and Phase 2 (Tier C),
-plus the calculation-targeted artifact upload endpoint."""
+"""Calculation read endpoints, plus the calculation-targeted artifact upload endpoint."""
 
 from __future__ import annotations
 
@@ -174,7 +173,7 @@ def _get_calculation_or_404(
 
 
 # ---------------------------------------------------------------------------
-# Tier A — parent resource
+# Parent resource
 # ---------------------------------------------------------------------------
 
 
@@ -217,7 +216,7 @@ def list_calculations(
             Calculation.conformer_observation_id == conformer_observation_id
         )
     if lot_id is not None:
-        # A merged row's id names the row it was merged into (#591).
+        # A merged row's id names the row it was merged into.
         base = base.where(
             Calculation.lot_id == canonical_level_of_theory_id(session, lot_id)
         )
@@ -288,7 +287,7 @@ def get_calculation(calculation_id: int, session: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
-# Tier B — SP / opt / freq results (one-to-one → 404 when absent)
+# SP / opt / freq results (one-to-one → 404 when absent)
 # ---------------------------------------------------------------------------
 
 
@@ -347,7 +346,7 @@ def get_hessian(calculation_id: int, session: Session = Depends(get_db)):
     is a one-row-per-calculation side table, absent by default, same as
     :class:`~app.db.models.calculation.CalculationSCFStability`). Same
     auth/visibility as the parent calculation resource — none beyond
-    calculation existence, matching every other Tier-B read on this router.
+    calculation existence, matching the other one-to-one result reads on this router.
     """
     _get_calculation_or_404(calculation_id, session)
     row = session.scalar(
@@ -363,7 +362,7 @@ def get_hessian(calculation_id: int, session: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
-# Tier B — input / output geometries (one-to-many → [] when empty)
+# Input / output geometries (one-to-many → [] when empty)
 # ---------------------------------------------------------------------------
 
 
@@ -402,7 +401,7 @@ def list_output_geometries(
 
 
 # ---------------------------------------------------------------------------
-# Tier B — dependencies (one-to-many → [] when empty)
+# Dependencies (one-to-many → [] when empty)
 # ---------------------------------------------------------------------------
 
 
@@ -444,7 +443,7 @@ def list_dependencies(
 
 
 # ---------------------------------------------------------------------------
-# Tier B — constraints (one-to-many → [] when empty)
+# Constraints (one-to-many → [] when empty)
 # ---------------------------------------------------------------------------
 
 
@@ -465,7 +464,7 @@ def list_constraints(
 
 
 # ---------------------------------------------------------------------------
-# Tier C — Phase 2: scan sub-resources
+# Scan sub-resources
 # ---------------------------------------------------------------------------
 
 
@@ -524,7 +523,7 @@ def list_scan_points(
 
 
 # ---------------------------------------------------------------------------
-# Tier C — Phase 2: IRC sub-resources
+# IRC sub-resources
 # ---------------------------------------------------------------------------
 
 
@@ -560,7 +559,7 @@ def list_irc_points(
 
 
 # ---------------------------------------------------------------------------
-# Tier C — Phase 2: path-search sub-resources (NEB / GSM / string methods)
+# Path-search sub-resources (NEB / GSM / string methods)
 # ---------------------------------------------------------------------------
 
 
@@ -601,7 +600,7 @@ def list_path_search_points(
 
 
 # ---------------------------------------------------------------------------
-# Tier C — Phase 2: parameters, artifacts, geometry validation
+# Parameters, artifacts, geometry validation
 # ---------------------------------------------------------------------------
 
 
@@ -851,7 +850,7 @@ def upload_calculation_artifacts(
         try_extract_input_geometry_from_artifact_upload(session, calculation, art_in)
 
     # Output logs also carry the program's version banner; a version the
-    # declared release lacked re-points the calculation (#305 (c)). Once per
+    # declared release lacked re-points the calculation. Once per
     # batch, so every log is compared with the declared release.
     software_warning = try_reconcile_software_from_output_uploads(
         session, calculation, request.artifacts

@@ -1,7 +1,7 @@
 """Minimal parser for CCCBDB ``alldata2x.asp`` per-species pages.
 
-Phase 5a parser policy
-----------------------
+Parser policy
+-------------
 
 The goal of this parser is **triage**, not full property extraction.
 What it produces:
@@ -14,8 +14,7 @@ What it produces:
 What it deliberately does **not** do:
 
 * parse thermochemistry, geometry, vibrational frequencies, …
-  (those are later phases when we have a real fixture corpus to
-  validate against),
+  (those need a real fixture corpus to validate against),
 * assume CCCBDB markup is stable beyond well-known headings,
 * invent identifiers when the page does not surface them.
 

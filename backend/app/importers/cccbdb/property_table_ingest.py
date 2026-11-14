@@ -5,7 +5,7 @@ This module gives the existing primitives — the parser
 (``build_molecular_property_payloads_from_property_table``), the
 snapshot runner, the catalog enrichment helper, the
 ``MolecularPropertyObservation`` model — a clean class-shape API
-that fits the Phase 5c prompt:
+with this shape:
 
     PropertyTableFetcher.fetch_or_use_cache(target)
         ─→ raw HTML (plus a manifest-shaped RecordResult)
@@ -20,9 +20,8 @@ ingestion code can compose the three steps as separate objects with
 their own injection seams (a test can swap the fetcher's transport
 without touching the parser or the ingestor, etc.).
 
-The composition that ties all three together for the four allowlisted
-property tables — Hf(0K), Goodlist Hf(0K) + unc, dipole, diatomic
-spectroscopic, and now polarizability — is :func:`ingest_property_pilot`.
+The composition that ties all three together for the allowlisted
+property tables is :func:`ingest_property_pilot`.
 
 Policy this façade enforces (matches the rest of the importer):
 
@@ -91,8 +90,8 @@ class PropertyTableFetcher:
     :param fetcher: Underlying :class:`Fetcher` callable. Production
         callers pass :class:`HttpFetcher`; tests inject a fake.
     :param sleep_seconds: Polite delay between requests. Defaults to
-        5 seconds (CCCBDB rate-limits aggressively; the Phase 2b runner
-        used 2s and that proved too tight in some live runs).
+        5 seconds (CCCBDB rate-limits aggressively; 2 seconds proved too
+        tight in some live runs).
     :param dry_run: When ``True``, no files are written and the live
         fetcher is not called — cached pages are still served.
     :param force_refresh: When ``True``, ignore the cache and re-fetch.
@@ -119,7 +118,7 @@ class PropertyTableFetcher:
             dry_run=self.dry_run,
             force_refresh=self.force_refresh,
             # Property tables don't build payloads from snapshot
-            # (Phase 4a routes those through the Ingestor below).
+            # (the Ingestor below routes those).
             write_payloads=False,
         )
         return run_snapshot(targets, config)
