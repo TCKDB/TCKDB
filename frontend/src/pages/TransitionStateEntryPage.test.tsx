@@ -1151,8 +1151,8 @@ describe("TransitionStateEntryPage", () => {
         expect(within(section).getByText(/deposited 2026-07-15/)).toBeVisible()
 
         expect(within(section).getAllByText(/MRCI\+Davidson/)).toHaveLength(2)
-        // Each sibling names its program twice: beside the level of theory and in its software cell.
-        expect(within(section).getAllByText(/Molpro \(version not recorded\)/)).toHaveLength(4)
+        // Each sibling names its program once, inside the level of theory line.
+        expect(within(section).getAllByText(/Molpro \(version not recorded\)/)).toHaveLength(2)
     })
 
     it("siblings: renders a distinct message when the sibling search request fails, instead of silently claiming there are none", async () => {

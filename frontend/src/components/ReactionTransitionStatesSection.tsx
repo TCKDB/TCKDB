@@ -155,7 +155,7 @@ function TransitionStateBlock({ ts, words, calculationsByRef }: {
                                 <tr key={key}>
                                     <td data-label="Stage">{STAGE_LABEL[key] ?? slot.type}</td>
                                     <td data-label="Level of theory">
-                                        {evidence?.level_of_theory ? <LevelLabel levelOfTheory={evidence.level_of_theory} program={evidence.software ? softwareLabel(evidence.software) : null} /> : "not recorded"}
+                                        {evidence?.level_of_theory ? <LevelLabel levelOfTheory={evidence.level_of_theory} /> : "not recorded"}
                                     </td>
                                     <td data-label="Software / workflow">
                                         {evidence?.software ? (softwareLabel(evidence.software) ?? "not recorded") : "not recorded"}

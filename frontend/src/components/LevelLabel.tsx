@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useId, useMemo, useState, type ReactNode } from "react"
 import { Link } from "react-router-dom"
 import { levelOfTheoryPath } from "../domain/methodsLinks"
 import { inlineQualifiers, levelKey, levelLine, qualifiersOf, type LevelFields, type LevelKey, type Qualifier } from "../domain/levelLabel"
@@ -45,15 +45,17 @@ export type LevelLabelProps = {
 }
 
 /**
- * A level of theory as method/basis and program on one line, with the
- * qualifiers folded behind "details". Built from the structured fields
- * alone; qualifiers that tell this level from another on the page are
- * printed inline. The disclosure is block content: inside a sentence use
- * `plain` and put `LevelDetails` after it.
+ * A level of theory as one run of inline text: method/basis and program, then a small "details" toggle when the level
+ * states qualifiers. The toggle is a button; its panel is positioned under the line, so opening it never moves the
+ * label or changes the line box, and the whole thing is phrasing content that sits in a sentence, a list line or a
+ * flex row. Built from the structured fields alone; qualifiers that tell this level from another on the page are
+ * printed inline. `plain` leaves the toggle out where `LevelDetails` follows.
  */
 export function LevelLabel({ levelOfTheory, program, link = true, plain = false }: LevelLabelProps) {
     const scope = useContext(ScopeContext)
     const register = scope?.register
+    const [open, setOpen] = useState(false)
+    const panelId = useId()
     const { method, basis, dispersion, solvent, solvent_model, aux_basis, cabs_basis, core_treatment, spin_treatment, relativistic_hamiltonian, pno_truncation, ri_approximation, level_of_theory_ref, display } = levelOfTheory
     useEffect(() => {
         if (!register) return undefined
@@ -63,11 +65,30 @@ export function LevelLabel({ levelOfTheory, program, link = true, plain = false 
     const head = link && level_of_theory_ref
         ? <Link className="level-label-text t-preserve-case" to={levelOfTheoryPath(level_of_theory_ref)}>{line}</Link>
         : <span className="level-label-text t-preserve-case">{line}</span>
-    if (plain) return <span className="level-label">{head}</span>
+    const pieces = plain ? [] : qualifiersOf(levelOfTheory)
+    if (pieces.length === 0) return <span className="level-label">{head}</span>
     return (
         <span className="level-label">
             {head}
-            <LevelDetails levelOfTheory={levelOfTheory} program={program} />
+            <button
+                type="button"
+                className="level-label-toggle"
+                aria-expanded={open}
+                aria-controls={open ? panelId : undefined}
+                aria-label={`Details of ${line}`}
+                onClick={() => setOpen(!open)}
+                onKeyDown={(event) => { if (event.key === "Escape") setOpen(false) }}
+            >details</button>
+            {open && (
+                <span id={panelId} role="group" aria-label={`Qualifiers of ${line}`} className="level-label-panel">
+                    {pieces.map((piece) => (
+                        <span key={piece.key} className="level-label-piece">
+                            <span className="level-label-piece-name">{piece.name}</span>
+                            <span className="t-preserve-case">{piece.value}</span>
+                        </span>
+                    ))}
+                </span>
+            )}
         </span>
     )
 }

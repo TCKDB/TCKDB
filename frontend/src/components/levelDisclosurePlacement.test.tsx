@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import type { ShapeRow } from "../domain/conformerGallery"
 import type { SinglePointsState } from "../hooks/useSpeciesSinglePoints"
-import { LevelLabel, LevelLabelScope } from "./LevelLabel"
+import { LevelDetails, LevelLabel, LevelLabelScope } from "./LevelLabel"
 import { ObservationEvidence } from "./ObservationEvidence"
 import { ShapeCalculations } from "./ShapeCalculations"
 import { ValueSource } from "./ValueSource"
@@ -33,9 +33,14 @@ function inScope(children: React.ReactNode) {
 }
 
 describe("a level's disclosure beside prose", () => {
-    it("the nesting check does catch a disclosure placed inside a paragraph", () => {
-        inScope(<p><LevelLabel levelOfTheory={level} /></p>)
+    it("the nesting check does catch a block disclosure placed inside a paragraph", () => {
+        inScope(<p><LevelDetails levelOfTheory={level} /></p>)
         expect(nestingWarnings().length).toBeGreaterThan(0)
+    })
+
+    it("a level label, toggle included, sits inside a paragraph with no nesting warning", () => {
+        inScope(<p>at <LevelLabel levelOfTheory={level} /> done</p>)
+        expect(nestingWarnings()).toEqual([])
     })
 
     it("a source line inside a paragraph prints the level as text, with no disclosure and no nesting warning", () => {

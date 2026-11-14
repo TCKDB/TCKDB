@@ -313,7 +313,7 @@ function CitedRow({ keyRef, position, calculation, labels, recordsAt }: { keyRef
             </td>
             <td data-label="Level of theory">
                 {calculation.level_of_theory
-                    ? <span className="level-label-cell"><LevelLabel levelOfTheory={calculation.level_of_theory} program={calculation.software ? programText(calculation.software) : null} /></span>
+                    ? <span className="level-label-cell"><LevelLabel levelOfTheory={calculation.level_of_theory} /></span>
                     : "not recorded"}
             </td>
             <td data-label="Kind of energy">{energyTypeWord(calculation.energy_type)}</td>

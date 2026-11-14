@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { afterEach, describe, expect, it } from "vitest"
 import { inlineQualifiers, levelKey, levelLine, qualifiersOf } from "../domain/levelLabel"
@@ -20,20 +20,36 @@ describe("LevelLabel", () => {
         expect(screen.getByRole("link")).toHaveTextContent("DLPNO-CCSD(T)-F12/cc-pVTZ-F12 · ORCA 6.0.0")
     })
 
-    it("folds the qualifiers behind a native details disclosure, as short labelled pieces", () => {
+    it("folds the qualifiers behind a toggle that opens a panel of short labelled pieces", () => {
         const { container } = page(<LevelLabel levelOfTheory={{ ...base, aux_basis: "cc-pvtz-f12-cabs", cabs_basis: "cc-pvtz-f12-cabs", dispersion: "d3bj", solvent: "water", spin_treatment: "restricted_open", core_treatment: "frozen_core" }} />)
-        const details = container.querySelector("details")!
-        expect(details).not.toHaveAttribute("open")
-        expect(within(details).getByText("details")).toBeInTheDocument()
-        const pieces = [...details.querySelectorAll("dt")].map((dt) => dt.textContent)
-        expect(pieces).toEqual(["aux", "cabs", "dispersion", "solvent", "spin", "core"])
-        expect(details.textContent).toContain("restricted open")
-        expect(details.textContent).toContain("frozen core")
+        const toggle = screen.getByRole("button", { name: /^Details of/ })
+        expect(toggle).toHaveAttribute("aria-expanded", "false")
+        expect(container.querySelector(".level-label-panel")).toBeNull()
+        fireEvent.click(toggle)
+        expect(toggle).toHaveAttribute("aria-expanded", "true")
+        const panel = container.querySelector(".level-label-panel")!
+        expect([...panel.querySelectorAll(".level-label-piece-name")].map((name) => name.textContent)).toEqual(["aux", "cabs", "dispersion", "solvent", "spin", "core"])
+        expect(panel.textContent).toContain("restricted open")
+        expect(panel.textContent).toContain("frozen core")
+        fireEvent.keyDown(toggle, { key: "Escape" })
+        expect(container.querySelector(".level-label-panel")).toBeNull()
     })
 
-    it("has no disclosure when the level states no qualifier", () => {
-        const { container } = page(<LevelLabel levelOfTheory={base} />)
-        expect(container.querySelector("details")).toBeNull()
+    it("keeps the label first and the program once: the toggle follows the text and the program is not repeated", () => {
+        const { container } = page(<li><LevelLabel levelOfTheory={{ ...base, core_treatment: "frozen_core" }} program="ORCA 6.0.0" /></li>)
+        expect(container.querySelector("li")?.textContent).toBe("dlpno-ccsd(t)-f12/cc-pvtz-f12 · ORCA 6.0.0details")
+        expect((container.textContent?.match(/ORCA 6\.0\.0/g) ?? []).length).toBe(1)
+    })
+
+    it("sits inside a paragraph without a nesting warning and opening it adds no text to the line before the toggle", () => {
+        const { container } = page(<p>at <LevelLabel levelOfTheory={{ ...base, core_treatment: "frozen_core" }} /> done</p>)
+        fireEvent.click(screen.getByRole("button", { name: /^Details of/ }))
+        expect(container.querySelector("p")?.textContent?.startsWith("at dlpno-ccsd(t)-f12/cc-pvtz-f12details")).toBe(true)
+    })
+
+    it("has no toggle when the level states no qualifier", () => {
+        page(<LevelLabel levelOfTheory={base} />)
+        expect(screen.queryByRole("button")).toBeNull()
     })
 
     it("two levels that share a short label but differ in a qualifier never read alike", async () => {
@@ -65,7 +81,7 @@ describe("LevelLabel", () => {
 
     it("names each disclosure by the level it opens", () => {
         page(<LevelLabel levelOfTheory={{ ...base, dispersion: "d3bj" }} />)
-        expect(screen.getByText("details")).toHaveAttribute("aria-label", "Details of dlpno-ccsd(t)-f12/cc-pvtz-f12")
+        expect(screen.getByRole("button", { name: "Details of dlpno-ccsd(t)-f12/cc-pvtz-f12" })).toBeInTheDocument()
     })
 
     it("names two colliding levels' disclosures apart, by qualifier and program", async () => {
@@ -87,7 +103,8 @@ describe("LevelLabel", () => {
             "dlpno-ccsd(t)-f12/cc-pvtz-f12 · PNO tight",
             "dlpno-ccsd(t)-f12/cc-pvtz-f12 · PNO normal",
         ])
-        const details = [...container.querySelectorAll("details")].map((element) => element.textContent)
+        screen.getAllByRole("button", { name: /^Details of/ }).forEach((toggle) => fireEvent.click(toggle))
+        const details = [...container.querySelectorAll(".level-label-panel")].map((element) => element.textContent)
         expect(details[0]).toContain("tight")
         expect(details[1]).toContain("normal")
         expect(details[0]).toContain("relativistic")

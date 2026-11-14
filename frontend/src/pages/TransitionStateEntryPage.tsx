@@ -460,7 +460,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                                 {summary ? `${statusLabel(summary.stage)} stage: ` : ""}
                                                 {primary?.level_of_theory ? <LevelLabel levelOfTheory={primary.level_of_theory} program={primary.software_release ? softwareCellText(primary.software_release) : null} /> : "level of theory not recorded"}
                                             </span>
-                                            <span>{primary?.software_release ? (softwareCellText(primary.software_release) ?? "software not recorded") : "software not recorded"}</span>
+                                            {!primary?.level_of_theory && <span>{primary?.software_release ? (softwareCellText(primary.software_release) ?? "software not recorded") : "software not recorded"}</span>}
                                         </>
                                     )}
                                     <span className={reviewPillClass(reviewStatus)}>

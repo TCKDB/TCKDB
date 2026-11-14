@@ -1,5 +1,5 @@
 /* LevelLabel: method/basis and program on one line, qualifiers folded behind "details". */
-.level-label { display: inline-block; max-width: 100%; vertical-align: baseline; }
+.level-label { position: relative; display: inline; }
 .level-label-text { overflow-wrap: break-word; }
 .level-label-cell { display: inline-block; min-width: 16ch; }
 .level-label-details { display: block; margin-top: .125rem; font-size: .875em; }
@@ -8,6 +8,8 @@
 .level-label-pieces > div { display: contents; }
 .level-label-pieces dt { color: var(--faint); }
 .level-label-pieces dd { margin: 0; overflow-wrap: anywhere; }
-/* Inside a sentence the label flows with the words around it instead of breaking before and after itself. */
-.shape-spread .level-label,
-.shape-cell-list .level-label { display: inline; }
+/* The toggle sits in the text run; its panel hangs under the line and takes no room in it. */
+.level-label-toggle { margin-left: .4em; padding: 0; border: 0; background: none; color: var(--muted); font: inherit; font-size: .875em; text-decoration: underline dotted; cursor: pointer; }
+.level-label-panel { position: absolute; top: 100%; left: 0; z-index: 20; display: grid; grid-template-columns: max-content 1fr; gap: .125rem .75rem; min-width: 12rem; max-width: min(24rem, 90vw); margin-top: .25rem; padding: .5rem .75rem; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); font-size: .875em; }
+.level-label-piece { display: contents; }
+.level-label-piece-name { color: var(--faint); }
