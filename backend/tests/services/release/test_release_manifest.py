@@ -412,7 +412,7 @@ def test_manifest_document_is_rebuildable_from_its_snapshot_columns(
     assert rebuilt["rights"]["basis_kinds"] == {"depositor_agreement": 1}
 
 
-def test_verify_release_reports_a_stored_document_whose_digest_no_longer_matches(
+def test_verify_release_reports_a_stored_document_whose_digest_does_not_match(
     db_session, draft_release, curator, thermo_candidates, species_entry
 ):
     """The recorded ``content_sha256`` is actually checked against the stored document.
@@ -1165,7 +1165,7 @@ def test_user_foreign_keys_are_still_dropped():
     assert "created_by" not in RefResolver.fk_targets(thermo)
 
 
-def test_artifact_foreign_keys_now_resolve_via_public_ref():
+def test_artifact_foreign_keys_resolve_via_public_ref():
     """``calculation_artifact`` gained a ``public_ref`` column, so its FKs
     are carried into releases automatically -- the general mechanism the
     module docstring promises ("a new FK to a ref-bearing table is carried

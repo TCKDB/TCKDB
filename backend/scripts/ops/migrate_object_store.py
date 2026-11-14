@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """Copy every stored object from one S3-compatible store to another, and prove it.
 
-Written to move an existing deployment from MinIO to SeaweedFS (#541), but
-nothing here is specific to either: source and destination are any two
-S3-compatible stores, and the runbook's rollback runs it the other way. The
+Moves a deployment between two S3-compatible stores (for example MinIO to
+SeaweedFS); nothing here is specific to either. Source and destination are
+any two S3-compatible stores, and the runbook's rollback runs it the other way. The
 operator runbook is ``backend/docs/deployment/migrating_minio_to_seaweedfs.md``.
 
 Why a copy is the whole migration. Every database reference to a stored
@@ -1156,7 +1156,7 @@ def run(
         report["warnings"].append(
             f"destination bucket {dest.bucket!r} differs from source bucket "
             f"{source.bucket!r}: rows record s3://{source.bucket}/... URIs, so "
-            "after the switch they would name a bucket the app no longer reads"
+            "after the switch they would name a bucket the app does not read"
         )
     log(f"source {source.describe()} -> destination {dest.describe()} ({mode})")
 

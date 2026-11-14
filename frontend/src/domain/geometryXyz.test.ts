@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { ANGSTROM_TO_BOHR, BOHR_RADIUS_ANGSTROM, angstromToBohr, atomicNumberForSymbol, buildXyzBlock, hydrogenSymbolsForViewer } from "./geometryXyz"
 
-describe("hydrogenSymbolsForViewer (#732)", () => {
+describe("hydrogenSymbolsForViewer", () => {
     it("rewrites D and T atom lines to H, keeping coordinates and the header lines", () => {
         expect(hydrogenSymbolsForViewer("3\nD T comment\nC 0 0 0\nD 1 2 3\n  T 4 5 6")).toBe(
             "3\nD T comment\nC 0 0 0\nH 1 2 3\n  H 4 5 6",
@@ -79,7 +79,7 @@ describe("atomicNumberForSymbol", () => {
         expect(atomicNumberForSymbol("Cl")).toBe(17)
     })
 
-    it("reads D and T as hydrogen, not as an unknown symbol (#672)", () => {
+    it("reads D and T as hydrogen, not as an unknown symbol", () => {
         // A row stored before D/T meant 2H/3H still holds the symbol; its
         // atomic number is hydrogen's. Case-sensitive like every other symbol.
         expect(atomicNumberForSymbol("D")).toBe(1)

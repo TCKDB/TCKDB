@@ -388,7 +388,7 @@ def test_standalone_statmech_for_an_atom_warns_without_levels_and_not_with(clien
 # ---------------------------------------------------------------------------
 
 
-def test_polyatomic_without_constants_or_freq_now_warns(client):
+def test_polyatomic_without_constants_or_freq_warns(client):
     """rotor_scan_7's C[C](S)O: opt source only, no rotational constants."""
     payload = _load("rotor_scan_7")
     sp = _species(payload, "C[C](S)O")

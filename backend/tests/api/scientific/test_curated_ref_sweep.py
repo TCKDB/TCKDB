@@ -244,7 +244,7 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
 #: read is here: a served detail shows what it embeds unless rejected or deprecated.
 SERVICE_FLOOR = (
     "a search service applies the record floor to a RECORD it lists or counts (a network solve, a kinetics record, "
-    "a transition state or entry: ADR 0023 Q3/Q5), or to a matching filter (step 4)"
+    "a transition state or entry), or to a matching filter (step 4)"
 )
 DERIVED = (
     "a reference row's search result counts and its usage-eligibility filter preview the RECORD list of what cites it (a "
@@ -256,7 +256,7 @@ EXPORTED_RECORDS = (
     "record floor decides which records it lists; the linked evidence of a listed record already follows the evidence rule"
 )
 ML_ENERGY_ROWS = (
-    "owner decision Q7 (ADR 0023), a named exception: the ML export's ENERGY ROWS are its calculations, and an energy row "
+    "a named exception: the ML export's ENERGY ROWS are its calculations, and an energy row "
     "is a record of the dataset, so the calculations stay approved-only (``ml_dataset.ml_energy_row_floor``); "
     "the dataset's other nested evidence (conformer observations, linearity witnesses) follows the evidence rule. The "
     "records it lists are under EXPORTED_RECORDS"

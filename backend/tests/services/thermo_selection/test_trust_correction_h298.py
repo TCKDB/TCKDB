@@ -59,8 +59,8 @@ def _blocking(result, thermo):
     return next(a for a in result.assessments if a.thermo_ref == thermo.public_ref).blocking
 
 
-def test_p1_a_sole_record_whose_only_flaw_is_an_automated_geometry_fail_is_now_selectable(db_session, methane):
-    """Main: no_applicable_candidate (blocked, source_calculation_hard_failed_for_required_role). Now: selectable."""
+def test_p1_a_sole_record_whose_only_flaw_is_an_automated_geometry_fail_is_selectable(db_session, methane):
+    """A geometry fail does not block the sole record: it is selectable."""
     thermo = make_thermo(db_session, methane, proto=protocol("g4"))
     _source(db_session, methane, thermo, geometry=ValidationStatus.fail)
     result = _run(db_session, methane)
@@ -68,8 +68,8 @@ def test_p1_a_sole_record_whose_only_flaw_is_an_automated_geometry_fail_is_now_s
     assert _blocking(result, thermo) == ()
 
 
-def test_p2_a_geometry_fail_no_longer_lets_a_competitor_win_by_exclusion(db_session, methane):
-    """Main: the G4 with the geometry fail was excluded, so the G3 was the sole eligible record. Now: both compete."""
+def test_p2_a_geometry_fail_does_not_let_a_competitor_win_by_exclusion(db_session, methane):
+    """The G4 with the geometry fail is not excluded, so it competes with the G3."""
     g4 = make_thermo(db_session, methane, proto=protocol("g4"), age_days=400)
     g3 = make_thermo(db_session, methane, proto=protocol("g3"), age_days=1)
     _source(db_session, methane, g4, geometry=ValidationStatus.fail)
@@ -116,7 +116,7 @@ def test_p6_the_geometry_fail_stays_visible_as_advisory_evidence(db_session, met
     assert {"evidence_rubric:computed_thermo", "evidence_rubric_version:1"} <= set(advisory), advisory
 
 
-def test_p7_two_g4_records_one_with_a_geometry_fail_now_compete_and_say_why_there_are_two(db_session, methane):
+def test_p7_two_g4_records_one_with_a_geometry_fail_compete_and_say_why_there_are_two(db_session, methane):
     """Two G4 records, one with a geometry fail, compete: the newer G4's geometry fail does not exclude it, so the older
     clean G4 is not ``sole_eligible_candidate``. Both are eligible and nothing ranks one over the other:
     ``incomparable_alternatives``, nothing selected. The flagged member's advisory shows the geometry warning, so a

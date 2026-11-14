@@ -4,7 +4,7 @@
 check reads ``energy_level_of_theory_id`` (a depositor's declaration, like thermo's), so
 declaring one must not change the context hash a stored review is judged against, and a rate
 stored before the column existed must keep the hash it had (the pinned hashes in
-``test_phase_d_d3_invariance`` pin the latter for every D3 scenario).
+``test_advisory_kinetics_participant_invariance`` pin the latter for every D3 scenario).
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from app.services.consistency.core import KINETICS_HASH_EXCLUDED_COLUMNS, encode
 from app.services.consistency.kinetics import compare_kinetics
 from app.services.reproducibility_rubric import _mapped_columns
 from tests.services.scientific_read._factories import make_lot
-from tests.services.test_phase_d_numerical import _reaction
+from tests.services.test_advisory_numerical import _reaction
 
 
 def _context_hash(forward, reverse, mapping) -> str:

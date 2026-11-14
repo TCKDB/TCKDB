@@ -49,7 +49,7 @@ describe("computeArrheniusSeries -- k(T) at the domain ends against the hand-com
         expect(series.maxK).toBe(3000)
     })
 
-    it("plots k with the record's own reference temperature T0 (#620)", () => {
+    it("plots k with the record's own reference temperature T0", () => {
         // A=1e10, n=2, Ea=0: k(T0=298)/k(T0=1) = 1/298^2 at every T, derived here.
         const at298 = computeArrheniusSeries(record({ parameters: { A: 1e10, n: 2, Ea_kj_mol: 0, A_units: "cm3_mol_s", T0_k: 298 } }))!
         const at1 = computeArrheniusSeries(record({ parameters: { A: 1e10, n: 2, Ea_kj_mol: 0, A_units: "cm3_mol_s", T0_k: 1 } }))!

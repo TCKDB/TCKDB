@@ -79,8 +79,8 @@ function mockRecord(overrides: Record<string, unknown> = {}) {
             has_geometries: true,
             has_review: true,
         },
-        // Lean sibling projection (`ConformerObservationSiblingSummary`,
-        // issue #269) -- a ref + review badge, nothing else. Siblings no
+        // Lean sibling projection (`ConformerObservationSiblingSummary`)
+        // -- a ref + review badge, nothing else. Siblings no
         // longer carry their own evidence_summary/available_sections/
         // calculations/geometries: that data is one hop away, at the
         // sibling's own detail endpoint.

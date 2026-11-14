@@ -126,7 +126,7 @@ function baseRecord(overrides: Record<string, unknown> = {}) {
  * (`sm_one`: false, `sm_two`: true — with a real torsion row) — a fixture
  * with all records agreeing on this flag could not distinguish "records
  * genuinely differ" from "the flag is hardcoded", which is exactly the
- * defect issue #268 found on the conformer surface. `sm_two` is also given
+ * defect a hardcoded flag causes. `sm_two` is also given
  * a non-null supersession so that path is covered too.
  */
 function mockRecords() {

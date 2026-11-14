@@ -17,7 +17,7 @@ from tckdb_client.errors import TCKDBConnectionError, TCKDBHTTPError
 
 @pytest.fixture(autouse=True)
 def _base_url_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``--base-url`` has no default (issue #521); every call below omits
+    """``--base-url`` has no default; every call below omits
     it and relies on ``TCKDB_BASE_URL`` instead, set once here so each test
     can stay focused on what it actually exercises. ``test_no_base_url_...``
     below unsets this to cover the omitted-entirely case."""
@@ -785,7 +785,7 @@ def test_unknown_token_mixed_with_networks_is_not_silently_dropped(
 
 
 # ---------------------------------------------------------------------------
-# no base URL configured (issue #521)
+# no base URL configured
 # ---------------------------------------------------------------------------
 
 

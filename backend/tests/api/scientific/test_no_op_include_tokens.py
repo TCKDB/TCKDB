@@ -131,8 +131,8 @@ def test_entries_on_ts_search_returns_the_parents_entry_list(
     for record in body["records"]:
         block = record["entries"]
         assert block is not None, (
-            "include=entries was accepted and produced no field: the no-op "
-            "this change exists to remove."
+            "include=entries was accepted and produced no field: a no-op "
+            "include token."
         )
         refs = sorted(
             e["transition_state_entry"]["transition_state_entry_ref"]

@@ -165,8 +165,7 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
     })
 
     /**
-     * #439 (deployed) added `software_id`/`workflow_tool_release_id` to
-     * `energy_correction_scheme`; this page fetches both (always present
+     * `energy_correction_scheme` carries `software_id`/`workflow_tool_release_id`; this page fetches both (always present
      * on the record, not include-gated) and now renders them as their own
      * rows. Software renders through `softwareLabel` -- text only, never
      * a link built from `software_release_ref` (empty on this live row).

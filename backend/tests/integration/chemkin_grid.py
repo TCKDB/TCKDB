@@ -4,7 +4,7 @@ Both mechanisms are loaded by the pinned Cantera (``ck2yaml`` then
 ``Solution``) and evaluated on one declared grid of temperatures, pressures
 and one composition. Per species the reduced thermo functions Cp/R, H/RT and
 S/R are compared under the printed-precision bound
-(``tests/services/scientific_read/test_thermo_phase_a_numerical.py``); per
+(``tests/services/scientific_read/test_thermo_numerical_custody.py``); per
 reaction the forward rate constant and the forward rate of progress are
 compared under a bound derived from the printed precision of every rate
 parameter the export writes. Unsupported forms and export gaps are listed in
@@ -88,7 +88,7 @@ from cantera import ck2yaml
 from rdkit import Chem
 
 from app.services.scientific_read.chemkin_serialize import _KJ_PER_MOL_TO_CAL_PER_MOL
-from tests.services.scientific_read.test_thermo_phase_a_numerical import (
+from tests.services.scientific_read.test_thermo_numerical_custody import (
     print_error_bound,
     reduced,
 )
@@ -394,7 +394,7 @@ class GridComparison:
                 "composition": COMPOSITION,
             },
             "bounds": {
-                "thermo": "Phase A printed-precision bound on each NASA-7 coefficient (half a unit "
+                "thermo": "Printed-precision bound on each NASA-7 coefficient (half a unit "
                 "of the export's nine printed digits) plus 1e-10, per reduced function",
                 "kinetics": "half a unit of the export's printed grid on A (5 digits) and Ea "
                 "(4 decimals, cal/mol) plus the unit-chain error, propagated per form; "

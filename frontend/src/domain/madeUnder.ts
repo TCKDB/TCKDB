@@ -117,7 +117,7 @@ export function describeMadeUnder(m: MadeUnder, kind: MadeUnderKind = "assessmen
                 state: "stale",
                 badge: "Stale",
                 sentence:
-                    `${did} under ${rubricPhrase(m.rubric)} (stamped before the 2026-10 versioning reset). `
+                    `${did} under ${rubricPhrase(m.rubric)} (no version recorded). `
                     + `${currentNow} ${notRedone}`,
             }
         }

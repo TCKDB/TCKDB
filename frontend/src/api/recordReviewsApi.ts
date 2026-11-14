@@ -45,8 +45,7 @@ export class RecordReviewResponseError extends Error {
  * The route answers with a bare array and no total, so `hasMore` is
  * inferred from a full page rather than reported. That is why the page
  * says "there may be more" instead of naming a backlog size: the count
- * would need either a breaking change to this response or a second route
- * (task #257).
+ * would need either a breaking change to this response or a second route.
  */
 export type RecordReviewPage = {
     items: RecordReview[]
@@ -92,7 +91,7 @@ export async function listRecordReviews(options: {
 }
 
 /**
- * Fetch one page of the subject-grouped queue (task #269):
+ * Fetch one page of the subject-grouped queue:
  * `GET /api/v1/record-reviews/queue`.
  *
  * `options.limit`/`options.offset` count SUBJECTS, not records -- the

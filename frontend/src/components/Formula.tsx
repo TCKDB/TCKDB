@@ -41,8 +41,7 @@ export function Formula({ value }: { value: string }) {
  * unaffected) opts OUT of the SMILES-leads rule above, for exactly one
  * caller: the record review queue's reaction_entry subject heading
  * (`ReviewQueuePage.tsx`), which sits directly under species subject
- * headings that already show formula alone -- review #492 caught
- * `<ReactionEquation>`'s default rendering ("[CH3] (CH3) + [H] (H) ⇌ C
+ * headings that already show formula alone --  `<ReactionEquation>`'s default rendering ("[CH3] (CH3) + [H] (H) ⇌ C
  * (CH4)") as exactly the notation-switch and per-participant duplication
  * that page's own species blocks do not have. This is a narrower claim
  * than the isomerisation ruling above, not a reversal of it: the review

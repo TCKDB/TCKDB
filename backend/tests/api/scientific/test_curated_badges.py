@@ -139,7 +139,7 @@ NOT_ENVELOPES = {
     "NetworkSelectionManifest": "hashed, replayed manifest",
     "RelativeConformerEnergyManifest": "hashed, replayed manifest",
     "RelativeConformerEnergyCompareManifest": "hashed, replayed manifest",
-    "ScientificReleaseManifestResponse": "dataset release artifact (exempt, ADR 0023 Q7)",
+    "ScientificReleaseManifestResponse": "dataset release artifact (exempt)",
     "ScientificReleaseDetailResponse": "dataset release read (exempt)",
     "ScientificReleaseListResponse": "dataset release read (exempt)",
     "ScientificReleaseSelectionsResponse": "dataset release read (exempt)",

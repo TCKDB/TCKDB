@@ -58,7 +58,7 @@ function minimalRecord(overrides: Record<string, unknown> = {}) {
 }
 
 describe("geometryLinkSchema's source field", () => {
-    // #384 (merged, `bc3fd2d2`): `source` is the backend's
+    // `source` is the backend's
     // `CalculationInputGeometrySource` enum (`"deposited"` /
     // `"extracted_from_artifact"`), not a bare string -- an unexpected
     // third value must fail validation visibly (surfacing as the

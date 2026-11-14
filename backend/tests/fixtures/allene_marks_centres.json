@@ -1,6 +1,6 @@
 {
  "provenance": {
-  "purpose": "Independent witness for allene SMILES marks (#832 part 2). Labels written by Centres, not by TCKDB.",
+  "purpose": "Independent witness for allene SMILES marks. Labels written by Centres, not by TCKDB.",
   "mapping": "M is Ra, P is Sa (IUPAC; the sign of the torsion between the two CIP-higher substituents).",
   "cdk": {
    "url": "https://github.com/cdk/cdk/releases/download/cdk-2.13/cdk-2.13.jar",

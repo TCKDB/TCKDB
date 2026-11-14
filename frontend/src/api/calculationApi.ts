@@ -285,7 +285,7 @@ const geometryLinkSchema = z.object({
     role: z.string().nullable().optional(),
     natoms: z.number().nullable().optional(),
     geom_hash: z.string().nullable().optional(),
-    // #384 (merged, `bc3fd2d2`) adds this to the input-geometry link
+    // The input-geometry link summary carries this
     // summary only -- the two values of the backend's
     // `CalculationInputGeometrySource` enum (`backend/app/db/models/
     // common.py`): `"deposited"` (the default -- a producer-declared

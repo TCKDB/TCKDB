@@ -136,8 +136,8 @@ class TestTheJudgement:
         assert "shorter, never longer" in message
         assert message.isascii(), (
             "a message that reaches a response body and a log must be "
-            "ASCII; an em dash in one rolled back a whole upload against a "
-            "SQL_ASCII database on 2026-08-04 (see "
+            "ASCII; an em dash in one rolls back a whole upload against a "
+            "SQL_ASCII database (see "
             "backend/scripts/check_runtime_ascii.py)"
         )
 

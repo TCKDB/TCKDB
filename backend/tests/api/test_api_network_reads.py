@@ -5,7 +5,7 @@ the full identity + provenance graph (network, states, channels, solve,
 species, calculations).  ``network_kinetics`` rows, however, are not
 written by any existing workflow — so tests that exercise kinetics read
 endpoints insert those rows via raw ORM inserts on the shared test
-session, matching the pattern used in ``test_calculation_phase2_reads``.
+session, matching the pattern used in ``test_calculation_subresource_reads``.
 """
 
 from __future__ import annotations

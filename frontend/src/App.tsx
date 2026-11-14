@@ -100,9 +100,9 @@ function App() {
                 leave every literal-segment route with no `:section` to
                 read, so the page could no longer tell `/sp` from `/thermo`
                 from the default -- every tab would silently render Geometry
-                regardless of the URL, the exact bug finding #12 was about,
+                regardless of the URL, the silent-Geometry-tab bug,
                 just moved one level down instead of fixed.
-                `SpeciesEntrySectionRoute` below is the gate finding #12
+                `SpeciesEntrySectionRoute` below is the gate for that bug
                 actually asks for: an unrecognized segment (a stale link, a
                 mistyped guess like `/single-point`) renders the not-found
                 page instead of reaching `SpeciesEntryPage` at all, while a
@@ -181,8 +181,8 @@ function App() {
 // `calculations` is a legacy alias (listed in `LEGACY_ENTRY_SECTION_ALIASES`) that
 // `SpeciesEntryPage` itself knows how to redirect to the default tab
 // (see its own effect); every OTHER unrecognized segment -- a mistyped
-// guess like `/single-point`, never a URL this app served -- is finding
-// #12's silent-Geometry-tab bug and gets the not-found page instead.
+// guess like `/single-point`, never a URL this app served -- would be a
+// silent Geometry tab, so it gets the not-found page instead.
 function SpeciesEntrySectionRoute() {
   const { section } = useParams<{ section?: string }>()
   if (section !== undefined && !isEntrySection(section) && !LEGACY_ENTRY_SECTION_ALIASES.has(section)) {

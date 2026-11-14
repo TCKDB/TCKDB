@@ -198,7 +198,7 @@ def test_no_ownership_refusal_discloses_a_row_id(client) -> None:
         (ts_aec, _AEC_OWNER_MISMATCH),
         (statmech, _STATMECH_OWNER_MISMATCH),
     ]
-    assert len(cases) == 3, "the three reaction-bundle sites #195 coded"
+    assert len(cases) == 3, "the three reaction-bundle sites carrying a code"
     for payload, code in cases:
         resp = client.post(_URL, json=payload)
         assert resp.status_code == 422, resp.text[:800]

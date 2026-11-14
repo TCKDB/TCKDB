@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Script help, test names and site text describe behaviour only (Unreleased)
+
+- **Behaviour:** script `--help` and printed text, test names and assertion messages, and site wording state current behaviour without design-record, issue or date references. `backend/scripts/bulk_load_arc.py` takes its source directory from `--src` or the new `TCKDB_ARC_RUNS_DIR` environment variable and exits 2 naming both when neither is set. A review stamped with version 0 reads "(no version recorded)".
+- **Schema and migration:** none. New environment variable: `TCKDB_ARC_RUNS_DIR`.
+- **Versions:** `tckdb-client` 0.207.0 (help text and docstrings only); `tckdb-schemas` 0.174.5.
+
 ## API messages and summaries state rules without design-record references (Unreleased)
 
 - **Behaviour:** refusal and warning messages, the code catalogue notes, OpenAPI descriptions, the glossary and the CCCBDB importer's help text and User-Agent state the rule in the present tense, without design-record, issue, phase or date references. The artifact download route's summary reads "Download Artifact" (it was "Download Approved Artifact"); any authenticated caller may download any stored artifact, and the operation id is unchanged. The `tckdb-schemas` README points to the package changelog (`schemas/python/tckdb-schemas/CHANGELOG.md`), which now also holds the entries for 0.23.0 to 0.34.0 that the README used to carry. No error code, field, route or condition changes.

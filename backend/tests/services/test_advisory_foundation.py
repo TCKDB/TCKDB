@@ -20,7 +20,7 @@ from app.services.consistency.stoichiometry import (
     species_facts,
     species_scope_reason,
 )
-from tests.services.test_phase_d_numerical import R, _nasa9, _thermo
+from tests.services.test_advisory_numerical import R, _nasa9, _thermo
 
 LOW = (3.0, 2e-3, -4e-7, 3e-11, -1e-15, 20.0, 7.0)
 HIGH = (3.4, 1.1e-3, -2e-7, 1e-11, -3e-16, 120.0, 5.0)
@@ -270,7 +270,7 @@ def _entry(smiles, charge=0, isotope_key=None):
 def test_entry_facts_take_isotopes_from_the_entry_key():
     """Stored exactly as ``resolve_species_entry`` stores CD4: bare species SMILES, labelled key.
 
-    The real upload path is exercised in ``test_phase_d_isotope_scope.py``.
+    The real upload path is exercised in ``test_advisory_isotope_scope.py``.
     """
     stored = _entry("C", isotope_key="[2H]C([2H])([2H])[2H]")
     assert species_facts(stored.species).has_isotopes is False
@@ -280,7 +280,7 @@ def test_entry_facts_take_isotopes_from_the_entry_key():
 
 
 # -- species scope: one case per reason, plus in scope --
-# Isotope cases on real persisted entries live in test_phase_d_isotope_scope.py;
+# Isotope cases on real persisted entries live in test_advisory_isotope_scope.py;
 # the rows here cover branches the upload path refuses to create (unreadable
 # SMILES, dummy atoms, unrecorded charge) but a row could still carry.
 

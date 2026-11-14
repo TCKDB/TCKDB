@@ -1,7 +1,7 @@
-"""Build a disposable, catalog-scale benchmark corpus (Stage 4).
+"""Build a disposable, catalog-scale benchmark corpus.
 
-The deployed database is tiny — 55 species — so no query shape in the read API
-has ever been exercised at catalog scale. This script builds a **disposable**
+The deployed database is tiny, so no query shape in the read API
+is exercised at catalog scale by it. This script builds a **disposable**
 ``tckdb_bench_*`` database whose table cardinalities are scaled from the
 *measured* production inventory, so a plan recorded against it says something
 about the plan the deployment will eventually produce.
@@ -20,7 +20,7 @@ The target database name must match ``tckdb_bench_[a-z0-9_]*``. Anything else
 connection is opened. The script only ever talks to the host in ``DB_HOST``,
 which the caller must point at a local Postgres.
 
-Measured production inventory (55 species) and the per-species
+The production inventory and the per-species
 ratios derived from it are in :data:`PRODUCTION_INVENTORY`. Deviations from
 those ratios are declared in :data:`DEVIATIONS` and are written into the
 corpus manifest, so a number quoted from this corpus can always be traced back

@@ -123,7 +123,7 @@ def _starting(calls: list[str], *prefixes: str) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def test_unset_swaps_exactly_as_before(deploy) -> None:
+def test_unset_swaps_the_container_in_place(deploy) -> None:
     result, calls = deploy()
     assert result.returncode == 0, result.stderr
     swap = _starting(calls, "rm -f tckdb-api", "run -d", "create", "start", "rename", "network connect")

@@ -11,7 +11,7 @@ import SpeciesEntryPage from "./SpeciesEntryPage"
 import { conformerReadHandlers } from "../test/conformerReads"
 
 /**
- * ToC-top-alignment (follow-up to #321/#322/#323/#325): five record pages
+ * ToC-top-alignment: five record pages
  * (species entry, calculation, geometry, conformer basin, conformer
  * observation) each compose a header a different way -- some already
  * nested it inside `<PageShell>`'s children, one (`SpeciesEntryPage`)

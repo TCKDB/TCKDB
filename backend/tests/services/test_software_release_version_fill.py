@@ -343,7 +343,7 @@ def test_gaussian_banner_fills_build_and_says_so(db_session, script, monkeypatch
         True,
     )
     assert _run(script, monkeypatch, db_session, store, ["--software", "Gaussian"]) == 0
-    assert "also fills build from the banner (DR-0008 enriched)" in capsys.readouterr().out
+    assert "also fills build from the banner (enriched release)" in capsys.readouterr().out
     assert clean.build is None
 
 

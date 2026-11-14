@@ -76,7 +76,7 @@ def stub_doi(monkeypatch):
 @pytest.mark.parametrize(
     "model", [CalculationWithResultsPayload, ConformerCalculationIn]
 )
-def test_the_shared_calculation_payload_no_longer_declares_literature_id(model):
+def test_the_shared_calculation_payload_does_not_declare_literature_id(model):
     """Pinned on the model, not just on one route's rejection.
 
     ``ConformerCalculationIn`` subclasses the shared payload, so it is

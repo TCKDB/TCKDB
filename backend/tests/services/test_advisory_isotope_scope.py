@@ -20,7 +20,7 @@ from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.services.consistency.kinetics import compare_kinetics
 from app.services.consistency.stoichiometry import entry_facts, species_scope_reason
 from app.services.species_resolution import resolve_species_entry
-from tests.services.test_phase_d_numerical import _reaction
+from tests.services.test_advisory_numerical import _reaction
 
 
 @contextmanager

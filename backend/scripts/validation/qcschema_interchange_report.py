@@ -48,8 +48,8 @@ read needs it; see the exporter's "calculation-id gap"). Then:
 * **Identity.** Symbols, charge, multiplicity and mass numbers equal.
 * **Energy.** Not carried, and asserted not carried. The C1 mapping maps a
   driver-``hessian`` document to a ``freq`` record holding only the matrix;
-  ``properties.return_energy`` is not stored, and since tckdb-qcschema 0.5.0
-  (issue #573) the import's mapping report names it ``retained_only``: a
+  ``properties.return_energy`` is not stored, and the import's mapping report
+  names it ``retained_only``: a
   ``freq`` record has no energy field, and a sibling ``sp`` would need a
   dependency edge the schema does not allow from a ``freq``. The exporter
   fills ``properties.return_energy`` only from a same-level ``sp`` record on
@@ -58,7 +58,7 @@ read needs it; see the exporter's "calculation-id gap"). Then:
   the energy it did not store. The energy enters the cross-program comparison
   below directly from the fixture.
 * **Import report, complete.** Every field the round trip loses is named by the
-  import's mapping report (issue #573): stored but not exported, or listed
+  import's mapping report: stored but not exported, or listed
   ``retained_only`` or ``unsupported``. None may be missing from it.
 * **Fixed frame.** The export declares ``fix_com`` and ``fix_orientation``
   true on both molecules, because the exported Hessian is expressed in those
@@ -1119,7 +1119,7 @@ def markdown_summary(report: dict[str, Any]) -> str:
         f"{cp['rigid_body_residue']['gaussian']['max_abs_rigid_body_curvature_cm1']:.4f} | "
         f"{cp['rigid_body_residue']['psi4']['max_abs_rigid_body_curvature_cm1']:.4f} | |",
         "",
-        f"Rigid-body bound (Phase B): {cp['rigid_body_residue']['frame_consistency_bound_cm1']} cm^-1 "
+        f"Rigid-body bound: {cp['rigid_body_residue']['frame_consistency_bound_cm1']} cm^-1 "
         f"({cp['rigid_body_residue']['bound_source']}).",
         "Six lowest unprojected eigenvalues (cm^-1): Gaussian "
         + ", ".join(_f(v, ".4f") for v in cp["rigid_body_residue"]["gaussian"]["lowest_six_unprojected_eigenvalues_cm1"])

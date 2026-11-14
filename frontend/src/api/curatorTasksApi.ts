@@ -166,8 +166,8 @@ export async function reopenCuratorTask(taskId: number): Promise<CuratorTask> {
  * This is the ONLY way a curator task comes into existence. Nothing runs on
  * upload (the route's own docstring says so), so before this call the
  * archive's machine-review findings sit in audit events and the curator
- * queue stays empty however many submissions arrive -- which is what
- * task #256 is about.
+ * queue stays empty however many submissions arrive -- which this call
+ * prevents.
  *
  * Upserting, not appending: a finding that already has an open task reuses
  * it rather than raising a second one, and a finding whose task was closed

@@ -695,7 +695,7 @@ def test_hess_check_does_not_restale_the_reviewer_review(db_conn):
 
     from app.services.machine_review.admin_trigger import active_rubric_for_record_type
     from app.services.machine_review.rereview import MachineReviewReReviewDecision, plan_record_machine_rereview
-    from tests.services.test_phase_d_persistence import _seed_reviewer_review
+    from tests.services.test_advisory_persistence import _seed_reviewer_review
 
     # The reviewer family's kinetics recipe is its own rubric, not the hess check's.
     assert active_rubric_for_record_type("kinetics") == VersionRef(name="computed_kinetics", version=1)

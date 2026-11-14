@@ -23,7 +23,7 @@ from app.services.consistency.service import compare
 from app.services.species_resolution import resolve_species_entry
 from app.services.thermo_resolution import persist_thermo, resolve_thermo_upload
 from app.workflows.thermo import persist_thermo_upload
-from tests.services.test_phase_d_foundation import HIGH, LOW, _h_nasa7_kj
+from tests.services.test_advisory_foundation import HIGH, LOW, _h_nasa7_kj
 
 R = 8.31446261815324  # SI, independent of Cantera and the production module
 T298 = 298.15

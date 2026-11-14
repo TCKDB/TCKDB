@@ -223,7 +223,7 @@ class TestPureVectorGeometry:
         raw_cos_theta = float(np.dot(v1, v2)) / (
             float(np.linalg.norm(v1)) * float(np.linalg.norm(v2))
         )
-        assert raw_cos_theta > 1.0, "fixture no longer reproduces the fp overshoot"
+        assert raw_cos_theta > 1.0, "fixture does not reproduce the fp overshoot"
 
         assert bond_angle_deg(a, b, c) == pytest.approx(0.0, abs=1e-6)
 

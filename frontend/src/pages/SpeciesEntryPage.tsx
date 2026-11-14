@@ -245,7 +245,7 @@ function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: 
     // that render can be stale: on a fresh load of a legacy `/calculations`
     // link, `SpeciesEntryPage`'s canonicalization had already replaced the
     // URL with `/geometry` when this page first rendered, but this render
-    // still saw `/calculations` and wrote it straight back (#562).
+    // still saw `/calculations` and wrote it straight back.
     const location = useLocation()
     function writeConformerParam(conformerGroupRef: string, byPage: boolean) {
         const next = new URLSearchParams(searchParams)

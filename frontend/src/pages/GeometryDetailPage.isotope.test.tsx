@@ -51,7 +51,7 @@ function record(atoms: Atom[]) {
 const O: Atom = { element: "O", xyz: [0, 0, 0] }
 const hAt = (mass: number | null, x: number): Atom => ({ element: "H", mass, xyz: [x, 0.59, 0] })
 
-describe("GeometryDetailPage isotope labels (#685)", () => {
+describe("GeometryDetailPage isotope labels", () => {
     it("shows a D2O geometry as 2H atoms and a 2H2O formula, not H / H2O", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(record([O, hAt(2, 0.76), hAt(2, -0.76)]))))
         page()

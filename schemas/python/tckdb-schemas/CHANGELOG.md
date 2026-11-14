@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.174.5 - 2026-11-14
+
+The producer contract's further-reading list names the scientific check register once, for which checks refuse and which only warn and for the chemistry positions TCKDB enforces, and no longer links a design record. No refusal, warning, field or behaviour changes.
+
 ## 0.174.4 - 2026-11-14
 
 Refusal and warning messages in the package state the rule without design-record references, and the energy-correction frequency-level refusal drops "for now". The package README points to this changelog, and its changelog entries for 0.23.0 to 0.34.0 now live at the bottom of this file, without design-record references. No code, field, payload shape or condition changes.

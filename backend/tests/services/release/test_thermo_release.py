@@ -6,12 +6,12 @@ from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.services.record_review import set_record_review_status
 from app.services.release.manifest import load_manifest, verify_release
 from app.workflows.thermo import persist_thermo_upload
-from tests.schemas.test_thermo_phase_a_contract import IDENTITY
+from tests.schemas.test_thermo_creation_strictness import IDENTITY
 from tests.services.release._attest import attest_thermo
 from tests.services.release.test_release_manifest import _publish_with_selection
 
 
-def test_frozen_zero_kelvin_and_null_state_survive_new_uploads(
+def test_release_freezes_null_phase_and_reference_pressure_and_zero_kelvin_against_new_uploads(
     db_session, draft_release, curator, monkeypatch,
 ):
     values = {"phase": None, "reference_pressure_bar": None,
@@ -20,7 +20,7 @@ def test_frozen_zero_kelvin_and_null_state_survive_new_uploads(
     row = persist_thermo_upload(db_session, ThermoUploadRequest(species_entry=IDENTITY, **values))
     set_record_review_status(db_session, record_type=SubmissionRecordType.thermo,
                              record_id=row.id, status=RecordReviewStatus.approved,
-                             actor=curator, note="Phase A custody fixture")
+                             actor=curator, note="custody fixture")
     # A release refuses a record nobody agreed to license (B1); the direct
     # workflow call opens no submission, so license it the way an upload would.
     attest_thermo(db_session, depositor=curator, rows=[row])

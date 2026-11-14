@@ -285,7 +285,7 @@ def test_submission_owner_downloads_a_deposit_they_did_not_write(
     assert response.content == content
 
 
-def test_a_retired_submission_no_longer_changes_a_download(
+def test_a_retired_submission_does_not_change_a_download(
     client, db_session, monkeypatch, _api_test_user, _api_other_user
 ) -> None:
     """A rejected submission does not change a download.

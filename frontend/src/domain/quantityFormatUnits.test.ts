@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { QUANTITY_SPECS } from "./quantityFormat"
 
 /**
- * Closed unit whitelist for `QUANTITY_SPECS` (issue #531).
+ * Closed unit whitelist for `QUANTITY_SPECS`.
  *
  * The per-quantity tests in `quantityFormat.test.ts` and the section
  * component tests pin the unit of each spec that exists today, so a typo in

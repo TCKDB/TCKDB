@@ -356,7 +356,7 @@ class TestNoCataloguedCodeIsLost:
 class TestAFunctionNameIsNotACode:
     """The defect, provoked from the real refusals rather than a copy."""
 
-    def test_the_keyset_guard_no_longer_advertises_its_own_name(self):
+    def test_the_keyset_guard_does_not_advertise_its_own_name(self):
         """``keyset_predicate`` guards an argument invariant, so it fires
         only on a backend bug -- and must not answer with a ``code`` naming
         the function that had the bug.

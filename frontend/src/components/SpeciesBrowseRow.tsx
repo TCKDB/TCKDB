@@ -13,7 +13,7 @@ function token(value: string) {
  * leads, formula follows in parentheses) renders SMILES
  * alone (never falling back to the public ref, matching
  * `IdentifierSearch`'s `MatchHeadline` rule) when the archive computed no
- * formula for this species (#251). `SpeciesFace` already puts the SMILES
+ * formula for this species. `SpeciesFace` already puts the SMILES
  * in the title, so there is no separate SMILES line.
  */
 export function SpeciesBrowseRow({ record }: { record: SpeciesBrowseRecord }) {
