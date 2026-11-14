@@ -10,8 +10,8 @@ Use this module when:
 * A URL pattern that looks reasonable (``alldata2x.asp?casno=...``)
   appears broken or redirects to a formula-entry form.
 * The browser flow works but no obvious GET URL is available.
-* You need to decide whether to invest in a session-aware POST
-  resolver before committing to one.
+* You need to judge whether a session-aware POST resolver is
+  needed.
 
 Out of scope:
 

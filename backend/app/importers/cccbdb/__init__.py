@@ -1,11 +1,7 @@
-"""CCCBDB importer package (Phase 1 prototype).
-
-Phase 1 ships a fixture-driven parser for CCCBDB experimental species
-pages and produces normalized in-memory records. It does **not** write
-to the database and does **not** crawl CCCBDB live.
+"""CCCBDB importer package.
 
 See ``backend/docs/specs/cccbdb_importer.md`` for the design spec and
-``backend/app/importers/cccbdb/README.md`` for usage and roadmap.
+``backend/app/importers/cccbdb/README.md`` for usage.
 """
 
 from __future__ import annotations

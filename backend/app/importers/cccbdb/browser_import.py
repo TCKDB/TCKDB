@@ -6,8 +6,8 @@ Why this exists
 CCCBDB's scripted-fetch surface is unreliable:
 
 * ``alldata2x.asp?casno=...`` sometimes returns the formula-entry
-  form instead of species data (the failure mode the Phase 5b
-  classifier now rejects).
+  form instead of species data (the failure mode the
+  classifier rejects).
 * ``exp1x.asp`` / ``alldata1x.asp`` are themselves the formula-entry
   pages.
 * ``getformx.asp`` is the real form workflow, but Python ``requests``
@@ -93,7 +93,7 @@ class BrowserImportConfig:
     :param allow_unknown: When ``True``, ``Classification.unknown``
         responses are accepted as data (a deliberate escape hatch
         for pages that lack the strict identifier patterns the
-        Phase 5b classifier requires).
+        classifier requires).
     :param save_rejected_html: When ``True``, rejected pages are
         copied to ``rejected_html/`` for forensic inspection.
     :param note: Free-text note recorded on the manifest record.
@@ -254,7 +254,7 @@ def import_saved_species_page(
 def _is_accepted(
     classification: Classification, allow_unknown: bool
 ) -> bool:
-    """Phase 5a/5b gate: only ``molecule_data_page`` is accepted by
+    """Classification gate: only ``molecule_data_page`` is accepted by
     default. ``unknown`` is opt-in (the browser-saved corpus may
     occasionally surface pages that lack the strict identifier
     patterns the classifier requires)."""

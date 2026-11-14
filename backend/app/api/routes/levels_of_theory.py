@@ -46,7 +46,7 @@ def list_levels_of_theory(
     ri_approximation: RiApproximation | None = Query(None),
     lot_hash: str | None = Query(None),
 ):
-    # A merged row (#574) is another spelling of a listed row; it is not a
+    # A merged row is another spelling of a listed row; it is not a
     # level of theory of its own.
     base = select(LevelOfTheory.id).where(
         LevelOfTheory.id.not_in(select(LevelOfTheoryMerge.merged_lot_id))
@@ -90,7 +90,7 @@ def list_levels_of_theory(
 
 @router.get("/{lot_id}", response_model=LevelOfTheoryRead)
 def get_level_of_theory(lot_id: int, session: Session = Depends(get_db)):
-    # A merged row's id names the row it was merged into (#591), as its
+    # A merged row's id names the row it was merged into, as its
     # ``lot_...`` ref does on the scientific routes.
     row = session.get(LevelOfTheory, canonical_level_of_theory_id(session, lot_id))
     if row is None:

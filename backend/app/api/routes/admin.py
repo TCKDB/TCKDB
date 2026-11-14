@@ -132,12 +132,8 @@ def list_users(
 ) -> PaginatedResponse[AdminUserResponse]:
     """List accounts and their roles (admin only).
 
-    This exists because ``PATCH /admin/users/{user_id}/role`` is keyed on
-    a numeric user id and nothing in the API told an admin what those ids
-    were. The role-change route has shipped since v1 and has been
-    callable only by someone willing to read ids out of the database by
-    hand -- which means role management was, in practice, a DB operation
-    wearing an HTTP interface.
+    ``PATCH /admin/users/{user_id}/role`` is keyed on a numeric user id;
+    this listing gives an admin those ids.
 
     Ordering is by ``username``, which carries a uniqueness constraint
     and is therefore a total order -- no tie-break needed, and no
@@ -1145,22 +1141,16 @@ class AdminEnergyCorrectionSchemeProvenanceResponse(BaseModel):
 
     energy_correction_scheme_ref: str
     source_literature_ref: str | None = None
-    #: Renamed from ``software_ref`` when ``energy_correction_scheme``
-    #: moved from ``software_id`` to ``software_release_id``
-    #:. The value this field carries changed referent at
-    #: the same moment -- it is now a ``software_release`` public ref
-    #: (``srel_...``), not a ``software`` one (``soft_...``). Keeping the
-    #: old name would have left an admin client silently resolving the
-    #: ref against the wrong table; renaming makes the break visible.
+    #: A ``software_release`` public ref (``srel_...``), not a ``software``
+    #: one (``soft_...``).
     software_release_ref: str | None = None
     workflow_tool_release_ref: str | None = None
     #: Warnings raised while normalising the supplied refs, in the same
     #: shape and from the same source the upload path uses.
     #:
-    #: Widening ``software`` to ``SoftwareReleaseRef`` (PR 3) brought
-    #: ``normalize_composite_version`` onto this route, a validator
-    #: ``SoftwareRef`` never had. It *rewrites* what the admin sent: a
-    #: ``version`` of "Gaussian 16, Revision C.02" is split into
+    #: ``software`` is a ``SoftwareReleaseRef``, so
+    #: ``normalize_composite_version`` runs on this route. It *rewrites*
+    #: what the admin sent: a ``version`` of "Gaussian 16, Revision C.02" is split into
     #: ``version="16"``/``revision="C.02"``, and a ``name``/``version``
     #: pair naming two different programs is left alone but flagged.
     #: Both are exactly the right behaviours and neither may happen
@@ -1168,10 +1158,8 @@ class AdminEnergyCorrectionSchemeProvenanceResponse(BaseModel):
     #: provenance -- an admin who cannot see that their input was
     #: reshaped cannot tell whether it was reshaped correctly.
     #:
-    #: The upload path has surfaced these since it gained the validator
-    #: (``uploads.py``, via ``collect_ref_warnings``).
-    #: This route now gives the same answer to the same input rather than
-    #: a quieter one. Raised in review of #461.
+    #: The upload path surfaces these through ``collect_ref_warnings``
+    #: (``uploads.py``); this route gives the same answer to the same input.
     warnings: list[UploadWarning] = []
 
 

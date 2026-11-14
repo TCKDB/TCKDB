@@ -156,8 +156,7 @@ def thermo_search_post(
     """JSON-body variant for structured thermo search.
 
     All search fields, filters, includes, offset, and limit live
-    in the body. Query-string parameters are rejected (per Phase 4 POST
-    convention). ``sort`` in the body is rejected by the service layer.
+    in the body. Query-string parameters are rejected. ``sort`` in the body is rejected by the service layer.
     """
     forbidden = set(request.query_params.keys()) - _POST_ALLOWED_QS_KEYS
     if forbidden:

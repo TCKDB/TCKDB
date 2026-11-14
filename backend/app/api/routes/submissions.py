@@ -13,7 +13,7 @@ module only exposes:
 
 The supersede action is the one producer-facing write here (any
 authenticated caller, not only a curator), so it names both submissions
-by public ref and never by row id (#571). The caller must own both
+by public ref and never by row id. The caller must own both
 submissions or be a curator/admin; the service enforces that.
 
 Direct ``/uploads/*`` ingestion is intentionally NOT routed through this
@@ -108,8 +108,8 @@ def _ai_review_summary_from_event(event) -> SubmissionAIReviewSummaryRead:
             counts[severity] += 1
 
     return SubmissionAIReviewSummaryRead(
-        # The current event carries the reviewer's verdict as ``status``; ``label`` is the wire name the card has
-        # always had for it. (An earlier reading looked for a ``label`` key that no event ever wrote.)
+        # The current event carries the reviewer's verdict as ``status``;
+        # ``label`` is the wire name the card uses for it.
         label=details.get("status") if isinstance(details.get("status"), str) else None,
         summary=(
             details.get("summary")

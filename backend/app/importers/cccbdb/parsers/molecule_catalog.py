@@ -7,8 +7,8 @@ CRITICAL POLICY (also documented in
   preserved as ``raw_href`` for audit/debugging but are NEVER trusted
   as data-page URLs.
 * ``CCCBDBCatalogEntry.trusted_property_url`` and
-  ``.trusted_species_url`` are always ``None`` in Phase 3b. A future
-  search/form resolver may populate them; this parser does not.
+  ``.trusted_species_url`` are always ``None``; this parser does not
+  populate them.
 * The catalog must never be joined to property-table rows by formula
   alone as a hard identity match. Use
   :func:`app.importers.cccbdb.enrichment.propose_catalog_matches`
@@ -158,9 +158,8 @@ class _CatalogTableExtractor(HTMLParser):
         occasionally times out mid-response — the server emits the
         full menu, then dumps ~1800 ``<tr>`` rows of the catalog
         table, then bails with an "ASP 0113 Script timed out" page
-        WITHOUT closing the data ``<table>``. With the table-end
-        path being the only place :attr:`tables` was previously
-        appended to, the entire catalog table was silently dropped.
+        WITHOUT closing the data ``<table>``. Without the flush below,
+        that table would never be appended to :attr:`tables`.
 
         This close-time flush recovers from that truncation: any
         in-flight cell / row / table is finalized into
@@ -402,20 +401,18 @@ def _looks_like_relative_url(href: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Future resolver placeholder
+# Search/form resolver placeholder
 # ---------------------------------------------------------------------------
 
 
 def resolve_species_data_page_from_search(
     catalog_entry: CCCBDBCatalogEntry,
 ) -> None:
-    """Placeholder for a future CCCBDB search/form resolver.
+    """Placeholder for a CCCBDB search/form resolver.
 
-    Do not use raw hrefs from ``inchix.asp`` as trusted URLs. A future
-    implementation may use CCCBDB's search form/session flow, known
-    CAS-number routes, or manually curated URL mappings. This stub
-    raises so callers get a loud signal if they assume the resolver
-    exists.
+    Do not use raw hrefs from ``inchix.asp`` as trusted URLs. This stub
+    raises ``NotImplementedError`` so callers get a loud signal if they
+    assume the resolver exists.
     """
 
     raise NotImplementedError(

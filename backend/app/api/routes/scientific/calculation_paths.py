@@ -65,8 +65,8 @@ def scientific_calculation_scan(
     of the form ``calc_…``. Wrong-prefix refs return 422
     ``handle_type_mismatch``; unknown refs and unknown ids return 404.
     A calculation with no ``calc_scan_result`` row returns 404
-    ``scan_result_not_found`` (matches the legacy
-    ``/api/v1/calculations/{id}/scan-result`` semantics — the
+    ``scan_result_not_found`` (matches
+    ``/api/v1/calculations/{id}/scan-result`` — the
     requested resource genuinely doesn't exist for this calc).
 
     Pagination applies to the ``points`` array only — coordinates are

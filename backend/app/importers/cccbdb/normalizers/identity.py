@@ -2,7 +2,7 @@
 
 The helpers here are intentionally conservative: they clean up
 whitespace and known string prefixes, but they do **not** invoke RDKit
-or perform structural canonicalization. Phase 1 preserves CCCBDB's raw
+or perform structural canonicalization. The helpers preserve CCCBDB's raw
 identity strings verbatim wherever round-tripping is in doubt.
 """
 
@@ -67,8 +67,8 @@ def normalize_inchikey(value: str | None) -> str | None:
 def normalize_smiles(value: str | None) -> str | None:
     """Whitespace-strip a SMILES string.
 
-    Does **not** call RDKit. Canonicalization (if needed) is a
-    Phase-2 concern that lives in the builder layer.
+    Does **not** call RDKit; the importer passes SMILES through
+    uncanonicalised.
     """
 
     return collapse_whitespace(value)

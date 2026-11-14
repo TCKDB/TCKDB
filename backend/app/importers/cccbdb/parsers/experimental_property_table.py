@@ -132,8 +132,7 @@ PROPERTY_CONFIGS: dict[str, PropertyTableConfig] = {
         # The live ``expdiatomicsx.asp`` page emits no ``<th>`` header
         # row — every row is plain ``<td>``. Without
         # ``configured_column_names``, the H2 data row would be
-        # treated as the column header (which was the Phase 5d bug
-        # ``payloads_dryrun/diatomic_spectroscopic.json`` surfaced).
+        # treated as the column header.
         #
         # Column meanings: positions 0-2 + 8 are confidently the
         # molecule formula, name, ωe (vibrational frequency), and
@@ -164,7 +163,7 @@ PROPERTY_CONFIGS: dict[str, PropertyTableConfig] = {
     ),
     "quadrupole_moment": PropertyTableConfig(
         # Experimental quadrupole moments from CCCBDB's quadlistx.asp.
-        # Live header (May 2026):
+        # Live header:
         #
         #   Molecule | name | xx | yy | zz | squib | commment
         #
@@ -193,14 +192,12 @@ PROPERTY_CONFIGS: dict[str, PropertyTableConfig] = {
     ),
     "polarizability_iso": PropertyTableConfig(
         # Isotropic polarizability from CCCBDB's pollistx.asp. The
-        # live page header (verified by re-fetching pollistx.asp in
-        # May 2026) is:
+        # live page header is:
         #
         #   Molecule | name | State | Conformation | alpha | squib | commment
         #
         # so the isotropic value column is ``alpha`` (Bohr^3), NOT the
-        # dipole-sibling ``iso`` that the Phase 5c inferred shape
-        # assumed. Per-axis xx/yy/zz components are *not* on this
+        # dipole-sibling ``iso``. Per-axis xx/yy/zz components are *not* on this
         # page (those live on pollistx2.asp / pollistx3.asp); the
         # tensor anisotropy table is deferred work.
         #

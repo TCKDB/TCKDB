@@ -42,9 +42,8 @@ from app.services.upload_submission import open_job_submission
 router = APIRouter(route_class=ServerFaultRoute)
 
 # Per-route dependency wired onto every enqueue (POST) endpoint. The
-# status GET is intentionally left open so a client running an old
-# version can still poll a previously-enqueued job while the user
-# upgrades.
+# status GET is left open so a client running an old version can still
+# poll an already-enqueued job.
 _enqueue_deps = [Depends(require_supported_tckdb_client)]
 _CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})
 

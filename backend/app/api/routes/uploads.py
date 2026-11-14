@@ -235,9 +235,7 @@ class ComputedReactionUploadResult(BaseModel):
     reaction_id: int
     transition_state_entry_id: int | None = None
     #: The ``reaction_atom_map`` row this bundle wrote, if it carried an
-    #: ``atom_map`` block. Previously computed and dropped, which is why
-    #: every atom-map test in the tree reads it back through
-    #: ``/reactions/{id}/full`` instead of taking it from the 201.
+    #: ``atom_map`` block.
     atom_map_id: int | None = None
     kinetics_ids: list[int]
     thermo_ids: list[int]
@@ -299,7 +297,7 @@ def upload_conformer(
     if (replay := idem.maybe_replay()) is not None:
         return replay
     # The request-derived warnings are assembled in one place, shared with the
-    # bundle importer and the job worker (#647); see
+    # bundle importer and the job worker; see
     # ``conformer_request_warnings`` for why the stationary-point check is
     # not repeated there.
     warnings = conformer_request_warnings(request)

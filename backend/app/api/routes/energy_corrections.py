@@ -63,7 +63,7 @@ def list_energy_correction_schemes(
     if name is not None:
         base = base.where(EnergyCorrectionScheme.name == name)
     if level_of_theory_id is not None:
-        # A merged row's id names the row it was merged into (#591).
+        # A merged row's id names the row it was merged into.
         base = base.where(
             EnergyCorrectionScheme.level_of_theory_id
             == canonical_level_of_theory_id(session, level_of_theory_id)
@@ -133,7 +133,7 @@ def list_frequency_scale_factors(
 ):
     base = select(FrequencyScaleFactor.id)
     if level_of_theory_id is not None:
-        # A merged row's id names the row it was merged into (#591).
+        # A merged row's id names the row it was merged into.
         base = base.where(
             FrequencyScaleFactor.level_of_theory_id
             == canonical_level_of_theory_id(session, level_of_theory_id)

@@ -173,7 +173,7 @@ def scientific_conformers_search_get(
     visibility = apply_internal_ids_visibility(payload)
     # A gated field is materialised again on each nested
     # ``observations[*]`` record only when ``observation_details`` is
-    # also requested (issue #537) -- the default lean summary shape has
+    # also requested -- the default lean summary shape has
     # none of these keys to strip. ``ANYWHERE_SCOPE`` still has to reach
     # both depths, since the full shape can appear at either one.
     return omit_unrequested_sections(
@@ -211,7 +211,7 @@ def scientific_conformers_search_post(
     visibility = apply_internal_ids_visibility(payload)
     # A gated field is materialised again on each nested
     # ``observations[*]`` record only when ``observation_details`` is
-    # also requested (issue #537) -- the default lean summary shape has
+    # also requested -- the default lean summary shape has
     # none of these keys to strip. ``ANYWHERE_SCOPE`` still has to reach
     # both depths, since the full shape can appear at either one.
     return omit_unrequested_sections(
@@ -245,7 +245,7 @@ def scientific_conformer_group_detail(
     visibility = apply_internal_ids_visibility(payload)
     # A gated field is materialised again on each nested
     # ``observations[*]`` record only when ``observation_details`` is
-    # also requested (issue #537) -- the default lean summary shape has
+    # also requested -- the default lean summary shape has
     # none of these keys to strip. ``ANYWHERE_SCOPE`` still has to reach
     # both depths, since the full shape can appear at either one.
     return omit_unrequested_sections(
@@ -282,7 +282,7 @@ def scientific_conformer_observation_detail(
     visibility = apply_internal_ids_visibility(payload)
     # A gated field is materialised again on each nested
     # ``observations[*]`` record only when ``observation_details`` is
-    # also requested (issue #537) -- the default lean summary shape has
+    # also requested -- the default lean summary shape has
     # none of these keys to strip. ``ANYWHERE_SCOPE`` still has to reach
     # both depths, since the full shape can appear at either one.
     return omit_unrequested_sections(

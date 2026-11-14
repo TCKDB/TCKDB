@@ -1,4 +1,4 @@
-"""CCCBDB → TCKDB payload builders (Phase 2a).
+"""CCCBDB → TCKDB payload builders.
 
 Builders consume :mod:`app.importers.cccbdb` parser records and emit
 TCKDB-compatible upload payloads. They never touch the database.

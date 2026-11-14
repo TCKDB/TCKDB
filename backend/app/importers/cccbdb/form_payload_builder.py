@@ -1,6 +1,6 @@
 """Builder: CCCBDB form-result parsed JSON → ``MolecularPropertyObservationCreate``.
 
-Closes the loop from Phase 6/7 (form-resolver) to the same
+Closes the loop from the form resolver to the same
 ``MolecularPropertyObservationCreate`` channel the flat property-table
 builder already feeds. The builder consumes either:
 
@@ -11,7 +11,7 @@ builder already feeds. The builder consumes either:
 and yields one :class:`MolecularPropertyObservationCreate` per
 *workflow-ready* row.
 
-Phase 8 ships exactly one supported ``target_kind`` —
+Exactly one ``target_kind`` is supported —
 ``atomization_energy`` — because it has unambiguous semantics
 (scalar enthalpy at a fixed temperature, kJ/mol). Other targets land
 in the parsed archive but the builder skips them and emits a warning.

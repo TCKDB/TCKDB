@@ -162,8 +162,7 @@ def species_calculations_search_post(
     """JSON-body variant for structured species-calculation queries.
 
     All search fields, filters, includes, ranking, offset, and
-    limit live in the body. Query-string parameters are rejected
-    (Phase 4 / Phase 6 POST convention). Body field ``sort`` is rejected
+    limit live in the body. Query-string parameters are rejected. Body field ``sort`` is rejected
     by the service layer (v0 sort policy).
 
     ``record.provenance.submission_ref`` on each result is served only

@@ -1,6 +1,6 @@
 """CCCBDB property-table dry-run payload exporter.
 
-Composes the Phase 5c façade (``PropertyTableFetcher``,
+Composes the property-table façade (``PropertyTableFetcher``,
 ``PropertyTableParser``, ``PropertyTableIngestor``) end-to-end and
 emits one JSON file per property target plus an aggregate
 ``summary.json``. **Never writes to the database.** **Never fetches
@@ -283,7 +283,7 @@ def run_payload_dryrun(
     ingestor_obj = PropertyTableIngestor(catalog=catalog)
 
     # If not cache-only, populate the cache by running the underlying
-    # snapshot. This is the same code path Phase 5c's
+    # snapshot. This is the same code path
     # ``ingest_property_pilot`` uses; the wrapper exists so the
     # cache-only branch can skip it cleanly.
     if not use_cache_only:
@@ -392,8 +392,8 @@ def _run_one_target(
             )
             continue
         # Round-trip validation: model_dump -> model_validate. This
-        # catches Pydantic-encoder drift the same way Phase 2c's
-        # round-trip catches builder/schema drift on disk.
+        # catches Pydantic-encoder drift, as the on-disk
+        # round-trip tests catch builder/schema drift.
         try:
             payload_json = build_result.payload.model_dump(mode="json")
             MolecularPropertyObservationCreate.model_validate(payload_json)

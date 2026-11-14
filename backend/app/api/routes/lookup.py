@@ -409,7 +409,7 @@ def _lot_match(
 
     # Report LOT fields that were present but not queried
     # By identity key, so a dispersion folded into the method (``b3lyp-d3bj``,
-    # empty column) is reported like one in the column (#630).
+    # empty column) is reported like one in the column.
     dispersion_key = level_identity_keys(lot.method, lot.dispersion)[1]
     if dispersion_key:
         shown = lot.dispersion or dispersion_key

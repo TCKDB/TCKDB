@@ -293,12 +293,8 @@ _UNSAFE_HEADER_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
 def content_disposition_for(filename: str) -> str:
     """The complete ``Content-Disposition`` value for one stored file.
 
-    Returns the whole header rather than its pieces on purpose. An
-    earlier version returned ``(ascii_name, encoded)`` and let the route
-    assemble them, which meant a test could only check the pieces --
-    and a mutation that dropped the ``filename=`` half from the route
-    passed all eleven of them. Composition was the untested step, so
-    composition moved in here.
+    Returns the whole header rather than its pieces, so the composition
+    of the ASCII and encoded filename forms is testable here.
 
     RFC 6266 wants both: ``filename=`` for clients that only parse the
     original form, and ``filename*=`` carrying the real, possibly

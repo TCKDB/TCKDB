@@ -1,7 +1,7 @@
 """Hosted contribution-bundle endpoints.
 
 Exposes the v0 dry-run preview and the v0 submit/import endpoints. The
-dry run rehearses submit itself (#577), so the two refuse identically.
+dry run rehearses submit itself, so the two refuse identically.
 Submit/import imports a bundle through existing thermo/kinetics upload
 workflows and creates a ``submission`` row marked unreviewed/pending
 review — see ``docs/contribution-bundles/hosted-submit.md``.
