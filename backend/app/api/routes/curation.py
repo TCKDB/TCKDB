@@ -20,9 +20,11 @@ from app.schemas.entities.structure_evidence_finding import (
     StructureEvidenceFindingPageRead,
     StructureEvidenceFindingRead,
 )
+from app.schemas.entities.species_name import SpeciesNameCreate, SpeciesNameRead
 from app.services.reproducibility_assessment import get_latest_reproducibility_assessment
 from app.services.reproducibility_rubric import evaluate_and_append_reproducibility
 from app.services.scientific_record_supersession import supersede_scientific_record
+from app.services.species_name_curation import add_species_name, retire_species_name
 from app.services.structure_evidence_finding import (
     append_structure_evidence_finding,
     list_findings_for_subject,
@@ -151,3 +153,46 @@ def list_structure_evidence_findings(
         offset=pagination.skip,
         limit=pagination.limit,
     )
+
+
+def _name_read(row, species) -> SpeciesNameRead:
+    return SpeciesNameRead(
+        name_ref=row.public_ref,
+        species_ref=species.public_ref,
+        name=row.name,
+        kind=row.kind,
+        source_kind=row.source_kind,
+        created_at=row.created_at,
+        retired_at=row.retired_at,
+    )
+
+
+@router.post(
+    "/species-names",
+    response_model=SpeciesNameRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_supported_tckdb_client)],
+)
+def create_species_name(
+    body: SpeciesNameCreate,
+    session: Session = Depends(get_write_db, scope="function"),
+    actor: AppUser = Depends(require_curator_or_admin),
+) -> SpeciesNameRead:
+    """Give a species a searchable name. The caller is recorded as the author."""
+    row, species = add_species_name(session, actor=actor, species_ref=body.species_ref, name=body.name, kind=body.kind)
+    return _name_read(row, species)
+
+
+@router.post(
+    "/species-names/{name_ref}/retire",
+    response_model=SpeciesNameRead,
+    dependencies=[Depends(require_supported_tckdb_client)],
+)
+def retire_species_name_route(
+    name_ref: str,
+    session: Session = Depends(get_write_db, scope="function"),
+    _actor: AppUser = Depends(require_curator_or_admin),
+) -> SpeciesNameRead:
+    """Retire a name so it is no longer searched. Retiring a retired name changes nothing."""
+    row, species = retire_species_name(session, name_ref=name_ref)
+    return _name_read(row, species)
