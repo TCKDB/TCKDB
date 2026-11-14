@@ -1,4 +1,7 @@
 import { useMemo } from "react"
+import { LevelLabel } from "../components/LevelLabel"
+import { RecordLink } from "../components/RecordLink"
+import { geometryWords } from "../domain/recordWords"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../record-identity-header.css"
@@ -150,8 +153,7 @@ function Ledger({ group }: { group: ConformerGroup }) {
                                 <ul className="shape-spread">
                                     {spreads.map((line) => (
                                         <li key={`${line.kind}-${line.levelLabel}-${line.program}`}>
-                                            {line.kind === "sp" ? "Single-point energies" : "Final energies of the optimisations"} at <span className="t-preserve-case">{line.levelLabel}</span> with{" "}
-                                            <span className="t-preserve-case">{line.program}</span> differ by up to {line.kjMol.toFixed(2)} <span className="t-preserve-case">kJ/mol</span> across{" "}
+                                            {line.kind === "sp" ? "Single-point energies" : "Final energies of the optimisations"} at {line.level ? <LevelLabel levelOfTheory={line.level} program={line.program} /> : <span className="t-preserve-case">{line.levelLabel} · {line.program}</span>} differ by up to {line.kjMol.toFixed(2)} <span className="t-preserve-case">kJ/mol</span> across{" "}
                                             {line.count} calculations.
                                         </li>
                                     ))}
@@ -217,7 +219,7 @@ function Ledger({ group }: { group: ConformerGroup }) {
                         <div className="geometry-links">
                             {geometries.map(({ geometry, calculationRefs }) => (
                                 <div className="geometry-link" key={geometry.geometry_ref}>
-                                    <Link to={`/geometries/${geometry.geometry_ref}`}>{geometry.geometry_ref}</Link>
+                                    <RecordLink kind="geometry" to={`/geometries/${geometry.geometry_ref}`} label={geometryWords(geometry.natoms)} />
                                     <span>
                                         produced by <CalcLinks refs={calculationRefs} />
                                         {geometry.natoms != null ? ` · ${geometry.natoms} atoms` : ""}
@@ -260,7 +262,6 @@ function ObservationItem({ observation, position, row, singlePoints, optimisatio
         <li className="observation-item">
             <p className="observation-item-head">
                 <Link to={`/conformer-observations/${core.conformer_observation_ref}`}>Observation {position}</Link>{" "}
-                <code className="data t-preserve-case">{core.conformer_observation_ref}</code>{" "}
                 <ReviewChip status={core.review.status} explain={false} />{" "}
                 <span className="observation-origin">Origin: {words(core.scientific_origin) ?? "not recorded"}</span>
             </p>
@@ -273,8 +274,8 @@ function ObservationItem({ observation, position, row, singlePoints, optimisatio
                 <p className="observation-geometries">
                     Geometry output: {geometries.map(({ calculation_ref: calculationRef, geometry }) => (
                         <span key={`${calculationRef}:${geometry.geometry_ref}`}>
-                            <Link to={`/geometries/${geometry.geometry_ref}`}>{geometry.geometry_ref}</Link>
-                            {" from "}<Link to={`/calculations/${calculationRef}`}>{calculationRef}</Link>
+                            <RecordLink kind="geometry" to={`/geometries/${geometry.geometry_ref}`} label={geometryWords(geometry.natoms)} />
+                            {" from "}<RecordLink kind="calculation" to={`/calculations/${calculationRef}`} label="Calculation" />
                         </span>
                     ))}
                 </p>

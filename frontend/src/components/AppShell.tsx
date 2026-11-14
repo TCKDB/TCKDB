@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useId, useRef, useState, type FocusEvent, type FormEvent, type KeyboardEvent } from "react"
-import { NavLink, Outlet, useNavigate } from "react-router-dom"
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom"
+import { LevelLabelScope } from "./LevelLabel"
 import { ThemeToggle } from "./ThemeToggle"
 import { AuthStatus } from "./AuthStatus"
 import { Announcer } from "./Announcer"
@@ -101,6 +102,7 @@ function MoreMenu() {
 
 export function AppShell() {
     const phone = useMediaQuery(PHONE_QUERY)
+    const { pathname } = useLocation()
     return <div className="archive-shell">
         <a className="skip-link" href="#main-content">Skip to content</a>
         <header className="site-bar">
@@ -116,7 +118,7 @@ export function AppShell() {
         </header>
         <RouteFocus />
         <Announcer />
-        <main id="main-content" tabIndex={-1}><Suspense fallback={<LoadingPage />}><Outlet /></Suspense></main>
+        <main id="main-content" tabIndex={-1}><LevelLabelScope key={pathname}><Suspense fallback={<LoadingPage />}><Outlet /></Suspense></LevelLabelScope></main>
         <footer className="archive-footer"><span>TCKDB · Theoretical Chemical Kinetics Database</span><span>Public scientific records</span></footer>
         {phone && <nav className="tab-bar" aria-label="Primary navigation">
             {TAB_LINKS.map((item) => <NavItemLink key={item.to} className="tab-bar-item" item={item} />)}

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom"
 import "../conformer-group.css"
 import "../entry-science.css"
 import type { ConformerProjection } from "../api/speciesEntryApi"
-import { LevelOfTheoryLink } from "./LevelOfTheoryLink"
+import { LevelLabel } from "./LevelLabel"
 import { SectionHeading } from "./PageSections"
 
 // This site's established link convention (`conformer-group.css`'s
@@ -114,7 +114,7 @@ export function ConformerGeometryTab({ conformer }: { conformer: ConformerProjec
                                                     <Link className="data" to={`/calculations/${calculation.calculation_ref}`} style={linkStyle}>
                                                         {calculation.calculation_ref}
                                                     </Link>
-                                                    {calculation.level_of_theory ? <> (<LevelOfTheoryLink levelOfTheory={calculation.level_of_theory} />)</> : " (level of theory not recorded)"}
+                                                    {calculation.level_of_theory ? <> (<LevelLabel levelOfTheory={calculation.level_of_theory} />)</> : " (level of theory not recorded)"}
                                                 </Fragment>
                                             ))}
                                             {" → "}

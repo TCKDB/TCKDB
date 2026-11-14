@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
-import { Link, useParams } from "react-router-dom"
+import { RecordLink } from "../components/RecordLink"
+import { useParams } from "react-router-dom"
 // See `ReactionEntryPage.tsx`'s own import-header comment for why these two
 // are imported directly here rather than relied on transitively: this page
 // hand-builds its identity-header markup (no `record_entry`-shaped branch
@@ -307,7 +308,7 @@ function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
                                                 <td className="num" data-label="Relative energy">{formatKjMol(row.energy_kj_mol)}</td>
                                                 <td data-label="Source calculation">
                                                     {row.source_calculation_ref
-                                                        ? <Link to={`/calculations/${row.source_calculation_ref}`}><code className="data">{row.source_calculation_ref}</code></Link>
+                                                        ? <RecordLink kind="calculation" to={`/calculations/${row.source_calculation_ref}`} label="Calculation" />
                                                         : <span className="record-identity-absent-inline">not recorded</span>}
                                                 </td>
                                             </tr>
@@ -331,7 +332,7 @@ function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
                                                 <td className="num" data-label="Reverse barrier">{formatKjMol(row.reverse_barrier_kj_mol)}</td>
                                                 <td data-label="Source calculation">
                                                     {row.source_calculation_ref
-                                                        ? <Link to={`/calculations/${row.source_calculation_ref}`}><code className="data">{row.source_calculation_ref}</code></Link>
+                                                        ? <RecordLink kind="calculation" to={`/calculations/${row.source_calculation_ref}`} label="Calculation" />
                                                         : <span className="record-identity-absent-inline">not recorded</span>}
                                                 </td>
                                             </tr>
@@ -401,7 +402,7 @@ function ReactionsSection({ channels, reactionEntries, totalChannels }: {
                             <th scope="col">Path kind</th>
                             <th scope="col">Transition state</th>
                             <th scope="col">Review</th>
-                            <th scope="col">Ref</th>
+                            <th scope="col">Entry</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -416,7 +417,7 @@ function ReactionsSection({ channels, reactionEntries, totalChannels }: {
                                 <td data-label="Path kind">{statusLabel(row.pathKind)}</td>
                                 <td data-label="Transition state">
                                     {row.transitionStateEntryRef
-                                        ? <Link to={`/transition-state-entries/${row.transitionStateEntryRef}`}><code className="data">{row.transitionStateEntryRef}</code></Link>
+                                        ? <RecordLink kind="transition-state" to={`/transition-state-entries/${row.transitionStateEntryRef}`} label="Transition state" context={`channel ${row.channelNumber}`} />
                                         : <span className="record-identity-absent-inline">{row.pathKind === "barrierless" ? "none — barrierless" : "not recorded"}</span>}
                                 </td>
                                 <td data-label="Review">
@@ -424,7 +425,7 @@ function ReactionsSection({ channels, reactionEntries, totalChannels }: {
                                         ? <span className={reviewPillClass(row.entry.review.status)}>{statusLabel(row.entry.review.status)}</span>
                                         : <span className="record-identity-absent-inline">not recorded</span>}
                                 </td>
-                                <td data-label="Ref"><Link to={`/reaction-entries/${row.reactionEntryRef}`}><code className="data">{row.reactionEntryRef}</code></Link></td>
+                                <td data-label="Entry"><RecordLink kind="reaction-entry" to={`/reaction-entries/${row.reactionEntryRef}`} label="Reaction entry" context={`channel ${row.channelNumber}`} /></td>
                             </tr>
                         ))}
                     </tbody>

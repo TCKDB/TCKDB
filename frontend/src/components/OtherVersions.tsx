@@ -45,7 +45,7 @@ export function OtherVersions({ entry }: { entry: SpeciesEntryProjection }) {
                                         {current ? <>{label} <span className="entry-versions-here">(this page)</span></> : <Link to={`/species-entries/${version.species_entry_ref}`}>{label}</Link>}
                                     </p>
                                     <p className="entry-versions-meta">{versionHolds(version)}</p>
-                                    <p className="entry-versions-meta"><ReviewChip status={version.review.status} explain={false} /> <code className="t-preserve-case">{version.species_entry_ref}</code></p>
+                                    <p className="entry-versions-meta"><ReviewChip status={version.review.status} explain={false} /></p>
                                 </li>
                             )
                         })}

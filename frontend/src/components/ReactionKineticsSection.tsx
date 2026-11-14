@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom"
+import { RecordLink } from "./RecordLink"
+import { calculationWords } from "../domain/recordWords"
 import type { ReactionFullCalculationEvidence, ReactionKineticsRecord, ReactionTransitionStateInFull } from "../api/reactionEntryApi"
 import { formatQuantity } from "../domain/quantityFormat"
 import { formatArrheniusValue } from "../domain/kineticsTable"
@@ -162,9 +163,9 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
     const unitLabel = aUnitsWord(record.parameters.A_units)
     const recordAnchor = `#kinetics-${record.kinetics_ref}`
     const sourceLevels = [
-        { role: "geometry", label: resolvedLevels.geometry ? lotLabel(resolvedLevels.geometry) : "" },
-        { role: "frequency", label: resolvedLevels.frequency ? lotLabel(resolvedLevels.frequency) : "" },
-        { role: "energy", label: resolvedLevels.energy ? lotLabel(resolvedLevels.energy) : "" },
+        { role: "geometry", label: resolvedLevels.geometry ? lotLabel(resolvedLevels.geometry) : "", level: resolvedLevels.geometry ?? undefined },
+        { role: "frequency", label: resolvedLevels.frequency ? lotLabel(resolvedLevels.frequency) : "", level: resolvedLevels.frequency ?? undefined },
+        { role: "energy", label: resolvedLevels.energy ? lotLabel(resolvedLevels.energy) : "", level: resolvedLevels.energy ?? undefined },
     ]
     const sourceProgram = softwareCellText(record.provenance.primary_software)
 
@@ -247,7 +248,7 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
 
             {record.provenance.network_kinetics_ref && (
                 <p className="note">
-                    Bridged to pressure-dependent network kinetics <code className="data">{record.provenance.network_kinetics_ref}</code>.
+                    Bridged to pressure-dependent network kinetics.
                 </p>
             )}
 
@@ -256,7 +257,7 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
                     <dt>TS opt calculation (kinetics' own link)</dt>
                     <dd>
                         {record.provenance.ts_opt_calculation_ref
-                            ? <Link to={`/calculations/${record.provenance.ts_opt_calculation_ref}`}><code className="data">{record.provenance.ts_opt_calculation_ref}</code></Link>
+                            ? <RecordLink kind="calculation" to={`/calculations/${record.provenance.ts_opt_calculation_ref}`} label={calculationWords("opt")} />
                             : <span className="record-identity-absent-inline">not recorded</span>}
                     </dd>
                 </div>
@@ -264,7 +265,7 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
                     <dt>TS freq calculation (kinetics' own link)</dt>
                     <dd>
                         {record.provenance.ts_freq_calculation_ref
-                            ? <Link to={`/calculations/${record.provenance.ts_freq_calculation_ref}`}><code className="data">{record.provenance.ts_freq_calculation_ref}</code></Link>
+                            ? <RecordLink kind="calculation" to={`/calculations/${record.provenance.ts_freq_calculation_ref}`} label={calculationWords("freq")} />
                             : <span className="record-identity-absent-inline">not recorded</span>}
                     </dd>
                 </div>
@@ -272,7 +273,7 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
                     <dt>TS sp calculation (kinetics' own link)</dt>
                     <dd>
                         {record.provenance.ts_sp_calculation_ref
-                            ? <Link to={`/calculations/${record.provenance.ts_sp_calculation_ref}`}><code className="data">{record.provenance.ts_sp_calculation_ref}</code></Link>
+                            ? <RecordLink kind="calculation" to={`/calculations/${record.provenance.ts_sp_calculation_ref}`} label={calculationWords("sp")} />
                             : <span className="record-identity-absent-inline">not recorded</span>}
                         {spNote && <div className="note">({spNote})</div>}
                     </dd>
@@ -280,7 +281,7 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
                 {record.provenance.transition_state_entry_ref && (
                     <div>
                         <dt>Transition-state entry used</dt>
-                        <dd><Link to={`/transition-state-entries/${record.provenance.transition_state_entry_ref}`}>{record.provenance.transition_state_entry_ref}</Link></dd>
+                        <dd><RecordLink kind="transition-state" to={`/transition-state-entries/${record.provenance.transition_state_entry_ref}`} label="Transition state" /></dd>
                     </div>
                 )}
             </dl>

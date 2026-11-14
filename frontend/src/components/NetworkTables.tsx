@@ -28,8 +28,6 @@ export function NetworkStatesTable({ states }: { states: NetworkState[] }) {
                                                 <Link to={`/species-entries/${participant.species_entry_ref}`}>
                                                     <code className="data">{participant.canonical_smiles}</code>
                                                 </Link>
-                                                {" "}
-                                                <code className="data">{participant.species_entry_ref}</code>
                                             </li>
                                         ))}
                                     </ul>

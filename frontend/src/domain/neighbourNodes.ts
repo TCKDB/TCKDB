@@ -9,11 +9,11 @@ export type NeighbourNode = {
     label: string
     /** How it relates to this entry. */
     relation: string
-    /** The node's own reference, kept whole here; the drawing shortens it and every text form shows it in full. */
+    /** The node's own reference, for matching nodes to records; never shown. */
     ref?: string
     /** The page or section it opens; `null` only for a failed read, or when nothing lists the records yet (the node then says so). */
     to: string | null
-    /** A short second line in plain words ("optimisation, b3lyp/def2tzvp"); shown when the node has no ref of its own. */
+    /** A short second line in plain words ("optimisation, b3lyp/def2tzvp"); shown under the label. */
     sub?: string
     /** The second line of the drawing only, when it must say more than the list does ("Reactant · [CH2]C=C"). */
     drawnNote?: string

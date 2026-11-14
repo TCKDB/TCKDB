@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom"
+import { RecordLink } from "./RecordLink"
+import { calculationWords } from "../domain/recordWords"
 import type { EffectiveSetting, RoleCalculationSettings } from "../api/effectiveSettingsSchema"
 import {
     absentReasonText,
@@ -178,7 +179,7 @@ export function SettingsBehindValue({ block, idSuffix = "", recordRef }: {
                                 {item.calculation_ref ? (
                                     <>
                                         <td data-label="Calculation">
-                                            <Link className="data" to={`/calculations/${item.calculation_ref}`}>{item.calculation_ref}</Link>
+                                            <RecordLink kind="calculation" to={`/calculations/${item.calculation_ref}`} label={calculationWords(item.calculation_type)} context={levelRoleLabel(item.role)} />
                                             {calculationTypeTag(item.calculation_type) && (
                                                 <span className="settings-calc-type">{calculationTypeTag(item.calculation_type)}</span>
                                             )}

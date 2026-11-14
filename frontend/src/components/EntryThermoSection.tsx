@@ -1,5 +1,7 @@
 import type { ReactNode } from "react"
-import { Link } from "react-router-dom"
+import { RecordLink } from "./RecordLink"
+import { RefsDisclosure } from "./RefsDisclosure"
+import { calculationWords, conformerGroupWords, recordWords } from "../domain/recordWords"
 import "../conformer-group.css"
 import "../entry-science.css"
 import type { ConformerProjection } from "../api/speciesEntryApi"
@@ -8,7 +10,6 @@ import { conformerLabel, partitionByConformerLink, thermoConformerGroupRef } fro
 import { groupByFingerprint, thermoRecordFingerprint } from "../domain/identicalRecordGroups"
 import {
     allProductLevelsAgree,
-    productLevelsAgree,
     anyNotation,
     type ProductLevels,
 } from "../domain/productLevels"
@@ -20,7 +21,6 @@ import { ListPager } from "./ListPager"
 import type { ListMeta } from "../api/listEnvelope"
 import type { PageRequest } from "../domain/paging"
 import { useRegisteredSection } from "../hooks/usePageSections"
-import { levelOfTheoryPath } from "../domain/methodsLinks"
 import { ConformerAttributionGroups } from "./ConformerAttributionGroups"
 import { Disclosure } from "./Disclosure"
 import { SectionHeading } from "./PageSections"
@@ -104,11 +104,11 @@ function reviewSummaryText(summary: ThermoListResponse["review_summary"]) {
     return parts.length > 0 ? parts.join(" · ") : "no records"
 }
 
-function thermoRecordFallback(record: ThermoRecord) {
+function thermoRecordFallback() {
     return (
         <article className="science-record card" role="alert">
             <p className="empty-projection">
-                Record <code className="data">{record.thermo_ref}</code> could not be displayed. Other
+                A thermo record could not be displayed. Other
                 records on this page are unaffected.
             </p>
         </article>
@@ -179,7 +179,7 @@ function thermoSectionLabels(records: ThermoRecord[]): Map<string, string> {
 function makeThermoRecordRenderer(sectionLabels: Map<string, string>) {
     return function renderThermoRecord(record: ThermoRecord) {
         return (
-            <SectionErrorBoundary key={record.thermo_ref} fallback={thermoRecordFallback(record)}>
+            <SectionErrorBoundary key={record.thermo_ref} fallback={thermoRecordFallback()}>
                 <ThermoRecordCard record={record} sectionLabel={sectionLabels.get(record.thermo_ref) ?? null} />
             </SectionErrorBoundary>
         )
@@ -209,7 +209,7 @@ function makeThermoGroupedRenderer(sectionLabels: Map<string, string>) {
                 .map((record) => sectionLabels.get(record.thermo_ref))
                 .find((label): label is string => label != null) ?? null
             return (
-                <SectionErrorBoundary key={representative.thermo_ref} fallback={thermoRecordFallback(representative)}>
+                <SectionErrorBoundary key={representative.thermo_ref} fallback={thermoRecordFallback()}>
                     <IdenticalThermoRecordsCard records={group.records} sectionLabel={sectionLabel} />
                 </SectionErrorBoundary>
             )
@@ -315,9 +315,9 @@ function ThermoRecordCard({ record, sectionLabel }: { record: ThermoRecord; sect
             <div className="science-record-heading">
                 <h3 id={`thermo-heading-${record.thermo_ref}`}>{modelKindLabel(record.model_kind)} thermo record</h3>
                 <span className="value-pill value-pill--muted">{statusLabel(record.review.status)}</span>
-                <code className="data">{record.thermo_ref}</code>
             </div>
             <ThermoRecordBody record={record} />
+            <RefsDisclosure refs={[{ label: "Thermo record", value: record.thermo_ref }]} />
         </article>
     )
 }
@@ -481,7 +481,7 @@ function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: Thermo
             <IdenticalThermoGroupRefs records={records} />
             <Disclosure className="identical-record-group-detail" summary={`Show all ${records.length} records individually`}>
                 {records.map((record) => (
-                    <SectionErrorBoundary key={record.thermo_ref} fallback={thermoRecordFallback(record)}>
+                    <SectionErrorBoundary key={record.thermo_ref} fallback={thermoRecordFallback()}>
                         <ThermoRecordCard record={record} sectionLabel={null} />
                     </SectionErrorBoundary>
                 ))}
@@ -520,13 +520,13 @@ function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
                 <table className="data-table" aria-label="Records sharing these identical values">
                     <thead>
                         <tr>
-                            <th scope="col">Ref</th>
+                            <th scope="col">Record</th>
                             <th scope="col">Review</th>
                             <ProductLevelsTableHead showNotation={showNotation} />
                             <th scope="col">Primary calculation</th>
                             <th scope="col">Freq calculation</th>
                             <th scope="col">SP calculation</th>
-                            <th scope="col">Statmech ref</th>
+                            <th scope="col">Statmech</th>
                             <th scope="col">Software</th>
                             <th scope="col">Workflow tool</th>
                         </tr>
@@ -537,19 +537,19 @@ function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
                             const primaryRef = provenance?.primary_calculation?.calculation_ref ?? null
                             return (
                                 <tr key={record.thermo_ref}>
-                                    <td data-label="Ref"><code className="data">{record.thermo_ref}</code></td>
+                                    <td data-label="Record">{recordWords(index + 1)}</td>
                                     <td data-label="Review">{statusLabel(record.review.status)}</td>
                                     <ProductLevelsTableCells levels={levelsByRecord[index]} showNotation={showNotation} />
                                     <td data-label="Primary calculation">
-                                        <CalculationRefCell calculationRef={primaryRef} />
+                                        <CalculationRefCell calculationRef={primaryRef} words={calculationWords("opt")} />
                                     </td>
                                     <td data-label="Freq calculation">
-                                        <CalculationRefCell calculationRef={provenance?.freq_calculation_ref ?? null} primaryRef={primaryRef} />
+                                        <CalculationRefCell calculationRef={provenance?.freq_calculation_ref ?? null} primaryRef={primaryRef} words={calculationWords("freq")} />
                                     </td>
                                     <td data-label="SP calculation">
-                                        <CalculationRefCell calculationRef={provenance?.sp_calculation_ref ?? null} primaryRef={primaryRef} />
+                                        <CalculationRefCell calculationRef={provenance?.sp_calculation_ref ?? null} primaryRef={primaryRef} words={calculationWords("sp")} />
                                     </td>
-                                    <td data-label="Statmech ref">{provenance?.statmech_ref ? <code className="data">{provenance.statmech_ref}</code> : "none"}</td>
+                                    <td data-label="Statmech">{provenance?.statmech_ref ? "linked" : "none"}</td>
                                     <td data-label="Software">{softwareLabel(provenance?.software_release) ?? "not recorded"}</td>
                                     <td data-label="Workflow tool">{toolReleaseLabel(provenance?.workflow_tool_release) ?? "not recorded"}</td>
                                 </tr>
@@ -582,13 +582,13 @@ function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
  * differing case -- true for every sampled Freq cell today -- must never
  * be hidden, only the identical one.
  */
-function CalculationRefCell({ calculationRef, primaryRef = null }: { calculationRef: string | null; primaryRef?: string | null }) {
+function CalculationRefCell({ calculationRef, primaryRef = null, words }: { calculationRef: string | null; primaryRef?: string | null; words: string }) {
     if (!calculationRef) return <>none</>
     // Plain text, not a link -- like the "none" branch above, this
     // cell has no calculation of its own to point at; the ref is already
     // linked from the Primary column in the same row.
     if (primaryRef && calculationRef === primaryRef) return <>same as primary</>
-    return <Link className="data" to={`/calculations/${calculationRef}`}>{calculationRef}</Link>
+    return <RecordLink kind="calculation" to={`/calculations/${calculationRef}`} label={words} />
 }
 
 /**
@@ -648,7 +648,7 @@ function NasaBlock({ nasa, thermoRef, idSuffix = "" }: { nasa: ThermoRecord["nas
                         <div><dt>T high (K)</dt><dd><QuantityValue value={formatQuantity("thermo_temperature_k", nasa.t_high, null)} /></dd></div>
                     </dl>
                     <div className="table-scroll">
-                        <table className="data-table" aria-label={`NASA-7 coefficients for ${thermoRef}`}>
+                        <table className="data-table" aria-label="NASA-7 coefficients">
                             <thead>
                                 <tr>
                                     <th scope="col">Range</th>
@@ -686,7 +686,7 @@ function Nasa9Block({ nasa9, thermoRef, idSuffix = "" }: { nasa9: ThermoRecord["
             <h4 className="model-block-heading" id={`nasa9-${thermoRef}${idSuffix}`}>NASA-9 polynomial</h4>
             {nasa9 && nasa9.length > 0 ? (
                 <div className="table-scroll">
-                    <table className="data-table" aria-label={`NASA-9 intervals for ${thermoRef}`}>
+                    <table className="data-table" aria-label="NASA-9 intervals">
                         <thead>
                             <tr>
                                 <th scope="col">Interval</th>
@@ -758,7 +758,7 @@ function PointsBlock({ points, thermoRef, idSuffix = "" }: { points: ThermoRecor
             {points && points.length > 0 ? (
                 <Disclosure summary={`${points.length} temperature point${points.length === 1 ? "" : "s"}`}>
                     <div className="table-scroll table-scroll--compact">
-                        <table className="data-table" aria-label={`Evaluated thermo points for ${thermoRef}`}>
+                        <table className="data-table" aria-label="Evaluated thermo points">
                             <thead>
                                 <tr>
                                     <th scope="col">T (K)</th>
@@ -913,6 +913,13 @@ function provenanceCalculationRows(provenance: NonNullable<ThermoRecord["provena
     return { rows, missing }
 }
 
+function calculationWordsForLabels(labels: readonly string[]): string {
+    const text = labels.join(" ").toLowerCase()
+    if (text.includes("freq")) return calculationWords("freq")
+    if (text.includes("single") || text.includes("sp ")) return calculationWords("sp")
+    return "Calculation"
+}
+
 function CalculationProvenanceRows({ provenance }: { provenance: NonNullable<ThermoRecord["provenance"]> }) {
     const { rows, missing } = provenanceCalculationRows(provenance)
     return (
@@ -920,7 +927,7 @@ function CalculationProvenanceRows({ provenance }: { provenance: NonNullable<The
             {rows.map((row) => (
                 <div key={row.ref}>
                     <dt>{row.labels.join(" / ")}</dt>
-                    <dd><Link className="data" to={`/calculations/${row.ref}`}>{row.ref}</Link></dd>
+                    <dd><RecordLink kind="calculation" to={`/calculations/${row.ref}`} label={calculationWordsForLabels(row.labels)} /></dd>
                 </div>
             ))}
             {missing.map((label) => (
@@ -950,11 +957,6 @@ function ProvenanceBlock({ provenance, productLevels, thermoRef, idSuffix = "" }
     // `productLevels` renders the levels: ALWAYS three labelled lines
     // (Geometry/Frequencies/Energy), agreeing or not; see
     // `components/ProductLevels.tsx`'s own header comment.
-    // "Level of theory ref" stays a SEPARATE row alongside it, shown ONLY
-    // when the three genuinely agree: with three distinct levels there are
-    // up to three distinct refs, and no single one of them is "the" ref
-    // this row could report without picking a winner among the others.
-    const levelsAgree = productLevelsAgree(productLevels)
     // "none" = the record links to no calculation and no statmech, so there is
     // nothing these fields could come from. "not recorded" = something
     // is linked but this field on it is NULL.
@@ -964,15 +966,6 @@ function ProvenanceBlock({ provenance, productLevels, thermoRef, idSuffix = "" }
             <h4 className="model-block-heading" id={`provenance-${thermoRef}${idSuffix}`}>Provenance</h4>
             <dl className="kv-list">
                 <ProductLevelsFact levels={productLevels} />
-                {/* A ref is a ref regardless of
-                    whether this page happens to link it: these render as `.data`, like the
-                    calc refs two rows below. */}
-                {levelsAgree && (
-                    <div>
-                        <dt>Level of theory ref</dt>
-                        <dd>{productLevels.geometry?.level_of_theory_ref ? <Link className="data" to={levelOfTheoryPath(productLevels.geometry.level_of_theory_ref)}>{productLevels.geometry.level_of_theory_ref}</Link> : noLinkLabel}</dd>
-                    </div>
-                )}
                 <div>
                     <dt>Software</dt>
                     <dd>{softwareLabel(provenance.software_release) ?? "not recorded"}</dd>
@@ -984,12 +977,12 @@ function ProvenanceBlock({ provenance, productLevels, thermoRef, idSuffix = "" }
                 <CalculationProvenanceRows provenance={provenance} />
                 {/* No dedicated statmech detail page exists in this project (see the
                     module docstring), so this stays plain text rather than a dead link. */}
-                <div><dt>Statmech ref</dt><dd>{provenance.statmech_ref ? <span className="data">{provenance.statmech_ref}</span> : "none"}</dd></div>
+                <div><dt>Statmech</dt><dd>{provenance.statmech_ref ? "linked" : "none"}</dd></div>
                 <div>
                     <dt>Conformer</dt>
                     <dd>
                         {provenance.conformer_group_ref
-                            ? <Link className="data" to={`/conformer-groups/${provenance.conformer_group_ref}`}>{provenance.conformer_group_ref}</Link>
+                            ? <RecordLink kind="conformer-group" to={`/conformer-groups/${provenance.conformer_group_ref}`} label={conformerGroupWords()} />
                             : noLinkLabel}
                     </dd>
                 </div>

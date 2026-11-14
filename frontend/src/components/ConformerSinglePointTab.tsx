@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Link } from "react-router-dom"
+import { RecordLink } from "./RecordLink"
 import "../conformer-group.css"
 import "../entry-science.css"
 import "../energy-display.css"
@@ -13,7 +13,7 @@ import {
     type EnergyDisplayUnit,
 } from "../domain/energyUnits"
 import { softwareLabel } from "../domain/provenanceFormat"
-import { LevelOfTheoryLink } from "./LevelOfTheoryLink"
+import { LevelLabel } from "./LevelLabel"
 import { SectionHeading } from "./PageSections"
 
 type Calculation = NonNullable<NonNullable<ConformerProjection["observations"]>[number]["calculations"]>[number]
@@ -131,11 +131,11 @@ export function ConformerSinglePointTab({ conformer, spEnergies }: {
                                     return (
                                         <tr key={row.key}>
                                             <td data-label="Observation">
-                                                <Link className="data" to={`/conformer-observations/${row.observationRef}`}>{row.observationRef}</Link>
+                                                <RecordLink kind="conformer-observation" to={`/conformer-observations/${row.observationRef}`} label="Observation" />
                                             </td>
                                             <td data-label="Calculation">
                                                 {row.calculation
-                                                    ? <Link className="data" to={`/calculations/${row.calculation.calculation_ref}`}>{row.calculation.calculation_ref}</Link>
+                                                    ? <RecordLink kind="calculation" to={`/calculations/${row.calculation.calculation_ref}`} label="Calculation" />
                                                     : "not recorded"}
                                             </td>
                                             <td className="num" data-label="Energy">
@@ -152,7 +152,7 @@ export function ConformerSinglePointTab({ conformer, spEnergies }: {
                                                 )}
                                             </td>
                                             <td data-label="Level of theory">
-                                                {row.calculation?.level_of_theory ? <LevelOfTheoryLink levelOfTheory={row.calculation.level_of_theory} /> : "not recorded"}
+                                                {row.calculation?.level_of_theory ? <LevelLabel levelOfTheory={row.calculation.level_of_theory} /> : "not recorded"}
                                             </td>
                                             <td data-label="Software">
                                                 {row.calculation ? (softwareLabel(row.calculation.software_release) ?? "not recorded") : "not recorded"}

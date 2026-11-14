@@ -1,4 +1,5 @@
 import { useId, useState, type ReactNode } from "react"
+import { recordWords } from "../domain/recordWords"
 import "../arrhenius-chart.css"
 import type { ReactionKineticsRecord } from "../api/reactionEntryApi"
 import {
@@ -122,6 +123,8 @@ import { Disclosure } from "./Disclosure"
 
 export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[] }) {
     const { panels, excluded } = buildArrheniusChartData(kinetics)
+    const recordNumbers = new Map(kinetics.map((record, index) => [record.kinetics_ref, index + 1] as const))
+    const recordText = (ref: string) => recordWords(recordNumbers.get(ref) ?? 1)
 
     // ONE control for the whole section (see header comment above) --
     // defaults to temperature in K.
@@ -195,6 +198,7 @@ export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[
                         <ArrheniusPanelChart
                             key={key}
                             panel={panel}
+                            recordText={recordText}
                             xAxisMode={xAxisMode}
                             selectedUnits={displayUnitsByPanelKey.get(key)}
                             onSelectUnits={(units) => setSelectedUnitsByPanel((prev) => ({ ...prev, [key]: units }))}
@@ -221,7 +225,7 @@ export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[
                 <ul className="arrhenius-chart-excluded-notes">
                     {excluded.map((item) => (
                         <li key={item.kinetics_ref} className="note">
-                            {`${item.kinetics_ref} is not plotted: ${item.reasons.join("; ")}.`}
+                            {`${recordText(item.kinetics_ref)} is not plotted: ${item.reasons.join("; ")}.`}
                         </li>
                     ))}
                 </ul>
@@ -253,11 +257,11 @@ export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[
                                 // breaking `findByText`'s exact-match
                                 // uniqueness assumption used throughout
                                 // `ReactionEntryPage.test.tsx`.
-                                summary={<code className="data">{`k(T) table — ${record.kinetics_ref}`}</code>}
+                                summary={<code className="data">{`k(T) table — ${recordText(record.kinetics_ref)}`}</code>}
                                 count={displayRows.length}
                             >
                                 <div className="table-scroll">
-                                    <table className="data-table kinetics-k-table" aria-label={`k(T) for ${record.kinetics_ref}`}>
+                                    <table className="data-table kinetics-k-table" aria-label={`k(T) for ${recordText(record.kinetics_ref)}`}>
                                         <caption>k(T) = A·T^n·exp(−Ea/(R·T)){unitLabel ? `, in ${unitLabel}` : ""}</caption>
                                         <thead>
                                             <tr>
@@ -286,7 +290,7 @@ export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[
     )
 }
 
-function ArrheniusLegend({ panel, displaySeriesDepositedUnits }: { panel: ArrheniusPanelData, displaySeriesDepositedUnits: (ref: string) => string | null }) {
+function ArrheniusLegend({ panel, recordText, displaySeriesDepositedUnits }: { panel: ArrheniusPanelData, recordText: (ref: string) => string, displaySeriesDepositedUnits: (ref: string) => string | null }) {
     return (
         <ul className="arrhenius-chart-legend" aria-label="Kinetics record series">
             {panel.series.map((series, index) => (
@@ -307,7 +311,7 @@ function ArrheniusLegend({ panel, displaySeriesDepositedUnits }: { panel: Arrhen
                         own surface regardless of what the panel is
                         currently displaying. */}
                     <code className="data">
-                        {`series ${index + 1} — ${series.kinetics_ref} (deposited: ${arrheniusUnitLabel(displaySeriesDepositedUnits(series.kinetics_ref))})`}
+                        {`series ${index + 1} — ${recordText(series.kinetics_ref)} (deposited: ${arrheniusUnitLabel(displaySeriesDepositedUnits(series.kinetics_ref))})`}
                     </code>
                 </li>
             ))}
@@ -438,8 +442,9 @@ function ArrheniusYAxisSelect({ panel, selectedUnits, onSelectUnits }: {
     )
 }
 
-function ArrheniusPanelChart({ panel, xAxisMode, selectedUnits, onSelectUnits, ownControls }: {
+function ArrheniusPanelChart({ panel, recordText, xAxisMode, selectedUnits, onSelectUnits, ownControls }: {
     panel: ArrheniusPanelData
+    recordText: (ref: string) => string
     xAxisMode: ArrheniusXAxisMode
     selectedUnits: string | undefined
     onSelectUnits: (units: string) => void
@@ -470,7 +475,7 @@ function ArrheniusPanelChart({ panel, xAxisMode, selectedUnits, onSelectUnits, o
     const xTickLabels = formatTicks(xTicks)
     const yTickLabels = formatTicks(yTicks)
 
-    const refList = panel.series.map((series) => series.kinetics_ref).join(", ")
+    const refList = panel.series.map((series) => recordText(series.kinetics_ref)).join(", ")
     // The axis clause names what x actually is, and -- in the inverse mode
     // -- states BOTH the reading convention (high T at the left) and the
     // straight-line fact, since the
@@ -497,6 +502,7 @@ function ArrheniusPanelChart({ panel, xAxisMode, selectedUnits, onSelectUnits, o
             )}
             <ArrheniusLegend
                 panel={panel}
+                recordText={recordText}
                 displaySeriesDepositedUnits={(ref) => panel.series.find((series) => series.kinetics_ref === ref)?.depositedUnits ?? null}
             />
             <div className="arrhenius-chart-panel">

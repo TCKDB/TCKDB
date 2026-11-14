@@ -1,5 +1,8 @@
 import type { ReactNode } from "react"
-import { Link, useParams } from "react-router-dom"
+import { baseLabel } from "../domain/levelLabel"
+import { RecordLink } from "../components/RecordLink"
+import { geometryWords } from "../domain/recordWords"
+import { useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../calculation-detail.css"
 import { BROWSE_KIND_PATHS } from "../api/browseApi"
@@ -36,17 +39,16 @@ import { Disclosure } from "../components/Disclosure"
 import { EnergyDisplay } from "../components/EnergyDisplay"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
 import { Formula } from "../components/Formula"
-import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
+import { LevelLabel } from "../components/LevelLabel"
 import { PageShell } from "../components/PageShell"
 import { RecordMap } from "../components/RelationshipMap"
 import { calculationNodes } from "../domain/recordMapNodes"
 import { conformerGroupName } from "../domain/conformerEvidence"
-import { lotLabel } from "../api/scientificSchemas"
 import { SectionHeading } from "../components/PageSections"
 import { QuantityValue } from "../components/QuantityValue"
 import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
-import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
+import { RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { typeLabel } from "../domain/calculationTypeFormat"
 import { isContradiction, legacyShapeText } from "../domain/compositeVerification"
 import { correctionSchemePath, frequencyScaleFactorPath } from "../domain/methodsLinks"
@@ -429,7 +431,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
         inputGeometryRefs: calculation.input_geometries ? inputGeometries.map((link) => link.geometry_ref) : null,
         outputGeometryRefs: calculation.output_geometries ? outputGeometries.map((link) => link.geometry_ref) : null,
         dependencies: calculation.dependencies ? dependencies : null,
-        levelOfTheory: lot ? { ref: lot.level_of_theory_ref ?? null, label: lotLabel(lot) } : null,
+        levelOfTheory: lot ? { ref: lot.level_of_theory_ref ?? null, label: baseLabel(lot) } : null,
         inputExtractedFromArtifact: inputGeometries[0]?.source === "extracted_from_artifact",
     })
 
@@ -483,7 +485,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                             <div>
                                 <dt>Level of theory</dt>
                                 <dd className="composite-label">
-                                    {lot ? <LevelOfTheoryLink levelOfTheory={lot} /> : "not recorded"}
+                                    {lot ? <LevelLabel levelOfTheory={lot} /> : "not recorded"}
                                     {lot?.composite_scheme && <div className="note"><CompositeSchemeLink scheme={lot.composite_scheme} /></div>}
                                 </dd>
                             </div>
@@ -618,13 +620,9 @@ function ConformerNote({ conformer }: { conformer: CalculationConformer | null }
             <div>
                 <dt>Conformer</dt>
                 <dd>
-                    <Link to={`/conformer-observations/${conformer.conformer_observation_ref}`}>
-                        <code className="data">{conformer.conformer_observation_ref}</code>
-                    </Link>
+                    <RecordLink kind="conformer-observation" to={`/conformer-observations/${conformer.conformer_observation_ref}`} label="Observation" />
                     {" · "}
-                    <Link to={`/conformer-groups/${conformer.conformer_group_ref}`}>
-                        group <code className="data">{conformer.conformer_group_ref}</code>
-                    </Link>
+                    <RecordLink kind="conformer-group" to={`/conformer-groups/${conformer.conformer_group_ref}`} label="Conformer group" />
                 </dd>
             </div>
         </dl>
@@ -804,7 +802,7 @@ function CompositeResultDetail({ composite, compositeScheme }: {
                                             <td data-label="Slot">{slotLabel(input.slot)}</td>
                                             <td data-label="Cardinal number">{input.cardinal_number ?? "none"}</td>
                                             <td data-label="Calculation">
-                                                <Link to={`/calculations/${input.calculation_ref}`}><code className="data">{input.calculation_ref}</code></Link>
+                                                <RecordLink kind="calculation" to={`/calculations/${input.calculation_ref}`} label="Calculation" context={`term ${input.term_position + 1}`} />
                                             </td>
                                         </tr>
                                     ))}
@@ -970,7 +968,7 @@ function GeometriesSection({
                     <h3 className="t-heading-2">Output geometry</h3>
                     <div className="geometry-links">
                         <div className="geometry-link" key={output[0].geometry_ref}>
-                            <Link to={`/geometries/${output[0].geometry_ref}`}>{output[0].geometry_ref}</Link>
+                            <RecordLink kind="geometry" to={`/geometries/${output[0].geometry_ref}`} label={geometryWords(output[0].natoms)} />
                             <span>{output[0].natoms != null ? `${output[0].natoms} atoms` : "atom count not recorded"}</span>
                             {input[0].source === "extracted_from_artifact" && (
                                 <span className="value-pill value-pill--muted">extracted from the deposited input file</span>
@@ -1030,7 +1028,7 @@ function GeometryLinkList({ title, links, emptyText, availability, contradicted 
                 <div className="geometry-links">
                     {links.map((link) => (
                         <div className="geometry-link" key={`${title}-${link.geometry_ref}`}>
-                            <Link to={`/geometries/${link.geometry_ref}`}>{link.geometry_ref}</Link>
+                            <RecordLink kind="geometry" to={`/geometries/${link.geometry_ref}`} label={geometryWords(link.natoms)} />
                             <span>
                                 {link.role ? `${statusLabel(link.role)} · ` : ""}
                                 {link.natoms != null ? `${link.natoms} atoms` : "atom count not recorded"}
@@ -1301,12 +1299,12 @@ function EnergyCorrectionsSection({ calculationRef, available }: { calculationRe
                                     <td data-label="Target">{row.target_record_ref ?? "not recorded"}</td>
                                     <td data-label="Scheme ref">
                                         {row.energy_correction_scheme_ref
-                                            ? <Link to={correctionSchemePath(row.energy_correction_scheme_ref)}>{row.energy_correction_scheme_ref}</Link>
+                                            ? <RecordLink kind="scheme" to={correctionSchemePath(row.energy_correction_scheme_ref)} label="Energy-correction scheme" />
                                             : "not recorded"}
                                     </td>
                                     <td data-label="Frequency scale factor ref">
                                         {row.frequency_scale_factor_ref
-                                            ? <Link to={frequencyScaleFactorPath(row.frequency_scale_factor_ref)}>{row.frequency_scale_factor_ref}</Link>
+                                            ? <RecordLink kind="scheme" to={frequencyScaleFactorPath(row.frequency_scale_factor_ref)} label="Frequency scale factor" />
                                             : "not recorded"}
                                     </td>
                                 </tr>
@@ -1348,13 +1346,13 @@ function GeometryValidationSection({ available, applicable, state, onOpen }: {
                             [
                                 "Input geometry",
                                 row.input_geometry_ref
-                                    ? <Link to={`/geometries/${row.input_geometry_ref}`}>{row.input_geometry_ref}</Link>
+                                    ? <RecordLink kind="geometry" to={`/geometries/${row.input_geometry_ref}`} label="Geometry" />
                                     : "not recorded",
                             ],
                             [
                                 "Output geometry",
                                 row.output_geometry_ref
-                                    ? <Link to={`/geometries/${row.output_geometry_ref}`}>{row.output_geometry_ref}</Link>
+                                    ? <RecordLink kind="geometry" to={`/geometries/${row.output_geometry_ref}`} label="Geometry" />
                                     : "not recorded",
                             ],
                         ]} />
@@ -1388,7 +1386,7 @@ function SCFStabilitySection({ calculationRef, available }: { calculationRef: st
                             [
                                 "Source calculation",
                                 row.source_calculation_ref
-                                    ? <Link to={`/calculations/${row.source_calculation_ref}`}>{row.source_calculation_ref}</Link>
+                                    ? <RecordLink kind="calculation" to={`/calculations/${row.source_calculation_ref}`} label="Calculation" />
                                     : "not recorded",
                             ],
                         ]} />
@@ -1643,7 +1641,6 @@ function ArtifactsSection({ calculationRef, available }: { calculationRef: strin
                             <tr>
                                 <th scope="col">Kind</th>
                                 <th scope="col">Size</th>
-                                <th scope="col">Artifact ref</th>
                                 <th scope="col">SHA-256</th>
                                 <th scope="col">File</th>
                             </tr>
@@ -1653,20 +1650,6 @@ function ArtifactsSection({ calculationRef, available }: { calculationRef: strin
                                 <tr key={`artifact-${index}`}>
                                     <td data-label="Kind">{statusLabel(row.kind)}</td>
                                     <td data-label="Size" className="num">{row.bytes.toLocaleString()} bytes</td>
-                                    <td data-label="Artifact ref">
-                                        {row.artifact_ref ? (
-                                            <>
-                                                <code className="data">{row.artifact_ref}</code>{" "}
-                                                <CopyButton value={row.artifact_ref} label="artifact" srLabel="ref" />
-                                            </>
-                                        ) : (
-                                            // Every calculation_artifact row carries a public_ref
-                                            // (backend/docs/deployment/migrations.md, "Public-ref
-                                            // backfill"), so this branch is unreachable
-                                            // in practice; the field stays optional in the wire schema.
-                                            "no ref"
-                                        )}
-                                    </td>
                                     {/* The sha256 is the artifact's identity — the storage URI (row.uri)
                                         is not a downloadable link, so this is the one stable handle for
                                         the bytes this row describes. */}

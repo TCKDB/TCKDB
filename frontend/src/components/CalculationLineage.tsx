@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { RecordLink } from "./RecordLink"
 import { Link } from "react-router-dom"
 import type { LineageStep } from "../domain/calculationLineage"
 
@@ -13,7 +14,7 @@ export function DependencyStrip({ steps, ownWords }: { steps: readonly LineageSt
                 {steps.map((step) => (
                     <li className="dep-strip-step" key={`${step.role}-${step.ref}`}>
                         <span className="dep-strip-words">{step.words}</span>
-                        <Link to={`/calculations/${step.ref}`}><code className="data">{step.ref}</code></Link>
+                        <RecordLink kind="calculation" to={`/calculations/${step.ref}`} label="Calculation" context={step.words} />
                     </li>
                 ))}
             </ul>
@@ -32,7 +33,7 @@ export function UsedByList({ steps }: { steps: readonly LineageStep[] }) {
         <ul className="used-by-list link-list">
             {steps.map((step) => (
                 <li key={`${step.role}-${step.ref}`}>
-                    {step.words}: <Link to={`/calculations/${step.ref}`}><code className="data">{step.ref}</code></Link>
+                    <RecordLink kind="calculation" to={`/calculations/${step.ref}`} label={step.words} />
                 </li>
             ))}
         </ul>

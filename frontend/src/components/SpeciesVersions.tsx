@@ -18,17 +18,15 @@ export function SpeciesVersions({ species }: { species: SpeciesOverview }) {
             ) : (
                 <ul className="entry-versions-list">
                     {species.entries.map((version) => {
-                        const refId = `version-ref-${version.species_entry_ref}`
                         return (
                             <li key={version.species_entry_ref} className="entry-versions-item">
                                 <p className="entry-versions-title">
                                     <RecordGlyph kind="species-entry" />{" "}
-                                    <Link to={`/species-entries/${version.species_entry_ref}`} aria-describedby={refId}>{versionFacts(version)}</Link>
+                                    <Link to={`/species-entries/${version.species_entry_ref}`}>{versionFacts(version)}</Link>
                                 </p>
                                 <p className="entry-versions-meta">{versionHolds(version)}</p>
                                 <p className="entry-versions-meta">
-                                    <ReviewChip status={version.review.status} explain={false} />{" "}
-                                    <code id={refId} className="t-preserve-case">{version.species_entry_ref}</code>
+                                    <ReviewChip status={version.review.status} explain={false} />
                                 </p>
                             </li>
                         )

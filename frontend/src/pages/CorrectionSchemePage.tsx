@@ -1,9 +1,11 @@
 import { GuideLink } from "../components/GuideLink"
+import { baseLabel } from "../domain/levelLabel"
+import { RecordLink } from "../components/RecordLink"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../methods.css"
 import { CorrectionSchemeTable } from "../components/CorrectionSchemeTable"
-import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
+import { LevelLabel } from "../components/LevelLabel"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { energyUnitLabel, ENERGY_DISPLAY_UNITS, type EnergyDisplayUnit } from "../domain/energyUnits"
@@ -16,7 +18,6 @@ import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton } from "../components/RefsDisclosure"
 import { ledeText } from "../domain/ledeText"
 import { schemeKindLabel } from "../domain/correctionSchemeFormat"
-import { lotLabel } from "../api/scientificSchemas"
 import { levelOfTheoryPath } from "../domain/methodsLinks"
 import { softwareLabel, toolReleaseLabel, words } from "../domain/provenanceFormat"
 import { useCorrectionScheme } from "../hooks/useCorrectionScheme"
@@ -52,7 +53,7 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
     // Titled from the scheme kind and its software, never the depositor's own name for it.
     const software = softwareLabel(record.software_release)
     const title = software ? `${schemeKindLabel(scheme.scheme_kind)}, ${software}` : schemeKindLabel(scheme.scheme_kind)
-    const levelLabel = record.level_of_theory ? lotLabel(record.level_of_theory) : null
+    const levelLabel = record.level_of_theory ? baseLabel(record.level_of_theory) : null
     useDocumentTitle("Energy-correction scheme", levelLabel ? `${title} at ${levelLabel}` : title)
 
     return (
@@ -78,7 +79,7 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                         <dt>Level of theory</dt>
                                         <dd>
                                             {record.level_of_theory
-                                                ? <LevelOfTheoryLink levelOfTheory={record.level_of_theory} />
+                                                ? <LevelLabel levelOfTheory={record.level_of_theory} />
                                                 : <span className="record-identity-absent-inline">not tied to a specific level of theory</span>}
                                         </dd>
                                     </div>
@@ -86,7 +87,7 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                         <dt>Frequency level</dt>
                                         <dd>
                                             {record.frequency_level_of_theory
-                                                ? <LevelOfTheoryLink levelOfTheory={record.frequency_level_of_theory} />
+                                                ? <LevelLabel levelOfTheory={record.frequency_level_of_theory} />
                                                 : "not recorded"}
                                         </dd>
                                     </div>
@@ -159,7 +160,7 @@ function UsageSection({ rows, available, total }: { rows: EnergyCorrectionScheme
                                     <td data-label="Applied value" className="num"><QuantityValue value={deposited(row.applied_value, unitText(row.applied_value_unit))} /></td>
                                     <td data-label="Source calculation">
                                         {row.source_calculation_ref
-                                            ? <Link className="data" to={`/calculations/${row.source_calculation_ref}`}>{row.source_calculation_ref}</Link>
+                                            ? <RecordLink kind="calculation" to={`/calculations/${row.source_calculation_ref}`} label="Calculation" />
                                             : "not recorded"}
                                     </td>
                                 </tr>

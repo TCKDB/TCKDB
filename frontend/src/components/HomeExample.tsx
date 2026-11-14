@@ -41,7 +41,6 @@ export function HomeExample({ state }: { state: HomeExampleState }) {
                             ? <SpeciesFace smiles={state.smiles} formula={state.formula} />
                             : <ReactionEquation reactants={state.record.species?.reactants ?? []} products={state.record.species?.products ?? []} reversible={state.record.reaction_entry.reversible} />}
                     </span>
-                    <code className="t-preserve-case home-example-ref">{state.status === "molecule" ? state.ref : state.record.reaction_entry.reaction_entry_ref}</code>
                     <Link className="home-example-open" to={path}>{state.status === "molecule" ? "Open this molecule" : "Open this reaction"}</Link>
                 </header>
                 {state.status === "molecule" && <EntryNumbers entryRef={state.ref} entryPath={path} conformerQuery="" conformers={[]} compact />}

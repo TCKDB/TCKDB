@@ -1,5 +1,7 @@
 import { useState } from "react"
-import { Link, useParams } from "react-router-dom"
+import { calculationWords } from "../domain/recordWords"
+import { RecordLink } from "../components/RecordLink"
+import { useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../geometry-detail.css"
 import { Breadcrumbs, type Crumb } from "../components/Breadcrumbs"
@@ -195,7 +197,6 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                 <CoordinateTableSection
                     atoms={atoms}
                     atomsAvailability={atomsAvailability}
-                    geometryRef={geometry.geometry_ref}
                     natoms={geometry.natoms}
                     unit={coordinateUnit}
                     onUnitChange={setCoordinateUnit}
@@ -281,10 +282,9 @@ function StageSection({ atoms, atomsAvailability, formula, xyzText, coordinateUn
     )
 }
 
-function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms, unit, onUnitChange }: {
+function CoordinateTableSection({ atoms, atomsAvailability, natoms, unit, onUnitChange }: {
     atoms: NonNullable<GeometryRecord["atoms"]>
     atomsAvailability: SectionAvailability
-    geometryRef: string
     natoms: number
     unit: CoordinateUnitMode
     onUnitChange: (unit: CoordinateUnitMode) => void
@@ -327,7 +327,7 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms,
             )}
             {atomsAvailability === "populated" ? (
                 <div className="table-scroll" tabIndex={0} role="region" aria-label="Table of coordinates">
-                    <table className="data-table coordinate-table" aria-label={`Coordinates for ${geometryRef}`}>
+                    <table className="data-table coordinate-table" aria-label="Coordinates">
                         <thead>
                             <tr>
                                 <th scope="col">Atom</th>
@@ -409,7 +409,7 @@ function ProvenanceSection({ title, description, links, availability, showRole, 
                             {links.map((link, index) => (
                                 <tr key={`${title}-${link.calculation_ref}-${index}`}>
                                     <td data-label="Calculation">
-                                        <Link to={`/calculations/${link.calculation_ref}`}>{link.calculation_ref}</Link>
+                                        <RecordLink kind="calculation" to={`/calculations/${link.calculation_ref}`} label={calculationWords(link.calculation_type)} context={`${title} ${index + 1}`} />
                                     </td>
                                     <td data-label="Type">{typeLabel(link.calculation_type)}</td>
                                     {showRole && <td data-label="Role">{link.role ? statusLabel(link.role) : "not recorded"}</td>}

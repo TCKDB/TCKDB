@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom"
+import { RecordLink } from "./RecordLink"
 import type { StatmechRecord } from "../api/statmechApi"
 
 const statusLabel = (status: string) => status.replaceAll("_", " ")
@@ -43,7 +43,7 @@ export function TorsionsTable({ rows }: { rows: StatmechRecord["torsions"] }) {
                             <td className="num" data-label="Symmetry number">{row.symmetry_number ?? "not recorded"}</td>
                             <td data-label="Source scan">
                                 {row.source_scan_calculation_ref
-                                    ? <Link className="data" to={`/calculations/${row.source_scan_calculation_ref}`}>{row.source_scan_calculation_ref}</Link>
+                                    ? <RecordLink kind="calculation" to={`/calculations/${row.source_scan_calculation_ref}`} label="Calculation" />
                                     : "not recorded"}
                             </td>
                             <td data-label="Invalidated">{row.invalidated_reason ? "invalidated" : "not invalidated"}</td>

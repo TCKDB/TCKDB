@@ -181,8 +181,8 @@ export function deltaReason(group: KineticsGroup): string | null {
 }
 
 /** The two records a group's difference is between, second first as written "second − first"; null unless the group has exactly two. */
-export function deltaNames(group: KineticsGroup): [string, string] | null {
-    return group.columns.length === 2 ? [group.columns[1].ref, group.columns[0].ref] : null
+export function deltaNames(group: KineticsGroup, name: (column: KineticsColumn) => string = (column) => column.ref): [string, string] | null {
+    return group.columns.length === 2 ? [name(group.columns[1]), name(group.columns[0])] : null
 }
 
 /** Signed difference of two stored numbers through a spec; null unless both are stated. */

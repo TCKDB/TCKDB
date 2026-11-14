@@ -1,4 +1,6 @@
 import { useId, useState } from "react"
+import { calculationWords } from "../domain/recordWords"
+import { RecordLink } from "../components/RecordLink"
 import { GuideLink } from "../components/GuideLink"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
@@ -6,7 +8,7 @@ import "../methods.css"
 import { CompositeSchemeLink } from "../components/CompositeSchemeLink"
 import { CorrectionSchemeTable } from "../components/CorrectionSchemeTable"
 import { Disclosure } from "../components/Disclosure"
-import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
+import { LevelLabel } from "../components/LevelLabel"
 import { scaleKindLabel } from "../domain/frequencyScaleFormat"
 import { recordRoute } from "../domain/recordRoute"
 import { usageIntro } from "../domain/usageIntro"
@@ -311,7 +313,7 @@ function CorrectionSchemeBox({ scheme }: { scheme: EnergyCorrectionSchemeRecord 
             <dl className="kv-list">
                 <div>
                     <dt>Scheme ref</dt>
-                    <dd><Link to={correctionSchemePath(ref)}><code className="data">{ref}</code></Link></dd>
+                    <dd><RecordLink kind="scheme" to={correctionSchemePath(ref)} label="Energy-correction scheme" /></dd>
                 </div>
                 {releaseRef && (
                     <div>
@@ -326,7 +328,7 @@ function CorrectionSchemeBox({ scheme }: { scheme: EnergyCorrectionSchemeRecord 
                     <dt>Frequency level</dt>
                     <dd>
                         {scheme.frequency_level_of_theory
-                            ? <LevelOfTheoryLink levelOfTheory={scheme.frequency_level_of_theory} />
+                            ? <LevelLabel levelOfTheory={scheme.frequency_level_of_theory} />
                             : "not recorded"}
                     </dd>
                 </div>
@@ -383,12 +385,10 @@ function FrequencyScaleFactorSection({ groups, available }: { groups: LevelOfThe
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {group.frequency_scale_factors.map((item) => (
+                                        {group.frequency_scale_factors.map((item, position) => (
                                             <tr key={item.frequency_scale_factor_ref}>
-                                                <td data-label="Ref">
-                                                    <Link to={frequencyScaleFactorPath(item.frequency_scale_factor_ref)}>
-                                                        <code className="data">{item.frequency_scale_factor_ref}</code>
-                                                    </Link>
+                                                <td data-label="Scale factor">
+                                                    <RecordLink kind="scheme" to={frequencyScaleFactorPath(item.frequency_scale_factor_ref)} label={`Frequency scale factor ${position + 1}`} />
                                                 </td>
                                                 <td data-label="Software">{softwareLabel(item.software_release) ?? "not recorded"}</td>
                                                 <td data-label="Workflow tool">{toolReleaseLabel(item.workflow_tool_release) ?? "not recorded"}</td>
@@ -433,9 +433,9 @@ function UsageSection({ rows, available, total }: { rows: LevelOfTheoryUsage[] |
                             </tr>
                         </thead>
                         <tbody>
-                            {list.map((row) => (
+                            {list.map((row, position) => (
                                 <tr key={row.calculation_ref}>
-                                    <td data-label="Calculation"><Link className="data" to={`/calculations/${row.calculation_ref}`}>{row.calculation_ref}</Link></td>
+                                    <td data-label="Calculation"><RecordLink kind="calculation" to={`/calculations/${row.calculation_ref}`} label={calculationWords(row.type)} context={`number ${position + 1}`} /></td>
                                     <td data-label="Type">{words(row.type)}</td>
                                     <td data-label="Owner">
                                         {row.record_ref && row.record_type

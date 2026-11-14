@@ -1,6 +1,9 @@
 import { useMemo } from "react"
+import { modelKindWord } from "../domain/kineticsWords"
+import { recordWords, versionWords } from "../domain/recordWords"
+import { RecordLink } from "../components/RecordLink"
 import { RecordPlaceholder } from "../components/RecordPlaceholder"
-import { Link, useParams } from "react-router-dom"
+import { useParams } from "react-router-dom"
 import "../data-table.css"
 import { BROWSE_KIND_PATHS } from "../api/browseApi"
 import { loadReactionOverview, type ReactionOverviewRecord } from "../api/reactionOverviewApi"
@@ -11,7 +14,7 @@ import { Breadcrumbs } from "../components/Breadcrumbs"
 import { CompareCellView, CompareTable, type CompareTableGroup } from "../components/CompareTable"
 import { DataTable, type DataColumn } from "../components/DataTable"
 import { Profiles } from "../components/EnergyProfile"
-import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
+import { LevelLabel } from "../components/LevelLabel"
 import { ListNotes, WalkStatus } from "../components/NumbersTable"
 import { OrderNote } from "../components/OrderNote"
 import { SectionHeading } from "../components/PageSections"
@@ -55,7 +58,7 @@ export default function ReactionComparePage() {
         return <State title="Archive is busy" alert message={`The archive is receiving too many requests right now. Wait ${formatWaitSeconds(state.retryAfterSeconds)} and reload the page.`} />
     }
     if (state.status !== "ready" || !first) return <State title="Reaction unavailable" alert message="The archive response could not be read. Try again later." />
-    return <CompareDocument reactionRef={reactionRef} first={first} labels={speciesLabels(state.record.records)} />
+    return <CompareDocument reactionRef={reactionRef} first={first} labels={speciesLabels(state.record.records)} versions={new Map(state.record.records.map((record, index) => [record.reaction_entry_ref, state.record.pagination.offset + index + 1]))} />
 }
 
 function State({ title, busy, alert, message }: { title: string; busy?: boolean; alert?: boolean; message?: string }) {
@@ -80,23 +83,32 @@ const recordPath = (column: KineticsColumn) => `/reaction-entries/${column.entry
 const levelText = (group: KineticsGroup) => (group.level ? `${lotLabel(group.level)}${group.levelDeclared ? " (declared)" : ""}` : NOT_STATED_LEVEL)
 const groupText = (group: KineticsGroup) => `${levelText(group)}, ${group.program?.text ?? NOT_STATED_PROGRAM}`
 
+function GroupLevel({ group }: { group: KineticsGroup }) {
+    return group.level
+        ? <><LevelLabel levelOfTheory={group.level} program={group.program?.text ?? null} />{group.levelDeclared && " (declared by the depositor)"}</>
+        : <>{NOT_STATED_LEVEL}{group.program && ` · ${group.program.text}`}</>
+}
+
 function GroupHead({ group }: { group: KineticsGroup }) {
     return (
         <span className="compare-head">
-            <span className="compare-head-key">{group.level ? <><LevelOfTheoryLink levelOfTheory={group.level} />{group.levelDeclared && " (declared by the depositor)"}</> : NOT_STATED_LEVEL}</span>
-            {group.program ? <span>{programLabel(group)}: <span className="t-preserve-case">{group.program.text}</span></span> : <span>{NOT_STATED_PROGRAM}</span>}
+            <span className="compare-head-key"><GroupLevel group={group} /></span>
+            <span>{group.program ? programLabel(group) : NOT_STATED_PROGRAM}</span>
         </span>
     )
 }
 
-function Head({ column }: { column: KineticsColumn }) {
+const versionName = (versions: ReadonlyMap<string, number>, entryRef: string) => (versions.has(entryRef) ? versionWords(versions.get(entryRef)!) : "Another version")
+
+function Head({ column, position, versions }: { column: KineticsColumn; position: number; versions: ReadonlyMap<string, number> }) {
     const origin = originWord(column.record.scientific_origin)
+    const kind = modelKindWord(column.record.model_kind) ?? column.record.model_kind.replaceAll("_", " ")
     return (
         <span className="compare-head">
-            <Link to={recordPath(column)}><code className="t-preserve-case">{column.ref}</code></Link>
-            <span>Origin: {origin ?? <code className="t-preserve-case">{column.record.scientific_origin}</code>}</span>
+            <RecordLink kind="kinetics" to={`/reaction-entries/${column.entryRef}`} hash={`kinetics-${column.ref}`} label={recordWords(position)} detail={kind} />
+            <span>Origin: {origin ?? column.record.scientific_origin.replaceAll("_", " ")}</span>
             <ReviewChip status={column.record.review.status} explain={false} />
-            <span>Entry <Link to={`/reaction-entries/${column.entryRef}`}><code className="t-preserve-case">{column.entryRef}</code></Link></span>
+            <span><RecordLink kind="reaction-entry" to={`/reaction-entries/${column.entryRef}`} label={versionName(versions, column.entryRef)} /></span>
         </span>
     )
 }
@@ -108,7 +120,7 @@ function unitsDiffer(row: CompareRow): boolean {
 
 type Entry = { column: KineticsColumn; group: KineticsGroup; index: number }
 
-function DataView({ entries, rows, order }: { entries: Entry[]; rows: readonly CompareRow[]; order: string }) {
+function DataView({ entries, rows, order, versions }: { entries: Entry[]; rows: readonly CompareRow[]; order: string; versions: ReadonlyMap<string, number> }) {
     const cells: DataColumn<Entry>[] = rows.map((row) => ({
         key: row.key,
         name: row.label,
@@ -127,8 +139,8 @@ function DataView({ entries, rows, order }: { entries: Entry[]; rows: readonly C
         cell: ({ column, index }) => <CompareCellView cell={row.cells[index]} to={recordPath(column)} showUnit={row.unit === null} />,
     }))
     const all: DataColumn<Entry>[] = [
-        { key: "record", name: "record", header: "Record", rowHeader: true, sortValue: ({ column }) => column.ref, cell: ({ column }) => <Link to={recordPath(column)}><code className="t-preserve-case">{column.ref}</code></Link> },
-        { key: "group", name: "group", header: "Level of theory and program", sortValue: ({ group }) => groupText(group), cell: ({ group }) => <span className="t-preserve-case">{groupText(group)}</span> },
+        { key: "record", name: "record", header: "Record", rowHeader: true, sortValue: ({ index }) => index, cell: ({ column, index }) => <RecordLink kind="kinetics" to={`/reaction-entries/${column.entryRef}`} hash={`kinetics-${column.ref}`} label={recordWords(index + 1)} context={versionName(versions, column.entryRef)} /> },
+        { key: "group", name: "group", header: "Level of theory and program", sortValue: ({ group }) => groupText(group), cell: ({ group }) => <GroupLevel group={group} /> },
         { key: "review", name: "review status", header: "Review", sortValue: ({ column }) => column.record.review.status, cell: ({ column }) => <ReviewChip status={column.record.review.status} explain={false} /> },
         ...cells,
     ]
@@ -144,7 +156,8 @@ function DataView({ entries, rows, order }: { entries: Entry[]; rows: readonly C
     )
 }
 
-function GroupProfiles({ group, position, reads, readRefs, labels }: {
+function GroupProfiles({ group, position, reads, readRefs, labels, versions }: {
+    versions: ReadonlyMap<string, number>
     group: KineticsGroup
     position: number
     reads: ReadonlyMap<string, EnergyProfileRead | null>
@@ -164,15 +177,15 @@ function GroupProfiles({ group, position, reads, readRefs, labels }: {
     }
     return (
         <>
-            <SectionHeading id={`compare-profile-${position}`} subsection>{groupText(group)}</SectionHeading>
-            {unread.length > 0 && <p className="note" role="note">Not read here: {unread.join(", ")}. Open the entry's own page for its profile.</p>}
-            {failed.length > 0 && <p className="note" role="alert">The energy profile of {failed.join(", ")} could not be loaded.</p>}
+            <SectionHeading id={`compare-profile-${position}`} subsection><GroupLevel group={group} /></SectionHeading>
+            {unread.length > 0 && <p className="note" role="note">Not read here: {unread.map((ref) => versionName(versions, ref)).join(", ")}. Open the entry's own page for its profile.</p>}
+            {failed.length > 0 && <p className="note" role="alert">The energy profile of {failed.map((ref) => versionName(versions, ref)).join(", ")} could not be loaded.</p>}
             {body}
         </>
     )
 }
 
-function CompareDocument({ reactionRef, first, labels }: { reactionRef: string; first: ReactionOverviewRecord; labels: ReadonlyMap<string, string> }) {
+function CompareDocument({ reactionRef, first, labels, versions }: { reactionRef: string; first: ReactionOverviewRecord; labels: ReadonlyMap<string, string>; versions: ReadonlyMap<string, number> }) {
     const state = useWalked(reactionRef, loadReactionKinetics)
     const data = state.status === "ready" ? state.data : null
     const equation = <ReactionEquation reactants={first.reactants} products={first.products} reversible={first.reversible} formulaOnly={!equationNeedsStructure(first.reactants, first.products)} />
@@ -184,13 +197,14 @@ function CompareDocument({ reactionRef, first, labels }: { reactionRef: string; 
         const full = groupKinetics(kineticsColumns(data.records))
         const shown = full.map((group) => ({ ...group, columns: group.columns.slice(0, MAX_COLUMNS_PER_GROUP) }))
         const entries: Entry[] = full.flatMap((group) => group.columns.map((column) => ({ column, group, index: 0 }))).map((entry, index) => ({ ...entry, index }))
-        return { full, shown, entries, rows: reactionRows(shown), listRows: reactionRows(full), cut: shown.some((group, index) => group.columns.length < full[index].columns.length), total: entries.length }
+        const positions = new Map(entries.map((entry) => [entry.column.key, entry.index + 1] as const))
+        return { full, shown, entries, positions, rows: reactionRows(shown), listRows: reactionRows(full), cut: shown.some((group, index) => group.columns.length < full[index].columns.length), total: entries.length }
     }, [data])
     const tableGroups: CompareTableGroup[] = (model?.shown ?? []).map((group) => ({
         key: group.key,
         header: <GroupHead group={group} />,
-        columns: group.columns.map((column) => ({ key: column.key, header: <Head column={column} />, to: recordPath(column) })),
-        ...(group.columns.length === 2 && { delta: { header: <span className="compare-head"><span className="compare-head-key"><span aria-hidden="true">Δ</span> {deltaNames(group)?.join(" − ")}</span><span>Difference within this group</span></span> } }),
+        columns: group.columns.map((column) => ({ key: column.key, header: <Head column={column} position={model?.positions.get(column.key) ?? 1} versions={versions} />, to: recordPath(column) })),
+        ...(group.columns.length === 2 && { delta: { header: <span className="compare-head"><span className="compare-head-key"><span aria-hidden="true">Δ</span> {deltaNames(group, (column) => recordWords(model?.positions.get(column.key) ?? 1))?.join(" − ")}</span><span>Difference within this group</span></span> } }),
     }))
     const difference = model ? groupDifference(model.full) : null
     const order = `Grouped by level and program; ${orderWords(data?.sort ?? null) ?? "the archive did not state an order"}.`
@@ -244,7 +258,7 @@ function CompareDocument({ reactionRef, first, labels }: { reactionRef: string; 
                                 {profiles.status === "retrying" && <p className="note" role="status" aria-busy="true">The archive is busy. Retrying in {formatWaitSeconds(profiles.retryAfterSeconds)}.</p>}
                                 {profiles.status === "loading" && <p className="note" role="status" aria-busy="true">Loading the energy profiles.</p>}
                                 {profiles.status === "ready" && model.full.map((group, position) => (
-                                    <GroupProfiles key={group.key} group={group} position={position} reads={profiles.reads} readRefs={readRefs} labels={labels} />
+                                    <GroupProfiles key={group.key} group={group} position={position} reads={profiles.reads} readRefs={readRefs} labels={labels} versions={versions} />
                                 ))}
                             </section>
                         )}
@@ -253,7 +267,7 @@ function CompareDocument({ reactionRef, first, labels }: { reactionRef: string; 
                                 <SectionHeading id="compare-lists" intro="One row per record. Sorting does not rank.">
                                     Records as a list
                                 </SectionHeading>
-                                <DataView entries={model.entries} rows={model.listRows} order="Same as the table above." />
+                                <DataView entries={model.entries} rows={model.listRows} order="Same as the table above." versions={versions} />
                             </section>
                         )}
                     </>

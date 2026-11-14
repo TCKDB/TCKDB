@@ -1,6 +1,9 @@
 import { useMemo } from "react"
+import { recordWords } from "../domain/recordWords"
+import { LevelLabel } from "../components/LevelLabel"
+import { RecordLink } from "../components/RecordLink"
 import { RecordPlaceholder } from "../components/RecordPlaceholder"
-import { Link, useParams } from "react-router-dom"
+import { useParams } from "react-router-dom"
 import "../data-table.css"
 import { BROWSE_KIND_PATHS } from "../api/browseApi"
 import type { SpeciesOverview } from "../api/speciesOverviewApi"
@@ -57,17 +60,18 @@ function versionText(entryRef: string | null, versions: Map<string, string>): st
     return entryRef ? (versions.get(entryRef) ?? "Another version") : "Version not stated by the archive"
 }
 
-function Head({ column }: { column: CompareColumn }) {
+function Head({ column, position }: { column: CompareColumn; position: number }) {
     const { row } = column
     const { to } = valueRecordLinks({ ...row, entryRef: column.entryRef })
-    const ref = <code className="t-preserve-case">{column.ref}</code>
+    const words = recordWords(position)
+    const program = row.programs.length > 0 ? row.programs.join(", ") : null
     return (
         <span className="compare-head">
-            {to ? <Link to={to}>{ref}</Link> : ref}
+            {to ? <RecordLink kind={column.kind} to={to} label={words} /> : words}
+            <span>{column.kind === "thermo" ? "Thermochemistry" : "Statistical mechanics"}</span>
             {row.levels.length > 0
-                ? <span>{levelParts(row.levels).map((part) => <span key={part.label} className="compare-level"><span className="t-preserve-case">{part.label}</span> ({part.roles.join(", ")})</span>)}</span>
+                ? <span>{levelParts(row.levels).map((part) => <span key={part.label} className="compare-level">{part.level ? <LevelLabel levelOfTheory={part.level} program={program} /> : <><span className="t-preserve-case">{part.label}</span>{program && ` · ${program}`}</>} ({part.roles.join(", ")})</span>)}</span>
                 : <span>No level of theory recorded</span>}
-            {row.programs.length > 0 && <span className="t-preserve-case">{row.programs.join(", ")}</span>}
             <ReviewChip status={row.review} explain={false} />
         </span>
     )
@@ -77,7 +81,7 @@ function GroupHead({ group, versions }: { group: VersionGroup; versions: Map<str
     return (
         <span className="compare-head">
             <span className="compare-head-key">{versionText(group.entryRef, versions)}</span>
-            {group.entryRef && <Link to={`/species-entries/${group.entryRef}`}><code className="t-preserve-case">{group.entryRef}</code></Link>}
+            {group.entryRef && <RecordLink kind="species-entry" to={`/species-entries/${group.entryRef}`} label="Species entry" />}
         </span>
     )
 }
@@ -109,7 +113,7 @@ function DataView({ columns, rows, versions, order, kind }: {
         cell: ({ column, index }) => <CompareCellView cell={row.cells[index]} to={linkOf(column)} />,
     }))
     const all: DataColumn<Entry>[] = [
-        { key: "record", name: "record", header: "Record", rowHeader: true, sortValue: ({ column }) => column.ref, cell: ({ column }) => <code className="t-preserve-case">{column.ref}</code> },
+        { key: "record", name: "record", header: "Record", rowHeader: true, sortValue: ({ index }) => index, cell: ({ index }) => recordWords(index + 1) },
         {
             key: "version", name: "version", header: "Version",
             sortValue: ({ column }) => versionText(column.entryRef, versions),
@@ -149,12 +153,12 @@ function CompareDocument({ species }: { species: SpeciesOverview }) {
         }
         return { thermo: build("thermo"), statmech: build("statmech") }
     }, [data, versionOrder])
-    const tableGroups = (groups: VersionGroup[]): CompareTableGroup[] => groups.map((group) => ({
+    const tableGroups = (groups: VersionGroup[], full: readonly CompareColumn[]): CompareTableGroup[] => groups.map((group) => ({
         key: group.key,
         header: <GroupHead group={group} versions={versions} />,
         columns: group.columns.map((column) => ({
             key: column.key,
-            header: <Head column={column} />,
+            header: <Head column={column} position={full.findIndex((candidate) => candidate.key === column.key) + 1} />,
             to: valueRecordLinks({ ...column.row, entryRef: column.entryRef }).to,
         })),
     }))
@@ -174,7 +178,7 @@ function CompareDocument({ species }: { species: SpeciesOverview }) {
                     <CompareTable
                         caption={`${KIND_WORDS[kind]}, one column per record, grouped by version`}
                         label={`${KIND_WORDS[kind]} compared`}
-                        groups={tableGroups(part.groups)}
+                        groups={tableGroups(part.groups, part.full)}
                         rows={part.compareRows}
                     />
                 )}

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
-import { Link } from "react-router-dom"
+import { RecordLink } from "./RecordLink"
+import { RefsDisclosure } from "./RefsDisclosure"
 import "../conformer-group.css"
 import "../entry-science.css"
 import {
@@ -137,7 +138,7 @@ function TransportList({ listKey, meta, onPage, linkedNote, response }: {
                             fallback={(
                                 <article className="science-record card" role="alert">
                                     <p className="empty-projection">
-                                        Record <code>{record.transport.transport_ref}</code> could not be
+                                        A transport record could not be
                                         displayed. Other records on this page are unaffected.
                                     </p>
                                 </article>
@@ -198,13 +199,12 @@ function TransportRecordCard({ record }: { record: TransportRecord }) {
             <div className="science-record-heading">
                 <h3 id={`transport-heading-${core.transport_ref}`}>{statusLabel(core.scientific_origin)} transport record</h3>
                 <span className="value-pill value-pill--muted">{statusLabel(core.review.status)}</span>
-                <code className="data">{core.transport_ref}</code>
             </div>
 
             {record.supersession && <SupersessionNotice supersession={record.supersession} />}
 
             <p className="note">
-                Species entry: <Link className="data" to={`/species-entries/${record.species.species_entry_ref}`}>{record.species.species_entry_ref}</Link>
+                Species entry: <RecordLink kind="species-entry" to={`/species-entries/${record.species.species_entry_ref}`} label="Species entry" />
                 {record.species.canonical_smiles ? ` (${record.species.canonical_smiles})` : ""}
             </p>
 
@@ -241,6 +241,7 @@ function TransportRecordCard({ record }: { record: TransportRecord }) {
                 {" · "}Literature:{" "}
                 {record.literature ? <LiteratureCitation literature={record.literature} /> : "not recorded"}
             </p>
+        <RefsDisclosure refs={[{ label: "Transport record", value: core.transport_ref }]} />
         </article>
     )
 }
@@ -292,14 +293,14 @@ function TransportLazySection<T>({
                 {state.status === "error" && state.message}
                 {state.status === "ready" && `${heading} loaded.`}
             </p>
-            {state.status === "ready" && records.map((record) => {
+            {state.status === "ready" && records.map((record, index) => {
                 const ref = record.transport.transport_ref
                 const data = state.dataByRef.get(ref)
                 const status = rowState(record, data)
                 return (
                     <div key={ref} className="science-record card">
                         <div className="science-record-heading">
-                            <h3>{ref}</h3>
+                            <h3>Transport record {index + 1}</h3>
                         </div>
                         {status === "populated" && data !== undefined
                             ? (

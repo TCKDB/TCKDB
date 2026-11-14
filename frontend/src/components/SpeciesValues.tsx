@@ -57,8 +57,7 @@ export function SpeciesValues({ species }: { species: SpeciesOverview }) {
                         version={(row) => (row.entryRef
                             ? <>
                                 <span className="entry-numbers-key">Version:</span>{" "}
-                                <Link to={`/species-entries/${row.entryRef}`} aria-describedby={`${row.kind}-${row.ref}-version-ref`}>{labels.get(row.entryRef) ?? "Another version"}</Link>{" "}
-                                <code id={`${row.kind}-${row.ref}-version-ref`} className="t-preserve-case">{row.entryRef}</code>
+                                <Link to={`/species-entries/${row.entryRef}`}>{labels.get(row.entryRef) ?? "Another version"}</Link>
                             </>
                             : <>Version not stated by the archive</>)}
                     />

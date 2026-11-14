@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom"
+import { RecordLink } from "./RecordLink"
+import { calculationWords, transitionStateWords } from "../domain/recordWords"
 import type { CalculationDependency } from "../api/calculationApi"
 import type { ReactionFullCalculationEvidence, ReactionTransitionStateInFull } from "../api/reactionEntryApi"
 import { CalculationDependencyGraph, type CentreSubject } from "./CalculationDependencyGraph"
-import { LevelOfTheoryLink } from "./LevelOfTheoryLink"
+import { LevelLabel } from "./LevelLabel"
 import { ProductLevelsFact } from "./ProductLevels"
 import { ReviewChip } from "./ReviewChip"
 import { deriveProductLevelsFromSourceCalculations } from "../domain/productLevels"
@@ -71,15 +73,16 @@ export function ReactionTransitionStatesSection({ transitionStates, calculations
     const calculationsByRef = buildCalculationsByRef(calculations)
     return (
         <>
-            {transitionStates.map((ts) => (
-                <TransitionStateBlock key={ts.transition_state_entry_ref} ts={ts} calculationsByRef={calculationsByRef} />
+            {transitionStates.map((ts, index) => (
+                <TransitionStateBlock key={ts.transition_state_entry_ref} ts={ts} words={transitionStateWords(transitionStates.length > 1 ? index + 1 : undefined)} calculationsByRef={calculationsByRef} />
             ))}
         </>
     )
 }
 
-function TransitionStateBlock({ ts, calculationsByRef }: {
+function TransitionStateBlock({ ts, words, calculationsByRef }: {
     ts: ReactionTransitionStateInFull
+    words: string
     calculationsByRef: Map<string, ReactionFullCalculationEvidence>
 }) {
     const stageEntries = STAGE_ORDER
@@ -125,18 +128,18 @@ function TransitionStateBlock({ ts, calculationsByRef }: {
     return (
         <div className="reaction-ts-block">
             <dl className="kv-list">
-                <div><dt>Entry</dt><dd><Link to={`/transition-state-entries/${ts.transition_state_entry_ref}`}>{ts.transition_state_entry_ref}</Link></dd></div>
+                <div><dt>Entry</dt><dd><RecordLink kind="transition-state" to={`/transition-state-entries/${ts.transition_state_entry_ref}`} label={words} /></dd></div>
                 <div><dt>Review</dt><dd><ReviewChip status={ts.review.status} explain={false} /></dd></div>
             </dl>
 
             <p className="t-label reaction-ts-status-label">Status</p>
             <StatusStages status={ts.status} />
 
-            <p className="reaction-ts-picture-link"><Link to={`/transition-state-entries/${ts.transition_state_entry_ref}`}>Picture and 3D view{" "}<span className="reaction-ts-picture-link-for">of {ts.transition_state_entry_ref}</span></Link></p>
+            <p className="reaction-ts-picture-link"><Link to={`/transition-state-entries/${ts.transition_state_entry_ref}`}>Picture and 3D view{" "}<span className="reaction-ts-picture-link-for">of {words.toLowerCase()}</span></Link></p>
 
             <p className="t-label reaction-ts-stage-label">Calculations by stage</p>
             <div className="table-scroll">
-                <table className="data-table" aria-label={`Calculations for ${ts.transition_state_entry_ref}`}>
+                <table className="data-table" aria-label={`Calculations for ${words.toLowerCase()}`}>
                     <thead>
                         <tr>
                             <th scope="col">Stage</th>
@@ -152,12 +155,12 @@ function TransitionStateBlock({ ts, calculationsByRef }: {
                                 <tr key={key}>
                                     <td data-label="Stage">{STAGE_LABEL[key] ?? slot.type}</td>
                                     <td data-label="Level of theory">
-                                        {evidence?.level_of_theory ? <LevelOfTheoryLink levelOfTheory={evidence.level_of_theory} /> : "not recorded"}
+                                        {evidence?.level_of_theory ? <LevelLabel levelOfTheory={evidence.level_of_theory} program={evidence.software ? softwareLabel(evidence.software) : null} /> : "not recorded"}
                                     </td>
                                     <td data-label="Software / workflow">
                                         {evidence?.software ? (softwareLabel(evidence.software) ?? "not recorded") : "not recorded"}
                                     </td>
-                                    <td data-label="Record"><Link to={`/calculations/${slot.calculation_ref}`}><code className="data">{slot.calculation_ref}</code></Link></td>
+                                    <td data-label="Record"><RecordLink kind="calculation" to={`/calculations/${slot.calculation_ref}`} label={calculationWords(key.replace("ts_", ""))} /></td>
                                 </tr>
                             )
                         })}

@@ -45,7 +45,6 @@ export function SpeciesBrowseRow({ record }: { record: SpeciesBrowseRecord }) {
                     </li>
                 ))}
             </ul>
-            <code className="browse-ref data">{record.species_ref}</code>
         </li>
     )
 }

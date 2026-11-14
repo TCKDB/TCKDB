@@ -2,7 +2,7 @@ import { GuideLink } from "../components/GuideLink"
 import { useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../methods.css"
-import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
+import { LevelLabel } from "../components/LevelLabel"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { Stored } from "../components/QuantityValue"
@@ -76,7 +76,7 @@ function CompositeSchemeDetail({ record }: { record: CompositeSchemeRecord }) {
                                         <dt>Recipe geometry level</dt>
                                         <dd>
                                             {scheme.geometry_level_of_theory
-                                                ? <LevelOfTheoryLink levelOfTheory={scheme.geometry_level_of_theory} />
+                                                ? <LevelLabel levelOfTheory={scheme.geometry_level_of_theory} />
                                                 : "not stated by the recipe"}
                                         </dd>
                                     </div>
@@ -84,7 +84,7 @@ function CompositeSchemeDetail({ record }: { record: CompositeSchemeRecord }) {
                                         <dt>Recipe frequency level</dt>
                                         <dd>
                                             {scheme.frequency_level_of_theory
-                                                ? <LevelOfTheoryLink levelOfTheory={scheme.frequency_level_of_theory} />
+                                                ? <LevelLabel levelOfTheory={scheme.frequency_level_of_theory} />
                                                 : "not stated by the recipe"}
                                         </dd>
                                     </div>
@@ -172,7 +172,7 @@ function TermBlock({ term }: { term: CompositeSchemeTerm }) {
                     <tbody>
                         {term.inputs.map((input, index) => (
                             <tr key={`${input.slot}-${index}`}>
-                                <td data-label="Input level of theory"><LevelOfTheoryLink levelOfTheory={input.level_of_theory} /></td>
+                                <td data-label="Input level of theory"><LevelLabel levelOfTheory={input.level_of_theory} /></td>
                                 <td data-label="Coefficient" className="num">
                                     {input.coefficient === null || input.coefficient === undefined
                                         ? "none, not a fixed weight"
@@ -214,7 +214,7 @@ function BoundLevelsSection({ record }: { record: CompositeSchemeRecord }) {
                         <tbody>
                             {rows.map((row) => (
                                 <tr key={row.level_of_theory.level_of_theory_ref ?? row.level_of_theory.method}>
-                                    <td data-label="Level of theory" className="composite-label"><LevelOfTheoryLink levelOfTheory={row.level_of_theory} /></td>
+                                    <td data-label="Level of theory" className="composite-label"><LevelLabel levelOfTheory={row.level_of_theory} /></td>
                                     <td data-label="How it is bound">{bindingSourceLabel(row.binding_source)}</td>
                                 </tr>
                             ))}

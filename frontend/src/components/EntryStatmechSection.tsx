@@ -1,4 +1,7 @@
 import { publicPointGroup } from "../domain/publicText"
+import { RecordLink } from "./RecordLink"
+import { RefsDisclosure } from "./RefsDisclosure"
+import { calculationWords, conformerGroupWords, recordWords } from "../domain/recordWords"
 import type { ReactNode } from "react"
 import { createContext, useContext, useEffect } from "react"
 import { Link } from "react-router-dom"
@@ -33,7 +36,7 @@ import type { PageRequest } from "../domain/paging"
 import { ConformerAttributionGroups } from "./ConformerAttributionGroups"
 import { Disclosure } from "./Disclosure"
 import { LazyRowBody } from "./LazyRowBody"
-import { LevelOfTheoryLink } from "./LevelOfTheoryLink"
+import { LevelLabel } from "./LevelLabel"
 import { SectionHeading } from "./PageSections"
 import { SettingsBehindValue, SettingsLegend } from "./EffectiveSettings"
 import { ProductLevelsFact, ProductLevelsTableCells, ProductLevelsTableHead } from "./ProductLevels"
@@ -292,11 +295,11 @@ function StatmechList({ listKey, meta, onPage, linkedNote, response, conformer, 
     )
 }
 
-function statmechRecordFallback(record: StatmechRecord) {
+function statmechRecordFallback() {
     return (
         <article className="science-record card" role="alert">
             <p className="empty-projection">
-                Record <code>{record.statmech.statmech_ref}</code> could not be
+                A statmech record could not be
                 displayed. Other records on this page are unaffected.
             </p>
         </article>
@@ -310,7 +313,7 @@ function renderStatmechRecord(
     frequenciesState: EntryListSectionState<StatmechRecord["frequencies"]>,
 ) {
     return (
-        <SectionErrorBoundary key={record.statmech.statmech_ref} fallback={statmechRecordFallback(record)}>
+        <SectionErrorBoundary key={record.statmech.statmech_ref} fallback={statmechRecordFallback()}>
             <StatmechRecordCard record={record} conformers={conformers} sourceCalcsState={sourceCalcsState} frequenciesState={frequenciesState} />
         </SectionErrorBoundary>
     )
@@ -338,7 +341,7 @@ function renderStatmechRecords(
         }
         const representative = group.records[0]
         return (
-            <SectionErrorBoundary key={representative.statmech.statmech_ref} fallback={statmechRecordFallback(representative)}>
+            <SectionErrorBoundary key={representative.statmech.statmech_ref} fallback={statmechRecordFallback()}>
                 <IdenticalStatmechRecordsCard
                     records={group.records}
                     conformers={conformers}
@@ -410,7 +413,6 @@ function StatmechRecordCard({ record, conformers, sourceCalcsState, frequenciesS
             <div className="science-record-heading">
                 <h3 id={`statmech-heading-${core.statmech_ref}`}>{statusLabel(core.scientific_origin)} statmech record</h3>
                 <span className="value-pill value-pill--muted">{statusLabel(core.review.status)}</span>
-                <code className="data">{core.statmech_ref}</code>
             </div>
             <StatmechRecordBody
                 record={record}
@@ -419,6 +421,7 @@ function StatmechRecordCard({ record, conformers, sourceCalcsState, frequenciesS
                 frequenciesState={frequenciesState}
                 productLevels={statmechRecordProductLevels(record, sourceCalcsState)}
             />
+            <RefsDisclosure refs={[{ label: "Statmech record", value: core.statmech_ref }]} />
         </article>
     )
 }
@@ -590,7 +593,7 @@ function FrequenciesBlock({ record, state }: {
                             ? freqRefs.map((freqRef, index) => (
                                 <span key={freqRef}>
                                     {index > 0 && ", "}
-                                    <Link className="data" to={`/calculations/${freqRef}`}>{freqRef}</Link>
+                                    <RecordLink kind="calculation" to={`/calculations/${freqRef}`} label={freqRefs.length > 1 ? `${calculationWords("freq")} ${index + 1}` : calculationWords("freq")} />
                                 </span>
                             ))
                             : "not recorded"}
@@ -689,7 +692,7 @@ function IdenticalStatmechRecordsCard({ records, conformers, sourceCalcsState, f
             <IdenticalStatmechGroupRefs records={records} sourceCalcsState={sourceCalcsState} frequenciesState={frequenciesState} />
             <Disclosure className="identical-record-group-detail" summary={`Show all ${records.length} records individually`}>
                 {records.map((record) => (
-                    <SectionErrorBoundary key={record.statmech.statmech_ref} fallback={statmechRecordFallback(record)}>
+                    <SectionErrorBoundary key={record.statmech.statmech_ref} fallback={statmechRecordFallback()}>
                         <StatmechRecordCard record={record} conformers={conformers} sourceCalcsState={sourceCalcsState} frequenciesState={frequenciesState} />
                     </SectionErrorBoundary>
                 ))}
@@ -705,7 +708,7 @@ function IdenticalStatmechRecordsCard({ records, conformers, sourceCalcsState, f
  * the shared, entry-scoped `include` this cell depends on is still
  * loading, this says so rather than falsely reading as "not recorded".
  */
-function RecordCalcRefsCell({ refs }: { refs: string[] | "loading" }) {
+function RecordCalcRefsCell({ refs, type }: { refs: string[] | "loading"; type: string }) {
     if (refs === "loading") return <>loading…</>
     if (refs.length === 0) return <>not recorded</>
     return (
@@ -713,7 +716,7 @@ function RecordCalcRefsCell({ refs }: { refs: string[] | "loading" }) {
             {refs.map((ref, index) => (
                 <span key={ref}>
                     {index > 0 && ", "}
-                    <Link className="data" to={`/calculations/${ref}`}>{ref}</Link>
+                    <RecordLink kind="calculation" to={`/calculations/${ref}`} label={refs.length > 1 ? `${calculationWords(type)} ${index + 1}` : calculationWords(type)} />
                 </span>
             ))}
         </>
@@ -804,7 +807,7 @@ function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesStat
                 <table className="data-table" aria-label="Records sharing these identical values">
                     <thead>
                         <tr>
-                            <th scope="col">Ref</th>
+                            <th scope="col">Record</th>
                             <th scope="col">Review</th>
                             <ProductLevelsTableHead showNotation={showNotation} />
                             <th scope="col">Opt calc</th>
@@ -828,13 +831,13 @@ function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesStat
                             const ref = record.statmech.statmech_ref
                             return [
                                 <tr key={ref}>
-                                    <td data-label="Ref"><code className="data">{ref}</code></td>
+                                    <td data-label="Record">{recordWords(index + 1)}</td>
                                     <td data-label="Review">{statusLabel(record.statmech.review.status)}</td>
                                     <StatmechLevelsRowCells levels={levelsByRecord[index]} showNotation={showNotation} />
-                                    <td data-label="Opt calc"><RecordCalcRefsCell refs={sourceCalcRefsByRole(sourceCalcsState, ref, "opt")} /></td>
-                                    <td data-label="Freq calc"><RecordCalcRefsCell refs={sourceCalcRefsByRole(sourceCalcsState, ref, "freq")} /></td>
-                                    <td data-label="SP calc"><RecordCalcRefsCell refs={sourceCalcRefsByRole(sourceCalcsState, ref, "sp")} /></td>
-                                    <td data-label="Source freq calcs"><RecordCalcRefsCell refs={freqCalcRefs(frequenciesState, ref)} /></td>
+                                    <td data-label="Opt calc"><RecordCalcRefsCell type="opt" refs={sourceCalcRefsByRole(sourceCalcsState, ref, "opt")} /></td>
+                                    <td data-label="Freq calc"><RecordCalcRefsCell type="freq" refs={sourceCalcRefsByRole(sourceCalcsState, ref, "freq")} /></td>
+                                    <td data-label="SP calc"><RecordCalcRefsCell type="sp" refs={sourceCalcRefsByRole(sourceCalcsState, ref, "sp")} /></td>
+                                    <td data-label="Source freq calcs"><RecordCalcRefsCell type="freq" refs={freqCalcRefs(frequenciesState, ref)} /></td>
                                 </tr>,
                                 <tr key={`${ref}-provenance`} className="data-table-provenance-row">
                                     <td colSpan={6 + LEVEL_COLUMN_COUNT}>
@@ -912,8 +915,8 @@ function FrequencyScaleFactorDetail({ core, fsf, productLevels }: {
             </>
         )
     }
-    const lot = fsf.level_of_theory ? <LevelOfTheoryLink levelOfTheory={fsf.level_of_theory} /> : null
     const fsfSoftwareLabel = fsf.software ? softwareLabel(fsf.software) : null
+    const lot = fsf.level_of_theory ? <LevelLabel levelOfTheory={fsf.level_of_theory} program={fsfSoftwareLabel} /> : null
     return (
         <>
             {loadingLevels && <p className="note" role="status">Loading level of theory…</p>}
@@ -927,8 +930,8 @@ function FrequencyScaleFactorDetail({ core, fsf, productLevels }: {
                     </dd>
                 </div>
                 {lot && <div><dt>Scale factor level of theory</dt><dd>{lot}</dd></div>}
-                {fsfSoftwareLabel && <div><dt>Scale factor software</dt><dd>{fsfSoftwareLabel}</dd></div>}
-                <div><dt>Frequency scale factor ref</dt><dd><code><Link to={frequencyScaleFactorPath(fsf.frequency_scale_factor_ref)}>{fsf.frequency_scale_factor_ref}</Link></code></dd></div>
+                {fsfSoftwareLabel && !fsf.level_of_theory && <div><dt>Scale factor software</dt><dd>{fsfSoftwareLabel}</dd></div>}
+                <div><dt>Frequency scale factor page</dt><dd><RecordLink kind="scheme" to={frequencyScaleFactorPath(fsf.frequency_scale_factor_ref)} label="Frequency scale factor" /></dd></div>
             </dl>
         </>
     )
@@ -998,15 +1001,14 @@ function SubjectLine({ record }: { record: StatmechRecord }) {
     if (record.species) {
         return (
             <p className="note">
-                Species entry: <Link className="data" to={`/species-entries/${record.species.species_entry_ref}`}>{record.species.species_entry_ref}</Link>
-                {record.species.canonical_smiles ? ` (${record.species.canonical_smiles})` : ""}
+                Species entry: <RecordLink kind="species-entry" to={`/species-entries/${record.species.species_entry_ref}`} label={record.species.canonical_smiles ?? "Species entry"} />
             </p>
         )
     }
     if (record.transition_state) {
         return (
             <p className="note">
-                Transition-state entry: <code>{record.transition_state.transition_state_entry_ref}</code>
+                Transition-state entry
                 {" — no dedicated page exists yet for this record kind."}
             </p>
         )
@@ -1080,7 +1082,7 @@ function StatmechLazySection<T>({
                                 for the primary card) plus the ref in `.data`
                                 (mono, muted -- `entry-science.css`) matches every other heading on
                                 this page. */}
-                            <h3>{statusLabel(record.statmech.scientific_origin)} statmech record <span className="data">{ref}</span></h3>
+                            <h3>{statusLabel(record.statmech.scientific_origin)} statmech record</h3>
                         </div>
                         {status === "populated" && data !== undefined
                             ? (
@@ -1161,7 +1163,7 @@ function ConformerAndReviewSection({ records, conformersState, reviewState, onOp
                     <table className="data-table" aria-label="Conformer context and review history">
                         <thead>
                             <tr>
-                                <th scope="col">Ref</th>
+                                <th scope="col">Record</th>
                                 <th scope="col">Conformer</th>
                                 <th scope="col">Review</th>
                                 <th scope="col">Reviewed at</th>
@@ -1169,13 +1171,13 @@ function ConformerAndReviewSection({ records, conformersState, reviewState, onOp
                             </tr>
                         </thead>
                         <tbody>
-                            {records.map((record) => {
+                            {records.map((record, index) => {
                                 const ref = record.statmech.statmech_ref
                                 const conformerRows = (conformersState.status === "ready" ? conformersState.dataByRef.get(ref) : undefined) ?? []
                                 const reviewRows = (reviewState.status === "ready" ? reviewState.dataByRef.get(ref) : undefined) ?? []
                                 return (
                                     <tr key={ref}>
-                                        <td data-label="Ref"><code className="data">{ref}</code></td>
+                                        <td data-label="Record">{recordWords(index + 1)}</td>
                                         <td data-label="Conformer">
                                             {conformerRows.length > 0
                                                 ? conformerRows.map((row, index) => (
@@ -1184,7 +1186,7 @@ function ConformerAndReviewSection({ records, conformersState, reviewState, onOp
                                                         {/* The ref, never `row.label` (the depositor's own
                                                             `conformer_group.label`, e.g. "conformer_1") --
                                                             no depositor-typed labels on public pages. */}
-                                                        <Link to={`/conformer-groups/${row.conformer_group_ref}`}>{row.conformer_group_ref}</Link>
+                                                        <RecordLink kind="conformer-group" to={`/conformer-groups/${row.conformer_group_ref}`} label={conformerGroupWords(index + 1)} />
                                                     </span>
                                                 ))
                                                 : "not recorded"}

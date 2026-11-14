@@ -3,7 +3,8 @@ import type {
     EnergyProfileRead,
     EnergyProfileRecord,
 } from "../api/reactionEnergyProfileApi"
-import { lotLabel } from "../api/scientificSchemas"
+import { baseLabel, inlineQualifiers, inlineText, levelKey } from "./levelLabel"
+import { transitionStateWords } from "./recordWords"
 import { hiddenByDefaultNote } from "./paging"
 
 const MINUS = "−"
@@ -56,18 +57,29 @@ export function relativeKjText(value: number): string {
     return `${rounded > 0 ? "+" : MINUS}${Math.abs(rounded).toFixed(1)}`
 }
 
-/** One profile's choice in the picker: the transition-state entry only when there is more than one, then level and program. */
-export function profileLabel(profile: EnergyProfileRecord, withEntry: boolean): string {
-    return `${withEntry ? `${profile.transition_state_entry_ref}, ` : ""}${lotLabel(profile.level_of_theory)}, ${profile.program}`
+/** The transition-state entries a read names, in the order it names them: profiles first, then reasons. */
+export function transitionStateOrder(read: { profiles: readonly { transition_state_entry_ref: string }[]; unavailable?: readonly { transition_state_entry_ref: string }[] }): string[] {
+    return [...new Set([...read.profiles, ...(read.unavailable ?? [])].map((item) => item.transition_state_entry_ref))]
 }
 
-/** Picker labels for every profile; two profiles that would read the same get their level ref added. */
-export function profileLabels(profiles: readonly EnergyProfileRecord[]): string[] {
+/** "Transition state 2" by position among the entries the read names; plain "Transition state" when there is one. */
+export function transitionStateNamer(read: Parameters<typeof transitionStateOrder>[0]): (ref: string) => string {
+    const order = transitionStateOrder(read)
+    return (ref) => transitionStateWords(order.length > 1 ? order.indexOf(ref) + 1 : undefined)
+}
+
+/**
+ * Picker labels for every profile: the transition state (by position) only when there is more than one, then
+ * level and program. Two levels that share a label but differ in a qualifier carry that qualifier.
+ */
+export function profileLabels(profiles: readonly EnergyProfileRecord[], read: Parameters<typeof transitionStateOrder>[0] = { profiles }): string[] {
+    const name = transitionStateNamer(read)
     const withEntry = new Set(profiles.map((profile) => profile.transition_state_entry_ref)).size > 1
-    const labels = profiles.map((profile) => profileLabel(profile, withEntry))
-    return labels.map((label, index) => labels.filter((other) => other === label).length > 1
-        ? `${label} [${profiles[index].level_of_theory.level_of_theory_ref ?? "level not named"}]`
-        : label)
+    const inline = inlineQualifiers(profiles.map((profile) => profile.level_of_theory))
+    return profiles.map((profile) => {
+        const level = [baseLabel(profile.level_of_theory), ...(inline.get(levelKey(profile.level_of_theory)) ?? []).map(inlineText)].join(" · ")
+        return `${withEntry ? `${name(profile.transition_state_entry_ref)}, ` : ""}${level}, ${profile.program}`
+    })
 }
 
 export const MIN_SPAN_KJ_MOL = 50

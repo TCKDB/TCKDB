@@ -1,4 +1,6 @@
 import { ROUNDED_NOTE } from "./QuantityValue"
+import { LevelLabel } from "./LevelLabel"
+import { conformerGroupWords } from "../domain/recordWords"
 import { Fragment, useMemo, useState, type ReactNode } from "react"
 import { Link } from "react-router-dom"
 import "../entry-numbers.css"
@@ -109,7 +111,7 @@ export function NumbersTable<R extends NumberRow>({ rows, caption, label, groupL
 function LevelHeading({ levels }: { levels: NumberRow["levels"] }) {
     if (levels.length === 0) return <>{NO_LEVEL_KEY}</>
     return <>{levelParts(levels).map((part, index) => (
-        <Fragment key={part.label}>{index > 0 && " · "}<span className="t-preserve-case">{part.label}</span> ({part.roles.join(", ")})</Fragment>
+        <Fragment key={part.label}>{index > 0 && " · "}{part.level ? <LevelLabel levelOfTheory={part.level} /> : <span className="t-preserve-case">{part.label}</span>} ({part.roles.join(", ")})</Fragment>
     ))}</>
 }
 
@@ -134,7 +136,7 @@ function DescribesLine({ describes, entryPath, groupLabels }: { describes: Descr
     else if (describes.kind === "unstated") body = "not stated by the depositor"
     else {
         const ref = describes.groupRef as string
-        const name = groupLabels.get(ref) ?? <code className="t-preserve-case">{ref}</code>
+        const name = groupLabels.get(ref) ?? conformerGroupWords()
         body = <>one shape, {entryPath ? <Link to={`${entryPath}?conformer=${encodeURIComponent(ref)}`}>{name}</Link> : name}</>
     }
     return <>{body}{describes.implied && " (implied by the CHEMKIN format)"}</>
@@ -151,7 +153,6 @@ function NumberRowView({ row, entryPath, to, groupLabels, version }: {
         <tr id={numberAnchor(row.kind, row.ref)}>
             <th scope="row">
                 <span className="entry-numbers-kind">{KIND_WORDS[row.kind]}</span>
-                <code className="t-preserve-case">{row.ref}</code>
                 {version && <span className="entry-numbers-version">{version}</span>}
                 <span className="entry-numbers-review"><ReviewChip status={row.review} explain={false} /></span>
             </th>

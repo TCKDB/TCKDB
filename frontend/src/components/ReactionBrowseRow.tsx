@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom"
 import type { ReactionBrowseRecord } from "../api/browseApi"
-import type { EquationParticipantInput } from "../domain/reactionEquation"
+import { equationText, type EquationParticipantInput } from "../domain/reactionEquation"
 import { ReactionEquation } from "./ReactionEquation"
 
 function token(value: string) {
@@ -167,7 +167,6 @@ export function ReactionBrowseRow({ record }: { record: ReactionBrowseRecord }) 
                 {matchedReverse && (
                     <span className="browse-row-evidence">Matched on the reverse direction</span>
                 )}
-                <code className="browse-ref data">{record.reaction_ref}</code>
                 {/* The one deposit THIS row itself represents -- a second,
                     SIBLING link (never nested inside the title's own
                     `<Link>`), reachable even though the title now points at
@@ -177,7 +176,7 @@ export function ReactionBrowseRow({ record }: { record: ReactionBrowseRecord }) 
                     doc comment and the CSS rule below) for exactly this
                     reason -- no new elevation rule needed on top of the one
                     the ref text already required. */}
-                <Link className="browse-row-entry-link" to={entryTarget}>View this deposit</Link>
+                <Link className="browse-row-entry-link" to={entryTarget} aria-label={`View this deposit, ${equationText(toEquationParticipants(record.reactants), toEquationParticipants(record.products), record.reversible)}`}>View this deposit</Link>
             </p>
         </li>
     )

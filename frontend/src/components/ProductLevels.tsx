@@ -2,7 +2,7 @@ import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
 import { CompositeSchemeLink } from "./CompositeSchemeLink"
 import { EnergyVerification } from "./CompositeVerification"
-import { LevelOfTheoryLink } from "./LevelOfTheoryLink"
+import { LevelLabel } from "./LevelLabel"
 import { legacyShapeText } from "../domain/compositeVerification"
 import { shortRecipeName } from "../domain/compositeSchemeFormat"
 import { compositeSchemePath } from "../domain/methodsLinks"
@@ -28,14 +28,14 @@ import { productLevelsAgree, type ProductLevels } from "../domain/productLevels"
 
 /**
  * `levelNode` renders `lotLabel()` text, wrapped in a
- * `LevelOfTheoryLink` when the level carries a `level_of_theory_ref`, so
+ * `LevelLabel` when the level carries a `level_of_theory_ref`, so
  * `EntryStatmechSection.tsx`/`EntryThermoSection.tsx` (this module's two
  * callers) get a working `/methods/:lotRef` link on every Geometry/
  * Frequencies/Energy fact without either file touching `lotLabel()`
  * directly.
  */
 function levelNode(level: ProductLevels["geometry"]): ReactNode {
-    return level ? <LevelOfTheoryLink levelOfTheory={level} /> : "not recorded"
+    return level ? <LevelLabel levelOfTheory={level} /> : "not recorded"
 }
 
 /** The Energy fact's own value node -- `levelNode(level)` when there IS a
@@ -238,5 +238,5 @@ export function ProductLevelsTableCells({ levels, showNotation = false }: { leve
 }
 
 function LevelCell({ level }: { level: ProductLevels["geometry"] }) {
-    return level ? <span className="data"><LevelOfTheoryLink levelOfTheory={level} /></span> : <>not recorded</>
+    return level ? <span className="data"><LevelLabel levelOfTheory={level} /></span> : <>not recorded</>
 }

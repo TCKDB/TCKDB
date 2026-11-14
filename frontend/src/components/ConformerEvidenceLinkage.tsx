@@ -128,9 +128,9 @@ export function ConformerEvidenceLinkage({ conformer }: { conformer: ConformerPr
                             this summary needs to provide. */}
                         {convergence.length > 0 ? (
                             <ul className="linkage-geometry-list">
-                                {convergence.map((entry) => (
+                                {convergence.map((entry, position) => (
                                     <li key={entry.geometryRef}>
-                                        <code>{entry.geometryRef}</code>
+                                        {`Geometry ${position + 1}`}
                                         {` — ${entry.calculationCount} calculation output${entry.calculationCount === 1 ? "" : "s"}`}
                                     </li>
                                 ))}

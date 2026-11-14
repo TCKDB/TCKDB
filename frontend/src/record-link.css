@@ -1,0 +1,6 @@
+/* RecordLink and the one-participant-per-line list. */
+.record-link { overflow-wrap: break-word; }
+.record-link-detail { display: block; color: var(--muted); font-size: .875em; }
+.participant-lines { display: block; margin: 0; padding: 0; list-style: none; }
+.participant-lines > li { display: block; margin: 0 0 .25rem; }
+.participant-lines > li:last-child { margin-bottom: 0; }

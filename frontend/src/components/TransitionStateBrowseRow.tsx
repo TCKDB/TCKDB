@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom"
 import type { TransitionStateBrowseRecord } from "../api/browseApi"
 import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
-import { lotLabel } from "../api/scientificSchemas"
+import { Fragment, type ReactNode } from "react"
+import { LevelLabel } from "./LevelLabel"
 
 function token(value: string) {
     return value.replaceAll("_", " ")
@@ -60,7 +61,7 @@ function selectedStages(levels: Record<string, unknown[]> | undefined): string[]
  */
 function provenanceSummary(
     record: TransitionStateBrowseRecord,
-): { levelOfTheory: string; software: string | null } {
+): { levelOfTheory: ReactNode; software: string | null } {
     const levels = record.evidence_summary.levels_of_theory
     const software = record.evidence_summary.software
     const stages = selectedStages(levels)
@@ -72,9 +73,12 @@ function provenanceSummary(
         }
     }
 
-    const levelOfTheory = stages
-        .map((stage) => `${stage} ${levels![stage].map((entry) => lotLabel(entry)).join(", ")}`)
-        .join(" · ")
+    const levelOfTheory = stages.map((stage, index) => (
+        <Fragment key={stage}>
+            {index > 0 && " · "}{stage}{" "}
+            {levels![stage].map((entry, position) => <Fragment key={position}>{position > 0 && ", "}<LevelLabel levelOfTheory={entry} /></Fragment>)}
+        </Fragment>
+    ))
 
     if (software === undefined) {
         return { levelOfTheory, software: null }
@@ -169,7 +173,6 @@ export function TransitionStateBrowseRow({ record }: { record: TransitionStateBr
     // The pill is the entry's STATUS only ("optimized"), not
     const entryStatusText = token(record.transition_state_entry.status)
     const entryReviewStatusText = token(record.transition_state_entry.review.status)
-    const entryRef = record.transition_state_entry.transition_state_entry_ref
     const deposited = depositedDate(record.transition_state_entry.created_at)
     const { levelOfTheory, software } = provenanceSummary(record)
 
@@ -196,7 +199,7 @@ export function TransitionStateBrowseRow({ record }: { record: TransitionStateBr
                         // ref is separately visible on `.browse-row-footer`
                         // below, so this does not duplicate it visually.
                         <Link
-                            aria-label={depositRef ? `${equation} (deposit ${depositRef})` : equation}
+                            aria-label={equation}
                             className="browse-row-title"
                             to={target}
                         >
@@ -227,10 +230,9 @@ export function TransitionStateBrowseRow({ record }: { record: TransitionStateBr
                 <span className="browse-row-evidence">{evidenceText}</span>
                 {depositRef && (
                     <span className="browse-row-deposit">
-                        from reaction entry <code className="data">{depositRef}</code>
+                        from a reaction entry
                     </span>
                 )}
-                <code className="browse-ref data">{entryRef}</code>
             </p>
         </li>
     )

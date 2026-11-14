@@ -26,7 +26,7 @@ export function SpeciesEntryLink({ speciesEntryRef, smiles, formula, facets }: {
     const chips = participantChips(facets)
     const base = (smiles || formula)
         ? <SpeciesFace smiles={smiles} formula={formula} />
-        : <code className="data">{speciesEntryRef}</code>
+        : <span>Species entry</span>
     return (
         <Link to={`/species-entries/${speciesEntryRef}`}>
             {base}

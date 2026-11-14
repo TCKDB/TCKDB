@@ -309,12 +309,6 @@
     overflow-wrap: anywhere;
 }
 
-.home-example-ref {
-    color: var(--muted);
-    font: var(--type-data-font);
-    overflow-wrap: anywhere;
-}
-
 .home-example-open {
     display: inline-flex;
     align-items: center;

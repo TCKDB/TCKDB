@@ -681,12 +681,11 @@ function ReactionMatchRow({ match }: { match: ReactionParticipationMatch }) {
         {match.matchedDirection === "reverse" && (
             <span className="search-result-evidence">Matched on the reverse direction</span>
         )}
-        <code className="search-result-ref">{match.reactionEntryRef}</code>
     </>
 }
 
 function ReactionFallbackRow({ match }: { match: ReactionParticipationMatch }) {
-    return <Link className="search-result-link" to={`/reaction-entries/${match.reactionEntryRef}`}>{match.reactionEntryRef}</Link>
+    return <Link className="search-result-link" to={`/reaction-entries/${match.reactionEntryRef}`}>Reaction entry</Link>
 }
 
 /**
@@ -701,7 +700,6 @@ function ReactionFallbackRow({ match }: { match: ReactionParticipationMatch }) {
  * `IdentifierSearch.test.tsx`.
  */
 function MatchRow({ match }: { match: SearchMatch }) {
-    const ref = match.entryRef ?? match.speciesRef
     const context = [chargeContext(match), spinContext(match)]
     if (match.entryCount !== undefined) context.push(entryCountDisplay(match.entryCount))
     return <>
@@ -710,7 +708,6 @@ function MatchRow({ match }: { match: SearchMatch }) {
             {" "}
             <span className="search-result-context">{context.join(" · ")}</span>
         </Link>
-        <code className="search-result-ref">{ref}</code>
     </>
 }
 
@@ -760,7 +757,7 @@ function MatchHeadline({ match }: { match: SearchMatch }) {
     // here is honest (there genuinely is no chemistry data), which is a
     // different case from the defect this component fixes: that defect was
     // showing the reference *instead of* chemistry that existed.
-    return <span className="search-result-headline search-result-headline-fallback">{match.entryRef ?? match.speciesRef}</span>
+    return <span className="search-result-headline search-result-headline-fallback">{match.entryRef ? "Species entry" : "Molecule"}</span>
 }
 
 function FallbackRow({ match }: { match: SearchMatch }) {

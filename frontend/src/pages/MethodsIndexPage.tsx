@@ -7,7 +7,7 @@ import "../methods.css"
 import { loadLevelOfTheoryBrowse, type CoreTreatmentValue, type LevelOfTheoryRecord } from "../api/methodsApi"
 import { loadSoftwareNames, loadWorkflowToolNames, type VocabEntry } from "../api/vocabApi"
 import { CompositeSchemeLink } from "../components/CompositeSchemeLink"
-import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
+import { LevelLabel } from "../components/LevelLabel"
 import { ListPager } from "../components/ListPager"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
@@ -198,7 +198,7 @@ function LevelOfTheoryTable({ state, filter }: { state: LoadState<{ records: Lev
                     {records.map((record) => (
                         <tr key={record.level_of_theory.level_of_theory_ref}>
                             <td data-label="Level of theory" className="composite-label">
-                                <LevelOfTheoryLink levelOfTheory={record.level_of_theory} />
+                                <LevelLabel levelOfTheory={record.level_of_theory} />
                                 {record.level_of_theory.composite_scheme && (
                                     <div className="note"><CompositeSchemeLink scheme={record.level_of_theory.composite_scheme} /></div>
                                 )}

@@ -512,17 +512,6 @@ span.browse-row-title {
     color: var(--accent-700);
 }
 
-/* The row's own stable ref -- an identifier, styled at the shared data step
-   (`.data`, applied alongside this class in both row components) rather
-   than its own one-off mono run. Its class name is distinct from the one
-   `index.css`'s accessibility-floor pass targets (prefixed `.archive-shell`),
-   so the ref renders at the data step rather than at that floor. */
-.browse-ref {
-    display: block;
-    margin-top: .6rem;
-    color: var(--faint);
-}
-
 /* TS row only: the evidence text and the ref code share one row. Flex
    rather than plain inline text so the ref
    (`.browse-ref`, reused as-is for its color) can still wrap onto its own
@@ -538,10 +527,6 @@ span.browse-row-title {
     gap: .25rem .7rem;
     margin-top: .6rem;
     color: var(--ink-2);
-}
-
-.browse-row-footer .browse-ref {
-    margin-top: 0;
 }
 
 .browse-row-footer,
