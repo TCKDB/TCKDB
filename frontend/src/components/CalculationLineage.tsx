@@ -8,7 +8,7 @@ import type { LineageStep } from "../domain/calculationLineage"
  */
 export function DependencyStrip({ steps, ownWords }: { steps: readonly LineageStep[]; ownWords: string }) {
     return (
-        <div className="dep-strip">
+        <div className="dep-strip link-list">
             <ul className="dep-strip-parents" aria-label="Calculations this one depends on">
                 {steps.map((step) => (
                     <li className="dep-strip-step" key={`${step.role}-${step.ref}`}>
@@ -18,7 +18,7 @@ export function DependencyStrip({ steps, ownWords }: { steps: readonly LineageSt
                 ))}
             </ul>
             <span className="dep-strip-arrow" aria-hidden="true">→</span>
-            <div className="dep-strip-own" aria-current="step">
+            <div className="dep-strip-own">
                 <span className="dep-strip-words">This calculation</span>
                 <span>{ownWords}</span>
             </div>
@@ -29,7 +29,7 @@ export function DependencyStrip({ steps, ownWords }: { steps: readonly LineageSt
 /** The calculations that depend on this one, each named by its type and linked. */
 export function UsedByList({ steps }: { steps: readonly LineageStep[] }) {
     return (
-        <ul className="used-by-list">
+        <ul className="used-by-list link-list">
             {steps.map((step) => (
                 <li key={`${step.role}-${step.ref}`}>
                     {step.words}: <Link to={`/calculations/${step.ref}`}><code className="data">{step.ref}</code></Link>

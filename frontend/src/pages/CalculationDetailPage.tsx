@@ -654,7 +654,7 @@ function ResultsSection({ results, type, availability, contradicted, verificatio
             <SectionHeading id="results-heading">
                 Result
             </SectionHeading>
-            {headline && (
+            {headline && availability !== "not-requested" && (
                 <div className="calc-headline-energy">
                     <HeadlineEnergy label={headline.label} valueHartree={headline.valueHartree} />
                     {isContradiction(verification) && <ContradictionMarker targetId={VERIFICATION_ID} />}
@@ -900,7 +900,7 @@ function ProducedSection({ ownRef, results, outputGeometries }: {
         <section className="ledger-section" aria-labelledby="produced-heading">
             <SectionHeading id="produced-heading">What this produced</SectionHeading>
             {resultWords !== null || outputGeometries.length > 0 ? (
-                <ul className="produced-list">
+                <ul className="produced-list link-list">
                     {resultWords && <ProducedItem to={`${here}#results-heading`}>{resultWords}</ProducedItem>}
                     {outputGeometries.length > 0 && (
                         <ProducedItem to={`${here}#geometries-heading`}>

@@ -29,8 +29,8 @@ describe("dependency strip", () => {
         )
         await user.tab()
         expect(screen.getByRole("link", { name: "before" })).toHaveFocus()
-        // By type words, then ref, with no sequence implied: Coarse optimisation, Composite energy, Optimisation.
-        for (const ref of ["calc_first", "calc_third", "calc_second"]) {
+        // By ref, with no sequence implied.
+        for (const ref of ["calc_first", "calc_second", "calc_third"]) {
             await user.tab()
             expect(screen.getByRole("link", { name: ref })).toHaveFocus()
         }

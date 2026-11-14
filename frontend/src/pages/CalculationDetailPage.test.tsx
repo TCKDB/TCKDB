@@ -688,11 +688,11 @@ describe("CalculationDetailPage", () => {
         const list = within(dependsOnSection()).getByRole("list", { name: "Calculations this one depends on" })
         // A composite behind freq_on is named as the composite it is, never as an optimisation.
         await waitFor(() => expect(within(list).getAllByRole("listitem").map((item) => item.textContent)).toEqual([
-            "Composite energycalc_b_cbs",
             "Optimisationcalc_a_opt",
+            "Composite energycalc_b_cbs",
         ]))
         expect(within(dependsOnSection()).queryByText(/in the order they ran/)).toBeNull()
-        const own = dependsOnSection().querySelector("[aria-current='step']") as HTMLElement
+        const own = dependsOnSection().querySelector(".dep-strip-own") as HTMLElement
         expect(own).toHaveTextContent("This calculationFrequency calculation")
         expect(within(own).queryByRole("link")).toBeNull()
         expect(dependsOnSection().querySelectorAll(".dep-strip-arrow")).toHaveLength(1)
@@ -765,6 +765,55 @@ describe("CalculationDetailPage", () => {
         const produced = screen.getByRole("heading", { name: "What this produced" }).closest("section") as HTMLElement
         expect(within(produced).queryByRole("link", { name: "calc_later" })).toBeNull()
         expect(within(dependsOnSection()).queryByRole("link", { name: "calc_later" })).toBeNull()
+    })
+
+    it("keeps the same order, by ref, before and after the types arrive", async () => {
+        server.use(
+            http.get(ENDPOINT, () => HttpResponse.json({
+                record: mockRecord({
+                    dependencies: [
+                        { role: "single_point_on", direction: "child", parent_calculation_ref: "calc_z", child_calculation_ref: "calc_freq_one" },
+                        { role: "composite_input", direction: "child", parent_calculation_ref: "calc_m", child_calculation_ref: "calc_freq_one" },
+                    ],
+                }),
+            })),
+            neighbours({ parents: { calc_z: "opt", calc_m: "sp" } }),
+        )
+        page()
+        await findLoaded("Frequency")
+        const refs = () => within(dependsOnSection()).getAllByRole("link").map((link) => link.textContent)
+        expect(refs()).toEqual(["calc_m", "calc_z"])
+        await waitFor(() => expect(dependsOnSection()).toHaveTextContent("Single-point energy"))
+        expect(refs()).toEqual(["calc_m", "calc_z"])
+    })
+
+    it("words a composite input without repeating the Used by heading while the types load", async () => {
+        server.use(
+            http.get(ENDPOINT, () => HttpResponse.json({
+                record: mockRecord({
+                    dependencies: [
+                        { role: "composite_input", direction: "parent", parent_calculation_ref: "calc_freq_one", child_calculation_ref: "calc_comp" },
+                    ],
+                }),
+            })),
+            neighbours({ children: "hang" }),
+        )
+        page()
+        await findLoaded("Frequency")
+        const usedBy = screen.getByRole("heading", { name: "Used by" }).closest("section") as HTMLElement
+        expect(within(usedBy).getByRole("listitem")).toHaveTextContent("Input to: calc_comp")
+    })
+
+    it("shows no energy above the not-requested note when the result section was not requested", async () => {
+        const record = mockRecord({ calculation: { ...mockRecord().calculation, type: "sp" } })
+        delete (record as Record<string, unknown>).results
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record })))
+        page()
+        await findLoaded("Single-point")
+        const resultsSection = screen.getByRole("heading", { name: "Result" }).closest("section") as HTMLElement
+        expect(within(resultsSection).getByText("This section was not requested for this view.")).toBeVisible()
+        expect(resultsSection.querySelector(".energy-display")).toBeNull()
+        expect(resultsSection).not.toHaveTextContent("not recorded")
     })
 
     it("shows no Used by section when nothing depends on this calculation", async () => {

@@ -57,8 +57,8 @@ const CHILD_FALLBACK: Readonly<Record<string, string>> = {
     irc_start: "Ran on this",
     scan_parent: "Ran on this",
     irc_followup: "Continued by",
-    composite_input: "Used by",
-    arkane_source: "Used by Arkane",
+    composite_input: "Input to",
+    arkane_source: "Source for Arkane",
 }
 
 export interface LineageStep {
@@ -90,8 +90,8 @@ function steps(edges: readonly CalculationDependency[], side: Side, types: Calcu
         seen.add(key)
         out.push({ ref, role: edge.role, words: stepWords(edge.role, side, types?.[ref]) })
     }
-    // By words (the real type once known), then ref; no sequence is implied between them.
-    return out.sort((a, b) => a.words.localeCompare(b.words) || a.ref.localeCompare(b.ref))
+    // By ref, so the order does not change when the types arrive; no sequence is implied between them.
+    return out.sort((a, b) => a.ref.localeCompare(b.ref) || a.role.localeCompare(b.role))
 }
 
 /** The calculations this one depends on. */
