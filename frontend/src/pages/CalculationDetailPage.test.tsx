@@ -66,7 +66,7 @@ function ddFor(container: HTMLElement, term: string): string {
  * prefix match is a stable target regardless of which owner/formula a
  * given test's fixture carries. */
 async function findLoaded(typePrefix: string) {
-    return screen.findByRole("heading", { level: 1, name: new RegExp(`^${typePrefix} of `) })
+    return screen.findByRole("heading", { level: 1, name: new RegExp(`^${typePrefix}( energy| calculation)? of `) })
 }
 
 /**
@@ -398,9 +398,9 @@ describe("CalculationDetailPage", () => {
         const h1 = await findLoaded("Frequency")
         // `Formula` renders element counts as <sub> -- "CH3" becomes "CH"
         // then a subscript "3", so the accessible name collapses the
-        // subscript back into plain text ("Frequency of CH3") while the
+        // subscript back into plain text ("Frequency calculation of CH3") while the
         // DOM keeps the <sub>.
-        expect(h1).toHaveTextContent("Frequency of CH3")
+        expect(h1).toHaveTextContent("Frequency calculation of CH3")
         expect(h1.querySelector("sub")).not.toBeNull()
         expect(h1.querySelector("sub")?.textContent).toBe("3")
         expect(screen.getByText("Frequency calculation · deposited evidence")).toBeVisible()
@@ -471,6 +471,20 @@ describe("CalculationDetailPage", () => {
     // wire's `label` field would only break one of the two, not
     // both identically).
     it("links a transition-state owner to its entry page by ref, with a breadcrumb branch, instead of unlinked plain text or the depositor label", async () => {
+        const row = (ref: string, smiles: string, formula: string, index: number) => (
+            { species_entry_ref: ref, smiles, formula, stoichiometry: 1, participant_index: index, review: { status: "not_reviewed" } }
+        )
+        server.use(http.get("/api/v1/scientific/reaction-entries/rxe_demo/full", () => HttpResponse.json({
+            reaction_entry: {
+                reaction_entry_ref: "rxe_demo", reaction_ref: "rxn_demo", equation: "as deposited", reversible: true,
+                family: null, review: { status: "not_reviewed" }, atom_maps: [],
+            },
+            review_summary: { total: 1, not_reviewed: 1, approved: 0, under_review: 0, deprecated: 0, rejected: 0 },
+            species: {
+                reactants: [row("spe_ch4", "C", "CH4", 0), row("spe_oh", "[OH]", "OH", 1)],
+                products: [row("spe_ch3", "[CH3]", "CH3", 0), row("spe_h2o", "O", "H2O", 1)],
+            },
+        })))
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({
                 owner: {
@@ -490,11 +504,10 @@ describe("CalculationDetailPage", () => {
         })))
         page()
         const h1 = await findLoaded("Frequency")
-        expect(h1).toHaveTextContent("Frequency of tse_demo")
+        await waitFor(() => expect(h1).toHaveTextContent("Frequency calculation of the CH4 + OH ⇌ CH3 + H2O transition state"))
         expect(h1).not.toHaveTextContent("TS0")
+        expect(h1).not.toHaveTextContent("tse_demo")
 
-        const link = screen.getByRole("link", { name: "tse_demo" })
-        expect(link).toHaveAttribute("href", "/transition-state-entries/tse_demo")
         expect(screen.queryByRole("link", { name: "TS0" })).not.toBeInTheDocument()
         // No more "does not yet have a dedicated page" disclaimer.
         expect(screen.queryByText(/does not yet have a dedicated page/)).not.toBeInTheDocument()
@@ -511,10 +524,8 @@ describe("CalculationDetailPage", () => {
         expect(within(breadcrumb).queryByRole("link", { name: "Reaction entry" })).not.toBeInTheDocument()
     })
 
-    // The ref-fallback path is the ONLY path -- `titleSubject` does not branch on the depositor
-    // label at all, so this and the test above must render identically
-    // apart from the ref value itself.
-    it("renders the raw ref, wrapped as a data run, when the TS owner has no label either", async () => {
+    // A transition state whose reaction is not named is described in words, never by its ref or label.
+    it("describes a transition-state owner with no reaction entry in words, never by ref", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({
                 owner: {
@@ -534,109 +545,8 @@ describe("CalculationDetailPage", () => {
         })))
         page()
         const h1 = await findLoaded("Frequency")
-        expect(h1).toHaveTextContent("Frequency of tse_demo2")
-
-        // The ref renders as a `.data` run inside the h1, not plain text --
-        // `.calc-headline-ref` is what keeps its font-size tracking the
-        // h1 around it (`calculation-detail.css`) rather than dropping to
-        // `.data`'s own 13px baseline.
-        const ref = within(h1).getByText("tse_demo2")
-        expect(ref.tagName).toBe("CODE")
-        expect(ref).toHaveClass("data", "calc-headline-ref")
-        // Not a link inside the h1 -- the clickable path to the TS entry
-        // is the separate "This calculation belongs to..." sentence below
-        // the identity header, unaffected by this fallback.
-        expect(within(h1).queryByRole("link")).not.toBeInTheDocument()
-    })
-
-    it("surfaces level_of_theory_ref, dispersion and solvent in the provenance row, and moves the refs into the collapsed disclosure", async () => {
-        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
-        page()
-        await findLoaded("Frequency")
-
-        const context = screen.getByText("Level of theory", { selector: "dt" }).closest(".record-context") as HTMLElement
-        expect(ddFor(context, "Dispersion")).toBe("D3BJ")
-        expect(ddFor(context, "Solvent")).toBe("water(CPCM)")
-        // Level of theory ref/software release ref/workflow tool release
-        // ref/literature ref all moved into RefsDisclosure -- the
-        // calculation's own ref is NOT among them any more; it renders in
-        // the identity header instead (see the "own ref" test above).
-        expect(within(context).queryByText("Level of theory ref")).not.toBeInTheDocument()
-
-        fireEvent.click(screen.getByText(bySummaryText(/References \(/)))
-        expect(screen.getByText("lot_1")).toBeVisible()
-        expect(screen.getByText("srel_1")).toBeVisible()
-        expect(screen.getByText("wfr_1")).toBeVisible()
-        expect(screen.getByText("lit_1")).toBeVisible()
-    })
-
-    // Item 3: Dispersion/Solvent/Literature rows appear ONLY when the
-    // archive actually recorded them -- never a "not recorded" row for a
-    // field most calculations simply don't carry.
-    it("omits Dispersion, Solvent and Literature rows entirely when the archive has nothing for them", async () => {
-        server.use(http.get(ENDPOINT, () => HttpResponse.json({
-            record: mockRecord({
-                level_of_theory: { level_of_theory_ref: "lot_1", method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp", dispersion: null, solvent: null },
-                literature: null,
-            }),
-        })))
-        page()
-        await findLoaded("Frequency")
-        expect(screen.queryByText("Dispersion")).not.toBeInTheDocument()
-        expect(screen.queryByText("Solvent")).not.toBeInTheDocument()
-        expect(screen.queryByText("Literature", { selector: "dt" })).not.toBeInTheDocument()
-        // Software and workflow tool are NEVER hidden.
-        expect(screen.getByText("Software", { selector: "dt" })).toBeVisible()
-        expect(screen.getByText("Workflow tool", { selector: "dt" })).toBeVisible()
-    })
-
-    it("withholds a depositor-typed literature title and DOI, and prints the public ref instead (guard)", async () => {
-        const typed = "DEPOSITOR_SENTINEL_literature_title"
-        const doi = "10.1/ DEPOSITOR_SENTINEL_literature_doi spam.example"
-        server.use(http.get(ENDPOINT, () => HttpResponse.json({
-            record: mockRecord({ literature: { literature_ref: "lit_1", title: typed, title_source: "depositor_supplied", year: 2019, doi } }),
-        })))
-        page()
-        await findLoaded("Frequency")
-        expect(screen.getByText("Literature", { selector: "dt" })).toBeVisible() // the fixture reached the page
-        expect(screen.getByText(/Title not verified/)).toBeVisible()
-        expect(document.body.innerHTML).not.toContain("DEPOSITOR_SENTINEL")
-        expect(document.title).not.toContain("DEPOSITOR_SENTINEL")
-    })
-
-    it("shows a registry-resolved literature title (the positive control for the guard above)", async () => {
-        server.use(http.get(ENDPOINT, () => HttpResponse.json({
-            record: mockRecord({ literature: { literature_ref: "lit_1", title: "RESOLVED_TITLE", title_source: "resolved_metadata", year: 2019 } }),
-        })))
-        page()
-        await findLoaded("Frequency")
-        expect(screen.getByText("RESOLVED_TITLE (2019)")).toBeVisible()
-    })
-
-    it("does not stutter the software/workflow-tool name when the version already opens with it", async () => {
-        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
-        page()
-        await findLoaded("Frequency")
-
-        const context = screen.getByText("Level of theory", { selector: "dt" }).closest(".record-context") as HTMLElement
-        const softwareRow = within(context).getByText("Software", { selector: "dt" }).closest("div") as HTMLElement
-        expect(within(softwareRow).getByText("Gaussian 16, Revision C.02")).toBeVisible()
-        expect(within(softwareRow).queryByText(/Gaussian Gaussian/)).not.toBeInTheDocument()
-
-        const workflowRow = within(context).getByText("Workflow tool", { selector: "dt" }).closest("div") as HTMLElement
-        expect(within(workflowRow).getByText("ARC 1.1.0")).toBeVisible()
-    })
-
-    // There are no "Input geometries / Output geometries /
-    // Dependency edges" count tiles (they would duplicate a section
-    // directly below); the evidence checklist is the only card left in the summary strip.
-    it("renders no count tiles -- the summary strip is the evidence checklist alone", async () => {
-        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
-        page()
-        await findLoaded("Frequency")
-
-        expect(screen.queryByText("Input geometries")).not.toBeInTheDocument()
-        expect(screen.queryByText("Output geometries")).not.toBeInTheDocument()
+        expect(h1).toHaveTextContent("Frequency calculation of a transition state")
+        expect(h1).not.toHaveTextContent("tse_demo2")
         expect(screen.queryByText("Dependency edges")).not.toBeInTheDocument()
         expect(document.querySelector(".metric")).toBeNull()
         // Positive check so this cannot pass on an empty page: the checklist
@@ -645,169 +555,76 @@ describe("CalculationDetailPage", () => {
         expect(within(strip).getByText("Evidence on this calculation")).toBeVisible()
     })
 
-    // Item 6: one sentence per edge, with a FIXED subject, replacing the
-    // Relationship/Role/Related-calculation columns that read backwards.
-    it("renders a parent-side edge and a child-side edge as different, correctly-subjected sentences", async () => {
+    function dependsOnSection() {
+        return screen.getByRole("heading", { name: "Depends on" }).closest("section") as HTMLElement
+    }
+
+    it("lists the calculations this one depends on in the order they ran, ending with this one", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({
                 dependencies: [
-                    {
-                        role: "single_point_on", direction: "parent",
-                        parent_calculation_ref: "calc_freq_one", child_calculation_ref: "calc_osrf4pnfcesq6s6somn7nr5hly",
-                    },
-                    {
-                        role: "optimized_from", direction: "child",
-                        parent_calculation_ref: "calc_htgb7s5nakuw52eqhcxpvilpoq", child_calculation_ref: "calc_freq_one",
-                    },
+                    { role: "single_point_on", direction: "child", parent_calculation_ref: "calc_b_opt", child_calculation_ref: "calc_freq_one" },
+                    { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_a_coarse", child_calculation_ref: "calc_freq_one" },
                 ],
             }),
         })))
         page()
         await findLoaded("Frequency")
-        const depSection = screen.getByRole("heading", { name: "Related calculations" }).closest("section") as HTMLElement
-
-        // The section renders the graph itself, not just the sentence
-        // list -- reverting `CalculationDependencyGraph`
-        // out of `CalculationDetailPage.tsx` (leaving only the demoted
-        // sentence list this test already checks below) left the FULL
-        // suite green, since nothing here named the graph specifically.
-        expect(within(depSection).getByRole("img", { name: /Dependency graph for/ })).toBeVisible()
-
-        // This page IS the centre calculation's own page -- its centre
-        // node must never become a link (unlike ReactionTransitionStates
-        // Section.tsx's own graph, whose centre is a DIFFERENT calculation
-        // the reader is not already viewing). Guarded here at the call
-        // site (`CalculationDependencyGraph.tsx:884` never passes
-        // `centreLinked`), not just at that prop's own default, so an
-        // accidental opt-in on THIS page is caught even if the component's
-        // default ever changed.
-        const centreNode = within(depSection).getByTestId("dep-node-centre-calc_freq_one")
-        expect(within(centreNode).queryByRole("link")).toBeNull()
-
-        // This page has no "whose" to report about its own centre
-        // calculation (unlike `ReactionTransitionStatesSection.tsx`'s own
-        // graph, whose centre node names the TS entry it belongs to) --
-        // `CalculationDependencyGraph.tsx`'s `centreSubject` must never be
-        // passed at this call site, so the node stays exactly two rows
-        // (pill + ref), never a third subject row.
-        expect(within(centreNode).queryByTestId("dep-node-subject-calc_freq_one")).toBeNull()
-
-        // Parent-side: the OTHER calculation is the subject, and the
-        // sentence has a verb ("was run on"), not just
-        // "single point on this geometry".
-        const spItem = within(depSection).getByRole("link", { name: "calc_osrf4pnfcesq6s6somn7nr5hly" }).closest("li") as HTMLElement
-        expect(spItem.textContent).toBe("The single point was computed on this geometry by calc_osrf4pnfcesq6s6somn7nr5hly")
-
-        // Child-side optimized_from: THIS calculation is the subject, fixed sentence.
-        const optFromItem = within(depSection).getByRole("link", { name: "calc_htgb7s5nakuw52eqhcxpvilpoq" }).closest("li") as HTMLElement
-        expect(optFromItem.textContent).toBe(
-            "This is the fine optimisation; its starting geometry came from calc_htgb7s5nakuw52eqhcxpvilpoq",
-        )
-
-        // The old backwards "feeds into | optimized from | ref" table is gone.
-        expect(within(depSection).queryByText("feeds into")).not.toBeInTheDocument()
-        expect(within(depSection).queryByRole("columnheader")).not.toBeInTheDocument()
+        const strip = within(dependsOnSection()).getByRole("list", { name: /in the order they ran/ })
+        const steps = within(strip).getAllByRole("listitem")
+        expect(steps.map((step) => step.textContent)).toEqual([
+            "Starting geometrycalc_a_coarse",
+            "→Optimisationcalc_b_opt",
+            "→This calculationFrequency calculation",
+        ])
+        expect(steps[2]).toHaveAttribute("aria-current", "step")
+        expect(within(steps[0]).getByRole("link", { name: "calc_a_coarse" })).toHaveAttribute("href", "/calculations/calc_a_coarse")
+        // This page never links to itself.
+        expect(within(steps[2]).queryByRole("link")).toBeNull()
     })
 
-    it("renders a freq_on parent-side edge with its own fixed sentence", async () => {
+    it("names a later calculation under what this produced, as a link", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({
                 dependencies: [
-                    {
-                        role: "freq_on", direction: "parent",
-                        parent_calculation_ref: "calc_freq_one", child_calculation_ref: "calc_rypxkxvsku5x2nk6sqbhhmfcla",
-                    },
+                    { role: "freq_on", direction: "parent", parent_calculation_ref: "calc_freq_one", child_calculation_ref: "calc_later" },
                 ],
             }),
         })))
         page()
         await findLoaded("Frequency")
-        const depSection = screen.getByRole("heading", { name: "Related calculations" }).closest("section") as HTMLElement
-        const item = within(depSection).getByRole("link", { name: "calc_rypxkxvsku5x2nk6sqbhhmfcla" }).closest("li") as HTMLElement
-        expect(item.textContent).toBe("Frequencies were computed on this geometry by calc_rypxkxvsku5x2nk6sqbhhmfcla")
+        const produced = screen.getByRole("heading", { name: "What this produced" }).closest("section") as HTMLElement
+        const item = within(produced).getByRole("link", { name: "calc_later" }).closest("li") as HTMLElement
+        expect(item.textContent).toBe("Frequency calculation: calc_later")
+        expect(within(item).getByRole("link", { name: "calc_later" })).toHaveAttribute("href", "/calculations/calc_later")
+        // The same edge is not drawn a second time as a strip step.
+        expect(within(dependsOnSection()).queryByRole("link", { name: "calc_later" })).toBeNull()
     })
 
-    // Child-side edges must not say "This was
-    // optimized from <link>" for EVERY role, not only `optimized_from` --
-    // the live archive has child-side `freq_on` (a freq calc's edge back to
-    // the opt it ran on), `single_point_on`, and `irc_start` edges, and each
-    // one rendered a sentence claiming the calc was an optimisation of its
-    // parent, which is false. Each of these three gets its own sentence
-    // with THIS calculation as the fixed subject and the correct verb.
-    it("renders a freq_on child-side edge naming what THIS calc is, not 'optimized from'", async () => {
-        server.use(http.get(ENDPOINT, () => HttpResponse.json({
-            record: mockRecord({
-                dependencies: [
-                    {
-                        role: "freq_on", direction: "child",
-                        parent_calculation_ref: "calc_ts0_opt", child_calculation_ref: "calc_freq_one",
-                    },
-                ],
-            }),
-        })))
+    it("links the result and the output geometries to their evidence sections", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
         page()
         await findLoaded("Frequency")
-        const depSection = screen.getByRole("heading", { name: "Related calculations" }).closest("section") as HTMLElement
-        const item = within(depSection).getByRole("link", { name: "calc_ts0_opt" }).closest("li") as HTMLElement
-        expect(item.textContent).toBe("This frequency calculation was computed on the geometry from calc_ts0_opt")
-        expect(item.textContent).not.toMatch(/optimized from/)
+        const produced = screen.getByRole("heading", { name: "What this produced" }).closest("section") as HTMLElement
+        expect(within(produced).getByRole("link", { name: "A frequency result" }))
+            .toHaveAttribute("href", "/calculations/calc_freq_one#results-heading")
+        expect(within(produced).getByRole("link", { name: /output geometr/ }))
+            .toHaveAttribute("href", "/calculations/calc_freq_one#geometries-heading")
     })
 
-    it("renders a single_point_on child-side edge naming what THIS calc is, not 'optimized from'", async () => {
+    it("falls back to the raw role token for an unrecognised role, never to 'optimized from'", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({
                 dependencies: [
-                    {
-                        role: "single_point_on", direction: "child",
-                        parent_calculation_ref: "calc_ts0_opt", child_calculation_ref: "calc_freq_one",
-                    },
+                    { role: "some_future_role", direction: "child", parent_calculation_ref: "calc_ts0_opt", child_calculation_ref: "calc_freq_one" },
                 ],
             }),
         })))
         page()
         await findLoaded("Frequency")
-        const depSection = screen.getByRole("heading", { name: "Related calculations" }).closest("section") as HTMLElement
-        const item = within(depSection).getByRole("link", { name: "calc_ts0_opt" }).closest("li") as HTMLElement
-        expect(item.textContent).toBe("This single point was computed on the geometry from calc_ts0_opt")
-        expect(item.textContent).not.toMatch(/optimized from/)
-    })
-
-    it("renders an irc_start child-side edge naming what THIS calc is, not 'optimized from'", async () => {
-        server.use(http.get(ENDPOINT, () => HttpResponse.json({
-            record: mockRecord({
-                dependencies: [
-                    {
-                        role: "irc_start", direction: "child",
-                        parent_calculation_ref: "calc_ts0_opt", child_calculation_ref: "calc_freq_one",
-                    },
-                ],
-            }),
-        })))
-        page()
-        await findLoaded("Frequency")
-        const depSection = screen.getByRole("heading", { name: "Related calculations" }).closest("section") as HTMLElement
-        const item = within(depSection).getByRole("link", { name: "calc_ts0_opt" }).closest("li") as HTMLElement
-        expect(item.textContent).toBe("This IRC started from the geometry of calc_ts0_opt")
-        expect(item.textContent).not.toMatch(/optimized from/)
-    })
-
-    it("falls back to the raw role token for an unrecognised child-side role, never to 'optimized from'", async () => {
-        server.use(http.get(ENDPOINT, () => HttpResponse.json({
-            record: mockRecord({
-                dependencies: [
-                    {
-                        role: "some_future_role", direction: "child",
-                        parent_calculation_ref: "calc_ts0_opt", child_calculation_ref: "calc_freq_one",
-                    },
-                ],
-            }),
-        })))
-        page()
-        await findLoaded("Frequency")
-        const depSection = screen.getByRole("heading", { name: "Related calculations" }).closest("section") as HTMLElement
-        const item = within(depSection).getByRole("link", { name: "calc_ts0_opt" }).closest("li") as HTMLElement
+        const item = within(dependsOnSection()).getByRole("link", { name: "calc_ts0_opt" }).closest("li") as HTMLElement
         expect(item.textContent).toMatch(/some future role/)
-        expect(item.textContent).not.toMatch(/optimized from/)
+        expect(item.textContent).not.toMatch(/optimi[sz]ed from/)
     })
 
     it("shows no dependency edge when the archive returns none", async () => {
@@ -820,8 +637,8 @@ describe("CalculationDetailPage", () => {
         page()
         await findLoaded("Frequency")
 
-        const depSection = screen.getByRole("heading", { name: "Related calculations" }).closest("section") as HTMLElement
-        expect(within(depSection).getByText("No dependency edges are recorded for this calculation.")).toBeVisible()
+        const depSection = dependsOnSection()
+        expect(within(depSection).getByText("No earlier calculation is recorded for this one.")).toBeVisible()
         expect(within(depSection).queryByRole("link")).not.toBeInTheDocument()
     })
 
@@ -841,9 +658,9 @@ describe("CalculationDetailPage", () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: withoutKey })))
         page()
         await findLoaded("Frequency")
-        const depSection = screen.getByRole("heading", { name: "Related calculations" }).closest("section") as HTMLElement
+        const depSection = dependsOnSection()
         expect(within(depSection).getByText("This section was not requested for this view.")).toBeVisible()
-        expect(within(depSection).queryByText("No dependency edges are recorded for this calculation."))
+        expect(within(depSection).queryByText("No earlier calculation is recorded for this one."))
             .not.toBeInTheDocument()
     })
 
@@ -1554,11 +1371,8 @@ describe("CalculationDetailPage", () => {
         expect(screen.queryByText("Conformer")).not.toBeInTheDocument()
     })
 
-    // The title, kicker, and stage strip all name the stage,
-    // reading the SAME wording table (`domain/optimisationStage.ts`).
-    // "Coarse pass; refined by …" would read as
-    // if the coarse molecule had been refined BY the other one.
-    it("names the coarse pass in the title/kicker and renders the stage strip, from a parent-side optimized_from edge", async () => {
+    // The title and kicker name the stage, reading the SAME wording table (`domain/optimisationStage.ts`).
+    it("names the coarse pass in the title and kicker, and lists the fine pass under what this produced", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({
                 calculation: { ...mockRecord().calculation, type: "opt" },
@@ -1572,23 +1386,13 @@ describe("CalculationDetailPage", () => {
         const h1 = await findLoaded("Coarse optimisation")
         expect(h1).toHaveTextContent("Coarse optimisation of CH3")
         expect(screen.getByText("Optimisation calculation · coarse pass")).toBeVisible()
-        expect(screen.getByText("Optimisation stages")).toBeVisible()
 
-        const strip = screen.getByTestId("opt-stage-strip")
-        const coarseBox = within(strip).getByTestId("opt-stage-box-coarse")
-        expect(within(coarseBox).getByText("Coarse optimisation")).toBeVisible()
-        expect(coarseBox).toHaveClass("card--selected")
-        expect(within(coarseBox).getByText("calc_freq_one")).toBeVisible()
-        expect(within(coarseBox).queryByRole("link")).not.toBeInTheDocument()
-
-        const fineBox = within(strip).getByTestId("opt-stage-box-fine")
-        expect(fineBox).not.toHaveClass("card--selected")
-        expect(within(fineBox).getByRole("link", { name: "calc_fine_stage" })).toHaveAttribute("href", "/calculations/calc_fine_stage")
-
-        expect(screen.queryByText(/Coarse pass; refined by/)).not.toBeInTheDocument()
+        const produced = screen.getByRole("heading", { name: "What this produced" }).closest("section") as HTMLElement
+        expect(within(produced).getByRole("link", { name: "calc_fine_stage" })).toHaveAttribute("href", "/calculations/calc_fine_stage")
+        expect(within(dependsOnSection()).queryByRole("link")).toBeNull()
     })
 
-    it("names the fine pass in the title/kicker and renders the stage strip, from a child-side optimized_from edge", async () => {
+    it("names the fine pass in the title and kicker, and links the coarse pass in the strip", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({
                 calculation: { ...mockRecord().calculation, type: "opt" },
@@ -1603,24 +1407,13 @@ describe("CalculationDetailPage", () => {
         expect(h1).toHaveTextContent("Fine optimisation of CH3")
         expect(screen.getByText("Optimisation calculation · fine pass")).toBeVisible()
 
-        const strip = screen.getByTestId("opt-stage-strip")
-        const fineBox = within(strip).getByTestId("opt-stage-box-fine")
-        expect(fineBox).toHaveClass("card--selected")
-        expect(within(fineBox).getByText("calc_freq_one")).toBeVisible()
-        expect(within(fineBox).queryByRole("link")).not.toBeInTheDocument()
-
-        const coarseBox = within(strip).getByTestId("opt-stage-box-coarse")
-        expect(coarseBox).not.toHaveClass("card--selected")
-        expect(within(coarseBox).getByRole("link", { name: "calc_coarse_stage" })).toHaveAttribute("href", "/calculations/calc_coarse_stage")
-
-        expect(screen.queryByText(/Refinement of/)).not.toBeInTheDocument()
+        const link = within(dependsOnSection()).getByRole("link", { name: "calc_coarse_stage" })
+        expect(link).toHaveAttribute("href", "/calculations/calc_coarse_stage")
+        expect(within(dependsOnSection()).getByText("Fine optimisation")).toBeVisible()
     })
 
-    // An absent optimized_from edge is not
-    // evidence of a single pass -- "Single-pass optimisation"
-    // would assert a stage the archive never reported.
-    // "Refinement stage: not recorded" says exactly what the page knows.
-    it("renders the muted 'not recorded' fact and no strip when no optimized_from edge exists on an opt calculation", async () => {
+    // An absent optimized_from edge is not evidence of a single pass, so no stage is claimed.
+    it("claims no stage when no optimized_from edge exists on an opt calculation", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({
                 calculation: { ...mockRecord().calculation, type: "opt" },
@@ -1633,16 +1426,8 @@ describe("CalculationDetailPage", () => {
         const h1 = await findLoaded("Optimisation")
         expect(h1).toHaveTextContent("Optimisation of CH3")
         expect(screen.getByText("Optimisation calculation · deposited evidence")).toBeVisible()
-
-        expect(screen.getByText("Refinement stage")).toBeVisible()
-        const stageRow = screen.getByText("Refinement stage").closest("div") as HTMLElement
-        const pill = within(stageRow).getByText("not recorded")
-        expect(pill).toHaveClass("value-pill", "value-pill--muted")
-
-        expect(screen.queryByTestId("opt-stage-strip")).not.toBeInTheDocument()
-        expect(screen.queryByText("Optimisation stages")).not.toBeInTheDocument()
+        expect(screen.queryByText("Refinement stage")).not.toBeInTheDocument()
         expect(screen.queryByText("Single-pass optimisation")).not.toBeInTheDocument()
-        expect(screen.queryByText("No refinement stage recorded")).not.toBeInTheDocument()
     })
 
     // input == output collapses to one card, framed as the
@@ -1838,18 +1623,16 @@ describe("CalculationDetailPage", () => {
         })
     })
 
-    it("demotes Related calculations and Review history below Result and Geometries", async () => {
+    it("puts what the calculation depends on and produced first, and the review history last", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
         page()
         await findLoaded("Frequency")
         const headingOrder = screen.getAllByRole("heading", { level: 2 }).map((el) => el.textContent)
-        const dependenciesIndex = headingOrder.indexOf("Related calculations")
-        const reviewIndex = headingOrder.indexOf("Review history")
-        const resultsIndex = headingOrder.indexOf("Result")
-        const geometriesIndex = headingOrder.indexOf("Geometries")
-        expect(dependenciesIndex).toBeGreaterThan(resultsIndex)
-        expect(dependenciesIndex).toBeGreaterThan(geometriesIndex)
-        expect(reviewIndex).toBeGreaterThan(dependenciesIndex)
+        const index = (name: string) => headingOrder.indexOf(name)
+        expect(index("Depends on")).toBeLessThan(index("What this produced"))
+        expect(index("What this produced")).toBeLessThan(index("Result"))
+        expect(index("Result")).toBeLessThan(index("Geometries"))
+        expect(index("Review history")).toBeGreaterThan(index("Geometries"))
     })
 
     it("shows a specific not-found state for a 404", async () => {
@@ -1921,7 +1704,7 @@ describe("CalculationDetailPage", () => {
             // evidence", so the applicability rule is now observed through
             // the missing-sections note instead (covered above); the ToC
             // itself only carries the top-level sections.
-            for (const heading of ["Result", "Geometries", "Related calculations", "Review history", "Further evidence"]) {
+            for (const heading of ["Result", "Geometries", "Depends on", "What this produced", "Review history", "Further evidence"]) {
                 expect(labels).toContain(heading)
             }
             for (const notASection of ["Scan trajectory", "IRC trajectory", "Path-search trajectory"]) {

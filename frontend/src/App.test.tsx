@@ -324,7 +324,7 @@ const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
     // `label: "Conformer group"`, which is not the archive's own numbering, so the page does not print it.
     ["/conformer-groups/cfg_abc", "Conformer", "cfg_abc"],
     ["/conformer-observations/cfo_abc", "Conformer observation", "cfo_abc"],
-    ["/calculations/calc_abc", "Single-point of H2O", "calc_abc"],
+    ["/calculations/calc_abc", "Single-point energy of H2O", "calc_abc"],
     ["/geometries/geom_abc", "Geometry", "geom_abc"],
     // `/reactions` is no longer `RecordPlaceholderPage` -- it is `BrowsePage`
     // with the "reaction" kind fixed by the route (same component as
@@ -355,7 +355,7 @@ const EXPECTED_TITLES: Record<string, string> = {
     "/species/spc_abcde234567abcde234567abcd": "H2O · Molecule · TCKDB",
     "/conformer-groups/cfg_abc": "Conformer · TCKDB",
     "/conformer-observations/cfo_abc": "Conformer observation · TCKDB",
-    "/calculations/calc_abc": "Single-point · Calculation · TCKDB",
+    "/calculations/calc_abc": "Single-point energy · Calculation · TCKDB",
     "/geometries/geom_abc": "Geometry · TCKDB",
 }
 

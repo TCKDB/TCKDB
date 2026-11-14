@@ -480,25 +480,6 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                             </div>
                         )}
 
-                        {/* The TS entry is a real link to
-                            `/transition-state-entries/:ref` -- that route exists
-                            (`App.tsx:52`). `RecordIdentityHeader`'s own TS branch
-                            renders the ref as plain `<code>` (a shared component
-                            used by pages that don't all have this route), so the
-                            link lives here instead, right below it. The link
-                            text is always the ref itself, never `ownerTS.label`
-                            (the depositor's own `transition_state.label`, e.g.
-                            "TS0") -- house rule: no
-                            depositor-typed labels on public pages. */}
-                        {ownerTS && (
-                            <p className="note record-identity-note">
-                                This calculation belongs to the transition-state entry{" "}
-                                <Link to={`/transition-state-entries/${ownerTS.transition_state_entry_ref}`}>
-                                    {ownerTS.transition_state_entry_ref}
-                                </Link>.
-                            </p>
-                        )}
-
                         <ConformerNote conformer={conformer ?? null} />
 
                         {/* One row of human provenance, always shown -- software
