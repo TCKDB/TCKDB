@@ -1,11 +1,12 @@
 import { GuideLink } from "../components/GuideLink"
 import { useParams } from "react-router-dom"
 import "../conformer-group.css"
-import "../record-identity-header.css"
 import "../methods.css"
 import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
+import { Stored } from "../components/QuantityValue"
+import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton } from "../components/RefsDisclosure"
 import {
@@ -21,24 +22,18 @@ import {
     slotLabel,
     termExpression,
 } from "../domain/compositeSchemeFormat"
+import { ledeText } from "../domain/ledeText"
+import { deposited } from "../domain/quantityFormat"
 import { words } from "../domain/provenanceFormat"
 import { useCompositeScheme } from "../hooks/useCompositeScheme"
 import type { CompositeSchemeRecord, CompositeSchemeTerm } from "../api/methodsApi"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
+const COMPOSITE_SCHEME_LEDE = ledeText`How a composite energy is defined, and which levels of theory name it.`
+
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
-/**
- * `/methods/composite-schemes/:schemeRef` -- a composite recipe (CBS-QB3, G4,
- * a CCSD(T)/CBS extrapolation, a focal-point sum). The page
- * answers "what is this number built from": each term with its operation,
- * component and formula, each input level with its cardinal number and
- * weight, the levels of theory bound to the recipe, and the levels the recipe
- * runs internally.
- *
- * Nothing is computed here. Every coefficient is the server's; a non-linear
- * term (the three-point exponential) has none and is said to have none.
- */
+/** `/methods/composite-schemes/:schemeRef`: a composite recipe, with its terms, their input levels and the levels of theory bound to it. */
 export default function CompositeSchemePage() {
     const { schemeRef = "" } = useParams<{ schemeRef: string }>()
     const state = useCompositeScheme(schemeRef)
@@ -66,26 +61,17 @@ function CompositeSchemeDetail({ record }: { record: CompositeSchemeRecord }) {
                 crumbs={[{ label: "Methods", to: "/methods" }, { label: title }]}
                 identity={(
                     <header className="basin-header">
-                        <div className="record-identity-header">
-                            <div className="record-identity-kicker-row">
-                                <span className="t-kicker record-identity-kicker">Composite recipe · provenance vocabulary</span>
-                            </div>
-                            <h1 className="t-display-2 record-identity-title">{title}</h1>
-                            <p className="composite-label"><code className="data">{scheme.name}</code></p>
-                            <p className="t-body section-intro">
-                                How a composite energy is defined, and which levels of theory name it.
-                                <GuideLink to="composite-recipe" />
-                            </p>
-                            <div className="record-identity-known">
-                                <dl className="kv-list record-identity-facts">
-                                    <div>
-                                        <dt>Composite scheme ref</dt>
-                                        <dd className="record-identity-fact-copyable">
-                                            <code className="data">{scheme.composite_scheme_ref}</code>
-                                            <CopyButton value={scheme.composite_scheme_ref} label="Composite scheme ref" srLabel="value" />
-                                        </dd>
-                                    </div>
+                        <RecordIdentityHeader
+                            kicker="Composite recipe"
+                            lede={COMPOSITE_SCHEME_LEDE}
+                            title={title}
+                            ownRef={{ label: "Composite scheme ref", value: scheme.composite_scheme_ref }}
+                            ownFacts={(
+                                <>
                                     <div><dt>Kind</dt><dd>{words(scheme.kind)}</dd></div>
+                                    {scheme.kind !== "named_method" && (
+                                        <div className="kv-list--wide"><dt>Recipe label</dt><dd className="composite-label"><code className="data">{scheme.name}</code></dd></div>
+                                    )}
                                     <div>
                                         <dt>Recipe geometry level</dt>
                                         <dd>
@@ -104,7 +90,7 @@ function CompositeSchemeDetail({ record }: { record: CompositeSchemeRecord }) {
                                     </div>
                                     <div>
                                         <dt>Recipe ZPE scale factor</dt>
-                                        <dd>{scheme.recipe_zpe_scale_factor ?? "not stated by the recipe"}</dd>
+                                        <dd><ZpeScaleFactor value={scheme.recipe_zpe_scale_factor} /></dd>
                                     </div>
                                     <div>
                                         <dt>Source literature ref</dt>
@@ -119,17 +105,13 @@ function CompositeSchemeDetail({ record }: { record: CompositeSchemeRecord }) {
                                                 : "not recorded"}
                                         </dd>
                                     </div>
-                                    {/* The note is TCKDB's own text only for a catalogued named method (the one path that
-                                        writes it: `composite_scheme_resolution.py` `get_or_create_named_method_scheme`);
-                                        a user-built recipe never gets one, so a note on any other kind is
-                                        not TCKDB's and is not printed. */}
                                     {scheme.kind === "named_method" && scheme.note && <div><dt>Note</dt><dd>{scheme.note}</dd></div>}
-                                </dl>
-                            </div>
-                        </div>
+                                </>
+                            )}
+                        />
+                        <p><GuideLink to="composite-recipe" /></p>
                         <dl className="kv-list basin-context">
                             <div><dt>Deposited</dt><dd>{isoDate(scheme.created_at)}</dd></div>
-                            <div><dt>Terms</dt><dd>{record.terms.length}</dd></div>
                         </dl>
                     </header>
                 )}
@@ -244,4 +226,10 @@ function BoundLevelsSection({ record }: { record: CompositeSchemeRecord }) {
             )}
         </section>
     )
+}
+
+function ZpeScaleFactor({ value }: { value: number | null | undefined }) {
+    const shown = deposited(value)
+    if (!shown) return <>not stated by the recipe</>
+    return <Stored full={shown.full}>{shown.value}</Stored>
 }

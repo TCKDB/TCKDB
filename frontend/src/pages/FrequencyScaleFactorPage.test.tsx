@@ -59,7 +59,7 @@ describe("FrequencyScaleFactorPage: the standalone scale-factor page", () => {
     it("renders the value, its owning level of theory (linked), workflow tool, and usage", async () => {
         server.use(http.get("/api/v1/scientific/frequency-scale-factors/fsf_one", () => HttpResponse.json(mockResponse())))
         page()
-        await screen.findByText("fundamental")
+        expect(await screen.findByRole("heading", { level: 1, name: "Fundamental frequency scale factor 0.999" })).toBeVisible()
         expect(screen.getByText("0.999")).toBeVisible()
         await waitFor(() => expect(titleHasKind(document.title, "/methods/frequency-scale-factors/:ref")).toBe(true))
         const lotLink = screen.getByRole("link", { name: "b3lyp/def2tzvp" })
@@ -79,7 +79,7 @@ describe("FrequencyScaleFactorPage -- no depositor-typed text", () => {
         const { value } = planted
         server.use(http.get("/api/v1/scientific/frequency-scale-factors/fsf_one", () => HttpResponse.json(value)))
         page()
-        await screen.findByText("fundamental")
+        expect(await screen.findByRole("heading", { level: 1, name: "Fundamental frequency scale factor 0.999" })).toBeVisible()
         expect(screen.getByText("0.999")).toBeVisible()
 
         expectNoDepositorText()

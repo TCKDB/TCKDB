@@ -350,6 +350,39 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         expect(within(screen.getByRole("table", { name: "Element correction parameters" })).getAllByRole("row")).toHaveLength(1 + 3)
     })
 
+    it("opens a correction scheme and switches between schemes of one kind with the keyboard alone", async () => {
+        const base = baseRecord()
+        const gaussianScheme = {
+            ...base.correction_schemes[0],
+            software_release: { software_release_ref: "swr_g16", software: "Gaussian", version: "16" },
+        }
+        const orcaScheme = {
+            ...base.correction_schemes[0],
+            energy_correction_scheme: { ...base.correction_schemes[0].energy_correction_scheme, energy_correction_scheme_ref: "ecs_atom_orca" },
+            software_release: { software_release_ref: "swr_orca6", software: "ORCA", version: "6" },
+            corrections: atomCorrections().slice(0, 3),
+        }
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord({
+            correction_schemes: [gaussianScheme, orcaScheme],
+        })))))
+        const user = userEvent.setup()
+        page()
+        await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })
+
+        const select = screen.getByRole("combobox", { name: "Software" })
+        let guard = 0
+        while (document.activeElement !== select && guard++ < 60) await user.tab()
+        expect(select).toHaveFocus()
+        await user.selectOptions(select, "ecs_atom_orca")
+        expect(screen.getByText("ORCA 6", { selector: ".value-pill" })).toBeVisible()
+        const summary = screen.getByText("Atom-energy correction").closest("summary") as HTMLElement
+        guard = 0
+        while (document.activeElement !== summary && guard++ < 20) await user.tab()
+        expect(summary).toHaveFocus()
+        await user.keyboard("{Enter}")
+        expect(within(screen.getByRole("table", { name: "Element correction parameters" })).getAllByRole("row")).toHaveLength(1 + 3)
+    })
+
     /**
      * RED-FIRST CRITERION 3. `softwareLabel` already renders `{name}
      * {version}` (no new formatting code needed here) -- this pins that a
