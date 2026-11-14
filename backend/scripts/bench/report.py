@@ -270,7 +270,7 @@ def _plans_block(evidence: dict) -> list[str]:
     return lines
 
 
-#: Defects the benchmark measured that were NOT fixed in Stage 4, each with
+#: Defects the benchmark measured that were NOT fixed, each with
 #: the reason. Publishing the wins and omitting the rest would make this file
 #: advertising rather than evidence.
 KNOWN_UNFIXED: tuple[dict[str, str], ...] = (
