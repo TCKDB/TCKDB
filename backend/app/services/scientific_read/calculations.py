@@ -311,9 +311,9 @@ def get_calculation(
             "include_not_implemented_yet: include token(s) "
             f"{sorted(requested_unimplemented)!r} are reserved for "
             "/scientific/calculations/{calculation_ref_or_id} but the "
-            "default-shape detail endpoint has not implemented them "
-            "yet. Drop the token(s) and re-issue, or fetch the legacy "
-            "Tier-A/B /api/v1/calculations/{id}/... routes for the same "
+            "default-shape detail endpoint does not support them. "
+            "Drop the token(s) and re-issue, or fetch the "
+            "/api/v1/calculations/{id}/... routes for the same "
             "data. See backend/docs/specs/scientific_calculation_reads.md."
         )
 

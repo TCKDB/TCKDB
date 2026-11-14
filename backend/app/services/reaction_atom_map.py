@@ -185,8 +185,8 @@ def persist_reaction_atom_map(
         raise CodedValueError(
             W_ATOM_MAP_WITHOUT_TRANSITION_STATE,
             f"{field_path} was supplied for a reaction with no transition "
-            "state. Both legs of an atom map run toward the saddle point "
-            "(ADR 0011).",
+            "state. Both legs of an atom map run toward the saddle point, so a "
+            "reaction without one cannot carry a map.",
             context={"field_path": field_path},
             message_prefix=False,
         )

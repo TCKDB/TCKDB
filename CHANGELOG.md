@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## API messages and summaries state rules without design-record references (Unreleased)
+
+- **Behaviour:** refusal and warning messages, the code catalogue notes, OpenAPI descriptions, the glossary and the CCCBDB importer's help text and User-Agent state the rule in the present tense, without design-record, issue, phase or date references. The artifact download route's summary reads "Download Artifact" (it was "Download Approved Artifact"); any authenticated caller may download any stored artifact, and the operation id is unchanged. The `tckdb-schemas` README points to the package changelog (`schemas/python/tckdb-schemas/CHANGELOG.md`), which now also holds the entries for 0.23.0 to 0.34.0 that the README used to carry. No error code, field, route or condition changes.
+- **Schema and migration:** none. No new environment variable. **Versions:** `tckdb-schemas` 0.174.4 (no client change).
+
 ## The migration chain is one revision (Unreleased)
 
 - **Behaviour:** none. `alembic upgrade head` on an empty database builds the same schema and seed rows from a single revision, `d5b8e2f4a916`; `alembic downgrade base` removes them. Revision ids that no longer exist are removed from comments, docs and tests. The OpenAPI descriptions of the two ML export routes lose a sentence that cited a revision, and the contribution-bundle example carries `schema_version` `d5b8e2f4a916` (the field is a free-form string that nothing reads).

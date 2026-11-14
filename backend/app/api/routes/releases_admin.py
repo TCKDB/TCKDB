@@ -262,7 +262,7 @@ def append_selection(
     """Append an attributed selection to a draft release.
 
     :raises HTTPException: 404 unknown release, or a ``record_ref`` naming no
-        record; 409 when the release is no longer a draft or the subject
+        record; 409 when the release is not a draft or the subject
         already has a standing selection (supersede it instead); 422 for a
         body that can be corrected and resent — an unselectable ref, a
         blank rationale, a record below the approval floor.
@@ -303,7 +303,7 @@ def supersede(
 
     :raises HTTPException: 404 unknown release, unknown selection, or a
         ``record_ref`` naming no record; 409 when the row has already been
-        superseded or the release is no longer a draft; 422 when the
+        superseded or the release is not a draft; 422 when the
         replacement is incoherent.
     """
     release = _release(session, release_handle)
@@ -337,7 +337,7 @@ def withdraw_a_selection(
     """Append a withdrawal: the release now recommends nothing for this subject.
 
     :raises HTTPException: 404 unknown release or selection; 409 when the row
-        has already been superseded or the release is no longer a draft; 422
+        has already been superseded or the release is not a draft; 422
         when no reason was given.
     """
     release = _release(session, release_handle)

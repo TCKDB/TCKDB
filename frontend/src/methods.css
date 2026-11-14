@@ -80,9 +80,8 @@
    `arrhenius-chart.css`'s own `.arrhenius-chart-control` (label + native
    `<select>` inside one bordered pill), duplicated locally rather than
    imported: that file is `ArrheniusChart.tsx`'s own component
-   stylesheet, not something this record page is an instance of (the same
-   "small, separate duplicate" pattern `NetworkKtpChart.tsx`'s own
-   `KtpXAxisSelect` comment documents for the identical reason). The label
+   stylesheet, not something this record page is an instance of (a
+   small, separate duplicate). The label
    deliberately does NOT use `--type-label-transform` the way the chart
    control's label does: this file's own header comment already commits
    to declaring no `text-transform` anywhere in it (case-sensitive atom

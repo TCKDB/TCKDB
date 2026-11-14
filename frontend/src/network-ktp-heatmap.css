@@ -1,0 +1,155 @@
+/* k(T,P): a heat map with the value written in each cell, a pressure and a temperature control, and a table twin. */
+.ktp-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-4);
+    align-items: end;
+    margin: var(--s-3) 0;
+}
+
+.ktp-field {
+    display: grid;
+    gap: var(--s-1);
+    min-width: 0;
+    max-width: 100%;
+}
+
+.ktp-field > span,
+.ktp-field > label {
+    color: var(--ink);
+    font: var(--type-ui-font);
+    font-weight: 600;
+}
+
+.ktp-field select {
+    min-height: 44px;
+    max-width: 100%;
+    padding: .4rem .6rem;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--ink);
+    font: var(--type-ui-font);
+}
+
+.ktp-slider-row {
+    display: flex;
+    align-items: stretch;
+    gap: var(--s-1);
+}
+
+.ktp-step {
+    min-width: 44px;
+    min-height: 44px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--ink);
+    font: var(--type-ui-font);
+    cursor: pointer;
+}
+
+.ktp-step:disabled {
+    color: var(--muted);
+    cursor: default;
+}
+
+.ktp-step:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.ktp-slider {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s-3);
+    flex: 1;
+    min-width: 8rem;
+    min-height: 44px;
+    padding: .4rem .75rem;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--ink);
+    font: var(--type-ui-font);
+}
+
+.ktp-slider:focus-visible,
+.ktp-field select:focus-visible,
+.ktp-box:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.ktp-slider-hint {
+    color: var(--muted);
+}
+
+.ktp-box {
+    overflow-x: auto;
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+}
+
+.ktp-svg {
+    display: block;
+    max-width: none;
+}
+
+.ktp-cell {
+    stroke: var(--surface);
+    stroke-width: 1;
+    cursor: pointer;
+}
+
+.ktp-heat-0 { fill: color-mix(in srgb, var(--accent) 6%, var(--surface)); }
+.ktp-heat-1 { fill: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.ktp-heat-2 { fill: color-mix(in srgb, var(--accent) 22%, var(--surface)); }
+.ktp-heat-3 { fill: color-mix(in srgb, var(--accent) 30%, var(--surface)); }
+.ktp-heat-4 { fill: color-mix(in srgb, var(--accent) 38%, var(--surface)); }
+.ktp-heat-none { fill: var(--surface-sunken); }
+
+.ktp-cell--chosen {
+    stroke: var(--ink);
+    stroke-width: 3;
+}
+
+.ktp-value {
+    fill: var(--ink);
+    font-size: 12px;
+    pointer-events: none;
+}
+
+.ktp-axis {
+    fill: var(--muted);
+    font-size: 12px;
+}
+
+.ktp-readout {
+    margin: var(--s-3) 0;
+    color: var(--ink);
+    font: var(--type-body-font);
+}
+
+.ktp-caption {
+    margin-top: var(--s-2);
+    color: var(--ink-2);
+    font: var(--type-body-font);
+}
+
+.ktp-caption code {
+    overflow-wrap: anywhere;
+}
+
+.ktp-table {
+    width: 100%;
+    min-width: 28rem;
+    border-collapse: collapse;
+}
+
+.ktp-table-scroll {
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-sm);
+}

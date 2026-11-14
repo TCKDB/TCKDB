@@ -777,7 +777,7 @@ def test_standalone_ts_upload_reports_the_absent_atom_map(db_conn) -> None:
         assert len(absent) == 1
         assert absent[0].field == "atom_map"
         assert "geometry_key" in absent[0].message
-        assert "ADR 0011" in absent[0].message
+        assert "accepts the same map" in absent[0].message
 
 
 def test_standalone_ts_evidence_requires_exactly_one_irc_calculation() -> None:

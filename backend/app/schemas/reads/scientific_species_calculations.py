@@ -344,7 +344,7 @@ class CalculationProvenanceBlock(BaseModel):
     """Calculation-level provenance summary.
 
     ``supporting_calculations`` object array and ``submission_ref``
-    carry the public stable handles alongside the legacy
+    carry the public stable handles alongside the
     ``supporting_calculation_ids`` and ``submission_id`` fields.
 
     ``submission_ref`` is served only to an authenticated caller — the

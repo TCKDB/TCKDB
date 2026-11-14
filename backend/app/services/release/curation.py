@@ -295,8 +295,8 @@ def _assert_standing_selections_still_approved(
             )
         except ReleaseCurationError as exc:
             raise ReleaseCurationError(
-                f"selection_no_longer_approved: selection {row.public_ref} can no "
-                f"longer be published -- {exc}"
+                f"selection_no_longer_approved: selection {row.public_ref} cannot "
+                f"be published -- {exc}"
             ) from exc
 
 

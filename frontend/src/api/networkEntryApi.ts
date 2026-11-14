@@ -380,3 +380,15 @@ export async function loadNetworkEntry(
         solveEnergiesUnavailable: solveDetail.status === "unavailable",
     }
 }
+
+export type NetworkTopology = { states: NetworkState[]; channels: NetworkChannel[] }
+
+/** States and channels only, for a small map beside another record; none of the follow-up reads `loadNetworkEntry` makes. */
+export async function loadNetworkTopology(ref: string, signal?: AbortSignal): Promise<NetworkTopology> {
+    const query = new URLSearchParams()
+    query.append("include", "states")
+    query.append("include", "channels")
+    const payload = await requestScientificJson(`/api/v1/scientific/networks/${encodeURIComponent(ref)}?${query}`, signal)
+    const { record } = parseScientificResponse(networkDetailResponseSchema, payload, "network")
+    return { states: record.states ?? [], channels: record.channels ?? [] }
+}
