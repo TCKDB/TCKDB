@@ -1,4 +1,4 @@
-"""The C-Q4 QCSchema interchange demonstration, run on its committed fixtures.
+"""The QCSchema interchange demonstration, run on its committed fixtures.
 
 ``backend/scripts/validation/qcschema_interchange_report.py`` imports a Psi4
 B3LYP/def2-TZVP water Hessian through the real adapter and upload route,

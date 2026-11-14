@@ -81,13 +81,12 @@ describe("ConformerAttributionGroups", () => {
         expect(within(details).getByRole("heading", { name: "From Conformer Group 3" })).toBeVisible()
     })
 
-    // `partitionByConformerLink` files a
-    // record naming MULTIPLE other groups under EVERY one of those groups'
-    // own buckets -- the SAME record reference appears in more than one
-    // bucket array. The prior summary count (`reduce` summing bucket
-    // lengths) double-counted such a record, and the prior render (mapping
-    // each bucket independently) rendered that SAME record twice into the
-    // DOM. A caller gives each rendered record a fixed id derived from its
+    // `partitionByConformerLink` files a record naming MULTIPLE other groups
+    // under EVERY one of those groups' own buckets -- the SAME record
+    // reference appears in more than one bucket array. A summary count that
+    // sums bucket lengths would double-count such a record, and a render
+    // that maps each bucket independently would put that SAME record into
+    // the DOM twice. A caller gives each rendered record a fixed id derived from its
     // own ref (e.g. `thermo-heading-${record.thermo_ref}`), so rendering it
     // twice produces two elements sharing one id -- this test's `renderRecord`
     // stands in for that with `data-testid`, which RTL's `getByTestId` also

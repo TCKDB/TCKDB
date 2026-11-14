@@ -603,12 +603,12 @@ describe("EntryThermoSection", () => {
         expect(within(alphaCard).queryByText("Superseded")).not.toBeInTheDocument()
     })
 
-    // An empty "Group-additivity estimation" box rendered on
-    // every card, including `nasa`/computed records that were never going
-    // to have one — group-additivity is a scheme only an ESTIMATED record
-    // ever carries at all, unlike nasa/nasa9/wilhoit/points (the four
-    // possible SHAPES of the one model kind every record declares). The
-    // section renders only for the record that actually has it now.
+    // An empty "Group-additivity estimation" box must not render on every
+    // card, including `nasa`/computed records that never have one --
+    // group-additivity is a scheme only an ESTIMATED record ever carries at
+    // all, unlike nasa/nasa9/wilhoit/points (the four possible SHAPES of the
+    // one model kind every record declares). The section renders only for the
+    // record that actually has it.
     it("renders group-additivity data only for the record that has it, and renders nothing at all (no section) for one that doesn't", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
@@ -1217,9 +1217,9 @@ describe("EntryThermoSection: thermo records register in the ToC", () => {
 })
 
 // ---------------------------------------------------------------------------
-// "seven byte-identical thermo records
-// render as fourteen full cards" -- 12,000px of scrolling to learn one
-// fact. `domain/identicalRecordGroups.ts`'s `thermoRecordFingerprint`
+// Seven byte-identical thermo records render as one card, not fourteen
+// full cards (12,000px of scrolling to learn one fact).
+// `domain/identicalRecordGroups.ts`'s `thermoRecordFingerprint`
 // compares model_kind, scientific_origin, H298/S298 (+ uncertainties), the
 // full model block (nasa/nasa9/wilhoit/points), and the record's own
 // temperature range -- never ref, date, review status, or provenance.
@@ -1227,7 +1227,7 @@ describe("EntryThermoSection: thermo records register in the ToC", () => {
 describe("EntryThermoSection: identical-value records group under one card", () => {
     /** Three clones of thm_alpha, identical in every fingerprinted field,
      *  differing only in `thermo_ref` and one PROVENANCE field
-     *  (`provenance.software_release`) -- the review's own worked case:
+     *  (`provenance.software_release`) -- the worked case:
      *  provenance that differs across identical-value records must stay
      *  visible even though the records are grouped. */
     function identicalClones() {

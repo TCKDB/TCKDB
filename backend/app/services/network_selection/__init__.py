@@ -1,7 +1,7 @@
 """Pressure-dependent network selection.
 
-Chunk 2: a bounded, consistent snapshot of one network's authorized population and a deterministic applicability
-assessment of its determinations (one channel) or declared product sets (a requested bundle). Chunk 3: the
+A bounded, consistent snapshot of one network's authorized population and a deterministic applicability
+assessment of its determinations (one channel) or declared product sets (a requested bundle), and the
 ordering engine and the replayable manifest, on the shared :mod:`app.services.selection_kernel` (outcomes and the
 administrative order are the kernel's and are not re-implemented here), with two replay levels. TCKDB ranks no method
 above another, so a decision is an honest statement of which candidates are eligible and in what display order.

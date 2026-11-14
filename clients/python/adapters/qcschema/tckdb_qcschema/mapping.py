@@ -650,7 +650,7 @@ def _build_atomic(record: QCRecord, report: MappingReport) -> tuple[dict, str | 
         raise QCSchemaAdapterError(
             "unsupported_driver",
             f"driver={driver!r} is not one of energy, gradient, hessian; "
-            f"scans, IRC, and other driver kinds are out of scope for C-Q1.",
+            f"scans, IRC, and other driver kinds are not supported.",
         )
 
     calc = ConformerCalculationIn(**{k: v for k, v in calc_kwargs.items() if v is not None or k == "type"})

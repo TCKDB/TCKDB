@@ -1,4 +1,4 @@
-"""Stage 5: upload built payloads via the generic ``tckdb-client`` (M4).
+"""Stage 5: upload built payloads via the generic ``tckdb-client``.
 
 This is the only stage that touches the network. ``tckdb-client`` is imported
 lazily so that stages 1-4 (and their tests) never require it. Every logical

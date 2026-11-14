@@ -1,6 +1,6 @@
 # Water B3LYP/def2-TZVP: a Psi4 Hessian and its Gaussian reference
 
-Inputs to the QCSchema interchange demonstration (Phase C work package C-Q4).
+Inputs to the QCSchema interchange demonstration.
 `backend/scripts/validation/qcschema_interchange_report.py` reads them, and
 nothing else. The write-up is `docs/validation/qcschema_interchange.md`.
 
@@ -20,9 +20,9 @@ ninth route case.
 
 ## Provenance
 
-- **Who and when.** The repository owner ran the script on 2026-09-29, from
-  an untracked working directory. The script writes its two outputs next to
-  itself, so running this committed copy writes them here.
+- **How it was run.** The script was run from an untracked working directory.
+  It writes its two outputs next to itself, so running this committed copy
+  writes them here.
 - **Environment.** Psi4 1.11 through qcengine 0.51.0, with qcelemental 0.51.2,
   in the conda environment `tckdb_qcschema_psi4`. That is the same pinned
   environment as the adapter's HF/STO-3G corpus. Its recipe is

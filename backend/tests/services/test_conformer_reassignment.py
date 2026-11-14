@@ -1123,7 +1123,7 @@ def test_a_thermo_on_the_group_is_not_by_itself_a_reason_to_owe_the_move(db_sess
 
 def test_an_unapproved_thermo_resting_on_the_structure_moves_with_it_and_nothing_is_owed(db_session) -> None:
     """The API role can move an unapproved thermo target, as an inline merge already does: the sp moves live, the
-    thermo follows the observation its calculation came from (D5), and a recompute straight after is a no-op."""
+    thermo follows the observation its calculation came from, and a recompute straight after is a no-op."""
     session = db_session
     entry_id, sp, group, smiles, butane, deposit = _owed_refile_scenario(session, blocker="unapproved_thermo_evidence")
     thermo_id = session.scalar(select(Thermo.id).where(Thermo.target_conformer_group_id == group))

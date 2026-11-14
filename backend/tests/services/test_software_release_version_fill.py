@@ -235,7 +235,7 @@ def _bind_to_manifest(db_session, calc, release) -> None:
 
 
 def test_environment_bound_calculation_is_reported_and_skipped(db_session):
-    """Review finding F1. ``trg_calculation_execution_environment_binding``
+    """``trg_calculation_execution_environment_binding``
     requires a calculation's release to equal its execution-environment
     manifest's, and the manifest is immutable. Re-pointing such a
     calculation raised P0001 and aborted the whole ``--commit``; it must be
@@ -278,7 +278,7 @@ def _approve(db_session, record_type, record_id) -> None:
 
 
 def test_plan_reports_stale_assessments_and_approved_products(db_session, script, monkeypatch, capsys):
-    """Review finding F4, reporting only. Re-pointing a calculation changes
+    """Reporting only. Re-pointing a calculation changes
     the release columns every stored reproducibility assessment covering it
     hashed, and an approved thermo/statmech citing it as a source is not
     guarded by the accepted-science trigger. The dry run must say both."""

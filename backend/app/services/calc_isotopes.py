@@ -50,7 +50,7 @@ def entry_isotope_counts(entry: SpeciesEntry, species: Species) -> IsotopeCounts
     """Return the ``(element, mass_number)`` counts a species entry declares.
 
     The entry's isotopes live on ``species_entry.isotope_key`` -- the canonical
-    isotope-labelled SMILES -- and, on every row written since #66, **not** on
+    isotope-labelled SMILES -- and, on every row written with an isotope key, **not** on
     ``species.smiles``, which is stripped of labels (species identity is shared
     by every isotopologue). ``NULL`` is the all-standard entry, i.e. an empty
     mapping.
@@ -64,7 +64,7 @@ def entry_isotope_counts(entry: SpeciesEntry, species: Species) -> IsotopeCounts
     sources. The two differ in one way: ``entry_facts`` ORs the key and the
     label (it only asks "are there isotopes at all"), whereas here the key wins
     when present and the SMILES is consulted only when the key is ``NULL``,
-    because a count needs one source, not two. For a row written after #66 the
+    because a count needs one source, not two. For a row written with an isotope key the
     SMILES carries no label, so the fallback yields the same empty mapping and
     changes nothing.
 

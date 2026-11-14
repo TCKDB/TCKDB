@@ -15,8 +15,8 @@ Adding a generator
 2. Register it below. The name becomes ``expected_outputs/<name>.json`` and
    ``<name>.md`` in the deposit.
 
-``hessian_reanalysis`` (work package B4b)
------------------------------------------
+``hessian_reanalysis``
+----------------------
 The spectrum-from-Hessian agreement table (``3_results.md:44``,
 ``SI.md:29``) is produced by
 :func:`app.services.hessian_reanalysis.hessian_reanalysis`, registered below
@@ -45,7 +45,7 @@ GENERATORS: dict[str, Generator] = {
     # QCSchema adapter and back, and its Psi4-vs-Gaussian measurements. Reads
     # committed fixtures; the session only hosts a rolled-back round trip.
     "qcschema_interchange": generators.qcschema_interchange,
-    # The spectrum-from-Hessian check (work package B4b): see the module docstring.
+    # The spectrum-from-Hessian check: see the module docstring.
     "hessian_reanalysis": snapshot_generators.hessian_reanalysis,
     # Demonstration snapshot (scripts/paper_snapshot): see snapshot_generators for what each answers.
     "conformer_basins": snapshot_generators.conformer_basins,

@@ -1,6 +1,6 @@
 """``?profile=`` pass-through for every typed scientific method.
 
-Stage 3's contract is that a consumer can tell curated results from
+The contract is that a consumer can tell curated results from
 exploratory ones. A typed client that cannot pass ``profile=curated`` makes
 that feature reachable only by dropping to raw HTTP, which defeats the point
 of the echo — so every typed method whose backend operation publishes the
@@ -227,7 +227,7 @@ def test_exploratory_is_forwarded_verbatim_rather_than_normalised_away(
 
 @pytest.mark.parametrize("method_name", PROFILE_METHODS)
 def test_omitting_profile_sends_no_profile_parameter(method_name):
-    """The default request must stay byte-identical to the pre-Stage-3 one."""
+    """The default request must stay byte-identical to a request made before the parameter existed."""
 
     seen: list[httpx.Request] = []
     client, _ = make_client(_handler_recording(seen))

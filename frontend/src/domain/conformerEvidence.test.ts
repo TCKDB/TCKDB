@@ -345,16 +345,15 @@ describe("optimizationStaging", () => {
         expect(staging).toMatchObject({ kind: "aggregate", rawOptCount: 4, chainCount: 3, stagedRowCount: 1 })
     })
 
-    // The safety guard's `!==` was only
-    // tested in the direction where the chain count EXCEEDS
-    // observations-with-opt (the fixture above). The `<` direction is real
-    // too -- the backend's `_feeds_a_refinement_on_the_same_observation`
-    // does not constrain the superseding calculation's TYPE, so an opt row
-    // whose `optimized_from` child is a non-opt calculation on the same
-    // observation is superseded (contributes 0 chains) while still counting
-    // toward `evidence_coverage.opt` (1). A reviewer's `!==` -> `>` mutation
-    // passed all 347 existing tests specifically because no fixture ever
-    // exercised chainCount < coverageOpt -- this one does.
+    // The safety guard's `!==` is exercised in both directions: the fixture
+    // above has the chain count EXCEEDING observations-with-opt, and this one
+    // has it below. The `<` direction is real too -- the backend's
+    // `_feeds_a_refinement_on_the_same_observation` does not constrain the
+    // superseding calculation's TYPE, so an opt row whose `optimized_from`
+    // child is a non-opt calculation on the same observation is superseded
+    // (contributes 0 chains) while still counting toward
+    // `evidence_coverage.opt` (1). A `!==` -> `>` mutation survives unless a
+    // fixture has chainCount < coverageOpt.
     it("falls back to 'aggregate' when the chain count is LESS THAN observations-with-opt, not just greater", () => {
         const conformer = group({
             observations_summary: { total: 1 },
@@ -450,12 +449,12 @@ describe("describeConformerEvidence", () => {
         expect(story).toContain("three of those calculations are a coarse pass later refined")
     })
 
-    // The per-observation branch had no
-    // equivalent of the aggregate branch's `rawOptCount === 0` guard. A
-    // conformer whose loaded observations carry freq/sp but no opt at all
-    // satisfies the safety condition (chainCount 0 === coverageOpt 0, every
-    // observation loaded), so it must be guarded against an EMPTY `buckets`
-    // map, which would produce a stray "." sentence fragment.
+    // The per-observation branch needs the equivalent of the aggregate
+    // branch's `rawOptCount === 0` guard. A conformer whose loaded
+    // observations carry freq/sp but no opt at all satisfies the safety
+    // condition (chainCount 0 === coverageOpt 0, every observation loaded),
+    // so it must be guarded against an EMPTY `buckets` map, which would
+    // produce a stray "." sentence fragment.
     it("says plainly that no observation has an optimization calculation, on the per-observation path, rather than a stray '.'", () => {
         const conformer = group({
             observations_summary: { total: 2 },
@@ -483,14 +482,12 @@ describe("describeConformerEvidence", () => {
         )
     })
 
-    // The staging clause silently dropped sightings with no opt
-    // row -- `perObservation` only gets an entry when `optCount > 0`, and
-    // the old clause text carried no denominator, so 4 sightings with only
-    // 2 having opt printed a staging clause that read as a complete
-    // accounting of all 4 (the freq/sp sentences right beside it DO carry a
-    // "of the four" denominator). This fixture is untested territory per
-    // the review: no existing fixture had an opt-free observation on the
-    // per-observation path.
+    // The staging clause must not silently drop sightings with no opt row:
+    // `perObservation` only gets an entry when `optCount > 0`, so without a
+    // denominator 4 sightings with only 2 having opt would print a staging
+    // clause that reads as a complete accounting of all 4 (the freq/sp
+    // sentences right beside it carry an "of the four" denominator). The
+    // fixture has an opt-free observation on the per-observation path.
     it("names how many sightings had NO optimisation on file, on the per-observation path, rather than silently dropping them", () => {
         const conformer = group({
             observations_summary: { total: 4 },

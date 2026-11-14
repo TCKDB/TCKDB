@@ -930,10 +930,10 @@ describe("EntryStatmechSection: frequencies render on the card by default", () =
 })
 
 // ---------------------------------------------------------------------------
-// "seven byte-identical statmech records render as fourteen
-// full cards" (paired with thermo's identical finding). See
-// `EntryThermoSection.test.tsx`'s matching describe block for the same
-// rule, applied to `statmechRecordFingerprint`.
+// Seven byte-identical statmech records render as one card, not fourteen
+// full cards (the same rule as thermo's). See
+// `EntryThermoSection.test.tsx`'s matching describe block for the rule
+// applied to `statmechRecordFingerprint`.
 // ---------------------------------------------------------------------------
 describe("EntryStatmechSection: identical-value records group under one card", () => {
     /** Three clones, identical in every fingerprinted field, differing only

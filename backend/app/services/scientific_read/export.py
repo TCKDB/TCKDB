@@ -1238,7 +1238,7 @@ def build_export_record_set(
     min_review_status: RecordReviewStatus | None = DEFAULT_MIN_REVIEW_STATUS,
     all_cap: int = DEFAULT_ALL_CAP,
 ) -> ExportRecordSet:
-    """Build the full in-memory export record set (M1).
+    """Build the full in-memory export record set.
 
     Resolves the seed, computes the species closure, and runs read-time
     selection per record. Used by the CHEMKIN serializer (which needs the
@@ -1415,7 +1415,7 @@ def iter_export_ndjson(
     min_review_status: RecordReviewStatus | None = DEFAULT_MIN_REVIEW_STATUS,
     all_cap: int = DEFAULT_ALL_CAP,
 ) -> Iterator[str]:
-    """Stream an NDJSON export (M2) without materializing the whole set.
+    """Stream an NDJSON export without materializing the whole set.
 
     Emits a header ``manifest`` line (seed + policy, no gaps yet), then one
     ``species`` line and one ``reaction`` line per record computed lazily,
