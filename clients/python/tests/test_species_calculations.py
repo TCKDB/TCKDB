@@ -1,10 +1,10 @@
 """Tests for the ``species_calculations`` extension.
 
 ``ComputedReactionUpload.calculations`` attaches every Calculation to the
-transition state; species blocks are identity-only. The
-``species_calculations: dict[Species, list[Calculation]]``
-bucket so reactant/product opt/freq/sp records can travel in the same
-upload — and the kinetics record can reference them as
+transition state; without ``species_calculations`` species blocks are
+identity-only. The ``species_calculations: dict[Species, list[Calculation]]``
+bucket lets reactant/product opt/freq/sp records travel in the same
+upload, and the kinetics record can reference them as
 ``reactant_energy`` / ``product_energy`` sources.
 """
 

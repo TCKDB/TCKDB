@@ -636,8 +636,8 @@ def _build_atomic(record: QCRecord, report: MappingReport) -> tuple[dict, str | 
         )
         report.transformed.append("return_result")
         if view["return_energy"] is not None:
-            # The Hessian job's own energy at this geometry is NOT stored
-            #. TCKDB has no energy column on a freq result, and
+            # The Hessian job's own energy at this geometry is NOT stored.
+            # TCKDB has no energy column on a freq result, and
             # the one other place -- an sp sibling in additional_calculations
             # -- would be wired to this freq by a single_point_on edge, a role
             # whose parent must be an opt (see

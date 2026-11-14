@@ -24,9 +24,9 @@ dataset must never require a code release.
 
 ## Package changelogs, docs and sources in `tckdb-schemas` and `tckdb-client` describe behaviour only (Unreleased)
 
-- **Behaviour:** none. Both package changelogs describe each change by its behaviour, without issue, pull-request or design-record references, and list each version once; the generated producer contract carries the same changelog. Comments, docstrings, docs, examples and test names in `schemas/python` and `clients/python` state the rule without history. The scan-coordinate refusal message in the QCSchema adapter no longer cites a design record.
+- **Behaviour:** two refusal and error messages are reworded; no change to when they fire (the builder's dependency-role error and the QCSchema adapter's scan-coordinate refusal). Both package changelogs describe each change by its behaviour, without issue, pull-request or design-record references, and list each version once; the generated producer contract carries the same changelog. Comments, docstrings, docs, examples and test names in `schemas/python` and `clients/python` state the rule without history. The scan-coordinate refusal message in the QCSchema adapter no longer cites a design record.
 - **Schema and migration:** none. No new environment variable.
-- **Versions:** `tckdb-schemas` 0.174.6 (no wire change); `tckdb-client` 0.207.1 (no behaviour change); `tckdb-qcschema` 0.9.3 and `tckdb-chemkin` 0.7.2 (comments only).
+- **Versions:** `tckdb-schemas` 0.174.6 (no wire change); `tckdb-client` 0.207.1 (one reworded message); `tckdb-qcschema` 0.9.3 and `tckdb-chemkin` 0.7.2 (comments and one reworded message).
 
 ## Code comments, docstrings and test text describe behaviour only (Unreleased)
 

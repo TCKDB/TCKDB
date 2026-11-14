@@ -2,7 +2,7 @@
 
 ## 0.207.1 - 2026-11-14
 
-No client behaviour changed. The changelog describes each change by its behaviour, without issue, pull-request or design-record references, and lists each version once. Comments, docstrings, docs and test names state the rule without history; the scan-coordinate refusal message no longer cites a design record.
+No client behaviour changed. The changelog describes each change by its behaviour, without issue, pull-request or design-record references, and lists each version once. Comments, docstrings, docs and test names state the rule without history; two messages are reworded without a change to when they fire: the builder's dependency-role error says `supported shapes are freq->opt, sp->opt, opt-><any>` (it carried a phase label), and the QCSchema adapter's scan-coordinate refusal states what is wrong with the series without citing a design record or a migration.
 
 ## 0.207.0 - 2026-11-14
 
@@ -906,8 +906,7 @@ typed method for this route; a raw `post_json` caller can branch on the code.
 
 ## 0.95.1 - 2026-09-29
 
-The parity table follows the server renaming the submission supersede route
-: it is now `POST /api/v1/submissions/{submission_ref}/supersede`,
+The parity table follows the server renaming the submission supersede route: it is now `POST /api/v1/submissions/{submission_ref}/supersede`,
 and its body is `{"new_submission_ref": "sub_..."}`. Both submissions are named
 by their public ref (`public_ref` on a submission read), and a row id is
 refused with 422 in the path and in the body. The client has no typed method

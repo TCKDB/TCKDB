@@ -271,7 +271,7 @@ A warning's `message` is TCKDB's sentence for its `code`, never text the deposit
 An unrecorded `freq.hessian_method` now resolves `tau` through the producing program's assumed default when the deposit is judged, not only when it is stored. No field is added or removed.
 
 - `tau` is resolved from, in order: the Hessian method you record (`freq.hessian_method`, with `grid.quality` and `opt.convergence`); else the assumed default of the calculation's own software and level-of-theory method; else 50 cm-1 with `protocol_not_recorded`.
-- The assumed defaults are the table of assumed defaults: Gaussian HF, DFT, MP2, CIS, CASSCF and ORCA HF, DFT resolve to the analytic default, 30 cm-1 (`assumed_analytic_default`); Gaussian MP3, MP4, QCISD, CCSD, CISD, CID and ORCA MP2, coupled cluster, DLPNO resolve to finite differences of gradients, 50 cm-1; Gaussian CCSD(T) and QCISD(T) resolve to finite differences of energies, 80 cm-1. CIS is matched exactly: CISD and CID have numerical frequencies only. Any other program, or a method family the table does not list, keeps 50 cm-1.
+- The assumed defaults are: Gaussian HF, DFT, MP2, CIS, CASSCF and ORCA HF, DFT resolve to the analytic default, 30 cm-1 (`assumed_analytic_default`); Gaussian MP3, MP4, QCISD, CCSD, CISD, CID and ORCA MP2, coupled cluster, DLPNO resolve to finite differences of gradients, 50 cm-1; Gaussian CCSD(T) and QCISD(T) resolve to finite differences of energies, 80 cm-1. CIS is matched exactly: CISD and CID have numerical frequencies only. Any other program, or a method family the table does not list, keeps 50 cm-1.
 - A `freq.hessian_method` that is present but not recognised (for example `numer`) keeps 50 cm-1 / `protocol_not_recorded`; it is never replaced by an assumption.
 - Input decks are read before judging. A deck attached inline (`artifacts` of kind `input` on a bundle calculation: computed-species, computed-reaction, network) is parsed for Gaussian `Freq=Numer` / `EnOnly` and ORCA `NumFreq` / `AnFreq`, and the method it states beats an assumed one. Order: recorded `freq.hessian_method`, the deck, the assumed default, 50 / `protocol_not_recorded`. An ORCA DFT minimum run with `NumFreq` and a -40 cm-1 mode is accepted at 50 with the recorded `finite_difference_gradient` basis; with no deck it is refused at the assumed 30. A deck with no frequency directive says nothing.
 - New refusal `hessian_method_contradicts_input_deck` (422): the recorded `freq.hessian_method` and the deck state different methods (analytic, `finite_difference_gradient` or `finite_difference_energy`; any two different parsed methods, because their tolerances differ). The message carries only TCKDB's words, the method tokens; `context` has `recorded`, `input_deck` and `calculation_key`.
@@ -801,8 +801,7 @@ on `/uploads/kinetics` is optional: unstated is inherited or refused, never gues
 
 ## 0.95.0 - 2026-10-04
 
-A network state energy can name one source calculation per participant, and is held against their sum
-. One new optional field on `POST /uploads/networks/pdep`, one new block-tier refusal and two new
+A network state energy can name one source calculation per participant, and is held against their sum. One new optional field on `POST /uploads/networks/pdep`, one new block-tier refusal and two new
 upload warnings. Existing payloads are accepted as before.
 
 - **`solve.state_energies[].source_calculation_keys`** (new, optional): a list of
@@ -904,7 +903,7 @@ A `D`/`T` element spelling now means 2H/3H: **a `D`/`T` geometry on a protium sp
 A geometry linked to a calculation is now checked against the isotopes of the subject the calculation is
 filed under. No payload field is added, removed or changed.
 
-- New refusal code `calculation_geometry_isotope_mismatch` (422), on every route that
+- New refusal code `calculation_geometry_isotope_mismatch` (422, block tier), on every route that
   already runs `calculation_geometry_composition_mismatch`: thermo, statmech, conformer, computed
   species, computed reaction, transition state and network. The multiset of `(element, mass number)`
   substitutions on each calculation geometry (`geometry.isotopes`) must equal the one the species entry
@@ -1319,7 +1318,7 @@ removed or changed, and every payload accepted before is accepted unchanged.
 - **New public-ref prefix `csch_`** (content-derived: the same recipe has the
   same ref on every instance).
 - Not in this release: sending a scheme of your own, the `composite`
-  calculation type, and energy components. Those are later phases and change
+  calculation type, and energy components. Those change
   the upload contract when they land.
 
 ## 0.67.0 - 2026-10-01
@@ -1803,8 +1802,7 @@ name, value or behaviour changes.
 
 ## 0.49.0 - 2026-09-24
 
-Stop defaulting `reference_pressure_bar` to 1 bar on computed thermo uploads
-. ARC computes entropy at 1 atm via a hardcoded translational
+Stop defaulting `reference_pressure_bar` to 1 bar on computed thermo uploads. ARC computes entropy at 1 atm via a hardcoded translational
 partition function and records no pressure anywhere in its output, so the
 default was stamping every computed deposit with a standard state its own
 numbers were not computed at. An omitted pressure now stays unrecorded, for

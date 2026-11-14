@@ -3,7 +3,7 @@
 Status: **implemented (public beta).** The builders ship in `tckdb_client.builders`
 (see [`builder_api_stability.md`](builder_api_stability.md) for the public surface and what may
 still change). This document is the original design spec; where it and the code disagree, the
-code and `builder_api_stability.md` win. Section 16 records which phases shipped.
+code and `builder_api_stability.md` win. Section 16 records which stages shipped.
 Audience: TCKDB client maintainers and workflow-tool authors who want to
 contribute scientific data without learning the raw upload payload shape.
 
@@ -892,8 +892,8 @@ print(result["species_entry_id"], result["primary_calculation"]["id"])
 
 ## 13. Artifact handling
 
-For the MVP, artifact handling is designed in but implemented separately from the core species pipeline.
-The intended API:
+Artifacts ship inline in the species payload, with a second upload step for
+what does not fit. The API:
 
 ```python
 opt.add_artifact(path="input.gjf", kind="input")
@@ -916,15 +916,6 @@ Upload mechanics — inline by default:
    `inline_artifacts=False`, are returned by `upload.artifact_plan(result)`
    and POSTed with `client.upload_artifacts(plan)` to
    `/api/v1/calculations/{calculation_ref}/artifacts`.
-
-Sidecar / replay-based artifact dispatch (using the existing
-`tckdb_client.replay` machinery) is an option to evaluate.
-If `replay_bundle` can already carry artifact bytes on disk between
-runs, artifact integration may fall out of that path without a dedicated
-helper.
-
-Artifact integration is deferred unless the existing client replay
-support makes it trivial.
 
 ---
 
@@ -1082,15 +1073,15 @@ shorter on-ramp.
 
 ---
 
-## 16. Implementation phases
+## 16. Implementation stages
 
 Status as of `tckdb-client` 0.185: the design, core species pipeline, reactions and depth stages shipped. Of the adapter-ergonomics stage, the worked
 examples shipped (`examples/builder_*`, `adapter_authoring_quickstart.md`); the
 cclib/Arkane converters did not and are not planned in this package, because that
 conversion belongs in the producer adapter. The list below is the original plan.
 
-The rollout has four stages. Every stage is independently shippable;
-no consumer code breaks at any phase boundary because the thin client
+The rollout has five stages. Every stage is independently shippable;
+no consumer code breaks at any stage boundary because the thin client
 contract is unchanged throughout.
 
 ### Design only (this document)

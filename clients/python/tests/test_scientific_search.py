@@ -322,7 +322,7 @@ def test_search_methods_preserve_auth_header():
 
 
 # ===========================================================================
-# search_species_calculations 
+# search_species_calculations
 # ===========================================================================
 
 

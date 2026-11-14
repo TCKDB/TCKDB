@@ -337,9 +337,8 @@ def export_scan(client: Any, calculation_ref_or_id: str | int) -> tuple[dict, di
                     f"stored as {stored!r} degrees but the point's own geometry "
                     f"holds {measured:.6f} (off by {residual:.3e}). The stored "
                     f"value is the coordinate itself, and this series "
-                    f"does not conform (deposits made under the earlier "
-                    f"convention hold a sweep relative to the first point); it "
-                    f"needs the absolute-angle migration. Even migrated, such a series "
+                    f"does not conform: it holds a sweep relative to the first "
+                    f"point. Even as absolute angles, such a series "
                     f"would still not fit a TorsionDrive: its angles are not whole "
                     f"degrees and a full sweep repeats its first grid point.",
                     point_index=index,
