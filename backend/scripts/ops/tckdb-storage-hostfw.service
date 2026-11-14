@@ -1,5 +1,5 @@
 [Unit]
-Description=Close the TCKDB object store's internal ports to this host (#548)
+Description=Close the TCKDB object store's internal ports to this host
 # SeaweedFS's filer, master and volume ports, and their gRPC ports, take no
 # credentials. The compose `storage` network keeps other containers away from
 # them; this keeps the host's own processes (and host-network containers such

@@ -280,7 +280,7 @@ Deliberately reachable only through the generic request helpers. Each group stat
 |---|---|---|---|---|---|
 | `GET /api/v1/scientific/reaction-entries/{reaction_entry_ref}/energy-profile` | yes | — | — | — | — |
 
-> Dataset-release surface is still stabilising (DR-0026); binding it typed now would lock in a shape that is expected to change. Reachable via get_json().
+> Dataset-release surface is still stabilising; binding it typed now would lock in a shape that is expected to change. Reachable via get_json().
 
 | Operation | raw HTTP | typed client | iterator | example | contract test |
 |---|---|---|---|---|---|

@@ -193,7 +193,7 @@ class TestOnlyTheCodePositionDeclaresACode:
             == "pressure_alias_conflict"
         )
 
-    def test_two_tokens_still_fall_back_exactly_as_before(self):
+    def test_two_tokens_fall_back_to_validation_error(self):
         """The narrowing is one-way, and this is what pins that.
 
         ``invalid_pagination: limit_too_large: …`` carries two tokens and
@@ -324,7 +324,7 @@ class TestTwoFailuresWithOneCodeReportNeither:
         context = validation_detail_context(failures)
         assert context.get("field") != "beta", (
             "the later failure's facts reached the envelope under a code "
-            "naming neither failure — this is the #236 defect"
+            "naming neither failure — that is the defect this pins"
         )
 
     def test_the_envelope_a_client_reads_is_consistent(self):

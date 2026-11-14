@@ -507,7 +507,7 @@ class TestSpeciesBundleLevelWorkflowTool:
             statmech.workflow_tool_release_id
         )
 
-    def test_the_bundle_no_longer_warns_about_what_it_was_given(
+    def test_the_bundle_does_not_warn_about_what_it_was_given(
         self, client
     ):
         """The 201 body must not report the filled-in field as missing."""

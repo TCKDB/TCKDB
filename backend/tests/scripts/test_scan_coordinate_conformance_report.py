@@ -294,7 +294,7 @@ def test_insufficient_data_is_not_counted_as_nonconforming(
     )
     assert "could not be checked at all" in out
     assert calc.public_ref in out
-    assert "do not conform to ADR 0020" not in out
+    assert "do not conform to the scan-coordinate convention" not in out
     assert "RESULT: every checkable scan coordinate series in scope conforms" in out
 
 
@@ -313,8 +313,8 @@ def test_insufficient_data_does_not_hide_a_real_nonconformance(
 
     assert code == report_script.EXIT_NONCONFORMING
     assert "could not be checked at all" in out
-    assert "do not conform to ADR 0020:" in out
-    nonconforming_section = out.split("do not conform to ADR 0020:", 1)[1]
+    assert "do not conform to the scan-coordinate convention:" in out
+    nonconforming_section = out.split("do not conform to the scan-coordinate convention:", 1)[1]
     assert nonconforming_calc.public_ref in nonconforming_section
 
 

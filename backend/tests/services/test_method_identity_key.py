@@ -272,7 +272,7 @@ def test_a_lower_case_method_hashes_as_it_always_did():
     assert _hash("B3LYP", basis="def2-tzvp") == pre_585
 
 
-def test_dispersion_and_solvent_case_is_no_longer_identity():
+def test_dispersion_and_solvent_case_is_not_identity():
     # Dispersion case is not identity.
     assert _hash("b3lyp", dispersion="d3bj") == _hash("b3lyp", dispersion="D3BJ")
 

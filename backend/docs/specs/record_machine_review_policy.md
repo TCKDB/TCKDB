@@ -307,7 +307,7 @@ persistence and no public exposure. Its naming:
   `context_schema_version_mismatch` / `context_hash_mismatch` /
   `prompt_version_mismatch` / `rubric_versions_mismatch`, emitted (in that fixed
   order) only when `state` is `stale`. A stored prompt or rubric version of `0`
-  means "stamped before the 2026-10 version reset" (never current), including for a
+  means no version was recorded (never current; pages show "(no version recorded)"), including for a
   deterministic runner's review whose own check did not change.
 
 A latest-selection determinism backstop: when the three policy ordering keys are

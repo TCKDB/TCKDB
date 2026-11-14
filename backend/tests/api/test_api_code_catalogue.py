@@ -551,7 +551,7 @@ def test_client_facing_excludes_what_a_client_cannot_use() -> None:
     for gone in ("create_applied_group_additivity", "keyset_predicate"):
         assert gone not in {entry.code for entry in CATALOGUE}, (
             f"{gone} is catalogued again. It is a function name, not a code: "
-            "#178 reworded both refusals so neither token reaches the code "
+            "both refusals are worded so neither token reaches the code "
             "position, and an entry for one means a message has regressed to "
             "the house style with the enclosing function as its context."
         )
@@ -755,7 +755,7 @@ def test_every_guard_entry_is_catalogued_annotated_and_unexported() -> None:
         )
     for code in _PROMOTED_FROM_GUARD:
         assert code not in named, (
-            f"{code} is classified as a guard again. It was promoted in #195 "
+            f"{code} is classified as a guard again. It is promoted "
             "because /uploads/computed-reaction resolves the key it guards "
             "in a bundle-wide namespace; going back means that write path is "
             "gone, which is a deliberate change, not a reclassification."
@@ -843,7 +843,7 @@ def test_every_never_succeeds_entry_is_annotated_and_effective() -> None:
     assert declared, (
         "no entry is declared Replay.never_succeeds, so the client's "
         "NON_RETRYABLE_CODES is empty and every deterministic 5xx is "
-        "replayed on a backoff schedule again -- the bug #234 fixed"
+        "replayed on a backoff schedule"
     )
     assert len(declared) * 10 < len(CATALOGUE), (
         f"{len(declared)} of {len(CATALOGUE)} entries are declared "

@@ -189,7 +189,7 @@ def test_a_raw_literature_id_is_refused_by_the_route(client: TestClient):
     assert "literature_id" in resp.text
 
 
-def test_the_shared_calculation_model_no_longer_declares_literature_id():
+def test_the_shared_calculation_model_does_not_declare_literature_id():
     """The field is gone from the model, not merely unreachable by one route.
 
     ``CalculationIn`` is shared with the network-PDep upload, whose no-FK

@@ -194,26 +194,26 @@ def main() -> int:
     if uncheckable:
         print(
             f"\n{len(uncheckable)} series could not be checked at all -- not "
-            "evidence for or against ADR 0020 conformance:"
+            "evidence for or against scan-coordinate conformance:"
         )
         for line in uncheckable:
             print(f"  {line}")
 
     if nonconforming:
         print(
-            f"\n{len(nonconforming)} series do not conform to ADR 0020:"
+            f"\n{len(nonconforming)} series do not conform to the scan-coordinate convention:"
         )
         for line in nonconforming:
             print(f"  {line}")
         print(
-            "\nRESULT: NONCONFORMING. Per ADR 0008 this is a warn-tier finding, "
+            "\nRESULT: NONCONFORMING. This is a warn-tier finding, "
             "never a refusal -- the deposits above are accepted and unchanged. "
             "The classification and implied constant printed for each series is "
-            "the input to the separate corrective migration ADR 0020 defers."
+            "the input to a separate corrective migration."
         )
         return EXIT_NONCONFORMING
 
-    print("\nRESULT: every checkable scan coordinate series in scope conforms to ADR 0020.")
+    print("\nRESULT: every checkable scan coordinate series in scope conforms to the scan-coordinate convention.")
     return EXIT_OK
 
 

@@ -193,7 +193,7 @@ export function recordTypeWords(recordType: string): string {
  * combined into a sentence alongside a ref ("shown on species entry
  * spc_..."), and drifting from the backend's own vocabulary there would
  * be confusing. This is a different job: a heading over a group of
- * records in the review queue (task #269), where "statmech" and
+ * records in the review queue, where "statmech" and
  * "kinetics" read as jargon and "applied_energy_correction" reads as
  * a table name, not a sentence fragment. Unmapped types fall back to
  * `recordTypeWords`, capitalized -- never blank, and never invented

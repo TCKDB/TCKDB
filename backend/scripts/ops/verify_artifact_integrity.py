@@ -49,8 +49,8 @@ Usage::
 Exit status separates the three ways this stops being a clean gate:
 ``1`` when a break was recorded, ``2`` when something in scope was **not
 checked at all** -- an empty population, or a store that would not
-answer -- and ``3`` when the run **repaired** something, which today
-means it put a held object back because a committed row referenced it. A
+answer -- and ``3`` when the run **repaired** something, which means
+it put a held object back because a committed row referenced it. A
 runbook gates on "not zero"; an operator triaging needs to know which,
 because "the evidence is corrupt", "we could not look" and "we mislaid
 your bytes and have put them back" call for entirely different
@@ -89,7 +89,7 @@ gates have enforced floors for this reason -- at zero they stop being
 guards -- and an object the store will not date is left alone rather than
 assumed ancient.
 
-**Losing that race is now repaired, and the repair is recorded.** Any
+**Losing that race is repaired, and the repair is recorded.** Any
 invocation that touches the hold puts back every held object a committed
 row references, re-reads it, and appends an
 ``artifact_integrity_event`` under the ``reclaim_restore`` detection
@@ -1057,7 +1057,7 @@ def main() -> int:
     if break_count or restores.broken:
         print(
             f"RESULT: {break_count + len(restores.broken)} break(s) recorded. "
-            "The owning calculations now hard-fail; see "
+            "The owning calculations hard-fail; see "
             "/scientific/artifacts/integrity."
         )
         return EXIT_BREAK

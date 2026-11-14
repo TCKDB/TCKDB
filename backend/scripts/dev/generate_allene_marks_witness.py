@@ -178,7 +178,7 @@ def main() -> None:
 
     document = {
         "provenance": {
-            "purpose": "Independent witness for allene SMILES marks (#832 part 2). Labels written by Centres, not by TCKDB.",
+            "purpose": "Independent witness for allene SMILES marks. Labels written by Centres, not by TCKDB.",
             "mapping": "M is Ra, P is Sa (IUPAC; the sign of the torsion between the two CIP-higher substituents).",
             "cdk": {"url": CDK_URL, "version": "2.13", "sha256": CDK_SHA256, "used_for": "respelling the SMILES, canonical re-export"},
             "centres": {"url": CENTRES_URL, "version": "1.2.1", "sha256": CENTRES_SHA256, "used_for": "reading the marks and labelling the axis"},

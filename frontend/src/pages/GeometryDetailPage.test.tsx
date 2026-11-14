@@ -87,7 +87,7 @@ function mockRecord(overrides: Record<string, unknown> = {}) {
     }
 }
 
-describe("GeometryDetailPage identity (#321)", () => {
+describe("GeometryDetailPage identity", () => {
     // Deliberately a DIFFERENT formula from what the CH4 fixture's atom
     // rows would Hill-derive ("CH4") -- a fixture where the two agree
     // cannot tell "reads the served identity" apart from "still computes

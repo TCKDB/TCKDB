@@ -45,7 +45,7 @@ describe("describeMadeUnder", () => {
         expect(w.state).toBe("stale")
         expect(w.badge).toBe("Stale")
         expect(w.sentence).toBe(
-            "Assessed under rubric tckdb reproducibility (stamped before the 2026-10 versioning reset). "
+            "Assessed under rubric tckdb reproducibility (no version recorded). "
             + "The current version is 1. It has not been re-assessed under the current version.",
         )
         expect(w.sentence).not.toMatch(/\bv0\b|version 0|numbered/)
@@ -84,7 +84,7 @@ describe("describeMadeUnder", () => {
             "review",
         )
         expect(stale.sentence).toBe(
-            "Reviewed under rubric computed kinetics (stamped before the 2026-10 versioning reset). "
+            "Reviewed under rubric computed kinetics (no version recorded). "
             + "The current version is 1. It has not been re-reviewed under the current version.",
         )
         const unchecked = describeMadeUnder(

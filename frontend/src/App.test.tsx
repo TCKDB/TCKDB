@@ -219,7 +219,7 @@ describe("public archive shell", () => {
         const user = userEvent.setup(); render(<App />)
         await user.type(await screen.findByLabelText("Molecule: name, formula, SMILES, InChI, InChIKey or TCKDB ref"), "smiles:CCO")
         await user.click(screen.getByRole("button", { name: "Search" }))
-        // The structure-search endpoint never returns a formula (#251): the
+        // The structure-search endpoint never returns a formula: the
         // row leads with SMILES instead and says so honestly, rather than
         // leaving a blank or falling back to the ref.
         expect(screen.getByText("formula not available")).toBeVisible()
@@ -922,7 +922,7 @@ describe("the home-page identifier search recognizes and routes public reference
     })
 })
 
-describe("unmatched routes (finding #12)", () => {
+describe("unmatched routes", () => {
     it("shows the not-found page instead of silently rendering the home page", async () => {
         window.history.replaceState({}, "", "/this-route-does-not-exist")
         render(<App />)

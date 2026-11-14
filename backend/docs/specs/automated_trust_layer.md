@@ -1173,7 +1173,7 @@ These are intentionally left for implementation review.
   (`inputs_changed`: the inputs the assessment was computed from differ now, which can be new evidence or a changed rule under the same version). A page
   says it has not been re-assessed under the current version; nothing schedules a re-assessment, only a curator action runs one.
 - `unassessed`: no assessment exists, so no rubric is named. Never a kind of stale.
-- Version 0 means "stamped before the 2026-10 versioning reset"; no registry holds 0, so it is never current. Pages word it that way, never as "v0".
+- Version 0 means no version was recorded; no registry holds 0, so it is never current. Pages word it as "(no version recorded)", never as "v0".
 - The deterministic trust badge is computed at read time under the rubric version in force, so it is `current` by construction. Only stored assessments
   (reproducibility) can be stale. Evidence-completeness checklists on thermo and kinetics are not registered rubrics and carry no version yet.
 - The line never ranks a record: it names the rule that judged it.

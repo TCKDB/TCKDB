@@ -16,7 +16,7 @@ from app.services.scientific_read.thermo import get_species_thermo
 from app.services.scientific_read.thermo_search import search_thermo
 from app.services.thermo_contract_inventory import iter_thermo_contract_inventory
 from app.workflows.thermo import persist_thermo_upload
-from tests.schemas.test_thermo_phase_a_contract import IDENTITY, nasa7
+from tests.schemas.test_thermo_creation_strictness import IDENTITY, nasa7
 
 
 @pytest.mark.parametrize("state", [

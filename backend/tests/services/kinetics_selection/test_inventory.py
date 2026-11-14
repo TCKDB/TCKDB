@@ -202,7 +202,7 @@ def test_a_confirmed_finding_on_a_records_source_moves_only_that_record_out_of_t
     assert delta(found, baseline, "reaction_entries_with_a_qualifying_record") == 1  # the other record still qualifies
 
 
-def test_an_entry_whose_only_record_is_invalidated_no_longer_counts_as_having_a_qualifying_record(db_session, world):
+def test_an_entry_whose_only_record_is_invalidated_does_not_count_as_having_a_qualifying_record(db_session, world):
     from app.db.models.common import StructureFindingKind
     from tests.services.kinetics_selection.test_source_findings_kinetics import Sources, record
 

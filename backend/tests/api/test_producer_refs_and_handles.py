@@ -386,7 +386,7 @@ def test_artifact_upload_refuses_a_row_id(client, db_session, spelling) -> None:
     assert client.post(f"/api/v1/calculations/{ref}/artifacts", json=ARTIFACT).status_code == 201
 
 
-def test_a_same_key_retry_on_the_old_integer_path_still_replays(
+def test_a_same_key_retry_on_the_integer_path_replays(
     client, db_session, monkeypatch
 ) -> None:
     """An upload committed through the integer path can still be replayed.

@@ -240,7 +240,7 @@ def main(argv: list[str] | None = None) -> int:
 # above, which remain ``tckdb-replay``'s exactly as before.
 ##############################################################################
 
-#: No default on purpose (issue #521): a fresh install of this client must
+#: No default on purpose: a fresh install of this client must
 #: never talk to somebody else's server just because the caller forgot to
 #: say which deployment they mean. ``--base-url`` and ``TCKDB_BASE_URL``
 #: are the two ways to say it; ``_resolve_base_url`` is where "neither was
@@ -268,7 +268,7 @@ def _resolve_base_url(cli_value: str | None) -> str | None:
     """``--base-url`` wins; otherwise fall back to ``TCKDB_BASE_URL``.
 
     Returns ``None`` when neither is set -- there is no third source, and
-    deliberately no hardcoded host to fall back to (issue #521). Callers
+    deliberately no hardcoded host to fall back to. Callers
     must turn a ``None`` here into ``_MISSING_BASE_URL`` before making any
     request, rather than let it flow into ``TCKDBClient`` and produce a
     confusing "base_url must be a non-empty string" from a lower layer.
@@ -369,7 +369,7 @@ def _build_tckdb_parser() -> argparse.ArgumentParser:
         "--base-url",
         default=None,
         help="API root. Required: pass this or set "
-        f"{BASE_URL_ENV_VAR}. No default -- see issue #521.",
+        f"{BASE_URL_ENV_VAR}. No default.",
     )
     artifact_parser.add_argument(
         "--api-key-env",
@@ -395,7 +395,7 @@ def _build_tckdb_parser() -> argparse.ArgumentParser:
         "--base-url",
         default=None,
         help="API root. Required: pass this or set "
-        f"{BASE_URL_ENV_VAR}. No default -- see issue #521.",
+        f"{BASE_URL_ENV_VAR}. No default.",
     )
     reaction_parser.add_argument(
         "--include",

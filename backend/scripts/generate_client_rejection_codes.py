@@ -38,10 +38,9 @@ The second export, and why it is not enum members
 ``NON_RETRYABLE_CODES`` is emitted from
 :func:`~app.api.code_catalogue.never_retryable` as bare strings, beside
 the enum rather than inside it. The two exports answer different
-questions -- *can I branch on this* and *should I replay this* -- and
-until #234 only the first had anywhere to go, which meant a client
-retried ``artifact_object_missing`` on a backoff schedule forever for a
-condition guaranteed never to clear. Making them members instead would
+questions -- *can I branch on this* and *should I replay this*. Without
+the second, a client would retry ``artifact_object_missing`` on a backoff
+schedule forever for a condition guaranteed never to clear. Making them members instead would
 have required admitting 5xx codes to ``RejectionCode``, moving seven
 entries into an enum named for refusals of the caller's request, three of
 which (``database_unavailable``, ``query_timeout``,
@@ -228,8 +227,8 @@ def render() -> str:
         raise SystemExit(
             "The catalogue declares no Replay.never_succeeds code that a "
             "client would otherwise replay. Emitting an empty "
-            "NON_RETRYABLE_CODES would restore the forever-retry bug #234 "
-            "fixed while leaving the export in place; refusing."
+            "NON_RETRYABLE_CODES would make every client retry codes that "
+            "never clear, forever, while leaving the export in place; refusing."
         )
 
     lines = [_HEADER]

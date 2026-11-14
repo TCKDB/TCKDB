@@ -149,7 +149,7 @@ Reminder -- the two correct configurations for talking to Postgres:
     DB_PORT=<host-published port>   # e.g. 5432, or 5434 if remapped
                                     # to avoid a host-installed Postgres
 
-  API inside the compose network (future containerized API):
+  API inside the compose network:
     DB_HOST=db                      # the compose service name
     DB_PORT=5432                    # the container port (does not move)
 EOF
@@ -182,7 +182,7 @@ fi
 # API port: warn if env file (or shell) uses port 8000
 # while the canonical local port is 8010.
 if [[ -n "$env_api_port" && "$env_api_port" == "8000" ]]; then
-    warn "TCKDB_API_PORT=8000 in $TCKDB_ENV_FILE -- the canonical local/host-run API port is now 8010"
+    warn "TCKDB_API_PORT=8000 in $TCKDB_ENV_FILE -- the canonical local/host-run API port is 8010"
     hint "update the env file, or override TCKDB_BASE_URL when launching tools."
 fi
 expected_api_port="$(echo "$TCKDB_BASE_URL" | sed -nE 's|^https?://[^/:]+:([0-9]+)/.*|\1|p')"
@@ -345,7 +345,7 @@ else
     if [[ "$TCKDB_BASE_URL" == *":8010/"* ]] && \
        legacy_body="$(curl -fsS "${TCKDB_BASE_URL//:8010\//:8000\/}/health" 2>/dev/null)" && \
        echo "$legacy_body" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then
-        warn "however, an API IS responding on port 8000 (the legacy default)."
+        warn "however, an API IS responding on port 8000 (not the canonical port)."
         hint "stop it and restart on 8010, or override TCKDB_BASE_URL to point at 8000."
     fi
 fi

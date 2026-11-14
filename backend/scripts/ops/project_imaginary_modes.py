@@ -198,7 +198,7 @@ def main() -> int:
             "\nRESULT: CONFLICT. Both readings are reported by the API; "
             "neither is preferred, and nothing has been changed. A conflict "
             "is a curation question, not a validation failure -- under "
-            "ADR 0008 a projection is an expectation and may not block."
+            "the validation tiers a projection is an expectation and may not block."
         )
         return EXIT_CONFLICT
 

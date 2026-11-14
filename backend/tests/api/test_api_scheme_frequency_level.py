@@ -85,7 +85,7 @@ def test_a_bundle_scheme_with_a_frequency_level_is_stored_and_keyed_on_it(
     assert len({s.level_of_theory_id for s in schemes}) == 1
 
 
-def test_a_bundle_scheme_without_one_still_lands_on_the_old_identity(
+def test_a_bundle_scheme_without_one_lands_on_the_null_frequency_identity(
     client, db_session: Session
 ) -> None:
     for _ in range(2):

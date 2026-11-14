@@ -15,7 +15,7 @@ import { AuthProvider } from "../components/AuthProvider"
  * 1. Who gets in (curator or admin; a plain signed-in user is told why).
  * 2. That the page says which review axis it is, since "review" alone
  *    does not distinguish it from Machine findings.
- * 3. Task #269's redesign: records group under the SUBJECT a curator
+ * 3. Subject grouping: records group under the SUBJECT a curator
  *    actually judges (a species entry, a transition-state entry, ...),
  *    a same-type cluster collapses to a count and still expands to reach
  *    every record, and the header reports honest totals over the WHOLE
@@ -322,7 +322,7 @@ describe("the page says which review this is", () => {
     })
 })
 
-describe("what a subject block shows (task #269, defect #4: nothing said what the chemistry was)", () => {
+describe("what a subject block shows", () => {
     it("does not print a species entry's own ref twice inside its own block (defect #1)", async () => {
         // A species deposit gets a
         // species_entry review row, that row is its own subject, and it
@@ -553,9 +553,9 @@ describe("what a subject block shows (task #269, defect #4: nothing said what th
         expect(heading).not.toHaveTextContent(/^Reaction entry/)
     })
 
-    it("shows each participant's formula ONCE, not its SMILES and formula both (review #492 follow-up)", async () => {
+    it("shows each participant's formula ONCE, not its SMILES and formula both", async () => {
         // The default <ReactionEquation> rendering shows BOTH -- "[CH3]
-        // (CH3) + [H] (H) ⇌ C (CH4)" -- which review of #492 caught as
+        // (CH3) + [H] (H) ⇌ C (CH4)" -- which is
         // noise here: a bare "C" next to "(CH4)" reads as a typo, and the
         // species blocks above this one already show formula alone. This
         // page must pass `formulaOnly` so exactly one notation appears.
@@ -842,8 +842,8 @@ describe("collapsing same-type records under one subject (defect #2: the duplica
         expect(within(section).getByText("atom-energy correction")).toBeInTheDocument()
         expect(within(section).getByText("bond-additivity correction")).toBeInTheDocument()
         // Each expanded record keeps its OWN Review... control -- a
-        // collapsed cluster is not a per-subject bulk approve (task #270
-        // is explicitly not this).
+        // collapsed cluster is not a per-subject bulk approve (no bulk
+        // approve is offered).
         expect(within(section).getAllByRole("button", { name: "Review…" })).toHaveLength(2)
     })
 
@@ -1489,7 +1489,7 @@ describe("paging counts subjects, never records", () => {
  * regressions-to-avoid, ported to subject/record
  * fixtures instead of the old flat rows.
  */
-describe("guarantees carried over from the flat queue (review #492, finding 4)", () => {
+describe("guarantees carried over from the flat queue", () => {
     it("opens every queue link in a new tab, safely (rel carries both noopener and noreferrer)", async () => {
         // Scoped to the subject list, not the whole page: the lede's own
         // "Machine findings" link is deliberate ordinary in-app

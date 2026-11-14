@@ -76,7 +76,7 @@ def _assert_no_internal_id_keys(payload):
         or k in {"id", "record_id", "reviewed_by", "created_by"}
     )
     assert not leaked, (
-        f"Phase D: integer-ID keys leaked into default response: {leaked!r}"
+        f"integer-ID keys leaked into default response: {leaked!r}"
     )
 
 
@@ -463,8 +463,8 @@ def test_caller_supplied_id_filter_is_echoed_back(client, db_session):
     assert body["request"]["filter"]["level_of_theory_id"] == lot.id
 
 
-def test_integer_path_handle_still_works_after_phase_d(client, db_session):
-    """Response IDs are hidden, but route inputs remain unchanged."""
+def test_integer_path_handle_resolves(client, db_session):
+    """Response IDs are hidden, but an integer in the route still resolves."""
     species = make_species(
         db_session, smiles="C#CCONOCC", inchi_key=next_inchi_key("PD_IP")
     )
@@ -479,7 +479,7 @@ def test_integer_path_handle_still_works_after_phase_d(client, db_session):
     _assert_no_internal_id_keys(body)
 
 
-def test_ref_path_handle_still_works_after_phase_d(client, db_session):
+def test_ref_path_handle_resolves(client, db_session):
     species = make_species(
         db_session, smiles="C#CCONOOC", inchi_key=next_inchi_key("PD_RP")
     )

@@ -10,7 +10,7 @@ const entrySchema = z.object({
 
 const speciesRecordSchema = z.object({
     species_ref: z.string(),
-    // Nullable, not just optional: computed by the archive (#251) and can
+    // Nullable, not just optional: computed by the archive and can
     // come back `null` for a real record. `canonical_smiles`/`charge`/
     // `multiplicity` are core identity fields the live API always sends,
     // but are still read defensively since a search-results row must
@@ -46,7 +46,7 @@ export type SearchMatch = {
     speciesRef: string
     entryRef?: string
     /**
-     * `null` when the archive computed no formula for this record (#251);
+     * `null` when the archive computed no formula for this record;
      * `undefined` only for a structure-search match, whose endpoint never
      * projects a formula at all. Both render the same honest fallback --
      * see `IdentifierSearch`'s `MatchHeadline`.

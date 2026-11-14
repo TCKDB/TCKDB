@@ -142,7 +142,7 @@ def test_two_composites_at_the_level_cannot_be_auto_resolved(client):
     assert "Multiple composite calculations" in resp.text
 
 
-def test_nothing_at_the_level_is_still_the_old_refusal(client):
+def test_nothing_at_the_level_is_refused(client):
     for species in (_METHYL, _H_ATOM, _METHANE):
         _deposit(client, species, primary=_sp_calc(_OTHER))
     resp = _kinetics(client, energy_level=_CBS_QB3)

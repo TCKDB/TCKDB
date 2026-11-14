@@ -564,7 +564,7 @@ function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
 
 /**
  * One calculation-ref cell in `IdenticalThermoGroupRefs`' table: a link
- * when the ref is present, plain "none" text otherwise (no borrowed ref, #645).
+ * when the ref is present, plain "none" text otherwise (no borrowed ref).
  *
  * `primaryRef`, when passed, is the SAME dedup this table's Primary
  * column always shows in full -- if this cell's own ref equals it, the
@@ -956,7 +956,7 @@ function ProvenanceBlock({ provenance, productLevels, thermoRef, idSuffix = "" }
     // this row could report without picking a winner among the others.
     const levelsAgree = productLevelsAgree(productLevels)
     // "none" = the record links to no calculation and no statmech, so there is
-    // nothing these fields could come from (#645). "not recorded" = something
+    // nothing these fields could come from. "not recorded" = something
     // is linked but this field on it is NULL.
     const noLinkLabel = !provenance.primary_calculation && !provenance.statmech_ref ? "none" : "not recorded"
     return (

@@ -18,8 +18,8 @@ import {
  * status is accounted for, and the three transitions the policy
  * deliberately withholds are absent.
  *
- * What they do NOT prove: that the backend still agrees. Reading the
- * Python was tried for the record-type table in #483 and abandoned --
+ * What they do NOT prove: that the backend still agrees. The
+ * record-type table does not read the Python source:
  * vite refuses to load a file outside its root, and widening
  * `server.fs.allow` would let the dev server (which binds 0.0.0.0) serve
  * backend source over the network. Task #255 covers putting that guard

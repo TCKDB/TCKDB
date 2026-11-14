@@ -375,7 +375,7 @@ export type ViewerStatus = "loading" | "ready" | "unavailable"
 // this component's own responsibility to keep in sync with the resolved
 // theme; CSS alone (e.g. a dark-mode stylesheet) has no way to reach
 // into 3Dmol's WebGL clear color. Reported against the parallel
-// `frontend/theme-tokens` PR (#296): that PR establishes the app-wide
+// `frontend/theme-tokens` PR: that PR establishes the app-wide
 // convention (a `data-theme="dark"|"light"` attribute on the document
 // root when a reader has made an explicit choice, `prefers-color-scheme`
 // for the unstamped default) but owns every `.css` file, none of which
@@ -672,8 +672,7 @@ export function GeometryViewer({
 
     // Keeps `isDarkTheme` in sync with the SAME two signals
     // `resolveIsDarkTheme` reads: a `MutationObserver` for `data-theme`
-    // changing on the document root (an explicit reader theme choice —
-    // #296's mechanism), and a `matchMedia` listener for
+    // changing on the document root (an explicit reader theme choice), and a `matchMedia` listener for
     // `prefers-color-scheme` changing (the unstamped-default case, e.g.
     // the OS theme changing while this page is open). Runs once, not
     // keyed on anything reactive — this is app-wide theme state, not

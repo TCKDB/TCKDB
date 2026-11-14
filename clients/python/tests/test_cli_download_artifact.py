@@ -22,7 +22,7 @@ DIGEST = hashlib.sha256(PAYLOAD).hexdigest()
 
 @pytest.fixture(autouse=True)
 def _base_url_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``--base-url`` has no default (issue #521); every call below omits
+    """``--base-url`` has no default; every call below omits
     it and relies on ``TCKDB_BASE_URL`` instead, set once here so each test
     can stay focused on what it actually exercises. Tests below that care
     about the omitted-entirely case unset this themselves."""
@@ -338,7 +338,7 @@ def test_missing_base_url_is_a_clear_error_and_makes_no_request(
     """Omitting both ``--base-url`` and ``TCKDB_BASE_URL`` must fail with an
     actionable message naming both ways to supply it -- and must never
     construct a client or make a request to anywhere, least of all a
-    hardcoded default host (issue #521)."""
+    hardcoded default host."""
     monkeypatch.setenv("TCKDB_API_KEY", "tck_test")
     monkeypatch.delenv("TCKDB_BASE_URL", raising=False)
 

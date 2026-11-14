@@ -35,7 +35,7 @@ function page(
 const lot = { method: "B3LYP", basis: "6-31G(d)" }
 
 describe("ConformerGeometryTab", () => {
-    it("attributes each producing geometry to its calculation, level of theory, and observation -- finding #11", async () => {
+    it("attributes each producing geometry to its calculation, level of theory, and observation", async () => {
         page(
             [{
                 conformer_observation: { conformer_observation_ref: "co_1" },

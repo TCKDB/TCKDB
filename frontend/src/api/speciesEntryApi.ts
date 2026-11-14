@@ -200,8 +200,7 @@ export async function loadEntryConformerPage(
     const query = new URLSearchParams({ species_entry_ref: entryRef })
     for (const [key, value] of (request ? pageQuery(request) : new URLSearchParams({ limit: "50" }))) query.set(key, value)
     // `observation_details` is required alongside `observations` to get
-    // each embedded observation's own `calculations` -- since issue #537
-    // the default `observations` shape is a lean summary with no
+    // each embedded observation's own `calculations` -- the default `observations` shape is a lean summary with no
     // `calculations` field at all. `domain/conformerEvidence.ts`'s
     // `optimizationStaging` reads `observation.calculations` per
     // observation (its `everyObservationLoaded` check) to tell a

@@ -610,8 +610,8 @@ def test_the_shipped_client_trees_are_clean(tree: Path):
     assert checker.check_path(tree) == []
 
 
-def test_the_mcp_integration_was_clean_before_it_was_covered():
-    """Coverage, not repair -- said here so the diff is not misread.
+def test_the_mcp_integration_is_clean():
+    """Coverage, not repair.
 
     ``tckdb_mcp`` has no violations and is on the target
     list so the *next*

@@ -422,8 +422,7 @@ function failureMessage(error: unknown): string {
  * Curator tasks are built by nothing else. The backend route says so in as
  * many words ("Explicit/admin-triggered only -- never runs on upload"), so
  * until this button existed the queue stayed empty however many
- * submissions arrived, and the only way to fill it was a hand-written curl
- * (task #256).
+ * submissions arrived, and the only way to fill it was a hand-written curl.
  *
  * It lives here because this page is already showing the exact findings
  * the build reads: an admin who has just looked at a submission's

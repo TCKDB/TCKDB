@@ -48,7 +48,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
 //   plainly and links to a producing calculation rather than fabricating
 //   a verdict.
 //
-// - `identity` (#321) is the molecular identity of whichever entry owns
+// - `identity` is the molecular identity of whichever entry owns
 //   this geometry, resolved server-side from its producing/consuming
 //   calculations. `null` when no owning calculation names an owner.
 //   `kind: null` with a non-empty `ambiguous_owners` means the geometry
@@ -75,7 +75,7 @@ const geometryAtomSchema = z.object({
     x: z.number(),
     y: z.number(),
     z: z.number(),
-    // Server-stored nuclide mass number (#682: a D/T spelling is stored as H + 2/3).
+    // Server-stored nuclide mass number (a D/T spelling is stored as H + 2/3).
     // null/absent = the element's natural isotope. Never derived client-side.
     isotope_mass_number: z.number().int().nullable().optional(),
 }).passthrough()

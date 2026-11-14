@@ -430,7 +430,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
     })
 
     /**
-     * A real `software_release_ref` (post-#459) renders as copyable text,
+     * A real `software_release_ref` renders as copyable text,
      * never a link -- `GET /api/v1/software-releases/{id}` 401s
      * anonymously (`require_auth_for_legacy_reads`), so linking it would
      * break for the very reader this page serves.

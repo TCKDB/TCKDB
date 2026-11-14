@@ -91,8 +91,8 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Path to a standalone ThermoML XML document to persist "
-            "directly -- not selected from the NIST archive (Phase "
-            "C-E6). Custody names the depositor-upload channel, not "
+            "directly -- not selected from the NIST archive. "
+            "Custody names the depositor-upload channel, not "
             "NIST. Mutually exclusive with --archive."
         ),
     )

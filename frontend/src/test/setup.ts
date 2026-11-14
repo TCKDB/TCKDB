@@ -13,8 +13,7 @@ import { resetAllRequestCaches } from "../api/requestCache"
  * runner. The symptom is a `findBy*` timing out with the page still showing
  * its loading state — the data was on its way, the window closed first. It shows
  * up under full-suite load (e.g. in `SpeciesEntryPage` and
- * `SpeciesOverviewPage` tests), not reproducibly in isolation. See
- * issue #286.
+ * `SpeciesOverviewPage` tests), not reproducibly in isolation.
  *
  * This raises the window; it does not weaken any assertion. Every query still
  * has to find its element and every expectation still has to hold — a genuinely

@@ -102,7 +102,7 @@ describe("thermoRecordFingerprint", () => {
         expect(thermoRecordFingerprint(a)).not.toBe(thermoRecordFingerprint(b))
     })
 
-    it("treats a null level of theory (an unlinked record, #645) as its own value: same as another null, different from any real level", () => {
+    it("treats a null level of theory (an unlinked record) as its own value: same as another null, different from any real level", () => {
         const withLot = thermoRecord({ provenance: { primary_calculation: null, software_release: null, level_of_theory: { method: "b3lyp", basis: "def2tzvp" } } })
         const none1 = thermoRecord({ provenance: { primary_calculation: null, software_release: null, level_of_theory: null } })
         const none2 = thermoRecord({ provenance: { primary_calculation: null, software_release: null, level_of_theory: null } })

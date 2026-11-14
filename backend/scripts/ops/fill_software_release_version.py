@@ -94,7 +94,7 @@ def _print_plan(plan) -> None:
             )
         if o.fills_build:
             print(
-                "      also fills build from the banner (DR-0008 enriched): the "
+                "      also fills build from the banner (enriched release): the "
                 "target may sit beside a build-less release of the same version"
             )
         if o.stale_assessment_refs:

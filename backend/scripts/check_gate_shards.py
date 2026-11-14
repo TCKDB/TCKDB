@@ -108,7 +108,7 @@ def check(reports: list[dict], plan: dict, floor_table: dict) -> tuple[list[str]
             problems.append(f"{gate}: no BODY_SWEEP_FLOORS row matches this gate's selection, so it has no floor")
         elif bodies < floor[0] or fields < floor[1]:
             problems.append(
-                f"{gate}: the DR-0028 body sweep fell below its floor: saw {bodies} bodies / {fields} fields, "
+                f"{gate}: the body sweep fell below its floor: saw {bodies} bodies / {fields} fields, "
                 f"needs {floor[0]} / {floor[1]}"
             )
         per_slice = ", ".join(f"{report['index']}: {report['selected']}" for report in sorted(slices, key=lambda r: r["index"]))
