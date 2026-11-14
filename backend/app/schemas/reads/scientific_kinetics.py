@@ -311,7 +311,7 @@ class ReactionPathDegeneracy(BaseModel):
 
     TCKDB returns the reported/fitted rate coefficient unchanged. The explicit
     convention tells consumers whether they must apply the stored degeneracy;
-    legacy records remain unknown rather than being inferred.
+    records that state no convention remain unknown rather than being inferred.
     """
 
     value: float

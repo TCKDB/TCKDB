@@ -232,12 +232,12 @@ def backfill_observation_submission_links(
                 created_by=actor.id,
                 submission_kind=SubmissionKind.other,
                 source_kind=SubmissionSourceKind.migration,
-                title=f"Backfill submission link for legacy {source_name} observations",
+                title=f"Backfill submission link for {source_name} observations",
                 summary=(
-                    f"Operator backfill (issue #514): links {len(group_rows)} "
-                    f"pre-existing molecular_property_observation row(s) "
-                    f"sourced from {source_name!r} that were written before "
-                    "submission linking existed for their importer, so a "
+                    f"Operator backfill: links {len(group_rows)} "
+                    f"molecular_property_observation row(s) "
+                    f"sourced from {source_name!r} that were written without "
+                    "a submission link, so a "
                     "curator can attach an identity to them. No scientific "
                     "field on any linked row is changed by this submission."
                 ),
@@ -250,9 +250,9 @@ def backfill_observation_submission_links(
                 actor=actor,
                 note=(
                     f"Historical coverage recorded by {actor.username} "
-                    f"(operator backfill, issue #514): these {source_name} "
-                    "rows predate submission linking. No new science is "
-                    "being deposited here -- only pre-existing rows are "
+                    f"(operator backfill): these {source_name} "
+                    "rows carry no submission link. No new science is "
+                    "being deposited here -- only existing rows are "
                     "being wrapped so they can be curated."
                 ),
             )

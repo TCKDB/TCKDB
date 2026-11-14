@@ -3352,7 +3352,7 @@ COMPUTED_TRANSITION_STATE: EvidenceRubric = EvidenceRubric(
                 "Representative freq result (the one a declared saddle target pins, "
                 "else the newest attached) must identify its reaction "
                 "coordinate: one imaginary mode needs no designation, more "
-                "than one does (ADR 0012)."
+                "than one does."
             ),
             runner=_check_ts_reaction_coordinate_designated,
         ),
@@ -3391,7 +3391,7 @@ COMPUTED_TRANSITION_STATE: EvidenceRubric = EvidenceRubric(
             name="extra_imaginary_modes_not_flagged",
             kind=EvidenceCheckKind.warning,
             explain=(
-                "Recorded ADR 0012 structural flag: an extra imaginary mode "
+                "Recorded structural flag: an extra imaginary mode "
                 "at or above the protocol's tau (advisory)."
             ),
             runner=_check_ts_extra_imaginary_modes_not_flagged,

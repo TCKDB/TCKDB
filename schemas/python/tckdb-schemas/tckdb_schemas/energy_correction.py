@@ -48,7 +48,7 @@ from tckdb_schemas.utils import normalize_optional_text, normalize_required_text
 _HEX_COMMIT = re.compile(r"[0-9a-fA-F]{7,64}")
 
 
-#: The scheme kinds that take a frequency level, for now. Arkane keys its
+#: The scheme kinds that take a frequency level. Arkane keys its
 #: correction tables on ``CompositeLevelOfTheory(freq, energy)`` only for
 #: ``pbac`` and ``mbac`` (RMG-database ``quantum_corrections/data.py``), and keys
 #: atom energies on the energy level alone: Arkane's ``corr.py`` strips the
@@ -134,8 +134,8 @@ class EnergyCorrectionSchemeRef(SchemaBase):
         ``CompositeLevelOfTheory(freq=..., energy=...)``, and keys atom
         energies on the energy level alone. Arkane's isodesmic reference data
         is keyed on the pair too, but the ``isodesmic`` kind has no defined
-        content here yet, so a frequency level is accepted only on the BAC
-        kinds for now. Send the
+        content here, so a frequency level is accepted only on the BAC
+        kinds. Send the
         ``energy`` half in ``level_of_theory`` and the ``freq`` half here.
         The same energy level with two different frequency levels is two
         schemes. Resolved exactly like ``level_of_theory`` (a duplicate
@@ -146,7 +146,7 @@ class EnergyCorrectionSchemeRef(SchemaBase):
         Refused, because each is a contradiction and not a preference:
         a frequency level without ``level_of_theory``
         (``energy_correction_scheme_frequency_level_without_energy_level``),
-        and a frequency level on any kind other than the two BAC kinds, for now
+        and a frequency level on any kind other than the two BAC kinds
         (``energy_correction_scheme_frequency_level_not_applicable``).
         A frequency level that resolves to the same level of theory as the
         energy level is not a second key: it is stored as absent, so the
@@ -248,10 +248,10 @@ class EnergyCorrectionSchemeRef(SchemaBase):
         """Refuse a frequency level that cannot be half of an Arkane key.
 
         A frequency level is accepted only on the Petersson and Melius BAC
-        kinds for now: those are the correction tables Arkane keys on an
+        kinds: those are the correction tables Arkane keys on an
         ``energy//frequency`` pair. (Arkane's isodesmic reference data is
-        keyed on a pair too; the ``isodesmic`` kind has no defined content
-        yet, so it is revisited when it does.) And a frequency half is a
+        keyed on a pair too; the ``isodesmic`` kind has no defined content,
+        so it takes no frequency level.) And a frequency half is a
         half: without the energy level there is no pair. Both are contradictions in the payload, not
         gaps in it, so they are refused with a code.
         """
@@ -261,7 +261,7 @@ class EnergyCorrectionSchemeRef(SchemaBase):
             raise CodedValidationError(
                 CODE_FREQUENCY_LEVEL_NOT_APPLICABLE,
                 "frequency_level_of_theory is accepted only on the BAC kinds "
-                f"(bac_petersson, bac_melius) for now; a {self.kind.value} "
+                f"(bac_petersson, bac_melius); a {self.kind.value} "
                 "scheme takes its level of theory alone. Send it in "
                 "level_of_theory and omit the frequency level.",
                 context={

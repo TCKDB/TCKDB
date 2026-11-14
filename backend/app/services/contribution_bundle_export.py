@@ -203,8 +203,7 @@ def _thermo_export_disposition(
         return (
             "record_omitted",
             "carries a NASA fit enthalpy with no enthalpy_reference_kind "
-            "declared -- a legacy shape predating the declaration rule "
-            "that the import workflow refuses. A NASA-7/NASA-9 fit's "
+            "declared, which the import workflow refuses. A NASA-7/NASA-9 fit's "
             "coefficients are mandatory together, so the enthalpy cannot "
             "be dropped without destroying the whole fit; the record is "
             "omitted from this bundle.",
@@ -212,8 +211,8 @@ def _thermo_export_disposition(
     return (
         "enthalpy_pruned",
         "carries a 298 K scalar, point, and/or Wilhoit enthalpy, or point "
-        "Gibbs energies, with no enthalpy_reference_kind declared -- a legacy "
-        "shape predating the declaration rule that the import workflow "
+        "Gibbs energies, with no enthalpy_reference_kind declared, which "
+        "the import workflow "
         "refuses. The enthalpy and Gibbs value(s) were dropped from this "
         "export; entropy, heat capacity and other fields are unaffected.",
     )
@@ -664,8 +663,7 @@ def _thermo_to_upload(
                 detail=(
                     f"carries only undeclared enthalpy content ("
                     f"{'; '.join(pruned_values)}), with no "
-                    "enthalpy_reference_kind declared -- a legacy shape "
-                    "predating the declaration rule that the import workflow "
+                    "enthalpy_reference_kind declared, which the import workflow "
                     "refuses. Once those values are dropped, no point, fit or "
                     "scalar value remains, so the record is omitted from this "
                     "bundle."
@@ -681,7 +679,7 @@ def _thermo_to_upload(
         if prune.model_kind_cleared:
             detail += (
                 " No tabulated point remained, so the stored model_kind "
-                "'tabulated' no longer describes the record; it was left out "
+                "'tabulated' does not describe the record; it was left out "
                 "for the importer to infer from what remains."
             )
         omission = BundleExportOmission(

@@ -1151,9 +1151,9 @@ class NetworkKineticsIn(SchemaBase):
     @model_validator(mode="after")
     def validate_source_ne_sink(self) -> Self:
         if self.channel_key is None and (self.source_state_key is None or self.sink_state_key is None):
-            raise ValueError("channel_key is required (or both legacy source_state_key and sink_state_key).")
+            raise ValueError("channel_key is required (or both source_state_key and sink_state_key).")
         if (self.source_state_key is None) != (self.sink_state_key is None):
-            raise ValueError("legacy source_state_key and sink_state_key must be supplied together.")
+            raise ValueError("source_state_key and sink_state_key must be supplied together.")
         if self.source_state_key == self.sink_state_key and self.source_state_key is not None:
             raise ValueError("source_state_key and sink_state_key must differ.")
         return self
@@ -1899,11 +1899,11 @@ class NetworkPDepUploadRequest(SchemaBase):
                 if nk.channel_key is None:
                     matches = [ch.key for ch in self.channels if ch.source_state_key == nk.source_state_key and ch.sink_state_key == nk.sink_state_key]
                     # No key was written at all, so there is nothing to
-                    # report as the offending name; the legacy endpoint pair
+                    # report as the offending name; the source/sink endpoint pair
                     # either matched nothing or matched ambiguously. A
                     # different refusal, and it keeps the generic code.
                     if len(matches) != 1:
-                        raise ValueError("channel_kinetics references undefined channel or ambiguous legacy endpoints; provide channel_key.")
+                        raise ValueError("channel_kinetics references undefined channel or ambiguous source/sink endpoints; provide channel_key.")
                     nk.channel_key = matches[0]
                 if nk.channel_key not in channel_keys:
                     raise undeclared_key_error(
