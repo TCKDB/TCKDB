@@ -1,4 +1,4 @@
-import { http, HttpResponse } from "msw"
+import { delay, http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
@@ -22,8 +22,26 @@ beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
 // Artifacts section should show "Sign in to download" and no button.
 // Without a handler, `onUnhandledRequest: "error"` fails every test here
 // for a reason that has nothing to do with what they check.
+type Neighbours = Record<string, string> | "fail" | "hang"
+
+/** The calculation search the page asks, once for the calculations it depends on and once for those depending on it. */
+function neighbours({ parents = {}, children = {} }: { parents?: Neighbours; children?: Neighbours }) {
+    return http.get("/api/v1/scientific/calculations/search", async ({ request }) => {
+        const asksForParents = new URL(request.url).searchParams.has("child_calculation_ref")
+        const answer = asksForParents ? parents : children
+        if (answer === "hang") await delay("infinite")
+        if (answer === "fail") return HttpResponse.json({ detail: "down" }, { status: 500 })
+        return HttpResponse.json({
+            records: Object.entries(answer as Record<string, string>).map(([ref, type]) => ({ calculation: { calculation_ref: ref, type } })),
+        })
+    })
+}
+
 beforeEach(() => {
-    server.use(http.get("/api/v1/auth/me", () => new HttpResponse(null, { status: 401 })))
+    server.use(
+        http.get("/api/v1/auth/me", () => new HttpResponse(null, { status: 401 })),
+        neighbours({}),
+    )
 })
 afterEach(() => {
     server.resetHandlers()
@@ -269,13 +287,13 @@ describe("CalculationDetailPage", () => {
             expect.stringContaining("Conformer group"),
             expect.stringContaining("Conformer observation"),
             expect.stringContaining("Geometries"),
-            expect.stringContaining("Related calculations"),
+            expect.stringContaining("Calculations it links to"),
             expect.stringContaining("Level of theory"),
         ])
         expect(items[1]).toContain("Conformer Group 3")
         expect(items[3]).toContain("1 input, 2 output")
         expect(within(list).getByRole("link", { name: "Level of theory" })).toHaveAttribute("href", "/methods/lot_1")
-        expect(within(list).getByRole("link", { name: "Related calculations" })).toHaveAttribute("href", "/calculations/calc_freq_one#dependencies-heading")
+        expect(within(list).getByRole("link", { name: "Calculations it links to" })).toHaveAttribute("href", "/calculations/calc_freq_one#dependencies-heading")
     })
 
     it("leaves a node out when the page does not hold its data", async () => {
@@ -505,6 +523,9 @@ describe("CalculationDetailPage", () => {
         page()
         const h1 = await findLoaded("Frequency")
         await waitFor(() => expect(h1).toHaveTextContent("Frequency calculation of the CH4 + OH ⇌ CH3 + H2O transition state"))
+        // The title names the reaction, so the identity sentence is not repeated, and the equation is not a link row.
+        expect(within(h1).queryByRole("link")).toBeNull()
+        expect(screen.queryByText(/A transition state has no SMILES identity/)).toBeNull()
         expect(h1).not.toHaveTextContent("TS0")
         expect(h1).not.toHaveTextContent("tse_demo")
 
@@ -547,6 +568,97 @@ describe("CalculationDetailPage", () => {
         const h1 = await findLoaded("Frequency")
         expect(h1).toHaveTextContent("Frequency calculation of a transition state")
         expect(h1).not.toHaveTextContent("tse_demo2")
+        expect(screen.getByText(/A transition state has no SMILES identity/)).toBeVisible()
+    })
+
+    it("surfaces level_of_theory_ref, dispersion and solvent in the provenance row, and moves the refs into the collapsed disclosure", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+        page()
+        await findLoaded("Frequency")
+
+        const context = screen.getByText("Level of theory", { selector: "dt" }).closest(".record-context") as HTMLElement
+        expect(ddFor(context, "Dispersion")).toBe("D3BJ")
+        expect(ddFor(context, "Solvent")).toBe("water(CPCM)")
+        // Level of theory ref/software release ref/workflow tool release
+        // ref/literature ref all moved into RefsDisclosure -- the
+        // calculation's own ref is NOT among them any more; it renders in
+        // the identity header instead (see the "own ref" test above).
+        expect(within(context).queryByText("Level of theory ref")).not.toBeInTheDocument()
+
+        fireEvent.click(screen.getByText(bySummaryText(/References \(/)))
+        expect(screen.getByText("lot_1")).toBeVisible()
+        expect(screen.getByText("srel_1")).toBeVisible()
+        expect(screen.getByText("wfr_1")).toBeVisible()
+        expect(screen.getByText("lit_1")).toBeVisible()
+    })
+
+    // Item 3: Dispersion/Solvent/Literature rows appear ONLY when the
+    // archive actually recorded them -- never a "not recorded" row for a
+    // field most calculations simply don't carry.
+    it("omits Dispersion, Solvent and Literature rows entirely when the archive has nothing for them", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                level_of_theory: { level_of_theory_ref: "lot_1", method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp", dispersion: null, solvent: null },
+                literature: null,
+            }),
+        })))
+        page()
+        await findLoaded("Frequency")
+        expect(screen.queryByText("Dispersion")).not.toBeInTheDocument()
+        expect(screen.queryByText("Solvent")).not.toBeInTheDocument()
+        expect(screen.queryByText("Literature", { selector: "dt" })).not.toBeInTheDocument()
+        // Software and workflow tool are NEVER hidden.
+        expect(screen.getByText("Software", { selector: "dt" })).toBeVisible()
+        expect(screen.getByText("Workflow tool", { selector: "dt" })).toBeVisible()
+    })
+
+    it("withholds a depositor-typed literature title and DOI, and prints the public ref instead (guard)", async () => {
+        const typed = "DEPOSITOR_SENTINEL_literature_title"
+        const doi = "10.1/ DEPOSITOR_SENTINEL_literature_doi spam.example"
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({ literature: { literature_ref: "lit_1", title: typed, title_source: "depositor_supplied", year: 2019, doi } }),
+        })))
+        page()
+        await findLoaded("Frequency")
+        expect(screen.getByText("Literature", { selector: "dt" })).toBeVisible() // the fixture reached the page
+        expect(screen.getByText(/Title not verified/)).toBeVisible()
+        expect(document.body.innerHTML).not.toContain("DEPOSITOR_SENTINEL")
+        expect(document.title).not.toContain("DEPOSITOR_SENTINEL")
+    })
+
+    it("shows a registry-resolved literature title (the positive control for the guard above)", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({ literature: { literature_ref: "lit_1", title: "RESOLVED_TITLE", title_source: "resolved_metadata", year: 2019 } }),
+        })))
+        page()
+        await findLoaded("Frequency")
+        expect(screen.getByText("RESOLVED_TITLE (2019)")).toBeVisible()
+    })
+
+    it("does not stutter the software/workflow-tool name when the version already opens with it", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+        page()
+        await findLoaded("Frequency")
+
+        const context = screen.getByText("Level of theory", { selector: "dt" }).closest(".record-context") as HTMLElement
+        const softwareRow = within(context).getByText("Software", { selector: "dt" }).closest("div") as HTMLElement
+        expect(within(softwareRow).getByText("Gaussian 16, Revision C.02")).toBeVisible()
+        expect(within(softwareRow).queryByText(/Gaussian Gaussian/)).not.toBeInTheDocument()
+
+        const workflowRow = within(context).getByText("Workflow tool", { selector: "dt" }).closest("div") as HTMLElement
+        expect(within(workflowRow).getByText("ARC 1.1.0")).toBeVisible()
+    })
+
+    // There are no "Input geometries / Output geometries /
+    // Dependency edges" count tiles (they would duplicate a section
+    // directly below); the evidence checklist is the only card left in the summary strip.
+    it("renders no count tiles -- the summary strip is the evidence checklist alone", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+        page()
+        await findLoaded("Frequency")
+
+        expect(screen.queryByText("Input geometries")).not.toBeInTheDocument()
+        expect(screen.queryByText("Output geometries")).not.toBeInTheDocument()
         expect(screen.queryByText("Dependency edges")).not.toBeInTheDocument()
         expect(document.querySelector(".metric")).toBeNull()
         // Positive check so this cannot pass on an empty page: the checklist
@@ -559,46 +671,107 @@ describe("CalculationDetailPage", () => {
         return screen.getByRole("heading", { name: "Depends on" }).closest("section") as HTMLElement
     }
 
-    it("lists the calculations this one depends on in the order they ran, ending with this one", async () => {
-        server.use(http.get(ENDPOINT, () => HttpResponse.json({
-            record: mockRecord({
-                dependencies: [
-                    { role: "single_point_on", direction: "child", parent_calculation_ref: "calc_b_opt", child_calculation_ref: "calc_freq_one" },
-                    { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_a_coarse", child_calculation_ref: "calc_freq_one" },
-                ],
-            }),
-        })))
+    it("lists every calculation this one depends on as one step, named by its real type, then one arrow to this one", async () => {
+        server.use(
+            http.get(ENDPOINT, () => HttpResponse.json({
+                record: mockRecord({
+                    dependencies: [
+                        { role: "freq_on", direction: "child", parent_calculation_ref: "calc_b_cbs", child_calculation_ref: "calc_freq_one" },
+                        { role: "single_point_on", direction: "child", parent_calculation_ref: "calc_a_opt", child_calculation_ref: "calc_freq_one" },
+                    ],
+                }),
+            })),
+            neighbours({ parents: { calc_a_opt: "opt", calc_b_cbs: "composite" } }),
+        )
         page()
         await findLoaded("Frequency")
-        const strip = within(dependsOnSection()).getByRole("list", { name: /in the order they ran/ })
-        const steps = within(strip).getAllByRole("listitem")
-        expect(steps.map((step) => step.textContent)).toEqual([
-            "Starting geometrycalc_a_coarse",
-            "→Optimisationcalc_b_opt",
-            "→This calculationFrequency calculation",
-        ])
-        expect(steps[2]).toHaveAttribute("aria-current", "step")
-        expect(within(steps[0]).getByRole("link", { name: "calc_a_coarse" })).toHaveAttribute("href", "/calculations/calc_a_coarse")
-        // This page never links to itself.
-        expect(within(steps[2]).queryByRole("link")).toBeNull()
+        const list = within(dependsOnSection()).getByRole("list", { name: "Calculations this one depends on" })
+        // A composite behind freq_on is named as the composite it is, never as an optimisation.
+        await waitFor(() => expect(within(list).getAllByRole("listitem").map((item) => item.textContent)).toEqual([
+            "Composite energycalc_b_cbs",
+            "Optimisationcalc_a_opt",
+        ]))
+        expect(within(dependsOnSection()).queryByText(/in the order they ran/)).toBeNull()
+        const own = dependsOnSection().querySelector("[aria-current='step']") as HTMLElement
+        expect(own).toHaveTextContent("This calculationFrequency calculation")
+        expect(within(own).queryByRole("link")).toBeNull()
+        expect(dependsOnSection().querySelectorAll(".dep-strip-arrow")).toHaveLength(1)
+        expect(within(list).getByRole("link", { name: "calc_a_opt" })).toHaveAttribute("href", "/calculations/calc_a_opt")
     })
 
-    it("names a later calculation under what this produced, as a link", async () => {
-        server.use(http.get(ENDPOINT, () => HttpResponse.json({
-            record: mockRecord({
-                dependencies: [
-                    { role: "freq_on", direction: "parent", parent_calculation_ref: "calc_freq_one", child_calculation_ref: "calc_later" },
-                ],
-            }),
-        })))
+    it("claims no type while the types are loading", async () => {
+        server.use(
+            http.get(ENDPOINT, () => HttpResponse.json({
+                record: mockRecord({
+                    dependencies: [
+                        { role: "freq_on", direction: "child", parent_calculation_ref: "calc_p", child_calculation_ref: "calc_freq_one" },
+                    ],
+                }),
+            })),
+            neighbours({ parents: "hang" }),
+        )
         page()
         await findLoaded("Frequency")
+        const item = within(dependsOnSection()).getByRole("link", { name: "calc_p" }).closest("li") as HTMLElement
+        expect(item).toHaveTextContent("Geometry fromcalc_p")
+        expect(dependsOnSection()).not.toHaveTextContent("Optimisation")
+    })
+
+    it("claims no type when the types cannot be read", async () => {
+        server.use(
+            http.get(ENDPOINT, () => HttpResponse.json({
+                record: mockRecord({
+                    dependencies: [
+                        { role: "freq_on", direction: "child", parent_calculation_ref: "calc_p", child_calculation_ref: "calc_freq_one" },
+                    ],
+                }),
+            })),
+            neighbours({ parents: "fail" }),
+        )
+        page()
+        await findLoaded("Frequency")
+        const item = within(dependsOnSection()).getByRole("link", { name: "calc_p" }).closest("li") as HTMLElement
+        await waitFor(() => expect(item).toHaveTextContent("Geometry fromcalc_p"))
+        expect(dependsOnSection()).not.toHaveTextContent("Optimisation")
+    })
+
+    it("asks for the neighbours only when the calculation has edges", async () => {
+        let asked = 0
+        server.use(
+            http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord({ dependencies: [], available_sections: { ...mockRecord().available_sections, has_dependencies: false } }) })),
+            http.get("/api/v1/scientific/calculations/search", () => { asked += 1; return HttpResponse.json({ records: [] }) }),
+        )
+        page()
+        await findLoaded("Frequency")
+        expect(asked).toBe(0)
+    })
+
+    it("lists later calculations under Used by, by real type, and not under what this produced", async () => {
+        server.use(
+            http.get(ENDPOINT, () => HttpResponse.json({
+                record: mockRecord({
+                    dependencies: [
+                        { role: "freq_on", direction: "parent", parent_calculation_ref: "calc_freq_one", child_calculation_ref: "calc_later" },
+                    ],
+                }),
+            })),
+            neighbours({ children: { calc_later: "irc" } }),
+        )
+        page()
+        await findLoaded("Frequency")
+        const usedBy = screen.getByRole("heading", { name: "Used by" }).closest("section") as HTMLElement
+        await waitFor(() => expect(within(usedBy).getByRole("listitem")).toHaveTextContent("IRC: calc_later"))
+        expect(within(usedBy).getByRole("link", { name: "calc_later" })).toHaveAttribute("href", "/calculations/calc_later")
         const produced = screen.getByRole("heading", { name: "What this produced" }).closest("section") as HTMLElement
-        const item = within(produced).getByRole("link", { name: "calc_later" }).closest("li") as HTMLElement
-        expect(item.textContent).toBe("Frequency calculation: calc_later")
-        expect(within(item).getByRole("link", { name: "calc_later" })).toHaveAttribute("href", "/calculations/calc_later")
-        // The same edge is not drawn a second time as a strip step.
+        expect(within(produced).queryByRole("link", { name: "calc_later" })).toBeNull()
         expect(within(dependsOnSection()).queryByRole("link", { name: "calc_later" })).toBeNull()
+    })
+
+    it("shows no Used by section when nothing depends on this calculation", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+        page()
+        await findLoaded("Frequency")
+        expect(screen.queryByRole("heading", { name: "Used by" })).toBeNull()
     })
 
     it("links the result and the output geometries to their evidence sections", async () => {
@@ -1146,7 +1319,46 @@ describe("CalculationDetailPage", () => {
         page()
         await findLoaded("Frequency")
         const resultsSection = screen.getByRole("heading", { name: "Result" }).closest("section") as HTMLElement
-        expect(ddFor(resultsSection, "Electronic energy (hartree)")).toBe("-76.123457")
+        expect(resultsSection).toHaveTextContent("-76.123457")
+    })
+
+    it("shows the imaginary frequency and ZPE with their units, and the energy only once, in Result", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                results: {
+                    kind: "freq",
+                    freq: { n_imag: 1, imag_freq_cm1: -1850.2, zpe_hartree: 0.0412345678, reaction_coordinate_mode_index: null, imaginary_mode_tau_basis: null, imaginary_mode_tau_cm1: null, n_imag_at_or_above_tau: null },
+                    sp: null, opt: null, scan: null, irc: null, path_search: null,
+                },
+            }),
+        })))
+        page()
+        await findLoaded("Frequency")
+        const resultsSection = screen.getByRole("heading", { name: "Result" }).closest("section") as HTMLElement
+        expect(ddFor(resultsSection, "Imaginary frequency")).toBe("-1850.2 cm⁻¹")
+        expect(ddFor(resultsSection, "ZPE")).toBe("0.0412346 hartree")
+    })
+
+    it("opens Result with the energy and shows none in the header", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                calculation: { ...mockRecord().calculation, type: "sp" },
+                results: {
+                    kind: "sp",
+                    sp: { electronic_energy_hartree: -76.5, electronic_energy_uncertainty_hartree: null },
+                    opt: null, freq: null, scan: null, irc: null, path_search: null,
+                },
+            }),
+        })))
+        page()
+        await findLoaded("Single-point")
+        const header = document.querySelector(".record-header") as HTMLElement
+        expect(header.querySelector(".energy-display")).toBeNull()
+        const resultsSection = screen.getByRole("heading", { name: "Result" }).closest("section") as HTMLElement
+        expect(resultsSection.querySelector(".energy-display")).not.toBeNull()
+        const produced = screen.getByRole("heading", { name: "What this produced" }).closest("section") as HTMLElement
+        expect(within(produced).getByRole("link", { name: "An electronic energy" }))
+            .toHaveAttribute("href", "/calculations/calc_freq_one#results-heading")
     })
 
     // Item 4: the opt Result body drops "Final energy" (it is the page's
@@ -1372,7 +1584,7 @@ describe("CalculationDetailPage", () => {
     })
 
     // The title and kicker name the stage, reading the SAME wording table (`domain/optimisationStage.ts`).
-    it("names the coarse pass in the title and kicker, and lists the fine pass under what this produced", async () => {
+    it("names the coarse pass in the title and kicker, and lists the fine pass under Used by", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({
                 calculation: { ...mockRecord().calculation, type: "opt" },
@@ -1387,8 +1599,8 @@ describe("CalculationDetailPage", () => {
         expect(h1).toHaveTextContent("Coarse optimisation of CH3")
         expect(screen.getByText("Optimisation calculation · coarse pass")).toBeVisible()
 
-        const produced = screen.getByRole("heading", { name: "What this produced" }).closest("section") as HTMLElement
-        expect(within(produced).getByRole("link", { name: "calc_fine_stage" })).toHaveAttribute("href", "/calculations/calc_fine_stage")
+        const usedBy = screen.getByRole("heading", { name: "Used by" }).closest("section") as HTMLElement
+        expect(within(usedBy).getByRole("link", { name: "calc_fine_stage" })).toHaveAttribute("href", "/calculations/calc_fine_stage")
         expect(within(dependsOnSection()).queryByRole("link")).toBeNull()
     })
 
@@ -1402,6 +1614,7 @@ describe("CalculationDetailPage", () => {
                 ],
             }),
         })))
+        server.use(neighbours({ parents: { calc_coarse_stage: "opt" } }))
         page()
         const h1 = await findLoaded("Fine optimisation")
         expect(h1).toHaveTextContent("Fine optimisation of CH3")
@@ -1409,6 +1622,7 @@ describe("CalculationDetailPage", () => {
 
         const link = within(dependsOnSection()).getByRole("link", { name: "calc_coarse_stage" })
         expect(link).toHaveAttribute("href", "/calculations/calc_coarse_stage")
+        await waitFor(() => expect(link.closest("li")).toHaveTextContent("Coarse optimisationcalc_coarse_stage"))
         expect(within(dependsOnSection()).getByText("Fine optimisation")).toBeVisible()
     })
 
@@ -1732,7 +1946,7 @@ describe("CalculationDetailPage", () => {
         // assertion cannot see this -- the DOM text stays correctly-cased;
         // only the COMPUTED style differs -- so this asserts
         // `getComputedStyle`, per `vite.config.ts`'s `test.css: true`.
-        it("computed text-transform is none on the Vibrational-modes table's 'Frequency (cm-1)' header", async () => {
+        it("computed text-transform is none on the Vibrational-modes table's 'Frequency (cm⁻¹)' header", async () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
             page()
             await findLoaded("Frequency")
@@ -1740,10 +1954,10 @@ describe("CalculationDetailPage", () => {
             fireEvent.click(screen.getByText("Vibrational modes"))
             const vibTable = await screen.findByRole("table", { name: "Vibrational modes" })
             expect(getComputedStyle(within(vibTable).getByRole("columnheader", { name: "Mode" })).textTransform).not.toBe("none")
-            expect(getComputedStyle(within(vibTable).getByRole("columnheader", { name: "Frequency (cm-1)" })).textTransform).toBe("none")
+            expect(getComputedStyle(within(vibTable).getByRole("columnheader", { name: "Frequency (cm⁻¹)" })).textTransform).toBe("none")
         })
 
-        it("computed text-transform is none on the Imaginary-mode-projections table's 'Frequency (cm-1)' header", async () => {
+        it("computed text-transform is none on the Imaginary-mode-projections table's 'Frequency (cm⁻¹)' header", async () => {
             const record = mockRecord()
             server.use(http.get(ENDPOINT, () => HttpResponse.json({
                 record: {
@@ -1760,7 +1974,7 @@ describe("CalculationDetailPage", () => {
             fireEvent.click(screen.getByText("Imaginary-mode projections"))
             const section = screen.getByText("Imaginary-mode projections").closest("details") as HTMLElement
             const projTable = await within(section).findByRole("table", { name: "Imaginary mode projections" })
-            expect(getComputedStyle(within(projTable).getByRole("columnheader", { name: "Frequency (cm-1)" })).textTransform).toBe("none")
+            expect(getComputedStyle(within(projTable).getByRole("columnheader", { name: "Frequency (cm⁻¹)" })).textTransform).toBe("none")
         })
     })
 })

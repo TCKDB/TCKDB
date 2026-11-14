@@ -546,7 +546,10 @@
 .kv-list a,
 .data-table a,
 .card a,
-.note a {
+.note a,
+.dep-strip a,
+.produced-list a,
+.used-by-list a {
     color: var(--accent);
     text-decoration: underline;
     text-decoration-color: var(--accent-underline);
@@ -556,7 +559,10 @@
 .kv-list a:hover,
 .data-table a:hover,
 .card a:hover,
-.note a:hover {
+.note a:hover,
+.dep-strip a:hover,
+.produced-list a:hover,
+.used-by-list a:hover {
     color: var(--accent-700);
     text-decoration-color: currentColor;
 }
@@ -564,7 +570,10 @@
 .kv-list a:focus-visible,
 .data-table a:focus-visible,
 .card a:focus-visible,
-.note a:focus-visible {
+.note a:focus-visible,
+.dep-strip a:focus-visible,
+.produced-list a:focus-visible,
+.used-by-list a:focus-visible {
     outline: 3px solid var(--focus-ring);
     outline-offset: 3px;
 }

@@ -101,26 +101,28 @@
 .dep-strip {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--s-3) var(--s-5);
+    align-items: flex-start;
+    gap: var(--s-3) var(--s-4);
+}
+
+.dep-strip-parents {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-3);
     margin: 0;
     padding: 0;
     list-style: none;
 }
 
-.dep-strip-step {
-    display: flex;
-    gap: var(--s-3);
-    min-width: 0;
-}
-
-.dep-strip-arrow { color: var(--faint); }
-
-.dep-strip-body {
+.dep-strip-step,
+.dep-strip-own {
     display: flex;
     flex-direction: column;
     gap: .15rem;
     min-width: 0;
 }
+
+.dep-strip-arrow { color: var(--faint); }
 
 .dep-strip-words {
     color: var(--muted);
@@ -129,17 +131,14 @@
     text-transform: var(--type-label-strong-transform);
 }
 
-.dep-strip-step--own { font-weight: 600; }
+.dep-strip-own { font-weight: 600; }
 
-.dep-strip code { overflow-wrap: anywhere; }
-
-.produced-list {
+.produced-list,
+.used-by-list {
     margin: 0;
     padding-left: var(--s-5);
     max-width: var(--measure-note);
 }
-
-.produced-list code { overflow-wrap: anywhere; }
 
 /* No mobile breakpoint override for `.record-context`/`.record-context--
    compact` needed: the canonical `.kv-list` (`design-system.css`) already

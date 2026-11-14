@@ -7,7 +7,6 @@ import {
     type CalculationArtifact,
     type CalculationConformer,
     type CalculationConstraint,
-    type CalculationDependency,
     type CalculationEnergyCorrection,
     type CalculationExecutionEnvironment,
     type CalculationFreqMode,
@@ -29,7 +28,7 @@ import { parameterStatement, parameterValueText } from "../domain/effectiveSetti
 import { publicParameterValue } from "../domain/publicText"
 import { EffectiveSettingsSummary } from "../components/EffectiveSettings"
 import { ArtifactDownloadButton } from "../components/ArtifactDownloadButton"
-import { DependencyStrip, ProducedItem } from "../components/CalculationLineage"
+import { DependencyStrip, ProducedItem, UsedByList } from "../components/CalculationLineage"
 import { ReactionEquation } from "../components/ReactionEquation"
 import { CompositeSchemeLink } from "../components/CompositeSchemeLink"
 import { CompositeVerificationBadge, ContradictionMarker } from "../components/CompositeVerification"
@@ -59,13 +58,14 @@ import {
 } from "../domain/optimisationStage"
 import { slotLabel } from "../domain/compositeSchemeFormat"
 import { softwareLabel, toolReleaseLabel, words } from "../domain/provenanceFormat"
-import { formatQuantity } from "../domain/quantityFormat"
+import { deposited, formatQuantity } from "../domain/quantityFormat"
 import { identityFromCalculationOwner } from "../domain/recordIdentity"
 import { hessianMethodLabel, isAssumedTauBasis, tauBasisNote } from "../domain/tauBasis"
 import { useCalculation } from "../hooks/useCalculation"
 import { useLoaded } from "../hooks/useLoaded"
 import { loadReactionEntryParticipants } from "../api/reactionEntryApi"
-import { calculationLede, calculationTitleWords, dependsOn, usedBy } from "../domain/calculationLineage"
+import { loadChildTypes, loadParentTypes } from "../api/calculationNeighboursApi"
+import { calculationLede, calculationTitleWords, dependsOn, usedBy, type LineageStep } from "../domain/calculationLineage"
 import { equationNeedsStructure } from "../domain/reactionEquation"
 import { useCalculationSection, type CalculationSectionState } from "../hooks/useCalculationSection"
 import { LiteratureCitation } from "../components/LiteratureCitation"
@@ -168,8 +168,7 @@ function evidenceTone(label: string): "pill" | "pill-muted" {
 }
 
 /**
- * The one headline energy figure this page promotes into its header —
- * the answer is promoted. Only `sp` (electronic
+ * The one energy figure the Result section opens with. Only `sp` (electronic
  * energy) and `opt` (final energy) calculations have a single number
  * that answers "what did this calculation compute" — `freq`/`scan`/
  * `irc`/`path_search` results are multi-valued or process-shaped and get
@@ -336,14 +335,9 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
     const ownerSpecies = owner.kind === "species_entry" ? (owner.species_entry ?? null) : null
     const ownerTS = owner.kind === "transition_state_entry" ? (owner.transition_state_entry ?? null) : null
     const identity = identityFromCalculationOwner(owner)
-    const headline = headlineEnergy(core.type, calculation.results)
 
-    // See `optimisationStage`'s own docstring (`domain/optimisationStage.ts`)
-    // for the "unknown" vs. single-pass distinction. Computed ONCE here
-    // (never twice from the same `dependencies` payload) and threaded to
-    // both the identity header (title/kicker) and `StageAndConformerNote`
-    // (the stage strip), so the two can never name the stage two
-    // different ways.
+    // Which pass of a two-step optimisation this is, from the `dependencies` payload; the title, the kicker and the
+    // strip's own step all read it.
     const stage: OptimisationStage | null = core.type === "opt" && dependenciesAvailability !== "not-requested"
         ? optimisationStage(dependencies)
         : null
@@ -402,9 +396,17 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 products={products}
                 reversible={participants.data.reaction_entry.reversible}
                 formulaOnly={!equationNeedsStructure(reactants, products)}
+                linkParticipants={false}
             />
         )
         : null
+    // The real type of each calculation on the other end of an edge, one read each and only when there are edges.
+    const parentEdges = dependencies.some((edge) => edge.direction === "child")
+    const childEdges = dependencies.some((edge) => edge.direction === "parent")
+    const parentTypes = useLoaded(loadParentTypes, parentEdges ? core.calculation_ref : null)
+    const childTypes = useLoaded(loadChildTypes, childEdges ? core.calculation_ref : null)
+    const dependsOnSteps = dependsOn(dependencies, parentTypes.status === "ready" ? parentTypes.data : null)
+    const usedBySteps = usedBy(dependencies, childTypes.status === "ready" ? childTypes.data : null)
     const titleSubject: ReactNode = identity.kind === "species_entry"
         ? (identity.formula ? <Formula value={identity.formula} /> : identity.canonicalSmiles)
         : identity.kind === "transition_state_entry"
@@ -462,23 +464,9 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                             lede={calculationLede(core.type)}
                             title={<>{titleTypeLabel} of {titleSubject}</>}
                             identity={identity}
+                            explainTransitionStateIdentity={!equation}
                             ownRef={{ label: "Calculation ref", value: core.calculation_ref }}
                         />
-
-                        {/* The answer this page exists to give, promoted to the
-                            largest weight on the page. Only sp/opt calculations
-                            have a single headline energy; every other
-                            calculation type renders nothing here rather than a
-                            fabricated or misleading figure. Rendered even when
-                            the value itself is null (see `headlineEnergy`'s own
-                            docstring) -- the SLOT is what a sp/opt calculation
-                            always gets, not only the ones with a result row. */}
-                        {headline && (
-                            <div className="calc-headline-energy">
-                                <HeadlineEnergy label={headline.label} valueHartree={headline.valueHartree} />
-                                {isContradiction(calculation.composite_energy_verification) && <ContradictionMarker targetId={VERIFICATION_ID} />}
-                            </div>
-                        )}
 
                         <ConformerNote conformer={conformer ?? null} />
 
@@ -544,9 +532,8 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 The evidence checklist is the only card that carries a fact
                 with no other home on the page. */}
             <DependsOnSection
-                dependencies={dependencies}
-                ownType={core.type}
-                stageLabel={stageWords ? stageWords.label : null}
+                steps={dependsOnSteps}
+                ownWords={stageWords ? stageWords.label : calculationTitleWords(core.type)}
                 availability={dependenciesAvailability}
                 contradicted={dependenciesAvailability === "empty" && available.has_dependencies}
             />
@@ -555,8 +542,9 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 ownRef={core.calculation_ref}
                 results={calculation.results ?? null}
                 outputGeometries={outputGeometries}
-                dependencies={dependencies}
             />
+
+            {usedBySteps.length > 0 && <UsedBySection steps={usedBySteps} />}
 
             <section className="ledger-summary ledger-summary--single" aria-label="Calculation evidence summary">
                 {/* `.card--derived` -- a COMPUTED evidence-completeness summary
@@ -657,6 +645,7 @@ function ResultsSection({ results, type, availability, contradicted, verificatio
     compositeScheme: NonNullable<CalculationRecord["level_of_theory"]>["composite_scheme"]
 }) {
     const legacyText = legacyShapeText(legacyShape)
+    const headline = headlineEnergy(type, results)
     return (
         <section className="ledger-section" aria-labelledby="results-heading">
             {/* No kicker here: it would repeat this section's own title
@@ -665,6 +654,12 @@ function ResultsSection({ results, type, availability, contradicted, verificatio
             <SectionHeading id="results-heading">
                 Result
             </SectionHeading>
+            {headline && (
+                <div className="calc-headline-energy">
+                    <HeadlineEnergy label={headline.label} valueHartree={headline.valueHartree} />
+                    {isContradiction(verification) && <ContradictionMarker targetId={VERIFICATION_ID} />}
+                </div>
+            )}
             {availability === "populated" && results ? <ResultBody results={results} /> : (
                 <SectionEmptyMessage
                     availability={availability}
@@ -691,13 +686,7 @@ function ResultsSection({ results, type, availability, contradicted, verificatio
 function ResultBody({ results }: { results: NonNullable<CalculationRecord["results"]> }) {
     const pairs: [string, ReactNode][] = []
     if (results.kind === "sp" && results.sp) {
-        // 6dp, matching `landing.py`'s `calculationView` headline
-        // (`fixed(energy.energy_hartree, 6, "hartree")`) -- the one
-        // electronic-energy precision the ported digits table actually
-        // specifies. `unitOverride: null` because the label already says
-        // "(hartree)". `Uncertainty` has no matching entry in that table,
-        // so it stays a raw pass-through rather than a guessed precision.
-        pairs.push(["Electronic energy (hartree)", <QuantityValue value={formatQuantity("calculation_electronic_energy_hartree", results.sp.electronic_energy_hartree, null)} />])
+        // The energy itself opens the section (`HeadlineEnergy`); only what it does not carry is listed here.
         pairs.push(["Uncertainty (hartree)", results.sp.electronic_energy_uncertainty_hartree ?? "not recorded"])
     } else if (results.kind === "opt" && results.opt) {
         // Final energy is dropped here -- it is already the page's own
@@ -707,8 +696,8 @@ function ResultBody({ results }: { results: NonNullable<CalculationRecord["resul
         pairs.push(["Optimiser steps (parsed from log)", results.opt.n_steps ?? "not recorded"])
     } else if (results.kind === "freq" && results.freq) {
         pairs.push(["Imaginary modes (n_imag)", results.freq.n_imag ?? "not recorded"])
-        pairs.push(["Imaginary frequency (cm-1)", results.freq.imag_freq_cm1 ?? "not recorded"])
-        pairs.push(["ZPE (hartree)", results.freq.zpe_hartree ?? "not recorded"])
+        pairs.push(["Imaginary frequency", <QuantityValue value={formatQuantity("ts_imaginary_frequency_cm1", results.freq.imag_freq_cm1)} />])
+        pairs.push(["ZPE", <QuantityValue value={deposited(results.freq.zpe_hartree, "hartree")} />])
         pairs.push(["Reaction-coordinate mode", results.freq.reaction_coordinate_mode_index ?? "not designated"])
         // The noise floor (τ) is resolved from this freq job's
         // Hessian method (`imaginary_mode_tau_basis`), translated to plain
@@ -730,9 +719,6 @@ function ResultBody({ results }: { results: NonNullable<CalculationRecord["resul
     } else if (results.kind === "composite" && results.composite) {
         const composite = results.composite
         pairs.push(["Assembly", composite.assembly === "assembled" ? "assembled from other calculations" : composite.assembly === "program_run" ? "one program run" : words(composite.assembly) ?? "not recorded"])
-        pairs.push(["Electronic energy (hartree)", composite.electronic_energy_hartree === null || composite.electronic_energy_hartree === undefined
-            ? "not recorded"
-            : <QuantityValue value={formatQuantity("calculation_electronic_energy_hartree", composite.electronic_energy_hartree, null)} />])
         pairs.push(["E0 (hartree)", composite.e0_hartree ?? "not recorded"])
         pairs.push(["Recipe ZPE (hartree)", composite.recipe_zpe_hartree ?? "not recorded"])
     } else if (results.kind === "scan" && results.scan) {
@@ -869,20 +855,28 @@ function TauValueCell({ tauCm1, basis }: { tauCm1: number | null | undefined; ba
     )
 }
 
-/** The calculations this one depends on, in the order they ran. Only edges the archive returned are drawn. */
-function DependsOnSection({ dependencies, ownType, stageLabel, availability, contradicted }: {
-    dependencies: CalculationDependency[]
-    ownType: string
-    stageLabel: string | null
+const RESULT_WORDS: Readonly<Record<string, string>> = {
+    sp: "An electronic energy",
+    opt: "An electronic energy at the final geometry",
+    freq: "A frequency result",
+    composite: "A composite energy",
+    scan: "A scan result",
+    irc: "An IRC result",
+    path_search: "A path search result",
+}
+
+/** The calculations this one depends on. Only edges the archive returned are drawn. */
+function DependsOnSection({ steps, ownWords, availability, contradicted }: {
+    steps: LineageStep[]
+    ownWords: string
     availability: SectionAvailability
     contradicted: boolean
 }) {
-    const steps = dependsOn(dependencies)
     return (
         <section className="ledger-section" aria-labelledby="dependencies-heading">
             <SectionHeading id="dependencies-heading">Depends on</SectionHeading>
             {availability === "populated" && steps.length > 0 ? (
-                <DependencyStrip steps={steps} ownWords={stageLabel ?? calculationTitleWords(ownType)} />
+                <DependencyStrip steps={steps} ownWords={ownWords} />
             ) : (
                 <SectionEmptyMessage
                     availability={availability}
@@ -894,31 +888,18 @@ function DependsOnSection({ dependencies, ownType, stageLabel, availability, con
     )
 }
 
-const RESULT_WORDS: Readonly<Record<string, string>> = {
-    sp: "An electronic energy",
-    opt: "An optimisation outcome",
-    freq: "A frequency result",
-    composite: "A composite energy",
-    scan: "A scan result",
-    irc: "An IRC result",
-    path_search: "A path search result",
-}
-
 /** The results and records this calculation produced, each linked to its evidence. */
-function ProducedSection({ ownRef, results, outputGeometries, dependencies }: {
+function ProducedSection({ ownRef, results, outputGeometries }: {
     ownRef: string
     results: CalculationRecord["results"]
     outputGeometries: CalculationGeometryLink[]
-    dependencies: CalculationDependency[]
 }) {
     const here = `/calculations/${ownRef}`
-    const used = usedBy(dependencies)
     const resultWords = results ? (Object.hasOwn(RESULT_WORDS, results.kind) ? RESULT_WORDS[results.kind] : "A result") : null
-    const hasItems = resultWords !== null || outputGeometries.length > 0 || used.length > 0
     return (
         <section className="ledger-section" aria-labelledby="produced-heading">
             <SectionHeading id="produced-heading">What this produced</SectionHeading>
-            {hasItems ? (
+            {resultWords !== null || outputGeometries.length > 0 ? (
                 <ul className="produced-list">
                     {resultWords && <ProducedItem to={`${here}#results-heading`}>{resultWords}</ProducedItem>}
                     {outputGeometries.length > 0 && (
@@ -926,15 +907,20 @@ function ProducedSection({ ownRef, results, outputGeometries, dependencies }: {
                             {outputGeometries.length} output {outputGeometries.length === 1 ? "geometry" : "geometries"}
                         </ProducedItem>
                     )}
-                    {used.map((step) => (
-                        <ProducedItem key={`${step.role}-${step.ref}`} lead={`${step.words}: `} to={`/calculations/${step.ref}`}>
-                            <code className="data">{step.ref}</code>
-                        </ProducedItem>
-                    ))}
                 </ul>
             ) : (
-                <p className="empty-projection">No result, geometry or later calculation is recorded for this one.</p>
+                <p className="empty-projection">No result or geometry is recorded for this one.</p>
             )}
+        </section>
+    )
+}
+
+/** The calculations that depend on this one. */
+function UsedBySection({ steps }: { steps: LineageStep[] }) {
+    return (
+        <section className="ledger-section" aria-labelledby="used-by-heading">
+            <SectionHeading id="used-by-heading">Used by</SectionHeading>
+            <UsedByList steps={steps} />
         </section>
     )
 }
@@ -1526,12 +1512,12 @@ function FreqModesSection({ calculationRef, available, applicable }: { calculati
                 <div className="table-scroll">
                     <table className="data-table" aria-label="Vibrational modes">
                         {/* `.t-preserve-case` keeps these symbols and units in their own case. */}
-                        <thead><tr><th scope="col">Mode</th><th className="t-preserve-case" scope="col">Frequency (cm-1)</th><th scope="col">Imaginary</th></tr></thead>
+                        <thead><tr><th scope="col">Mode</th><th className="t-preserve-case" scope="col">Frequency (cm⁻¹)</th><th scope="col">Imaginary</th></tr></thead>
                         <tbody>
                             {rows.map((row) => (
                                 <tr key={`mode-${row.mode_index}`}>
                                     <td data-label="Mode" className="num">{row.mode_index}</td>
-                                    <td data-label="Frequency (cm-1)" className="num">{row.frequency_cm1}</td>
+                                    <td data-label="Frequency (cm⁻¹)" className="num">{row.frequency_cm1}</td>
                                     <td data-label="Imaginary">{boolLabel(row.is_imaginary)}</td>
                                 </tr>
                             ))}
@@ -1566,7 +1552,7 @@ function ImaginaryModeProjectionsSection({ calculationRef, hessianAvailable, app
                                             {/* Same "cm-1" defect the Vibrational-modes table
                                                 above fixes -- .t-preserve-case keeps it out of
                                                 .data-table th's uppercase transform. */}
-                                            <th className="t-preserve-case" scope="col">Frequency (cm-1)</th>
+                                            <th className="t-preserve-case" scope="col">Frequency (cm⁻¹)</th>
                                             <th scope="col">Declared</th>
                                             <th scope="col">Determination</th>
                                             <th scope="col">Agreement</th>
@@ -1576,7 +1562,7 @@ function ImaginaryModeProjectionsSection({ calculationRef, hessianAvailable, app
                                         {modes.map((mode) => (
                                             <tr key={`imag-${mode.mode_index}`}>
                                                 <td data-label="Mode" className="num">{mode.mode_index}</td>
-                                                <td data-label="Frequency (cm-1)" className="num">{mode.frequency_cm1}</td>
+                                                <td data-label="Frequency (cm⁻¹)" className="num">{mode.frequency_cm1}</td>
                                                 <td data-label="Declared">{mode.declared_disposition ? statusLabel(mode.declared_disposition) : "not recorded"}</td>
                                                 <td data-label="Determination">{mode.determination ? statusLabel(mode.determination) : "not determined"}</td>
                                                 <td data-label="Agreement">{statusLabel(mode.agreement)}</td>
