@@ -46,11 +46,7 @@ function mockResponse(overrides: Record<string, unknown> = {}) {
                 label: null,
                 display: "b3lyp/def2tzvp",
             },
-            // Fixture shape: software backfilled
-            // cleanly on both schemes (empty `software_release_ref` --
-            // the row stores a vendor, not a release, to point at);
-            // workflow_tool_release stayed null (only 10 of 416
-            // calculations recorded one, no single release derivable).
+            // Software named without a release ref; no workflow-tool release.
             software_release: { software_release_ref: "", software: "Gaussian", version: null },
             workflow_tool_release: null,
             literature: null,
@@ -75,14 +71,12 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
     it("renders the scheme identity, its parameter table, its owning level of theory (linked), and its applications", async () => {
         server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse())))
         page()
-        // Titled from the controlled `scheme_kind` vocabulary plus the
-        // owning level of theory -- NOT the depositor's own `name` text
-        // (see the dedicated mutation-table test below).
-        expect(await screen.findByRole("heading", { name: "Petersson bond-additivity correction", level: 1 })).toBeVisible()
+        // Titled from the controlled `scheme_kind` vocabulary, not the depositor's own `name` text.
+        expect(await screen.findByRole("heading", { name: "Petersson bond-additivity correction, Gaussian", level: 1 })).toBeVisible()
         await waitFor(() => expect(titleHasKind(document.title, "/methods/schemes/:ref")).toBe(true))
-        // The level of theory is linked once, in the identity facts.
+        // The level of theory is linked in the breadcrumb and once in the identity facts.
         const lotLinks = screen.getAllByRole("link", { name: "b3lyp/def2tzvp" })
-        expect(lotLinks).toHaveLength(1)
+        expect(lotLinks).toHaveLength(2)
         for (const link of lotLinks) expect(link).toHaveAttribute("href", "/methods/lot_b3lyp")
 
         const paramTable = screen.getByRole("table", { name: "Bond correction parameters" })
@@ -99,7 +93,7 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
         server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse({ level_of_theory: null }))))
         page()
         // No level-of-theory suffix at all when there is none to link.
-        await screen.findByRole("heading", { name: "Petersson bond-additivity correction", level: 1 })
+        await screen.findByRole("heading", { name: "Petersson bond-additivity correction, Gaussian", level: 1 })
         expect(screen.getByText("not tied to a specific level of theory")).toBeVisible()
     })
 
@@ -118,7 +112,7 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
             energy_correction_scheme: { ...mockResponse().record.energy_correction_scheme, name: "Bob's custom BAC v3 (DO NOT USE)", scheme_kind: "atom_energy" },
         }))))
         page()
-        expect(await screen.findByRole("heading", { name: "Atom-energy correction", level: 1 })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: "Atom-energy correction, Gaussian", level: 1 })).toBeVisible()
         expect(screen.queryByText("Bob's custom BAC v3 (DO NOT USE)")).not.toBeInTheDocument()
     })
 
@@ -146,13 +140,7 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
         expect(document.body.innerHTML).not.toContain("DEPOSITOR_SENTINEL")
     })
 
-    /**
-     * Coordinator follow-up: the page fetches `literature` and never
-     * rendered it. Its absence must read as an absence (an explicit row
-     * stating "not recorded"), not as a silently omitted row -- the live
-     * archive holds ZERO literature rows today, so this IS the case a
-     * reader actually sees.
-     */
+    /** An absent literature source reads as its own "not recorded" row, never as an omitted row. */
     it("states a missing literature source plainly, as its own row, rather than omitting it", async () => {
         server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse({ literature: null }))))
         page()
@@ -162,20 +150,15 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
         expect(dt.nextElementSibling).toHaveTextContent("not recorded")
     })
 
-    /**
-     * `energy_correction_scheme` carries `software_id`/`workflow_tool_release_id`; this page fetches both (always present
-     * on the record, not include-gated) and now renders them as their own
-     * rows. Software renders through `softwareLabel` -- text only, never
-     * a link built from `software_release_ref` (empty on this live row).
-     */
-    it("renders deposited software and workflow-tool release as their own rows", async () => {
+    /** Software is part of the title and is never a link; the workflow-tool release is its own row. */
+    it("titles the scheme with its software and renders the workflow-tool release as its own row", async () => {
         server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse({
             workflow_tool_release: { workflow_tool_release_ref: "wfr_one", workflow_tool: "ARC", version: "1.1.0" },
         }))))
         page()
         await screen.findByRole("heading", { level: 1 })
-        const softwareDt = screen.getByText("Software")
-        expect(softwareDt.nextElementSibling).toHaveTextContent("Gaussian")
+        expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Petersson bond-additivity correction, Gaussian")
+        expect(screen.queryByText("Software")).not.toBeInTheDocument()
         // Never a link -- `software_release_ref` is empty on this row.
         expect(screen.queryByRole("link", { name: /Gaussian/ })).not.toBeInTheDocument()
         const toolDt = screen.getByText("Workflow-tool release")
@@ -188,6 +171,41 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
      * NEVER turns it into a link. It still earns its own row, as
      * copyable text.
      */
+    it("shows the applied value with a spelled-out unit and links a species entry but not a statmech record", async () => {
+        server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse({
+            used_by: [
+                {
+                    record_type: "species_entry", record_ref: "spe_one", record_id: null, endpoint: "/x",
+                    application_role: "bac_total", applied_value: -3.6, applied_value_unit: "kcal_mol", applied_value_hartree: -0.0057,
+                    temperature_k: null, applied_note: null, source_calculation_ref: null, source_calculation_endpoint: null, component_count: 2,
+                },
+                {
+                    record_type: "statmech", record_ref: "sm_one", record_id: null, endpoint: "/y",
+                    application_role: "bac_total", applied_value: 1.5, applied_value_unit: "kj_mol", applied_value_hartree: 0.0005,
+                    temperature_k: null, applied_note: null, source_calculation_ref: null, source_calculation_endpoint: null, component_count: 2,
+                },
+            ],
+        }))))
+        page()
+        await screen.findByRole("heading", { level: 1 })
+        const table = screen.getByRole("table", { name: "Applications of this correction scheme" })
+        expect(within(table).getByRole("link", { name: "spe_one" })).toHaveAttribute("href", "/species-entries/spe_one")
+        expect(within(table).queryByRole("link", { name: "sm_one" })).not.toBeInTheDocument()
+        expect(within(table).getByText("sm_one")).toBeVisible()
+        expect(table).toHaveTextContent("-3.6 kcal/mol")
+        expect(table).toHaveTextContent("1.5 kJ/mol")
+        expect(table).not.toHaveTextContent("kcal_mol")
+    })
+
+    it("puts the level of theory in the breadcrumb and the document title", async () => {
+        server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByRole("heading", { level: 1 })
+        const crumb = screen.getByRole("navigation", { name: "Breadcrumb" })
+        expect(within(crumb).getByRole("link", { name: "b3lyp/def2tzvp" })).toHaveAttribute("href", "/methods/lot_b3lyp")
+        await waitFor(() => expect(document.title).toContain("b3lyp/def2tzvp"))
+    })
+
     it("renders a real software_release_ref as its own copyable row, never a link", async () => {
         server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse({
             software_release: { software_release_ref: "swr_g16", software: "Gaussian", version: "16" },
@@ -244,7 +262,7 @@ describe("CorrectionSchemePage -- no depositor-typed text", () => {
         ;(value.record.corrections as { target: string }[]).forEach((row, index) => { row.target = index === 0 ? ADVERSARIAL.elementKey : "Xx" })
         server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(value)))
         page()
-        expect(await screen.findByRole("heading", { name: "Petersson bond-additivity correction", level: 1 })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: "Petersson bond-additivity correction, Gaussian", level: 1 })).toBeVisible()
         expect(within(screen.getByRole("table", { name: "Applications of this correction scheme" })).getByText("spe_one")).toBeVisible()
 
         expectNoDepositorText()

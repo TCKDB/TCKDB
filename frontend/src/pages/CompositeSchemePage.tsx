@@ -24,7 +24,6 @@ import {
 } from "../domain/compositeSchemeFormat"
 import { ledeText } from "../domain/ledeText"
 import { deposited } from "../domain/quantityFormat"
-import { words } from "../domain/provenanceFormat"
 import { useCompositeScheme } from "../hooks/useCompositeScheme"
 import type { CompositeSchemeRecord, CompositeSchemeTerm } from "../api/methodsApi"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
@@ -68,8 +67,9 @@ function CompositeSchemeDetail({ record }: { record: CompositeSchemeRecord }) {
                             ownRef={{ label: "Composite scheme ref", value: scheme.composite_scheme_ref }}
                             ownFacts={(
                                 <>
-                                    <div><dt>Kind</dt><dd>{words(scheme.kind)}</dd></div>
-                                    {scheme.kind !== "named_method" && (
+                                    {scheme.kind === "named_method"
+                                        ? <div><dt>Kind</dt><dd>{scheme.kind.replaceAll("_", " ")}</dd></div>
+                                        : (
                                         <div className="kv-list--wide"><dt>Recipe label</dt><dd className="composite-label"><code className="data">{scheme.name}</code></dd></div>
                                     )}
                                     <div>
@@ -155,7 +155,7 @@ function TermBlock({ term }: { term: CompositeSchemeTerm }) {
                 <div><dt>Operation</dt><dd>{operationLabel(term.operation)}</dd></div>
                 <div><dt>Energy component</dt><dd>{componentLabel(term.energy_component)}</dd></div>
                 <div><dt>Formula</dt><dd>{formula ?? "none"}</dd></div>
-                <div><dt>α (exponent)</dt><dd>{term.exponent ?? "none"}</dd></div>
+                <div><dt>α (exponent)</dt><dd>{term.exponent === null || term.exponent === undefined ? "none" : (deposited(term.exponent)?.value ?? term.exponent)}</dd></div>
                 <div><dt>Weights</dt><dd>{linearityText(term)}</dd></div>
                 {expression && <div className="kv-list--wide"><dt>As a sum</dt><dd><code className="data">{expression}</code></dd></div>}
             </dl>

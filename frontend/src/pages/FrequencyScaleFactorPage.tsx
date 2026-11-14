@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom"
+import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../methods.css"
 import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
@@ -8,13 +8,16 @@ import { Stored } from "../components/QuantityValue"
 import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
 import { ledeText } from "../domain/ledeText"
+import { scaleKindLabel } from "../domain/frequencyScaleFormat"
+import { recordRoute } from "../domain/recordRoute"
+import { usageIntro } from "../domain/usageIntro"
 import { deposited } from "../domain/quantityFormat"
 import { softwareLabel, toolReleaseLabel, words } from "../domain/provenanceFormat"
 import { useFrequencyScaleFactor } from "../hooks/useFrequencyScaleFactor"
 import type { FrequencyScaleFactorRecord, FrequencyScaleFactorUsage } from "../api/methodsApi"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
-const FREQUENCY_SCALE_FACTOR_LEDE = ledeText`A factor that scales computed vibrational frequencies at one level of theory.`
+const FREQUENCY_SCALE_FACTOR_LEDE = ledeText`A factor that scales computed vibrational frequencies.`
 
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
@@ -37,24 +40,25 @@ export default function FrequencyScaleFactorPage() {
 }
 
 function FrequencyScaleFactorDetail({ record }: { record: FrequencyScaleFactorRecord }) {
-    useDocumentTitle("Frequency scale factor", String(record.frequency_scale_factor.value))
     const fsf = record.frequency_scale_factor
     const usage = record.used_by ?? []
     const shown = deposited(fsf.value)
-    const scaleKind = words(fsf.scale_kind)
-    const kind = scaleKind ? `${scaleKind.charAt(0).toUpperCase()}${scaleKind.slice(1)} frequency scale factor` : "Frequency scale factor"
+    const valueText = shown?.value ?? String(fsf.value)
+    const kindText = scaleKindLabel(fsf.scale_kind)
+    const kind = `${kindText.charAt(0).toUpperCase()}${kindText.slice(1)} scale factor`
+    useDocumentTitle("Frequency scale factor", `${kind} ${valueText}`)
 
     return (
         <section className="conformer-page methods-page">
             <PageShell
-                crumbs={[{ label: "Methods", to: "/methods" }, { label: `Frequency scale factor ${shown?.value ?? fsf.value}` }]}
+                crumbs={[{ label: "Methods", to: "/methods" }, { label: kind }]}
                 contents="none"
                 identity={(
                     <header className="basin-header">
                         <RecordIdentityHeader
                             kicker="Frequency scale factor"
                             lede={FREQUENCY_SCALE_FACTOR_LEDE}
-                            title={<>{kind} <span><Stored full={shown?.full}>{shown?.value ?? String(fsf.value)}</Stored></span></>}
+                            title={<>{kind} <span><Stored full={shown?.full}>{valueText}</Stored></span></>}
                             ownRef={{ label: "Frequency scale factor ref", value: fsf.frequency_scale_factor_ref }}
                             ownFacts={(
                                 <>
@@ -88,7 +92,7 @@ function UsageSection({ rows, available, total }: { rows: FrequencyScaleFactorUs
         <section className="ledger-section" aria-labelledby="fsf-usage-heading">
             <SectionHeading
                 id="fsf-usage-heading"
-                intro={`${total} statmech record${total === 1 ? "" : "s"}.`}
+                intro={usageIntro(total, rows.length, "record", "records")}
             >
                 Used by
             </SectionHeading>
@@ -105,7 +109,11 @@ function UsageSection({ rows, available, total }: { rows: FrequencyScaleFactorUs
                             {rows.map((row) => (
                                 <tr key={row.record_ref}>
                                     <td data-label="Record type">{words(row.record_type)}</td>
-                                    <td data-label="Record"><span className="data">{row.record_ref}</span></td>
+                                    <td data-label="Record">
+                                        {recordRoute(row.record_type, row.record_ref)
+                                            ? <Link className="data" to={recordRoute(row.record_type, row.record_ref) ?? ""}>{row.record_ref}</Link>
+                                            : <span className="data">{row.record_ref}</span>}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>

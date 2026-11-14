@@ -6,6 +6,9 @@ import { CorrectionSchemeTable } from "../components/CorrectionSchemeTable"
 import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
+import { energyUnitLabel, ENERGY_DISPLAY_UNITS, type EnergyDisplayUnit } from "../domain/energyUnits"
+import { recordRoute } from "../domain/recordRoute"
+import { usageIntro } from "../domain/usageIntro"
 import { QuantityValue } from "../components/QuantityValue"
 import { deposited } from "../domain/quantityFormat"
 import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
@@ -13,6 +16,8 @@ import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton } from "../components/RefsDisclosure"
 import { ledeText } from "../domain/ledeText"
 import { schemeKindLabel } from "../domain/correctionSchemeFormat"
+import { lotLabel } from "../api/scientificSchemas"
+import { levelOfTheoryPath } from "../domain/methodsLinks"
 import { softwareLabel, toolReleaseLabel, words } from "../domain/provenanceFormat"
 import { useCorrectionScheme } from "../hooks/useCorrectionScheme"
 import type { EnergyCorrectionSchemeRecord, EnergyCorrectionSchemeUsage } from "../api/methodsApi"
@@ -44,14 +49,22 @@ export default function CorrectionSchemePage() {
 function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeRecord }) {
     const scheme = record.energy_correction_scheme
     const usage = record.used_by ?? []
-    // Titled from the scheme kind, never the depositor's own name for it.
-    const title = schemeKindLabel(scheme.scheme_kind)
-    useDocumentTitle("Energy-correction scheme", title)
+    // Titled from the scheme kind and its software, never the depositor's own name for it.
+    const software = softwareLabel(record.software_release)
+    const title = software ? `${schemeKindLabel(scheme.scheme_kind)}, ${software}` : schemeKindLabel(scheme.scheme_kind)
+    const levelLabel = record.level_of_theory ? lotLabel(record.level_of_theory) : null
+    useDocumentTitle("Energy-correction scheme", levelLabel ? `${title} at ${levelLabel}` : title)
 
     return (
         <section className="conformer-page methods-page">
             <PageShell
-                crumbs={[{ label: "Methods", to: "/methods" }, { label: title }]}
+                crumbs={[
+                    { label: "Methods", to: "/methods" },
+                    ...(record.level_of_theory && levelLabel
+                        ? [{ label: levelLabel, to: levelOfTheoryPath(record.level_of_theory.level_of_theory_ref ?? "") }]
+                        : []),
+                    { label: title },
+                ]}
                 identity={(
                     <header className="basin-header">
                         <RecordIdentityHeader
@@ -77,7 +90,6 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                                 : "not recorded"}
                                         </dd>
                                     </div>
-                                    <div><dt>Software</dt><dd>{softwareLabel(record.software_release) ?? "not recorded"}</dd></div>
                                     {record.software_release?.software_release_ref && (
                                         <div>
                                             <dt>Software release ref</dt>
@@ -124,7 +136,7 @@ function UsageSection({ rows, available, total }: { rows: EnergyCorrectionScheme
         <section className="ledger-section" aria-labelledby="ecs-usage-heading">
             <SectionHeading
                 id="ecs-usage-heading"
-                intro={`${total} record${total === 1 ? "" : "s"}; first 50 listed.`}
+                intro={usageIntro(total, rows.length, "record", "records")}
             >
                 Applications
             </SectionHeading>
@@ -142,9 +154,9 @@ function UsageSection({ rows, available, total }: { rows: EnergyCorrectionScheme
                         <tbody>
                             {rows.map((row, index) => (
                                 <tr key={`${row.record_ref}-${index}`}>
-                                    <td data-label="Record"><span className="data">{row.record_ref}</span></td>
+                                    <td data-label="Record"><UsageRecord type={row.record_type} recordRef={row.record_ref} /></td>
                                     <td data-label="Role">{words(row.application_role)}</td>
-                                    <td data-label="Applied value" className="num"><QuantityValue value={deposited(row.applied_value, row.applied_value_unit)} /></td>
+                                    <td data-label="Applied value" className="num"><QuantityValue value={deposited(row.applied_value, unitText(row.applied_value_unit))} /></td>
                                     <td data-label="Source calculation">
                                         {row.source_calculation_ref
                                             ? <Link className="data" to={`/calculations/${row.source_calculation_ref}`}>{row.source_calculation_ref}</Link>
@@ -160,4 +172,14 @@ function UsageSection({ rows, available, total }: { rows: EnergyCorrectionScheme
             )}
         </section>
     )
+}
+
+function unitText(unit: string | null | undefined): string | null {
+    if (!unit) return null
+    return (ENERGY_DISPLAY_UNITS as readonly string[]).includes(unit) ? energyUnitLabel(unit as EnergyDisplayUnit) : unit
+}
+
+function UsageRecord({ type, recordRef }: { type: string; recordRef: string }) {
+    const to = recordRoute(type, recordRef)
+    return to ? <Link className="data" to={to}>{recordRef}</Link> : <span className="data">{recordRef}</span>
 }

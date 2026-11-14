@@ -205,7 +205,7 @@ function LevelOfTheoryTable({ state, filter }: { state: LoadState<{ records: Lev
                             </td>
                             <td data-label="Core treatment">{record.level_of_theory.core_treatment ? words(record.level_of_theory.core_treatment) : "not recorded"}</td>
                             <td data-label="Spin treatment">{record.level_of_theory.spin_treatment ? words(record.level_of_theory.spin_treatment) : "not recorded"}</td>
-                            <td data-label="Calculations" className="num"><Link to={levelOfTheoryPath(record.level_of_theory.level_of_theory_ref)}>{record.evidence_summary.calculation_usage_count}</Link></td>
+                            <td data-label="Calculations" className="num"><Link to={`${levelOfTheoryPath(record.level_of_theory.level_of_theory_ref)}#lot-usage-heading`}>{record.evidence_summary.calculation_usage_count}</Link></td>
                             <td data-label="Dispersion">{record.level_of_theory.dispersion ?? NO_DISPERSION_TEXT}</td>
                             <td data-label="Solvent">{record.level_of_theory.solvent ?? NO_SOLVENT_TEXT}</td>
                         </tr>

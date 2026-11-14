@@ -7,6 +7,9 @@ import { CompositeSchemeLink } from "../components/CompositeSchemeLink"
 import { CorrectionSchemeTable } from "../components/CorrectionSchemeTable"
 import { Disclosure } from "../components/Disclosure"
 import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
+import { scaleKindLabel } from "../domain/frequencyScaleFormat"
+import { recordRoute } from "../domain/recordRoute"
+import { usageIntro } from "../domain/usageIntro"
 import { ValueLink } from "../components/ValueLink"
 import { deposited } from "../domain/quantityFormat"
 import { PageShell } from "../components/PageShell"
@@ -220,7 +223,7 @@ function CorrectionSchemesSection({ schemes, available }: { schemes: EnergyCorre
                 ))
             ) : (
                 <p className="empty-projection">
-                    Not deposited: {LOT_SCOPED_SCHEME_KINDS.filter((kind) => !depositedKinds.has(kind)).map((kind) => SCHEME_KIND_LABELS[kind].toLowerCase()).join(", ")}.
+                    Not deposited: {LOT_SCOPED_SCHEME_KINDS.filter((kind) => !depositedKinds.has(kind)).map((kind) => SCHEME_KIND_LABELS[kind]).join(", ")}.
                 </p>
             )}
         </section>
@@ -296,13 +299,13 @@ function CorrectionSchemeBox({ scheme }: { scheme: EnergyCorrectionSchemeRecord 
             className="correction-scheme-block"
             defaultOpen={false}
             summary={(
-                <>
+                <span className="correction-scheme-summary">
                     <span className="t-heading-2">{schemeKindLabel(scheme.energy_correction_scheme.scheme_kind)}</span>
                     {software
                         ? <span className="value-pill">{software}</span>
                         : <span className="value-pill value-pill--muted">software not recorded</span>}
                     <span className="correction-scheme-summary-rollup">{schemeParameterRollup(scheme.evidence_summary)}</span>
-                </>
+                </span>
             )}
         >
             <dl className="kv-list">
@@ -327,7 +330,14 @@ function CorrectionSchemeBox({ scheme }: { scheme: EnergyCorrectionSchemeRecord 
                             : "not recorded"}
                     </dd>
                 </div>
-                <div><dt>Applied to</dt><dd>{scheme.evidence_summary.applied_usage_count} entries</dd></div>
+                <div>
+                    <dt>Applied to</dt>
+                    <dd>
+                        <Link to={`${correctionSchemePath(ref)}#ecs-usage-heading`}>
+                            {scheme.evidence_summary.applied_usage_count} {scheme.evidence_summary.applied_usage_count === 1 ? "entry" : "entries"}
+                        </Link>
+                    </dd>
+                </div>
             </dl>
             <CorrectionSchemeTable
                 corrections={scheme.corrections ?? []}
@@ -349,25 +359,22 @@ function FrequencyScaleFactorSection({ groups, available }: { groups: LevelOfThe
                 Frequency scale factor
             </SectionHeading>
             {available && rows.length > 0 ? (
-                rows.map((group) => (
+                rows.map((group, index) => (
                     <div key={`${group.scale_kind}-${group.value}`} className="fsf-group">
                         <p>
-                            <FactorValue value={group.value} to={group.frequency_scale_factors.length === 1 ? frequencyScaleFactorPath(group.frequency_scale_factors[0].frequency_scale_factor_ref) : null} /> <span className="value-pill">{words(group.scale_kind)}</span>
+                            <FactorValue value={group.value} to={group.frequency_scale_factors.length === 1 ? frequencyScaleFactorPath(group.frequency_scale_factors[0].frequency_scale_factor_ref) : `#fsf-provenance-${index}`} /> <span className="value-pill">{scaleKindLabel(group.scale_kind)}</span>
                         </p>
                         <Disclosure
+                            id={`fsf-provenance-${index}`}
                             summary="Provenance"
                             count={group.frequency_scale_factor_count}
                             defaultOpen={false}
                         >
                             {group.frequency_scale_factor_count > 1 && (
-                                <p className="note">
-                                    {group.frequency_scale_factor_count} separate depositor actions produced this
-                                    same value — each keeps its own ref and provenance below, not collapsed into
-                                    one.
-                                </p>
+                                <p className="note">{group.frequency_scale_factor_count} deposits gave this value. Each keeps its own ref below.</p>
                             )}
                             <div className="table-scroll">
-                                <table className="data-table" aria-label={`Frequency scale factor provenance for ${group.value}`}>
+                                <table className="data-table" aria-label={`Frequency scale factor provenance for ${deposited(group.value)?.value ?? group.value}`}>
                                     <thead>
                                         <tr>
                                             <th scope="col">Ref</th>
@@ -411,7 +418,7 @@ function UsageSection({ rows, available, total }: { rows: LevelOfTheoryUsage[] |
         <section className="ledger-section" aria-labelledby="lot-usage-heading">
             <SectionHeading
                 id="lot-usage-heading"
-                intro={`${total} calculation${total === 1 ? "" : "s"}; first 50 listed.`}
+                intro={usageIntro(total, list.length, "calculation", "calculations")}
             >
                 Calculations at this level of theory
             </SectionHeading>
@@ -432,7 +439,7 @@ function UsageSection({ rows, available, total }: { rows: LevelOfTheoryUsage[] |
                                     <td data-label="Type">{words(row.type)}</td>
                                     <td data-label="Owner">
                                         {row.record_ref && row.record_type
-                                            ? <span className="data">{row.record_ref}</span>
+                                            ? <OwnerRecord type={row.record_type} recordRef={row.record_ref} />
                                             : "not recorded"}
                                     </td>
                                 </tr>
@@ -445,4 +452,9 @@ function UsageSection({ rows, available, total }: { rows: LevelOfTheoryUsage[] |
             )}
         </section>
     )
+}
+
+function OwnerRecord({ type, recordRef }: { type: string; recordRef: string }) {
+    const to = recordRoute(type, recordRef)
+    return to ? <Link className="data" to={to}>{recordRef}</Link> : <span className="data">{recordRef}</span>
 }
