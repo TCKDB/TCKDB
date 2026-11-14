@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { cleanup, render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import { GUIDE_TOPICS } from "../domain/glossary"
 import GuidePage from "./GuidePage"
@@ -51,5 +52,18 @@ describe("GuidePage", () => {
     it("sets the page title", () => {
         render(<MemoryRouter><GuidePage /></MemoryRouter>)
         expect(document.title).toBe("Guide · TCKDB")
+    })
+
+    it("tabs through its links in reading order, each one a link to somewhere", async () => {
+        const user = userEvent.setup()
+        const { container } = render(<MemoryRouter><GuidePage /></MemoryRouter>)
+        const links = [...container.querySelectorAll("a[href]")]
+        expect(container.querySelectorAll("[tabindex]:not([tabindex='-1']):not([tabindex='0'])")).toHaveLength(0)
+        const visited: Element[] = []
+        for (let step = 0; step < links.length; step += 1) {
+            await user.tab()
+            visited.push(document.activeElement as Element)
+        }
+        expect(visited).toEqual(links)
     })
 })

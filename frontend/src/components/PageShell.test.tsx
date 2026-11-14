@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import type { ReactNode } from "react"
+import { useEffect, type ReactNode } from "react"
 import { act, cleanup, render, screen } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { PageShell } from "./PageShell"
@@ -185,5 +185,31 @@ describe("PageShell: side column", () => {
         expect(pageShellCss).toMatch(/\.page-shell \{[^}]*max-width:\s*var\(--page-max\)/)
         expect(pageShellCss).toMatch(/\.page-shell-layout \{[^}]*grid-template-columns:\s*14rem minmax\(0, 1fr\)[^}]*gap:\s*3rem/)
         expect(pageShellCss).not.toMatch(/page-shell-rail/)
+    })
+})
+
+describe("PageShell: a breakpoint change keeps the page mounted", () => {
+    afterEach(() => { delete (window as { matchMedia?: unknown }).matchMedia })
+
+    it("does not remount the content when the screen crosses the narrow breakpoint", () => {
+        const listeners = new Set<() => void>()
+        let narrow = false
+        window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+            get matches() { return narrow && query.includes("62rem") },
+            media: query,
+            addEventListener: (_type: string, listener: () => void) => { listeners.add(listener) },
+            removeEventListener: (_type: string, listener: () => void) => { listeners.delete(listener) },
+        })) as unknown as typeof window.matchMedia
+        let mounts = 0
+        function Probe() {
+            useEffect(() => { mounts += 1 }, [])
+            return <p data-testid="probe">Page content</p>
+        }
+        render(<MemoryRouter><PageShell><Probe /></PageShell></MemoryRouter>)
+        const before = screen.getByTestId("probe")
+        act(() => { narrow = true; listeners.forEach((listener) => listener()) })
+        act(() => { narrow = false; listeners.forEach((listener) => listener()) })
+        expect(screen.getByTestId("probe")).toBe(before)
+        expect(mounts).toBe(1)
     })
 })

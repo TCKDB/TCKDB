@@ -6,12 +6,20 @@ const CLOSE_DELAY_MS = 150
 const EDGE_GAP_PX = 8
 
 /**
- * A glossary word as a button. The explanation is always in the DOM and linked by `aria-describedby`;
- * it opens on hover, focus and tap, closes on Esc with focus kept on the button, and stays open while the pointer is over it.
+ * A word with an explanation, as a button. Give a glossary `term`, or a free-text `note` with a `label` for the
+ * button's accessible name (its visible text is then usually just a mark). The explanation is always in the DOM and
+ * linked by `aria-describedby`; `popoverId` lets the caller point a field at the same text. It opens on hover, focus
+ * and tap, closes on Esc with focus kept on the button, and stays open while the pointer is over it.
  */
-export function Term({ term, children }: { term: GlossaryKey; children?: ReactNode }) {
-    const entry = GLOSSARY[term]
-    const popoverId = useId()
+export type TermProps = (
+    | { term: GlossaryKey; note?: undefined; label?: undefined }
+    | { note: string; label: string; term?: undefined }
+) & { children?: ReactNode; popoverId?: string }
+
+export function Term({ term, note, label, children, popoverId: givenId }: TermProps) {
+    const entry = term === undefined ? undefined : GLOSSARY[term]
+    const generatedId = useId()
+    const popoverId = givenId ?? generatedId
     const wrapRef = useRef<HTMLSpanElement>(null)
     const popoverRef = useRef<HTMLSpanElement>(null)
     const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -80,6 +88,7 @@ export function Term({ term, children }: { term: GlossaryKey; children?: ReactNo
                 type="button"
                 className="term"
                 aria-describedby={popoverId}
+                aria-label={label}
                 onFocus={show}
                 onClick={(event) => {
                     // Enter or Space (detail 0) toggles; a pointer tap opens.
@@ -87,10 +96,10 @@ export function Term({ term, children }: { term: GlossaryKey; children?: ReactNo
                     else show()
                 }}
             >
-                {children ?? entry.term}
+                {children ?? entry?.term}
             </button>
             <span ref={popoverRef} id={popoverId} role="tooltip" className="term-popover t-preserve-case" data-open={open ? "true" : "false"}>
-                {entry.definition}
+                {note ?? entry?.definition}
             </span>
         </span>
     )

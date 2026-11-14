@@ -7,11 +7,11 @@ import { arrheniusUnitLabel } from "../domain/arrheniusChartLayout"
 import { buildKtpRequestGrid, groupKtpFitsByChannel, modelKindLabel } from "../domain/networkKtpChartLayout"
 import { channelRowId } from "../domain/networkMap"
 import { channelHandle } from "../domain/publicText"
-import { deposited, type Quantity } from "../domain/quantityFormat"
+import { evaluated, type Quantity } from "../domain/quantityFormat"
 import { useAnnounce } from "../hooks/useAnnounce"
 import { useOverflows } from "../hooks/useOverflows"
 import { Disclosure } from "./Disclosure"
-import { QuantityValue } from "./QuantityValue"
+import { QuantityValue, EVALUATED_NOTE } from "./QuantityValue"
 
 const COLUMN_COUNT = 8
 const CELL_W = 72
@@ -54,7 +54,7 @@ function superscript(exponent: string): string {
 
 /** The served k to 6 significant figures, as text, in the house form. */
 function kText(k: number): string {
-    const quantity: Quantity | null = deposited(k)
+    const quantity: Quantity | null = evaluated(k)
     if (!quantity) return "no value"
     return quantity.exponent ? `${quantity.value} × 10${superscript(quantity.exponent)}` : quantity.value
 }
@@ -246,7 +246,7 @@ export function NetworkKtpHeatmap({ networkRef, network, channels, states }: {
             <p className="ktp-readout" data-channel-key={channelHandle(fit.channel_key)}>
                 {`k at ${where(temperatureIndex, pressureIndex)}: `}
                 {picked
-                    ? link(<QuantityValue value={deposited(picked.k, unit)} />)
+                    ? link(<QuantityValue value={evaluated(picked.k, unit)} />)
                     : "no value"}
                 {picked && !picked.in_range && " (outside the stated range)"}
             </p>
@@ -315,7 +315,7 @@ export function NetworkKtpHeatmap({ networkRef, network, channels, states }: {
                                         return (
                                             <td key={option.fit.network_kinetics_ref} className="num">
                                                 {point
-                                                    ? <Fragment>{link(<QuantityValue value={deposited(point.k)} />)}{!point.in_range && <span title="Outside the stated range"> †</span>}</Fragment>
+                                                    ? <Fragment>{link(<QuantityValue value={evaluated(point.k)} />)}{!point.in_range && <span title="Outside the stated range"> †</span>}</Fragment>
                                                     : "n/a"}
                                             </td>
                                         )
@@ -325,6 +325,7 @@ export function NetworkKtpHeatmap({ networkRef, network, channels, states }: {
                         </tbody>
                     </table>
                 </div>
+                <p className="note">{EVALUATED_NOTE}</p>
             </Disclosure>
         </div>
     )

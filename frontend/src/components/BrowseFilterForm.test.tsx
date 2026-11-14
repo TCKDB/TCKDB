@@ -679,72 +679,58 @@ describe("Family select: only used families, readable labels", () => {
     })
 })
 
-// ---------------------------------------------------------------------------
-// Item 1 of the hover-hint fix: a field's explanation is no longer a
-// permanently-rendered paragraph under the field -- it is an `InlineExplain`
-// box, opened on demand from the field's own `<label>` (hover, keyboard
-// focus, or a tap/click) or from the field's `<input>` itself (keyboard
-// focus, the field's own natural, always-reachable tab stop). The
-// underlying facts (comma separation, same-side grouping, either-direction
-// matching, an unheld SMILES emptying the result) must all still be
-// present in the DOM -- just not drawn on screen until asked for.
-// ---------------------------------------------------------------------------
+describe("SMILES field: a short label with its scope explained on demand", () => {
+    const SCOPE = "Matches either the reactant or the product side of the reaction."
 
-describe("SMILES field: short label, hover/focus explanation instead of a permanent paragraph", () => {
-    it('is labeled "SMILES" (not "SMILES (reactant or product)"), with the scope explained on demand -- present in the DOM, but not drawn on screen until hover or focus', async () => {
+    it("is labelled SMILES, with the scope in a note that stays closed until asked for", async () => {
         server.use(...metaHandlers())
         renderForm("transition_state")
         await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
-        const field = screen.getByLabelText("SMILES")
-        expect(field).toBeInTheDocument()
-
-        const note = screen.getByText("Matches either the reactant or the product side of the reaction.")
-        // The permanently-rendered `<p className="browse-filter-hint">`
-        // this replaced would have been `toBeVisible()` here
-        // UNCONDITIONALLY -- asserting the closed state is what this test
-        // adds over the version it replaces.
-        expect(note).not.toBeVisible()
-        expect(field).toHaveAttribute("aria-describedby", note.id)
+        expect(screen.getByLabelText("SMILES")).toBeInTheDocument()
+        const note = screen.getByText(SCOPE)
+        expect(note).toHaveAttribute("data-open", "false")
+        expect(screen.getByRole("button", { name: "About SMILES" })).toHaveAttribute("aria-describedby", note.id)
+        expect(screen.getByLabelText("SMILES")).toHaveAttribute("aria-describedby", note.id)
     })
 
-    it("hovering the label opens the box; moving off it closes it again", async () => {
+    it("hovering the mark opens the note", async () => {
         server.use(...metaHandlers())
         renderForm("transition_state")
         await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
-        const label = screen.getByText("SMILES", { selector: "label" })
-        const note = screen.getByText("Matches either the reactant or the product side of the reaction.")
-
-        expect(note).not.toBeVisible()
-        fireEvent.mouseEnter(label)
-        expect(note).toBeVisible()
-        fireEvent.mouseLeave(label)
-        expect(note).not.toBeVisible()
+        const mark = screen.getByRole("button", { name: "About SMILES" })
+        const note = screen.getByText(SCOPE)
+        fireEvent.mouseEnter(mark)
+        expect(note).toHaveAttribute("data-open", "true")
     })
 
-    it("keyboard focus on the FIELD ITSELF (not just the label) opens the same box -- hover is not the only path", async () => {
+    it("moving off the mark closes the note again", async () => {
         server.use(...metaHandlers())
         renderForm("transition_state")
         await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
-        const field = screen.getByLabelText("SMILES")
-        const note = screen.getByText("Matches either the reactant or the product side of the reaction.")
-
-        expect(note).not.toBeVisible()
-        fireEvent.focus(field)
-        expect(note).toBeVisible()
-        fireEvent.blur(field)
-        expect(note).not.toBeVisible()
+        const mark = screen.getByRole("button", { name: "About SMILES" })
+        const note = screen.getByText(SCOPE)
+        fireEvent.mouseEnter(mark)
+        fireEvent.mouseLeave(mark)
+        await waitFor(() => expect(note).toHaveAttribute("data-open", "false"))
     })
 
-    it("a tap (a click, with no preceding hover) opens the box too -- the touch path, where there is no hover", async () => {
+    it("a tap on the mark opens the note, with no hover first", async () => {
+        const user = userEvent.setup()
         server.use(...metaHandlers())
         renderForm("transition_state")
         await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
-        const label = screen.getByText("SMILES", { selector: "label" })
-        const note = screen.getByText("Matches either the reactant or the product side of the reaction.")
+        const note = screen.getByText(SCOPE)
+        await user.click(screen.getByRole("button", { name: "About SMILES" }))
+        expect(note).toHaveAttribute("data-open", "true")
+    })
 
-        expect(note).not.toBeVisible()
-        fireEvent.click(label)
-        expect(note).toBeVisible()
+    it("keyboard focus on the mark opens the note", async () => {
+        server.use(...metaHandlers())
+        renderForm("transition_state")
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+        const note = screen.getByText(SCOPE)
+        fireEvent.focus(screen.getByRole("button", { name: "About SMILES" }))
+        expect(note).toHaveAttribute("data-open", "true")
     })
 })
 
@@ -1027,28 +1013,17 @@ describe("reaction kind: the direction control defaults to the backend's own def
     })
 })
 
-// ---------------------------------------------------------------------------
-// Renamed "Reactant structures" / "Product structures":
-// the matching-rules prose under these two
-// fields must be fully present -- comma separation, same-side
-// grouping, either-direction matching (the field's OWN explanation for
-// why the conventional "Reactant"/"Product" naming is accurate), and
-// an unheld SMILES emptying the result -- reachable on demand instead
-// of always rendered. Item 3: neither hint may contain a literal `--`.
-// ---------------------------------------------------------------------------
-
-describe("Reactant/Product structures: the either-direction matching rule moved into the hover/focus explanation, not deleted", () => {
-    it("both hints are present in the DOM but not drawn on screen until opened", async () => {
+describe("Reactant and product structures: the matching rules sit in notes opened on demand", () => {
+    it("both notes are present but closed until asked for", async () => {
         server.use(...metaHandlers())
         renderForm("reaction")
         await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
 
         const reactantNote = screen.getByText(/every one of them must sit together on the SAME side/)
         const productNote = screen.getByText(/every one of them must sit together on the side OPPOSITE/)
-        expect(reactantNote).not.toBeVisible()
-        expect(productNote).not.toBeVisible()
+        expect(reactantNote).toHaveAttribute("data-open", "false")
+        expect(productNote).toHaveAttribute("data-open", "false")
 
-        // No permanently-rendered hint paragraph survives for either field.
         expect(document.querySelectorAll(".browse-filter-hint")).toHaveLength(0)
     })
 
@@ -1079,37 +1054,30 @@ describe("Reactant/Product structures: the either-direction matching rule moved 
         expect(note.textContent).not.toContain("--")
     })
 
-    it("focusing the Reactant structures FIELD reveals its box; focusing Product structures does not open the reactant one", async () => {
+    it("focusing the Reactant structures mark opens its note and not the product one", async () => {
         server.use(...metaHandlers())
         renderForm("reaction")
         await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
-        const reactantField = screen.getByLabelText("Reactant structures")
-        const productField = screen.getByLabelText("Product structures")
         const reactantNote = screen.getByText(/every one of them must sit together on the SAME side/)
         const productNote = screen.getByText(/every one of them must sit together on the side OPPOSITE/)
 
-        fireEvent.focus(reactantField)
-        expect(reactantNote).toBeVisible()
-        expect(productNote).not.toBeVisible()
-        fireEvent.blur(reactantField)
-        expect(reactantNote).not.toBeVisible()
-
-        fireEvent.focus(productField)
-        expect(productNote).toBeVisible()
-        expect(reactantNote).not.toBeVisible()
+        fireEvent.focus(screen.getByRole("button", { name: "About Reactant structures" }))
+        expect(reactantNote).toHaveAttribute("data-open", "true")
+        expect(productNote).toHaveAttribute("data-open", "false")
+        fireEvent.blur(screen.getByRole("button", { name: "About Reactant structures" }))
+        fireEvent.focus(screen.getByRole("button", { name: "About Product structures" }))
+        expect(productNote).toHaveAttribute("data-open", "true")
+        await waitFor(() => expect(reactantNote).toHaveAttribute("data-open", "false"))
     })
 
-    it("each field's input carries aria-describedby pointing at its own note's id", async () => {
+    it("each mark points at its own note", async () => {
         server.use(...metaHandlers())
         renderForm("reaction")
         await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
-        const reactantField = screen.getByLabelText("Reactant structures")
-        const productField = screen.getByLabelText("Product structures")
         const reactantNote = screen.getByText(/every one of them must sit together on the SAME side/)
         const productNote = screen.getByText(/every one of them must sit together on the side OPPOSITE/)
-
-        expect(reactantField).toHaveAttribute("aria-describedby", reactantNote.id)
-        expect(productField).toHaveAttribute("aria-describedby", productNote.id)
+        expect(screen.getByRole("button", { name: "About Reactant structures" })).toHaveAttribute("aria-describedby", reactantNote.id)
+        expect(screen.getByRole("button", { name: "About Product structures" })).toHaveAttribute("aria-describedby", productNote.id)
         expect(reactantNote.id).not.toBe(productNote.id)
     })
 })

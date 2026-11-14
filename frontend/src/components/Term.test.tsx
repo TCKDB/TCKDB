@@ -66,6 +66,15 @@ describe("Term", () => {
         expect(popover()).toHaveAttribute("data-open", "false")
     })
 
+    it("takes free text and an accessible name for a mark, and uses a given id for the description", () => {
+        render(<Term note="Matches either side." label="About SMILES" popoverId="smiles-hint">?</Term>)
+        const button = screen.getByRole("button", { name: "About SMILES" })
+        expect(button).toHaveTextContent("?")
+        expect(button).toHaveAttribute("aria-describedby", "smiles-hint")
+        expect(popover()).toHaveAttribute("id", "smiles-hint")
+        expect(popover()).toHaveTextContent("Matches either side.")
+    })
+
     it("has a glossary entry, with a definition, for every key", () => {
         for (const entry of Object.values(GLOSSARY)) {
             expect(entry.term.length).toBeGreaterThan(0)
