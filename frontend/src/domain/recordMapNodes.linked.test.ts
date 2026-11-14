@@ -63,7 +63,7 @@ const all: Record<string, Case> = {
     },
     reactionOverview: {
         source: reactionOverviewPage,
-        nodes: reactionOverviewNodes({ entryRefs: many, total: 5, reactants: [p("a"), p("b")], products: [p("c"), p("d")] }),
+        nodes: reactionOverviewNodes({ entries: many.map((ref, index) => ({ ref, position: index + 1 })), total: 5, reactants: [p("a"), p("b")], products: [p("c"), p("d")] }),
     },
     levelOfTheory: {
         source: levelOfTheoryPage,

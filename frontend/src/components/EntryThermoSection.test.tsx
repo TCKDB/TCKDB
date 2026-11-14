@@ -781,6 +781,26 @@ describe("EntryThermoSection", () => {
         expect(seen.at(-1)).toEqual({ offset: "0", limit: "2" })
     })
 
+    it("numbers the records of a later page after those of the earlier pages, not from 1 again", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const url = new URL(request.url)
+            const start = Number(url.searchParams.get("offset") ?? 0)
+            const size = Number(url.searchParams.get("limit") ?? 2)
+            const all = mockRecords()
+            return HttpResponse.json(mockResponse({
+                records: all.slice(start, start + size),
+                pagination: { offset: start, limit: size, returned: all.slice(start, start + size).length, total: all.length },
+            }))
+        }))
+        page()
+        await screen.findByText("thm_alpha")
+        const numberOf = () => screen.getAllByRole("heading", { level: 3 }).flatMap((heading) => (/thermo record (\d+)$/.exec(heading.textContent ?? "") ? [Number(/(\d+)$/.exec(heading.textContent ?? "")![1])] : []))
+        expect(numberOf()).toEqual([1, 2])
+        fireEvent.click(await screen.findByRole("button", { name: "Next" }))
+        await screen.findByText(/Showing 3/)
+        expect(numberOf()).toEqual([3])
+    })
+
     function pagedHandler(seen: Array<{ offset: number; limit: number }>) {
         return http.get(ENDPOINT, ({ request }) => {
             const url = new URL(request.url)

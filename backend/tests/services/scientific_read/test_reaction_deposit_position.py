@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
 from app.schemas.reads.scientific_reactions import ReactionsBrowseRequest
-from app.services.scientific_read.reactions import browse_reactions
+from app.services.scientific_read.reactions import browse_reactions, reaction_entry_deposit_positions
 from tests.services.scientific_read._factories import (
     make_chem_reaction,
     make_reaction_entry,
@@ -15,8 +17,8 @@ from tests.services.scientific_read._factories import (
 )
 
 
-def _reaction_with_entries(session, n):
-    reactants = [make_species(session, smiles="[CH3]", inchi_key=next_inchi_key("R"))]
+def _reaction_with_entries(session, n, reactant_smiles="[CH3]"):
+    reactants = [make_species(session, smiles=reactant_smiles, inchi_key=next_inchi_key("R"))]
     products = [make_species(session, smiles="C", inchi_key=next_inchi_key("P"))]
     r_entries = [make_species_entry(session, sp) for sp in reactants]
     p_entries = [make_species_entry(session, sp) for sp in products]
@@ -72,3 +74,27 @@ def test_hidden_entry_leaves_a_gap(db_session):
     positions = _positions(db_session)
     assert entries[1].id not in positions
     assert positions == {entries[0].id: 1, entries[2].id: 3}
+
+
+def test_positions_follow_created_at_then_id(db_session):
+    _, entries = _reaction_with_entries(db_session, 4)
+    early = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    late = datetime(2024, 6, 1, tzinfo=timezone.utc)
+    # The last-created row (highest id) was deposited first; the other three tie, so ids order them.
+    entries[3].created_at = early
+    for e in entries[:3]:
+        e.created_at = late
+    db_session.flush()
+    assert _positions(db_session) == {
+        entries[3].id: 1,
+        entries[0].id: 2,
+        entries[1].id: 3,
+        entries[2].id: 4,
+    }
+
+
+def test_positions_ignore_other_reactions(db_session):
+    _, first = _reaction_with_entries(db_session, 2)
+    _, second = _reaction_with_entries(db_session, 2, reactant_smiles="[OH]")
+    positions = reaction_entry_deposit_positions(db_session, [first[1].id, second[0].id])
+    assert positions == {first[1].id: 2, second[0].id: 1}

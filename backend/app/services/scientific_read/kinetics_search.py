@@ -167,6 +167,7 @@ def search_kinetics(
             reaction_ref=r_record.reaction_ref,
             reaction_entry_id=r_record.reaction_entry_id,
             reaction_entry_ref=r_record.reaction_entry_ref,
+            deposit_position=r_record.deposit_position,
             equation=r_record.equation,
             reversible=r_record.reversible,
             family=r_record.family,

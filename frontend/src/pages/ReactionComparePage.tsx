@@ -14,7 +14,7 @@ import { Breadcrumbs } from "../components/Breadcrumbs"
 import { CompareCellView, CompareTable, type CompareTableGroup } from "../components/CompareTable"
 import { DataTable, type DataColumn } from "../components/DataTable"
 import { Profiles } from "../components/EnergyProfile"
-import { LevelLabel } from "../components/LevelLabel"
+import { LevelDetails, LevelLabel } from "../components/LevelLabel"
 import { ListNotes, WalkStatus } from "../components/NumbersTable"
 import { OrderNote } from "../components/OrderNote"
 import { SectionHeading } from "../components/PageSections"
@@ -59,7 +59,7 @@ export default function ReactionComparePage() {
         return <State title="Archive is busy" alert message={`The archive is receiving too many requests right now. Wait ${formatWaitSeconds(state.retryAfterSeconds)} and reload the page.`} />
     }
     if (state.status !== "ready" || !first) return <State title="Reaction unavailable" alert message="The archive response could not be read. Try again later." />
-    return <CompareDocument reactionRef={reactionRef} first={first} labels={speciesLabels(state.record.records)} versions={new Map(state.record.records.map((record) => [record.reaction_entry_ref, record.deposit_position]))} />
+    return <CompareDocument reactionRef={reactionRef} first={first} labels={speciesLabels(state.record.records)} />
 }
 
 function State({ title, busy, alert, message }: { title: string; busy?: boolean; alert?: boolean; message?: string }) {
@@ -181,14 +181,15 @@ function GroupProfiles({ group, position, reads, readRefs, labels, versions, inl
     if (!group.level || !group.program) {
         body = <p className="empty-projection">These records do not state both an energy level of theory and a program, so no energy profile can be matched to them.</p>
     } else if (matching.length > 0) {
-        body = <Profiles read={{ profiles: matching }} labels={labels} />
+        body = <Profiles read={{ profiles: matching }} labels={labels} showLevel={false} />
     } else {
         body = <p className="empty-projection">No complete energy profile is available at this level of theory from this program for the reaction entries of this group.</p>
     }
     return (
         <>
             <SectionHeading id={`compare-profile-${position}`} subsection label={heading}>{heading}</SectionHeading>
-            {group.level && <p className="note"><LevelLabel levelOfTheory={group.level} program={group.program?.text ?? null} />{group.levelDeclared && " (declared by the depositor)"}</p>}
+            {group.level && <LevelDetails levelOfTheory={group.level} program={group.program?.text ?? null} />}
+            {group.level && group.levelDeclared && <p className="note">The level of theory is declared by the depositor.</p>}
             {unread.length > 0 && <p className="note" role="note">Not read here: {unread.map((ref) => versionName(versions, ref)).join(", ")}. Open the entry's own page for its profile.</p>}
             {failed.length > 0 && <p className="note" role="alert">The energy profile of {failed.map((ref) => versionName(versions, ref)).join(", ")} could not be loaded.</p>}
             {body}
@@ -196,9 +197,10 @@ function GroupProfiles({ group, position, reads, readRefs, labels, versions, inl
     )
 }
 
-function CompareDocument({ reactionRef, first, labels, versions }: { reactionRef: string; first: ReactionOverviewRecord; labels: ReadonlyMap<string, string>; versions: ReadonlyMap<string, number> }) {
+function CompareDocument({ reactionRef, first, labels }: { reactionRef: string; first: ReactionOverviewRecord; labels: ReadonlyMap<string, string> }) {
     const state = useWalked(reactionRef, loadReactionKinetics)
     const data = state.status === "ready" ? state.data : null
+    const versions = useMemo(() => new Map((data?.records ?? []).map((row) => [row.entryRef, row.entryPosition] as const)), [data])
     const equation = <ReactionEquation reactants={first.reactants} products={first.products} reversible={first.reversible} formulaOnly={!equationNeedsStructure(first.reactants, first.products)} />
     const entryOrder = useMemo(() => [...new Set((data?.records ?? []).map((row) => row.entryRef))], [data])
     const readRefs = useMemo(() => entryOrder.slice(0, MAX_PROFILE_ENTRIES), [entryOrder])

@@ -80,5 +80,9 @@ describe("a level's disclosure beside prose", () => {
         expect(container.querySelector(".shape-spread li > details")).not.toBeNull()
         expect(container.querySelectorAll("p details")).toHaveLength(0)
         expect(nestingWarnings()).toEqual([])
+        // The label flows with the sentence, so the sentence does not break around it.
+        expect(getComputedStyle(container.querySelector(".shape-spread li .level-label") as Element).display).toBe("inline")
+        // Rows are told apart by position.
+        expect([...container.querySelectorAll("tbody th a")].map((link) => link.textContent)).toEqual(["Observation 1", "Observation 2"])
     })
 })

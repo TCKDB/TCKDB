@@ -107,6 +107,14 @@ describe("ValueSource", () => {
         expect(screen.getByRole("link")).toHaveAttribute("href", "/transition-state-entries/tse_a")
     })
 
+    it("on the record's own card names what it was made from, not the record itself", () => {
+        inRouter(<ValueSource own source={{ recordType: "kinetics", ref: "kin_a", to: "#kinetics-kin_a" }} position={1} programs={["Gaussian 16"]} review="approved" />)
+        expect(screen.queryByRole("link")).toBeNull()
+        const line = document.querySelector(".value-source")?.textContent ?? ""
+        expect(line).toMatch(/^Gaussian 16 · Review of this record: approved/)
+        expect(line).not.toMatch(/Source|Record 1/)
+    })
+
     it("shows an unknown record type as plain words, with no link and no ref", () => {
         inRouter(<ValueSource source={{ recordType: "something_new", ref: "xyz_a" }} />)
         expect(screen.queryByRole("link")).toBeNull()

@@ -165,3 +165,20 @@
     clip-path: inset(50%);
     white-space: nowrap;
 }
+
+/* The reaction-entries table stacks each row into labelled lines on a narrow screen instead of clipping its right columns. */
+@media (max-width: 680px) {
+    .reaction-entries-table { min-width: 0; }
+    .reaction-entries-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    .reaction-entries-table tr,
+    .reaction-entries-table th,
+    .reaction-entries-table td { display: block; width: auto; min-width: 0; }
+    .reaction-entries-table tr { padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--line-2); }
+    .reaction-entries-table td[data-label]::before {
+        content: attr(data-label);
+        display: block;
+        color: var(--muted);
+        font: var(--type-label-font);
+    }
+    .reaction-entries-table td.num { text-align: left; }
+}

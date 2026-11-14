@@ -225,7 +225,7 @@ function KineticsRecordCard({ record, position, calculationsByRef, dependencyEdg
             <p className="kinetics-record-source">
                 <ValueSource
                     source={{ recordType: "kinetics", ref: record.kinetics_ref, to: recordAnchor }}
-                    position={position}
+                    own
                     levels={sourceLevels}
                     programs={sourceProgram ? [sourceProgram] : []}
                     review={record.review.status}

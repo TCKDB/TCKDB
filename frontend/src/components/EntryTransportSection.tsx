@@ -115,7 +115,7 @@ function TransportList({ listKey, meta, onPage, linkedNote, response }: {
     const [reviewState, openReview] = useTransportSection<TransportRecord["review_history"]>(listKey, "review")
 
     return (
-        <RecordNumbersProvider refs={records.map((record) => record.transport.transport_ref)}>
+        <RecordNumbersProvider refs={records.map((record) => record.transport.transport_ref)} offset={pagination.offset}>
             <section className="ledger-section" aria-labelledby="transport-heading">
                 <div className="ledger-heading">
                     <p className="eyebrow">Deposited evidence</p>

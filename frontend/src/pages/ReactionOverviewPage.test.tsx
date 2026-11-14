@@ -267,6 +267,11 @@ describe("ReactionOverviewPage: version numbers", () => {
         expect(screen.getByRole("link", { name: "Reaction entry: Version 7" })).toHaveAttribute("href", "/reaction-entries/rxe_kftcgjn7zalusaouojwi23z3gy")
         expect(screen.queryByRole("link", { name: "Reaction entry: Version 41" })).toBeNull()
         expect(screen.getByText("Title from Version 3; versions can differ.")).toBeVisible()
+        // The map beside the page names the same versions by the same numbers as the table.
+        const toFirst = screen.getAllByRole("link").filter((link) => link.getAttribute("href") === "/reaction-entries/rxe_tku6xu2lt3girf2rsiwl5uds4e")
+        expect(toFirst.length).toBeGreaterThanOrEqual(2)
+        expect(toFirst.some((link) => link.closest("table") === null && /Version 3/.test(link.textContent ?? ""))).toBe(true)
+        expect(document.body.textContent).not.toMatch(/Reaction version \d|first reaction version/)
     })
 })
 

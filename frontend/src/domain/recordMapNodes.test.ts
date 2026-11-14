@@ -184,24 +184,24 @@ describe("transitionStateEntryNodes", () => {
 describe("reactionOverviewNodes", () => {
     it("shows two entries and says how many more are listed under Reaction entries", () => {
         const nodes = reactionOverviewNodes({
-            entryRefs: ["rxe_1", "rxe_2", "rxe_3"], total: 5, reactants: [participant("spe_a", "CH4")], products: [participant("spe_b", "CH3")],
+            entries: [{ ref: "rxe_1", position: 61 }, { ref: "rxe_2", position: 60 }, { ref: "rxe_3", position: 59 }], total: 61, reactants: [participant("spe_a", "CH4")], products: [participant("spe_b", "CH3")],
         })
         expect(ids(nodes)).toEqual(["rxe_1", "rxe_2", "more-entries", "reactant-0", "product-0"])
-        expect(nodes.slice(0, 2).map((n) => n.label)).toEqual(["Reaction version 1", "Reaction version 2"])
-        expect(byId(nodes, "reactant-0")?.relation).toBe("Reactant, first reaction version")
-        expect(byId(nodes, "more-entries")).toMatchObject({ label: "3 more under Reaction entries", to: "#entries-heading" })
+        expect(nodes.slice(0, 2).map((n) => n.label)).toEqual(["Version 61", "Version 60"])
+        expect(byId(nodes, "reactant-0")?.relation).toBe("Reactant, Version 61")
+        expect(byId(nodes, "more-entries")).toMatchObject({ label: "59 more under Reaction entries", to: "#entries-heading" })
     })
 
     it("adds no more-row when every entry is shown", () => {
-        const nodes = reactionOverviewNodes({ entryRefs: ["rxe_1"], total: 1, reactants: [], products: [] })
+        const nodes = reactionOverviewNodes({ entries: [{ ref: "rxe_1", position: 1 }], total: 1, reactants: [], products: [] })
         expect(ids(nodes)).toEqual(["rxe_1"])
     })
 
     it("keeps one molecule version per side and one row for the rest, at most six nodes", () => {
         const nodes = reactionOverviewNodes({
-            entryRefs: ["rxe_1", "rxe_2"], total: 9, reactants: [participant("a"), participant("b"), participant("c")], products: [participant("d"), participant("e")],
+            entries: [{ ref: "rxe_1", position: 1 }, { ref: "rxe_2", position: 2 }], total: 9, reactants: [participant("a"), participant("b"), participant("c")], products: [participant("d"), participant("e")],
         })
-        expect(byId(nodes, "participants-more")).toMatchObject({ label: "3 more molecule versions", to: "/reaction-entries/rxe_1" })
+        expect(byId(nodes, "participants-more")).toMatchObject({ label: "3 more molecule versions", relation: "Listed on Version 1", to: "/reaction-entries/rxe_1" })
         expect(nodes.length).toBeLessThanOrEqual(6)
     })
 })

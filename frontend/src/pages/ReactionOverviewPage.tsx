@@ -89,7 +89,7 @@ function ReactionChooser({ reactionRef }: { reactionRef: string }) {
         <ChooserDocument
             reactionRef={reactionRef}
             headerRecord={firstPage.record.records[0]}
-            firstPageEntryRefs={firstPage.record.records.map((record) => record.reaction_entry_ref)}
+            firstPageEntries={firstPage.record.records.map((record) => ({ ref: record.reaction_entry_ref, position: record.deposit_position }))}
             total={firstPage.record.pagination.total}
             kineticsTotal={firstPage.record.records.reduce((sum, record) => sum + record.availability.kinetics_count, 0)}
             records={shown?.records ?? []}
@@ -101,12 +101,12 @@ function ReactionChooser({ reactionRef }: { reactionRef: string }) {
     )
 }
 
-function ChooserDocument({ reactionRef, headerRecord, firstPageEntryRefs, total, kineticsTotal, records, pageStatus, reviewSummary, meta, onPage }: {
+function ChooserDocument({ reactionRef, headerRecord, firstPageEntries, total, kineticsTotal, records, pageStatus, reviewSummary, meta, onPage }: {
     reactionRef: string
     /** The first entry of the first page: the source of the title and equation, whatever page the table is on. */
     headerRecord: ReactionOverviewRecord
-    /** The refs of the first page of entries, the same page the header comes from. */
-    firstPageEntryRefs: readonly string[]
+    /** The first page of entries with their version numbers, the same page the header comes from. */
+    firstPageEntries: readonly { ref: string; position: number }[]
     total: number
     /** Kinetics records across the first page of entries; the compare link is offered from two. */
     kineticsTotal: number
@@ -122,7 +122,7 @@ function ChooserDocument({ reactionRef, headerRecord, firstPageEntryRefs, total,
     useDocumentTitle("Reaction", equationText(first.reactants, first.products, first.reversible))
     const mapParticipant = (p: (typeof first.reactants)[number]) => ({ entryRef: p.species_entry_ref, formula: p.formula, smiles: p.smiles })
     const mapNodes = reactionOverviewNodes({
-        entryRefs: firstPageEntryRefs,
+        entries: firstPageEntries,
         total,
         reactants: first.reactants.map(mapParticipant),
         products: first.products.map(mapParticipant),
@@ -177,7 +177,7 @@ function ChooserDocument({ reactionRef, headerRecord, firstPageEntryRefs, total,
                     {pageStatus !== "ready" && <p className="note" role="status">{pageStatus === "loading" || pageStatus === "retrying" ? "Loading this page of entries…" : "This page of entries could not be loaded."}</p>}
                     {meta && <ListPager meta={meta} noun="reaction entry" nounPlural="reaction entries" onPage={onPage} label="Reaction entries paging" />}
                     <div className="table-scroll">
-                        <table className="data-table" aria-label="Reaction entries">
+                        <table className="data-table reaction-entries-table" aria-label="Reaction entries">
                             <thead>
                                 <tr>
                                     <th scope="col">Entry</th>

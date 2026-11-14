@@ -1,6 +1,6 @@
 import { RecordLink } from "./RecordLink"
 import { LevelDetails, LevelLabel } from "./LevelLabel"
-import { calculationWords } from "../domain/recordWords"
+import { calculationWords, observationWords } from "../domain/recordWords"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { conformerLabel } from "../domain/conformerEvidence"
 import { calculationDid } from "../domain/calculationTypeFormat"
@@ -78,9 +78,9 @@ export function ShapeCalculations({ conformer, singlePoints, optimisations }: {
                                 </tr>
                             </thead>
                             <tbody>
-                                {rows.map((row) => (
+                                {rows.map((row, index) => (
                                     <tr key={row.observationRef}>
-                                        <th scope="row"><RecordLink kind="conformer-observation" to={`/conformer-observations/${row.observationRef}`} label="Observation" /></th>
+                                        <th scope="row"><RecordLink kind="conformer-observation" to={`/conformer-observations/${row.observationRef}`} label={observationWords(index + 1)} /></th>
                                         <td data-label="Optimisation and frequency calculations">
                                             {row.foundBy.length === 0 ? <span className="shape-energy-absent">No calculation recorded.</span> : (
                                                 <ul className="shape-cell-list">

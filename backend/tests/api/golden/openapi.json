@@ -11328,6 +11328,16 @@
             ],
             "title": "Energy Type"
           },
+          "level_of_theory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheorySummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "level_of_theory_ref": {
             "anyOf": [
               {
@@ -26310,6 +26320,10 @@
       "KineticsSearchReactionContext": {
         "description": "Resolved reaction/reaction-entry identity context for a kinetics record.\n\n``reaction_ref`` and ``reaction_entry_ref`` are the public\nstable handles alongside the integer IDs.",
         "properties": {
+          "deposit_position": {
+            "title": "Deposit Position",
+            "type": "integer"
+          },
           "equation": {
             "title": "Equation",
             "type": "string"
@@ -26371,6 +26385,7 @@
         "required": [
           "reaction_ref",
           "reaction_entry_ref",
+          "deposit_position",
           "equation",
           "reversible",
           "matched_direction",

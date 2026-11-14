@@ -235,7 +235,7 @@ describe("EnergyProfile", () => {
             cited_by_kinetics: [{
                 kinetics_ref: "kin_x",
                 calculations: [
-                    { role: "ts_energy", calculation_ref: "calc_cited", review_status: "approved", transition_state_entry_ref: "tse_one", level_of_theory_ref: "lot_c", energy_type: "single_point", electronic_energy_hartree: -115.19, software: software("16") },
+                    { role: "ts_energy", calculation_ref: "calc_cited", review_status: "approved", transition_state_entry_ref: "tse_one", level_of_theory_ref: "lot_c", level_of_theory: lot("lot_c", "ccsdt"), energy_type: "single_point", electronic_energy_hartree: -115.19, software: software("16") },
                     { role: "reactant_energy", calculation_ref: "calc_nulls", review_status: "not_reviewed", species_entry_ref: "spe_a", electronic_energy_hartree: null },
                 ],
             }],
@@ -249,29 +249,32 @@ describe("EnergyProfile", () => {
         expect(cited).toHaveTextContent("Transition-state energy")
         expect(within(cited).getByText("Level of theory", { selector: "th" })).toBeInTheDocument()
         expect(within(cited).queryByRole("link", { name: "Level of theory" })).toBeNull()
-        expect(cited).toHaveTextContent("not named here")
+        expect(cited).not.toHaveTextContent("not named here")
+        expect(within(cited).getByRole("link", { name: /^ccsdt\/def2tzvp/ })).toHaveAttribute("href", "/methods/lot_c")
         expect(cited).toHaveTextContent("not recorded")
         const profileTable = screen.getByRole("table", { name: /Every point of the selected profile/ })
         expect(profileTable).not.toHaveTextContent("calc_cited")
         expect(profileTable).not.toHaveTextContent("kin_x")
     })
 
-    it("names the level of a cited energy when the read gives that level, and says so when it does not", async () => {
+    it("names the level of a cited energy from the calculation itself, and says so when it has none", async () => {
         mount(read({
             profiles: [profile("tse_one", lot("lot_a", "wb97xd"), "Gaussian", [0, 3, -2])],
             cited_by_kinetics: [{
                 kinetics_ref: "kin_x",
                 calculations: [
-                    { role: "ts_energy", calculation_ref: "calc_known", review_status: "approved", transition_state_entry_ref: "tse_one", level_of_theory_ref: "lot_a", energy_type: "single_point", electronic_energy_hartree: -1.5, software: software("16") },
-                    { role: "ts_energy", calculation_ref: "calc_unknown", review_status: "approved", transition_state_entry_ref: "tse_one", level_of_theory_ref: "lot_elsewhere", energy_type: "single_point", electronic_energy_hartree: -1.6, software: software("16") },
+                    { role: "ts_energy", calculation_ref: "calc_known", review_status: "approved", transition_state_entry_ref: "tse_one", level_of_theory_ref: "lot_elsewhere", level_of_theory: lot("lot_elsewhere", "b3lyp"), energy_type: "single_point", electronic_energy_hartree: -1.5, software: software("16") },
+                    { role: "ts_energy", calculation_ref: "calc_unknown", review_status: "approved", transition_state_entry_ref: "tse_one", level_of_theory_ref: null, level_of_theory: null, energy_type: "single_point", electronic_energy_hartree: -1.6, software: software("16") },
                 ],
             }],
         }))
         await loaded()
         const cited = screen.getByRole("table", { name: /Calculations cited by each record/ })
         const [known, unknown] = [...cited.querySelectorAll("tbody tr")].map((row) => row.querySelector('[data-label="Level of theory"]')?.textContent)
-        expect(known).toContain("wb97xd/def2tzvp")
-        expect(unknown).toBe("not named here")
+        expect(known).toContain("b3lyp/def2tzvp")
+        expect(unknown).toBe("not recorded")
+        expect(cited.querySelector("tbody tr th")).toHaveClass("energy-profile-record")
+        expect(cited.querySelector('[data-label="Level of theory"] .level-label-cell')).not.toBeNull()
     })
 
     it("numbers the cited records by the page's numbering when it is given, and by the cited order when it is not", async () => {

@@ -1,6 +1,6 @@
 import { useId, useState } from "react"
 import { calculationWords } from "../domain/recordWords"
-import { baseLabel, levelKey, levelLine, qualifiersOf } from "../domain/levelLabel"
+import { baseLabel, inlineText, levelKey, levelLine, qualifiersOf } from "../domain/levelLabel"
 import { RecordLink } from "../components/RecordLink"
 import { GuideLink } from "../components/GuideLink"
 import { Link, useParams } from "react-router-dom"
@@ -64,6 +64,8 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
     const lot = record.level_of_theory
     // The heading is the short label (the facts below list every qualifier); the tab title adds them so levels sharing a short label differ.
     const title = baseLabel(lot)
+    // Levels sharing a method and basis differ only in these, so the line under the heading states them.
+    const stated = qualifiersOf(lot).map(inlineText).join(" · ")
     useDocumentTitle("Level of theory", levelLine(lot, new Map([[levelKey(lot), qualifiersOf(lot)]])))
 
     const mapNodes = levelOfTheoryNodes({
@@ -89,6 +91,7 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
                             glyph="level-of-theory"
                             lede={LEVEL_OF_THEORY_LEDE}
                             title={title}
+                            subtitle={stated || undefined}
                             ownRef={{ label: "Level of theory ref", value: lot.level_of_theory_ref }}
                             ownFacts={(
                                 <>

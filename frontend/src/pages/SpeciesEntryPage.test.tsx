@@ -63,7 +63,7 @@ type HandlerOptions = {
     // calc_sp_1b is computed at a second level of theory.
     twoLevels?: boolean
     // What the relative-energies read answers for the second shape.
-    energyAnswer?: "value" | "absent" | "disagree" | "reference_unavailable" | "multiple_recipes"
+    energyAnswer?: "value" | "absent" | "disagree" | "reference_unavailable" | "multiple_recipes" | "two_calculations"
     // calc_sp_3 (the second shape's energy) was run with ORCA, the reference's with Gaussian.
     twoPrograms?: boolean
     optFails?: boolean
@@ -436,6 +436,8 @@ function handlers(options: HandlerOptions = {}) {
                     ? member({ status: "absent", relative_energy_kj_mol: null, value_hartree: null, energy_calculation_refs: [], absent_reason: "multiple_recipes_at_level" })
                     : options.energyAnswer === "reference_unavailable"
                         ? member({ relative_energy_kj_mol: null, detail: ["reference_unavailable"] })
+                        : options.energyAnswer === "two_calculations"
+                            ? member({ energy_calculation_refs: ["calc_sp_3", "calc_sp_1b"] })
                         : options.energyAnswer === "disagree"
                             ? member({
                                 status: "unresolved", relative_energy_kj_mol: null, value_hartree: null, absent_reason: "repeat_values_disagree",
@@ -1617,6 +1619,14 @@ describe("species-entry page: relative energies on the shape cards", () => {
         expect(screen.getByRole("table", { name: /relative to Conformer Group 1 at b3lyp\/def2tzvp with Gaussian 16/ })).toBeVisible()
     })
 
+    it("numbers the calculations a value comes from when there are several, and names a single one plainly", async () => {
+        await openEntry({ energyAnswer: "two_calculations" })
+        const card = cardFor("Conformer Group 2")
+        await waitFor(() => expect(card).toHaveTextContent(/from Calculation 1, Calculation 2/))
+        expect(within(card).getByRole("link", { name: "Calculation 2" })).toHaveAttribute("href", "/calculations/calc_sp_1b")
+        expect(within(cardFor("Conformer Group 1")).queryByRole("link", { name: /Calculation \d/ })).not.toBeInTheDocument()
+    })
+
     it("words more than one recipe as not compared, never as a disagreement", async () => {
         await openEntry({ energyAnswer: "multiple_recipes" })
         expect(await within(cardFor("Conformer Group 2")).findByText("More than one recipe at this level; not compared.")).toBeVisible()
@@ -1673,7 +1683,7 @@ describe("species-entry page: calculations of the selected shape", () => {
         const region = await screen.findByRole("region", { name: "Table of calculations" })
         const rows = within(region).getAllByRole("row")
         expect(rows).toHaveLength(3)
-        expect(within(rows[1]).getByRole("link", { name: "Conformer observation: Observation" })).toHaveAttribute("href", "/conformer-observations/co_1")
+        expect(within(rows[1]).getByRole("link", { name: "Conformer observation: Observation 1" })).toHaveAttribute("href", "/conformer-observations/co_1")
         expect(rows[1].querySelectorAll('a[href="/calculations/calc_opt_1a"]').length).toBeGreaterThan(0)
         // Two single-point energies and the final energy of each of two optimisations, on one geometry.
         await waitFor(() => expect(within(rows[1]).getAllByRole("link", { name: /^[\u2212-]7\d\.\d+ hartree/ })).toHaveLength(4))

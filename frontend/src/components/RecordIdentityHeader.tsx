@@ -83,7 +83,7 @@ type OwnerProps =
     | { identity?: never; ownFacts: ReactNode }
 
 export function RecordIdentityHeader({
-    kicker, pill, glyph, review, lede, title, intro,
+    kicker, pill, glyph, review, lede, title, subtitle, intro,
     identity, facets, submissionRef, explainTransitionStateIdentity = true, ownRef, ownFacts,
 }: OwnerProps & {
     kicker: ReactNode
@@ -96,6 +96,8 @@ export function RecordIdentityHeader({
     lede?: LedeText
     /** A human label (a name, a formula or an equation), never the record's ref. */
     title: ReactNode
+    /** A short line directly under the title that tells records sharing the title apart. */
+    subtitle?: ReactNode
     /** An optional descriptive sentence
      *  between the h1 and the identity tier -- the same slot/role
      *  `SectionHeading`'s own `intro` prop plays for an in-page section,
@@ -130,6 +132,7 @@ export function RecordIdentityHeader({
             <h1 className="t-display-2 record-identity-title">
                 {title}
             </h1>
+            {subtitle && <p className="t-value record-identity-subtitle">{subtitle}</p>}
             {lede ? <Lede>{lede}</Lede> : intro && <p className="t-body section-intro">{intro}</p>}
             {identity ? (
                 <IdentityTier identity={identity} explainTransitionStateIdentity={explainTransitionStateIdentity} ownRef={ownRef} />

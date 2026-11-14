@@ -35,7 +35,7 @@ function CalculationLinks({ refs }: { refs: readonly string[] }) {
     return (
         <>
             {refs.map((ref, index) => (
-                <span key={ref}>{index > 0 && ", "}<RecordLink kind="calculation" to={`/calculations/${ref}`} label="Calculation" /></span>
+                <span key={ref}>{index > 0 && ", "}<RecordLink kind="calculation" to={`/calculations/${ref}`} label={refs.length > 1 ? `Calculation ${index + 1}` : "Calculation"} /></span>
             ))}
         </>
     )

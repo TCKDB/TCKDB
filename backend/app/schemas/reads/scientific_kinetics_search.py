@@ -207,6 +207,9 @@ class KineticsSearchReactionContext(BaseModel):
     reaction_ref: str
     reaction_entry_id: int
     reaction_entry_ref: str
+    #: 1-based deposit position of the entry among all entries of its reaction (filters, paging and review status
+    #: do not enter).
+    deposit_position: int
     equation: str
     reversible: bool
     family: str | None = None

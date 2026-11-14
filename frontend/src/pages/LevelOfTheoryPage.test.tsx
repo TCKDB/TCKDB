@@ -463,6 +463,25 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         expect(document.title).toContain("CCSD(T)/cc-pCVTZ · all electron")
     })
 
+    it("states the qualifiers under the heading so levels with one method and basis do not read alike, and nothing when there are none", async () => {
+        const record = baseRecord()
+        const served = (extra: Record<string, unknown>) => server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse({
+            ...record, level_of_theory: { ...record.level_of_theory, ...extra },
+        }))))
+        served({ pno_truncation: "tight", core_treatment: "frozen_core" })
+        const first = page()
+        const heading = await screen.findByRole("heading", { level: 1, name: "b3lyp/def2tzvp" })
+        expect(heading.nextElementSibling).toHaveTextContent(/^frozen core · PNO tight$/)
+        expect(first.container.querySelectorAll(".record-identity-subtitle")).toHaveLength(1)
+    })
+
+    it("prints no line under the heading when the level states no qualifier", async () => {
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord()))))
+        page()
+        await screen.findByRole("heading", { level: 1, name: "b3lyp/def2tzvp" })
+        expect(document.querySelector(".record-identity-subtitle")).toBeNull()
+    })
+
     it("tells the calculations at this level apart by visible numbered words", async () => {
         server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord({
             used_by: [

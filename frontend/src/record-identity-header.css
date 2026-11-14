@@ -36,6 +36,12 @@
     color: var(--ink);
 }
 
+.record-identity-subtitle {
+    margin: 0;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+
 /* A fact whose value can run long (a multi-fragment unmapped SMILES) --
    spans the full facts grid instead of being squeezed into one
    `minmax(12rem, 1fr)` column alongside short facts like charge/multiplicity. */

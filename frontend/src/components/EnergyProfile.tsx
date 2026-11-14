@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom"
 import { GuideLink } from "./GuideLink"
 import { Fragment, useId, useRef, useState } from "react"
 import "../energy-profile.css"
@@ -29,7 +30,6 @@ import { useScientificRecord } from "../hooks/useScientificRecord"
 import { Disclosure } from "./Disclosure"
 import { LevelLabel } from "./LevelLabel"
 import { RecordLink } from "./RecordLink"
-import type { LevelOfTheory } from "../api/scientificSchemas"
 import { OrderNote } from "./OrderNote"
 import { SectionHeading } from "./PageSections"
 import { ReviewChip } from "./ReviewChip"
@@ -217,7 +217,7 @@ function ProfileTable({ profile, labels, single, tsWords }: { profile: EnergyPro
     )
 }
 
-function ProfileView({ profile, labels, several, markPeak, tsWords }: { profile: EnergyProfileRecord; labels: ReadonlyMap<string, string>; several: boolean; markPeak: boolean; tsWords: (ref: string) => string }) {
+function ProfileView({ profile, labels, several, markPeak, tsWords, showLevel }: { profile: EnergyProfileRecord; labels: ReadonlyMap<string, string>; several: boolean; markPeak: boolean; tsWords: (ref: string) => string; showLevel: boolean }) {
     const captionId = useId()
     const boxRef = useRef<HTMLDivElement | null>(null)
     const overflows = useOverflows(boxRef)
@@ -228,7 +228,7 @@ function ProfileView({ profile, labels, several, markPeak, tsWords }: { profile:
         <div className="energy-profile-view">
             <dl className="kv-list energy-profile-facts">
                 {!markPeak && <div><dt>Transition-state entry</dt><dd><RecordLink kind="transition-state" to={`/transition-state-entries/${profile.transition_state_entry_ref}`} label={tsWords(profile.transition_state_entry_ref)} /> <ReviewChip status={profile.transition_state_entry_review_status} explain={false} /></dd></div>}
-                <div><dt>Level of theory</dt><dd><LevelLabel levelOfTheory={profile.level_of_theory} program={profile.program} /></dd></div>
+                {showLevel && <div><dt>Level of theory</dt><dd><LevelLabel levelOfTheory={profile.level_of_theory} program={profile.program} /></dd></div>}
             </dl>
             <figure className="energy-profile-figure">
                 {overflows && <p className="energy-profile-hint">Scroll sideways inside the box to see the whole picture. The table below has the same numbers.</p>}
@@ -290,12 +290,21 @@ function Unavailable({ read, single }: { read: EnergyProfileRead; single: boolea
     )
 }
 
-function CitedRow({ keyRef, position, calculation, labels, levels }: { keyRef: string; position: number; calculation: EnergyProfileCitedCalculation; labels: ReadonlyMap<string, string>; levels: ReadonlyMap<string, LevelOfTheory> }) {
+/** Where the kinetics records of the entry are listed, when that is not this page. */
+export type RecordsAt = { to: string; version: string | null }
+
+function CitedRow({ keyRef, position, calculation, labels, recordsAt }: { keyRef: string; position: number | undefined; calculation: EnergyProfileCitedCalculation; labels: ReadonlyMap<string, string>; recordsAt?: RecordsAt }) {
     const subject = citedSubjectRef(calculation)
     const subjectLabel = calculation.species_entry_ref ? labels.get(calculation.species_entry_ref) : undefined
     return (
         <tr>
-            <th scope="row"><a href={`#kinetics-${keyRef}`}>{recordWords(position)}</a></th>
+            {recordsAt
+                ? (
+                    <th scope="row" className={position ? "energy-profile-record" : undefined}>
+                        <Link to={`${recordsAt.to}#kinetics-${keyRef}`}>{position ? recordWords(position) : `A record of ${recordsAt.version ?? "this version"}`}</Link>
+                    </th>
+                )
+                : <th scope="row" className="energy-profile-record"><a href={`#kinetics-${keyRef}`}>{recordWords(position ?? 1)}</a></th>}
             <td data-label="What it cites">{roleWord(calculation.role)}{subject && <>{": "}<span className="t-preserve-case">{subjectLabel ?? (calculation.species_entry_ref ? "species" : "transition state")}</span></>}</td>
             <td data-label="Electronic energy">
                 {calculation.electronic_energy_hartree == null
@@ -303,10 +312,8 @@ function CitedRow({ keyRef, position, calculation, labels, levels }: { keyRef: s
                     : <ValueLink value={hartreeText(calculation.electronic_energy_hartree)} unit="hartree" to={`/calculations/${calculation.calculation_ref}`} />}
             </td>
             <td data-label="Level of theory">
-                {calculation.level_of_theory_ref
-                    ? (levels.has(calculation.level_of_theory_ref)
-                        ? <LevelLabel levelOfTheory={levels.get(calculation.level_of_theory_ref)!} program={calculation.software ? programText(calculation.software) : null} />
-                        : <span className="energy-profile-absent">not named here</span>)
+                {calculation.level_of_theory
+                    ? <span className="level-label-cell"><LevelLabel levelOfTheory={calculation.level_of_theory} program={calculation.software ? programText(calculation.software) : null} /></span>
                     : "not recorded"}
             </td>
             <td data-label="Kind of energy">{energyTypeWord(calculation.energy_type)}</td>
@@ -316,14 +323,10 @@ function CitedRow({ keyRef, position, calculation, labels, levels }: { keyRef: s
     )
 }
 
-function CitedEnergies({ read, labels, recordNumbers }: { read: EnergyProfileRead; labels: ReadonlyMap<string, string>; recordNumbers?: ReadonlyMap<string, number> }) {
-    const rows = read.cited_by_kinetics.flatMap((record, position) => record.calculations.map((calculation) => ({ ref: record.kinetics_ref, position: recordNumbers?.get(record.kinetics_ref) ?? position + 1, calculation })))
+function CitedEnergies({ read, labels, recordNumbers, recordsAt }: { read: EnergyProfileRead; labels: ReadonlyMap<string, string>; recordNumbers?: ReadonlyMap<string, number>; recordsAt?: RecordsAt }) {
+    // Away from the page that lists the records, a number is claimed only when the list gave one.
+    const rows = read.cited_by_kinetics.flatMap((record, position) => record.calculations.map((calculation) => ({ ref: record.kinetics_ref, position: recordsAt ? recordNumbers?.get(record.kinetics_ref) : (recordNumbers?.get(record.kinetics_ref) ?? position + 1), calculation })))
     if (rows.length === 0) return null
-    // Structured levels of this read, keyed by ref: a cited calculation names only its level's ref.
-    const levels = new Map<string, LevelOfTheory>()
-    for (const item of [...read.profiles.map((profile) => profile.level_of_theory), ...read.unavailable.flatMap((item) => (item.level_of_theory ? [item.level_of_theory] : []))]) {
-        if (item.level_of_theory_ref) levels.set(item.level_of_theory_ref, item)
-    }
     return (
         <div className="energy-profile-cited">
             <h3 className="t-heading-2">Energies a record cites</h3>
@@ -343,7 +346,7 @@ function CitedEnergies({ read, labels, recordNumbers }: { read: EnergyProfileRea
                         </tr>
                     </thead>
                     <tbody>
-                        {rows.map(({ ref, position, calculation }) => <CitedRow key={`${ref}-${calculation.role}-${calculation.calculation_ref}`} keyRef={ref} position={position} calculation={calculation} labels={labels} levels={levels} />)}
+                        {rows.map(({ ref, position, calculation }) => <CitedRow key={`${ref}-${calculation.role}-${calculation.calculation_ref}`} keyRef={ref} position={position} calculation={calculation} labels={labels} recordsAt={recordsAt} />)}
                     </tbody>
                 </table>
             </div>
@@ -352,7 +355,13 @@ function CitedEnergies({ read, labels, recordNumbers }: { read: EnergyProfileRea
 }
 
 /** The picker and the chosen profile; `read` needs only its profiles. */
-export function Profiles({ read, labels, markPeak = false }: { read: Pick<EnergyProfileRead, "profiles"> & Partial<Pick<EnergyProfileRead, "unavailable">>; labels: ReadonlyMap<string, string>; markPeak?: boolean }) {
+export function Profiles({ read, labels, markPeak = false, showLevel = true }: {
+    read: Pick<EnergyProfileRead, "profiles"> & Partial<Pick<EnergyProfileRead, "unavailable">>
+    labels: ReadonlyMap<string, string>
+    markPeak?: boolean
+    /** False under a heading that already names the level and program. */
+    showLevel?: boolean
+}) {
     const pickerId = useId()
     const [index, setIndex] = useState(0)
     const optionLabels = profileLabels(read.profiles, read)
@@ -376,7 +385,7 @@ export function Profiles({ read, labels, markPeak = false }: { read: Pick<Energy
                         : "By TS entry, then level and program."} />
                 </div>
             )}
-            {chosen && <ProfileView profile={chosen} labels={labels} several={read.profiles.length > 1} markPeak={markPeak} tsWords={tsWords} />}
+            {chosen && <ProfileView profile={chosen} labels={labels} several={read.profiles.length > 1} markPeak={markPeak} tsWords={tsWords} showLevel={showLevel} />}
         </>
     )
 }
@@ -387,11 +396,13 @@ export function Profiles({ read, labels, markPeak = false }: { read: Pick<Energy
  * stay a separate table. With `onlyTransitionState` the read is narrowed to that transition-state entry's own profiles
  * and reasons, its peak is marked, and the rate records' cited energies are kept only where they cite this transition state.
  */
-export function EnergyProfile({ entryRef, speciesLabels, onlyTransitionState, recordNumbers }: {
+export function EnergyProfile({ entryRef, speciesLabels, onlyTransitionState, recordNumbers, recordsAt }: {
     entryRef: string
     speciesLabels: ReadonlyMap<string, string>
     /** The page's one "Record N" numbering by kinetics ref; the cited order when absent. */
     recordNumbers?: ReadonlyMap<string, number>
+    /** Set on a page that does not list the entry's records: cited records link to where they are listed. */
+    recordsAt?: RecordsAt
     onlyTransitionState?: string
 }) {
     const state = useScientificRecord(entryRef, loadReactionEnergyProfile)
@@ -422,7 +433,7 @@ export function EnergyProfile({ entryRef, speciesLabels, onlyTransitionState, re
                     {onlyTransitionState && read.profiles.length === 0 && read.unavailable.length === 0 && (
                         <p className="note">The energy profile read gives no reason for this transition state: it was not among the entries it listed.</p>
                     )}
-                    <CitedEnergies read={read} labels={speciesLabels} recordNumbers={recordNumbers} />
+                    <CitedEnergies read={read} labels={speciesLabels} recordNumbers={recordNumbers} recordsAt={recordsAt} />
                     {hiddenNotes(read).map((note) => <p className="note" role="note" key={note}>{onlyTransitionState ? `For this reaction entry: ${note}` : note}</p>)}
                 </>
             )}

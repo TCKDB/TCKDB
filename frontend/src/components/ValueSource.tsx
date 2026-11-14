@@ -39,7 +39,7 @@ export type ValueSourceRecord = {
  * own page, else its container's, else the ref is plain text. `review` is the review of the linked
  * record. `compact` is the short form: "from <ref>".
  */
-export function ValueSource({ source, did, position, levels, programs, review, compact = false, showDetails = false }: {
+export function ValueSource({ source, did, position, levels, programs, review, compact = false, showDetails = false, own = false }: {
     source: ValueSourceRecord
     /** A calculation type code (`opt`, `freq`, `sp`...); shown as TCKDB wording, omitted when unknown. */
     did?: string | null
@@ -51,6 +51,8 @@ export function ValueSource({ source, did, position, levels, programs, review, c
     compact?: boolean
     /** Put each level's qualifiers (as a "details" disclosure) after the line. Leave off when the line sits in a paragraph. */
     showDetails?: boolean
+    /** The line sits on the source record's own card: the record is not named, only what it was made from. */
+    own?: boolean
 }) {
     const location = resolveRecordLocation(source.recordType, source.ref, source.container?.recordType ?? null, source.container?.ref ?? null)
     const kind = SOURCE_KIND[source.recordType]
@@ -78,8 +80,9 @@ export function ValueSource({ source, did, position, levels, programs, review, c
     return (
         <>
             <span className="value-source">
-                <span className="value-source-key">Source</span> {link}
-                {parts.map((part, index) => <Fragment key={index}>{" · "}{part}</Fragment>)}
+                {own
+                    ? parts.map((part, index) => <Fragment key={index}>{index > 0 && " · "}{part}</Fragment>)
+                    : <><span className="value-source-key">Source</span> {link}{parts.map((part, index) => <Fragment key={index}>{" · "}{part}</Fragment>)}</>}
             </span>
             {detailed.map((level) => <LevelDetails key={levelKey(level)} levelOfTheory={level} />)}
         </>

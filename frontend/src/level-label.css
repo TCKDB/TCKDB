@@ -8,3 +8,6 @@
 .level-label-pieces > div { display: contents; }
 .level-label-pieces dt { color: var(--faint); }
 .level-label-pieces dd { margin: 0; overflow-wrap: anywhere; }
+/* Inside a sentence the label flows with the words around it instead of breaking before and after itself. */
+.shape-spread .level-label,
+.shape-cell-list .level-label { display: inline; }

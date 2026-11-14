@@ -382,6 +382,16 @@ export async function loadReactionEntryParticipants(
     return parseScientificResponse(reactionFullResponseSchema.pick({ reaction_entry: true, species: true }), payload, "reaction entry")
 }
 
+/** The entry, its participating species and its kinetics records in the order the entry's own page lists them. */
+export async function loadReactionEntryKinetics(
+    ref: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<Pick<ReactionFullRecord, "reaction_entry" | "species" | "kinetics">> {
+    const payload = await fetchFull(ref, ["species", "kinetics"], signal, onRateLimited)
+    return parseScientificResponse(reactionFullResponseSchema.pick({ reaction_entry: true, species: true, kinetics: true }), payload, "reaction entry")
+}
+
 // ---------------------------------------------------------------------------
 // §3C fallback -- `networks/search?reaction_entry_ref=...&include=reactions`
 // against an API that does not yet serve `include=networks` on `/full`.

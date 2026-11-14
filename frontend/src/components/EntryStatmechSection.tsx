@@ -203,7 +203,7 @@ function StatmechList({ listKey, meta, onPage, linkedNote, response, conformer, 
     }, [openSettings])
 
     return (
-        <RecordNumbersProvider refs={records.map((record) => record.statmech.statmech_ref)}>
+        <RecordNumbersProvider refs={records.map((record) => record.statmech.statmech_ref)} offset={pagination.offset}>
         <SettingsStateContext.Provider value={settingsState}>
             <section className="ledger-section" aria-labelledby="statmech-heading">
                 <div className="ledger-heading">

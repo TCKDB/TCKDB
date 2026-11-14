@@ -30,7 +30,13 @@ function participant(ref: string, smiles: string, formula: string, index: number
 }
 
 // The parent reaction entry's participants: what names the reaction on this page.
-function participantsRead() {
+const KINETICS = (ref: string) => ({
+    kinetics_ref: ref, scientific_origin: "computed", model_kind: "modified_arrhenius", review: { status: "not_reviewed" },
+    parameters: { A: 1, A_units: "cm3_mol_s", n: 0, Ea_kj_mol: 10 }, is_third_body: false, uncertainty: {},
+    evidence_completeness: { score: 0, max: 9, checklist: {} }, provenance: {},
+})
+
+function participantsRead(kinetics: string[] = []) {
     return {
         reaction_entry: {
             reaction_entry_ref: REACTION_ENTRY_REF,
@@ -47,6 +53,7 @@ function participantsRead() {
             reactants: [participant("spe_ch4", "C", "CH4", 0), participant("spe_oh", "[OH]", "OH", 1)],
             products: [participant("spe_ch3", "[CH3]", "CH3", 0), participant("spe_h2o", "O", "H2O", 1)],
         },
+        kinetics: kinetics.map(KINETICS),
     }
 }
 
@@ -1688,10 +1695,33 @@ describe("TransitionStateEntryPage -- the redesigned page", () => {
         const table = await screen.findByRole("table", { name: /Calculations cited by each record/ })
         expect(within(table).getByRole("link", { name: /115\.2/ })).toHaveAttribute("href", "/calculations/calc_cited_mine")
         expect(within(table).getAllByRole("row")).toHaveLength(2)
-        expect(table).toHaveTextContent("Record 1")
         expect(table).not.toHaveTextContent("Record 2")
         expect(table).not.toHaveTextContent("Rate record")
         expect(table).not.toHaveTextContent(/kin_/)
+    })
+
+    it("cited energies: number the records as the reaction entry's page does and link to that page", async () => {
+        withRecord()
+        server.use(
+            http.get(`/api/v1/scientific/reaction-entries/${REACTION_ENTRY_REF}/full`, () => HttpResponse.json(participantsRead(["kin_other", "kin_mine"]))),
+            http.get(`/api/v1/scientific/reaction-entries/${REACTION_ENTRY_REF}/energy-profile`, () => HttpResponse.json(citedRead())),
+        )
+        page()
+        const table = await screen.findByRole("table", { name: /Calculations cited by each record/ })
+        const link = await within(table).findByRole("link", { name: "Record 2" })
+        expect(link).toHaveAttribute("href", `/reaction-entries/${REACTION_ENTRY_REF}#kinetics-kin_mine`)
+        expect(table).not.toHaveTextContent("Record 1")
+        expect(table.querySelector('a[href^="#"]')).toBeNull()
+    })
+
+    it("cited energies: without the entry's numbering, name the version instead of inventing a number", async () => {
+        withRecord()
+        server.use(http.get(`/api/v1/scientific/reaction-entries/${REACTION_ENTRY_REF}/energy-profile`, () => HttpResponse.json(citedRead())))
+        page()
+        const table = await screen.findByRole("table", { name: /Calculations cited by each record/ })
+        const link = await within(table).findByRole("link", { name: "A record of Version 2" })
+        expect(link).toHaveAttribute("href", `/reaction-entries/${REACTION_ENTRY_REF}#kinetics-kin_mine`)
+        expect(table).not.toHaveTextContent(/Record \d/)
     })
 
     it("cited energies: no table when none cites this entry", async () => {

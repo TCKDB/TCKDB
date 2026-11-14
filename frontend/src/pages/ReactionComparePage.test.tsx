@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import App from "../App"
@@ -43,6 +43,8 @@ const K4: Spec = { ref: "kin_four", level: null, software: null, A: 5e9, n: 0.5,
 
 const ENTRY_OF: Record<string, string> = { kin_one: "rxe_one", kin_two: "rxe_one", kin_three: "rxe_two", kin_four: "rxe_two", kin_five: "rxe_one", kin_six: "rxe_one" }
 
+const POSITION_OF: Record<string, number> = { rxe_one: 1, rxe_two: 2 }
+
 const participant = (ref: string, smiles: string, formula: string, index: number) => ({ species_entry_ref: ref, smiles, formula, stoichiometry: 1, participant_index: index })
 const overview = () => ({
     review_summary: summary,
@@ -70,11 +72,14 @@ function profile(level: typeof lotA, program: string, tse: string, version = pro
 
 const profileRead = (ref: string, profiles: object[]) => ({ request: { hidden_by_default: null, hidden_by_default_by_scope: {} }, reaction_entry_ref: ref, profiles, unavailable: [], cited_by_kinetics: [] })
 
-type Options = { records?: object[]; overviewPayload?: object; profiles?: Record<string, object[]>; entryOf?: Record<string, string>; onProfile?: (ref: string) => void }
+type Options = { records?: object[]; overviewPayload?: object; profiles?: Record<string, object[]>; entryOf?: Record<string, string>; positionOf?: Record<string, number>; onProfile?: (ref: string) => void }
 
 function handlers(options: Options = {}) {
     const records = options.records ?? [K1, K2, K3, K4].map(kinetics)
-    const rows = records.map((record) => ({ reaction: { reaction_ref: reactionRef, reaction_entry_ref: (options.entryOf ?? ENTRY_OF)[(record as { kinetics_ref: string }).kinetics_ref] }, kinetics: record }))
+    const rows = records.map((record) => {
+        const entry = (options.entryOf ?? ENTRY_OF)[(record as { kinetics_ref: string }).kinetics_ref]
+        return { reaction: { reaction_ref: reactionRef, reaction_entry_ref: entry, deposit_position: (options.positionOf ?? POSITION_OF)[entry] ?? 1 }, kinetics: record }
+    })
     const profiles = options.profiles ?? { rxe_one: [profile(lotA, "Gaussian", "tse_one"), profile(lotB, "Orca", "tse_one"), profile(lotB, "Gaussian", "tse_one"), profile(lotA, "Orca", "tse_one"), profile(lotA, "Gaussian", "tse_one", "09")], rxe_two: [profile(lotB, "Orca", "tse_two")] }
     return [
         http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(options.overviewPayload ?? overview())),
@@ -240,10 +245,13 @@ describe("reaction compare page", () => {
         expect(document.querySelectorAll(".energy-profile-picker")).toHaveLength(0)
         const first = sections[0].parentElement as HTMLElement
         const groupOne = Array.from(document.querySelectorAll(".energy-profile-view"))[0] as HTMLElement
-        expect(groupOne).toHaveTextContent("wb97xd/def2tzvp")
-        expect(groupOne).not.toHaveTextContent("ccsdt/ccpvtz")
         const second = Array.from(document.querySelectorAll(".energy-profile-view"))[1] as HTMLElement
-        expect(second).toHaveTextContent("ccsdt/ccpvtz")
+        // Each profile sits under its own group's heading, which is where its level and program are stated.
+        expect(sections[0].compareDocumentPosition(groupOne) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+        expect(groupOne.compareDocumentPosition(sections[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+        expect(sections[1].compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+        expect(second.compareDocumentPosition(sections[2]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+        expect(groupOne).not.toHaveTextContent("ccsdt/ccpvtz")
         expect(second).not.toHaveTextContent("wb97xd/def2tzvp")
         expect(first).toBeTruthy()
         expect(screen.getByText(/do not state both an energy level of theory and a program/)).toBeInTheDocument()
@@ -264,8 +272,31 @@ describe("reaction compare page", () => {
         await waitFor(() => expect(contents).toHaveTextContent("wb97xd/def2tzvp · Gaussian 16"))
         expect(contents).toHaveTextContent("ccsdt/ccpvtz · Orca 6.0")
         expect(contents.textContent).not.toMatch(/compare-profile/)
-        const level = headings[0].nextElementSibling as HTMLElement
-        expect(level.querySelector("a.level-label-text")).toHaveTextContent("wb97xd/def2tzvp · Gaussian 16")
+        const section = headings[0].parentElement as HTMLElement
+        // The heading already says the level and program: the profile does not say them again.
+        expect(within(section).queryByText("Level of theory", { selector: "dt" })).toBeNull()
+        expect(section.textContent?.match(/wb97xd\/def2tzvp/g)).toHaveLength(1)
+    })
+
+    it("puts a group's qualifier disclosure beside its heading, never inside a paragraph, without repeating the level", async () => {
+        const errors = vi.spyOn(console, "error").mockImplementation(() => undefined)
+        try {
+            const qualified = { ...lotA, pno_truncation: "tight" }
+            const kinetic = records({ ...K1, level: qualified }, { ...K2, level: qualified })
+            await open({ records: kinetic, profiles: { rxe_one: [profile(qualified, "Gaussian", "tse_one")] } })
+            await table()
+            await waitFor(() => expect(document.querySelectorAll("svg.energy-profile-svg").length).toBe(1))
+            const heading = screen.getAllByRole("heading", { level: 3 })[0]
+            const details = heading.parentElement?.querySelector(".level-label-details") as HTMLElement
+            expect(details).not.toBeNull()
+            expect(details.closest("p")).toBeNull()
+            expect(within(details).getByText("tight")).toBeInTheDocument()
+            expect(heading.parentElement?.querySelector(".energy-profile-facts")?.textContent).not.toContain("Level of theory")
+            const warnings = errors.mock.calls.map((call) => call.map(String).join(" ")).filter((message) => /validateDOMNesting|cannot be a descendant|cannot contain/.test(message))
+            expect(warnings).toEqual([])
+        } finally {
+            errors.mockRestore()
+        }
     })
 
     it("gives the list's level cell room, and wraps long labels at word breaks only", async () => {
@@ -299,13 +330,21 @@ describe("reaction compare page", () => {
         expect(document.body.textContent).not.toContain("Program of the energy calculation")
     })
 
-    it("names each record's version by the server's deposit position", async () => {
+    it("names each version by the deposit position its kinetics records carry, not by the overview page", async () => {
         const payload = overview()
-        await open({ overviewPayload: { ...payload, records: [{ ...payload.records[0], deposit_position: 4 }], pagination: { offset: 30, limit: 50, returned: 1, total: 31 } } })
+        await open({
+            overviewPayload: { ...payload, pagination: { offset: 0, limit: 50, returned: 1, total: 61 } },
+            positionOf: { rxe_one: 61, rxe_two: 60 },
+        })
         const grid = await table()
         const head = within(grid).getAllByRole("columnheader").find((cell) => cell.textContent?.startsWith("Record 1")) as HTMLElement
-        expect(within(head).getByRole("link", { name: "Reaction entry: Version 4" })).toBeInTheDocument()
-        expect(screen.queryByRole("link", { name: "Reaction entry: Version 31" })).toBeNull()
+        expect(within(head).getByRole("link", { name: "Reaction entry: Version 61" })).toBeInTheDocument()
+        const third = within(grid).getAllByRole("columnheader").find((cell) => cell.textContent?.startsWith("Record 3")) as HTMLElement
+        expect(within(third).getByRole("link", { name: "Reaction entry: Version 60" })).toBeInTheDocument()
+        const list = await screen.findByRole("region", { name: "Rate records as a list" })
+        expect(within(list).getByRole("link", { name: "Record 1, Version 61" })).toBeInTheDocument()
+        expect(within(list).getByRole("link", { name: "Record 3, Version 60" })).toBeInTheDocument()
+        expect(document.body.textContent).not.toContain("Another version")
     })
 
     it("names the order and offers the list view with sort buttons", async () => {

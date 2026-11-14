@@ -1103,6 +1103,11 @@ def reaction_entry_deposit_positions(
             )
             .label("position"),
         )
+        .where(
+            ReactionEntry.reaction_id.in_(
+                select(ReactionEntry.reaction_id).where(ReactionEntry.id.in_(entry_ids))
+            )
+        )
     ).subquery()
     rows = session.execute(
         select(ranked.c.entry_id, ranked.c.position).where(ranked.c.entry_id.in_(entry_ids))

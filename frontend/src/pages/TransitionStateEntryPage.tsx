@@ -1,5 +1,6 @@
 import { GuideLink } from "../components/GuideLink"
 import { calculationWords, versionWords } from "../domain/recordWords"
+import { numberRefs } from "../domain/recordNumbers"
 import { transitionStateWords } from "../domain/recordWords"
 import { RecordLink } from "../components/RecordLink"
 import { geometryWords } from "../domain/recordWords"
@@ -7,7 +8,7 @@ import { useMemo, type ReactNode } from "react"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../transition-state-entry.css"
-import { loadReactionEntryParticipants } from "../api/reactionEntryApi"
+import { loadReactionEntryKinetics } from "../api/reactionEntryApi"
 import { BROWSE_KIND_PATHS } from "../api/browseApi"
 import type { StructureAssessment, TransitionStateEntryRecord } from "../api/transitionStateEntryApi"
 import { loadTransitionStateEntry } from "../api/transitionStateEntryApi"
@@ -167,8 +168,10 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
     } = record
     const trust = record.trust ?? null
 
-    const participants = useLoaded(loadReactionEntryParticipants, reaction.reaction_entry_ref ?? null)
+    const participants = useLoaded(loadReactionEntryKinetics, reaction.reaction_entry_ref ?? null)
     const species = participants.status === "ready" ? participants.data.species : null
+    // The numbers the reaction entry's own page gives its records.
+    const entryRecordNumbers = useMemo(() => (participants.status === "ready" ? numberRefs((participants.data.kinetics ?? []).map((item) => item.kinetics_ref)) : undefined), [participants])
     const reactants = useMemo(() => species?.reactants ?? [], [species])
     const products = useMemo(() => species?.products ?? [], [species])
     const equationKnown = reactants.length > 0 && products.length > 0
@@ -292,7 +295,13 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                 )}
             >
                 {reaction.reaction_entry_ref ? (
-                    <EnergyProfile entryRef={reaction.reaction_entry_ref} speciesLabels={speciesLabels} onlyTransitionState={entry.transition_state_entry_ref} />
+                    <EnergyProfile
+                        entryRef={reaction.reaction_entry_ref}
+                        speciesLabels={speciesLabels}
+                        onlyTransitionState={entry.transition_state_entry_ref}
+                        recordNumbers={entryRecordNumbers}
+                        recordsAt={{ to: `/reaction-entries/${reaction.reaction_entry_ref}`, version: participants.status === "ready" ? versionWords(participants.data.reaction_entry.deposit_position) : null }}
+                    />
                 ) : (
                     <section className="energy-profile" aria-labelledby="energy-heading">
                         <SectionHeading id="energy-heading">Energy hill</SectionHeading>

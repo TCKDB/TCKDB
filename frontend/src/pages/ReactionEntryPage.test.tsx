@@ -1271,7 +1271,9 @@ describe("ReactionEntryPage -- the energy hill, the scheme and the numbers", () 
         expect(within(section).getByRole("heading", { name: "Numbers for this entry" })).toBeInTheDocument()
         expect(section).toHaveTextContent("Listed approved first, then newest deposited first. This order is not a recommendation.")
         expect(within(section).getAllByRole("link").filter((anchor) => /3025\.44|3\.11242|39\.9711/.test(anchor.textContent ?? ""))).toHaveLength(0)
-        expect(section.querySelector(".value-source")).toHaveTextContent("Source Record 1")
+        // The card is Record 1 already; its source line does not name it again.
+        expect(section.querySelector(".value-source")?.textContent).not.toMatch(/Source|Record 1/)
+        expect(section.querySelector(".value-source a")).toBeNull()
         expect(section.querySelector(".value-source")).toHaveTextContent("Review of this record: not reviewed")
     })
 

@@ -219,11 +219,11 @@ function ThermoList({ response, meta, onPage, linkedNote, conformer, conformers 
     // ("NASA-7 thermo record 1".."NASA-7 thermo record 7") for content a
     // reader only needs to visit once.
     const representativeRecords = groupByFingerprint(records, thermoRecordFingerprint).map((group) => group.records[0])
-    const numbers = useMemo(() => numberRefs(records.map((record) => record.thermo_ref)), [records])
+    const numbers = useMemo(() => numberRefs(records.map((record) => record.thermo_ref), pagination.offset), [records, pagination.offset])
     const sectionLabels = thermoSectionLabels(representativeRecords, numbers)
     const renderThermoRecords = makeThermoGroupedRenderer(sectionLabels)
     return (
-        <RecordNumbersProvider refs={records.map((record) => record.thermo_ref)}>
+        <RecordNumbersProvider refs={records.map((record) => record.thermo_ref)} offset={pagination.offset}>
         <section className="ledger-section" aria-labelledby="thermo-heading">
             <div className="ledger-heading">
                 <p className="eyebrow">Deposited evidence</p>

@@ -172,3 +172,7 @@
 .energy-profile-cited .data-table code {
     overflow-wrap: anywhere;
 }
+
+.energy-profile-cited .data-table th.energy-profile-record {
+    white-space: nowrap;
+}
