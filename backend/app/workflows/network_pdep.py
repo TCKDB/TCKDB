@@ -242,7 +242,7 @@ def _resolve_energy_source(
 ) -> int | None:
     """Resolve a state or barrier energy's source; check its type and owner.
 
-    The type (#642) and the owning subject (#668) are read off the persisted
+    The type and the owning subject are read off the persisted
     row, never off the payload, so this holds for a request built without wire
     validation as well. ``assert_owner`` is the subject check for the energy
     being stated, run after the type check.
@@ -263,7 +263,7 @@ def _resolve_energy_source(
 def _state_owner_check(
     state_species_entry_ids: set[int], *, state_key: str, field: str
 ) -> Callable[[Calculation], None]:
-    """The subject check for one state's energy source (#668)."""
+    """The subject check for one state's energy source."""
 
     def check(calculation: Calculation) -> None:
         assert_state_energy_source_owner(
@@ -276,7 +276,7 @@ def _state_owner_check(
 def _barrier_owner_check(
     transition_state_entry_id: int, *, transition_state_key: str, field: str
 ) -> Callable[[Calculation], None]:
-    """The subject check for one channel barrier's energy source (#668)."""
+    """The subject check for one channel barrier's energy source."""
 
     def check(calculation: Calculation) -> None:
         assert_barrier_source_owner(
@@ -536,7 +536,7 @@ def persist_network_pdep_upload(
             geometry_key_to_id[conf.geometry.key] = geometry.id
 
             # Create the conformer's primary calculation: an opt, or, for a
-            # one-atom geometry, the atom's sp (#615). Unlike the two other
+            # one-atom geometry, the atom's sp. Unlike the two other
             # bundle routes, this seam links the conformer geometry as the
             # calculation's final output for any type, so an atom's sp
             # primary carries its geometry with no extra flag.
@@ -1427,7 +1427,7 @@ def persist_network_pdep_upload(
             energy_row.source_sum_comparison = comparison.status
             energy_row.source_sum_not_compared_reason = comparison.reason
         warning_sink.extend(collect_state_energy_source_warnings(sum_inputs, sum_comparisons))
-        # Which subjects the upload gives a ``freq``, for the "composed energy with no ZPE source" warning (#669).
+        # Which subjects the upload gives a ``freq``, for the "composed energy with no ZPE source" warning.
         species_entries_with_freq: set[int] = set()
         ts_entries_with_freq: set[int] = set()
         for payload_calculation_id in calculation_key_to_id.values():
@@ -1543,14 +1543,14 @@ def persist_network_pdep_upload(
             )
             # Re-read from the row, not from the payload: the wire schema
             # does not narrow this key by type, and a caller that reaches
-            # this function without it must meet the same refusal (#642).
+            # this function without it must meet the same refusal.
             sc_calculation = _calculation_row(session, sc_calculation_id)
             assert_network_source_role_type(
                 sc_calculation,
                 sc.role,
                 field=sc_field,
             )
-            # ... and whose it is (#668), read from the same persisted row.
+            # ... and whose it is, read from the same persisted row.
             assert_network_role_source_owner(
                 sc_calculation,
                 sc.role,

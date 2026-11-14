@@ -1,4 +1,4 @@
-"""The scoped structure assessment as an input to the transition-state trust projection (#723, rubric v5).
+"""The scoped structure assessment as an input to the transition-state trust projection.
 
 The trust rubric is a presence checklist and its runners are pure. The structure assessment is a separate, scoped
 judgement of the saddle a depositor *declared* (a stored ``structure_determination``), and it needs queries. This

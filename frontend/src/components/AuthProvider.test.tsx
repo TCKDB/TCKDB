@@ -14,7 +14,7 @@ afterEach(() => { server.resetHandlers(); cleanup() })
 afterAll(() => server.close())
 
 const meResponse = {
-    id: 1, username: "calvin", email: "calvin@example.com", full_name: "Calvin Pieters", role: "user", is_active: true,
+    id: 1, username: "ada", email: "ada@example.com", full_name: "Ada Example", role: "user", is_active: true,
 }
 
 function renderStatus() {
@@ -33,7 +33,7 @@ function renderStatus() {
  * state it clears, the flag it sets -- and not about menu mechanics,
  * which `AuthStatus.menu.test.tsx` covers on its own.
  */
-async function clickSignOut(displayName = "Calvin Pieters") {
+async function clickSignOut(displayName = "Ada Example") {
     const user = userEvent.setup()
     await user.click(await screen.findByRole("button", { name: displayName }))
     await user.click(await screen.findByRole("menuitem", { name: "Sign out" }))
@@ -43,7 +43,7 @@ describe("AuthProvider seeding", () => {
     it("a live session cookie (GET /auth/me -> 200) yields signed-in state on load", async () => {
         server.use(http.get("/api/v1/auth/me", () => HttpResponse.json(meResponse)))
         renderStatus()
-        expect(await screen.findByRole("button", { name: "Calvin Pieters" })).toBeInTheDocument()
+        expect(await screen.findByRole("button", { name: "Ada Example" })).toBeInTheDocument()
     })
 
     it("a 401 yields signed-out state and shows no error", async () => {
@@ -74,7 +74,7 @@ describe("AuthProvider seeding", () => {
 
         // Nothing is asserted about the session, either way.
         await expect(screen.findByRole("link", { name: "Sign in" }, { timeout: 300 })).rejects.toThrow()
-        expect(screen.queryByRole("button", { name: "Calvin Pieters" })).not.toBeInTheDocument()
+        expect(screen.queryByRole("button", { name: "Ada Example" })).not.toBeInTheDocument()
     })
 })
 
@@ -89,7 +89,7 @@ describe("logout", () => {
         }))
 
         renderStatus()
-        await screen.findByRole("button", { name: "Calvin Pieters" })
+        await screen.findByRole("button", { name: "Ada Example" })
 
         await clickSignOut()
 
@@ -98,7 +98,7 @@ describe("logout", () => {
         // reverted to signed-out (not just "no error was thrown").
         expect(logoutCalls).toBe(1)
         expect(await screen.findByRole("link", { name: "Sign in" })).toBeInTheDocument()
-        expect(screen.queryByRole("button", { name: "Calvin Pieters" })).not.toBeInTheDocument()
+        expect(screen.queryByRole("button", { name: "Ada Example" })).not.toBeInTheDocument()
     })
 })
 

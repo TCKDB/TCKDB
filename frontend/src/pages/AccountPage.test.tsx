@@ -13,7 +13,7 @@ afterEach(() => { server.resetHandlers(); cleanup() })
 afterAll(() => server.close())
 
 const meResponse = {
-    id: 1, username: "calvin", email: "calvin@example.com", full_name: "Calvin Pieters", role: "user", is_active: true,
+    id: 1, username: "ada", email: "ada@example.com", full_name: "Ada Example", role: "user", is_active: true,
 }
 
 function signedInHandlers(keys: unknown[] = []) {
@@ -46,7 +46,7 @@ describe("AccountPage", () => {
     it("lists the signed-in user's identity and an empty key state", async () => {
         server.use(...signedInHandlers([]))
         renderAccountPage()
-        expect(await screen.findByText("Calvin Pieters")).toBeInTheDocument()
+        expect(await screen.findByText("Ada Example")).toBeInTheDocument()
         expect(await screen.findByText("No API keys yet.")).toBeInTheDocument()
     })
 
@@ -100,7 +100,7 @@ describe("AccountPage", () => {
             { id: 11, label: null, created_at: "2026-09-13T00:00:00Z", last_used_at: null, revoked_at: null },
         ]))
         renderAccountPage()
-        await screen.findByText("Calvin Pieters")
+        await screen.findByText("Ada Example")
         expect(screen.queryByText("tckdb_live_anothersecret")).not.toBeInTheDocument()
     })
 })

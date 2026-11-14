@@ -46,9 +46,9 @@ already follow for role/type compatibility:
   ``composite``s) on one structure are a duplicate. A polyatomic geometry is
   the same structure as another when one is the other moved rigidly (a
   Kabsch-aligned RMSD within the rounding of the stored coordinates, the
-  atoms listed in any order, #667, #679); a single atom has no geometry
+  atoms listed in any order); a single atom has no geometry
   to differ in, so every position of it is one structure, compared by element
-  (``D``/``T`` read as hydrogen) and stated isotope mass number (#610, #623).
+  (``D``/``T`` read as hydrogen) and stated isotope mass number.
 * **R3' -- every sp must sit on some linked opt's geometry.** Silent
   when either side declares no geometry at all -- absence of evidence is
   not evidence of a mismatch, and with at most one linked ``opt`` there
@@ -580,11 +580,11 @@ def _structure_key(geometry: Geometry) -> tuple[str | int | None, ...]:
     same structure -- so it is keyed by its element (D and T resolve to
     hydrogen) and its isotope mass number (stated, or implied by a D/T spelling
     on an older row), and a copy of the atom moved to
-    another coordinate is the same structure, not a second one (#623).
+    another coordinate is the same structure, not a second one.
 
     A polyatomic geometry is keyed by its row id *here*, and
     :func:`_energies_by_structure` then merges rows that are the same structure
-    moved rigidly (#667, :func:`_same_polyatomic_structure`). The key is only
+    moved rigidly (:func:`_same_polyatomic_structure`). The key is only
     the starting point for that merge, never the answer.
 
     The element rather than a conformer observation, because the element is
@@ -658,7 +658,7 @@ _KABSCH_UNITS_PER_ATOM = 30
 #: Work units charged per same-order Kabsch comparison on top of the per-atom term: ``kabsch_rmsd`` has a
 #: fixed cost of about 19 microseconds per call (array construction, the SVD call), which at 3 atoms is
 #: most of its time. Charging only ``30 * n`` let a record run the in-order allowance for ~11 s at n = 3
-#: against ~0.6 s at n = 200. 800 units makes the two comparable (#745).
+#: against ~0.6 s at n = 200. 800 units makes the two comparable.
 _KABSCH_UNITS_PER_CALL = 800
 
 
@@ -697,7 +697,7 @@ def _atoms_of(geometry: Geometry) -> _AtomsOf | None:
     if not rows or len(rows) != geometry.natoms:
         return None
     coordinates = [(row.x, row.y, row.z) for row in rows]
-    # Element and explicit isotope per atom, the atom path's own notion of "the same atom" (#663).
+    # Element and explicit isotope per atom, the atom path's own notion of "the same atom".
     species = tuple(_atom_nuclide(row) for row in rows)
     return _AtomsOf(species, coordinates, _coordinate_decimals(coordinates), _gyration_radius(coordinates))
 
@@ -708,7 +708,7 @@ def _same_polyatomic_structure(
     budget: SearchBudget | None = None,
     prepared: tuple[PreparedGeometry, PreparedGeometry] | None = None,
 ) -> bool:
-    """Whether two geometries are one structure moved rigidly (#667), atoms in any order (#679).
+    """Whether two geometries are one structure moved rigidly, atoms in any order.
 
     Same elements and stated isotopes in the same order are compared directly
     (Kabsch). When that does not match and the two hold the same atoms (the same
@@ -723,7 +723,7 @@ def _same_polyatomic_structure(
     *different* (the behaviour before the search), never a match.
     """
     tolerance = _rigid_motion_tolerance(a.decimals, b.decimals)
-    # Constant-time answer for the common case of two different shapes (#692): neither the same-order
+    # Constant-time answer for the common case of two different shapes: neither the same-order
     # Kabsch nor the relabelling search can accept a pair whose radii of gyration differ by more
     # than the tolerance (see :func:`_gyration_radius`), so neither is run, and nothing is charged.
     radius_a = _gyration_radius(a.coordinates) if a.gyration_radius is None else a.gyration_radius
@@ -755,11 +755,11 @@ def _merge_rigidly_equal_geometries(geometries: Sequence[Geometry]) -> dict[int,
     group of equal atom count, so an atom list is read from the database
     only for a geometry that has a same-size neighbour to be compared with.
     A pair whose radii of gyration differ by more than the rounding tolerance is
-    answered in constant time (#692), and a pair that is compared pays for it in
+    answered in constant time, and a pair that is compared pays for it in
     its own per-record allowance, the same-order Kabsch included.
     One :class:`SearchBudget` is shared by every pair, and a pair already in one
     structure through a third geometry is not compared again. The relabelling
-    search (#679) is charged to that budget: a gate on the sorted distance list
+    search is charged to that budget: a gate on the sorted distance list
     (about n^2/2 units per pair), the candidate table (n^3) and each fit (4 n^2).
     What is *not* charged is building each geometry's distance tables once,
     O(n^2 log n) per geometry, linear in the number of geometries; so the cost is
@@ -804,8 +804,8 @@ def geometries_are_one_structure(first: Geometry, second: Geometry) -> bool:
     """Whether two stored geometries are the same structure, by the rule energies are grouped with.
 
     The same row; or one atom of the same nuclide (position is no part of a
-    single atom's structure, #623); or the same polyatomic structure moved
-    rigidly with atoms in any order (#667, #679). One definition of "the same
+    single atom's structure); or the same polyatomic structure moved
+    rigidly with atoms in any order. One definition of "the same
     geometry" for the repository, so a caller does not invent a second.
     """
     if first.id == second.id:
@@ -970,7 +970,7 @@ def assert_role_consistency(
     itself.
 
     **Precedence, when a deposit is wrong in more than one way at once**:
-    an ``sp`` and a ``composite`` both linked as energy (decision 4: the
+    an ``sp`` and a ``composite`` both linked as energy (the
     record has two energies) first, then R3' (a genuine geometry mismatch),
     then R2' distinctness (two energy calculations on the same opt's
     geometry), then R2' level uniformity (ambiguous),
@@ -1008,7 +1008,7 @@ def assert_role_consistency(
     :param ambiguous_code: Coded refusal for "linked energy calculations
         disagree on level of theory" (R2').
     :param sp_and_composite_code: Coded refusal for "an sp and a composite are
-        both linked as the energy" (decision 4).
+        both linked as the energy".
     :param subject: ``"statmech"`` or ``"thermo"``, for messages.
     :param warnings: Out-list for the warn-tier findings about composite links
         (:func:`collect_composite_link_warnings`). Required, with ``None``
@@ -1088,7 +1088,7 @@ def assert_role_consistency(
                 message_prefix=False,
             )
 
-    # R2' distinctness with no optimisation linked (#610, #623). Every check
+    # R2' distinctness with no optimisation linked. Every check
     # above is anchored on a linked opt, so a record that links only sps (a
     # single atom's honest shape: its sp is its primary and it has no opt)
     # would escape it. The same fact is still a duplicate: two sps run on one
@@ -1096,7 +1096,7 @@ def assert_role_consistency(
     # not by geometry row: for one atom every position is the same structure,
     # so a second sp on a shifted copy of the atom is the same duplicate. A
     # polyatomic geometry is the same structure as another when one is the
-    # other moved rigidly (#667): translated, rotated, atoms listed in any order (#679).
+    # other moved rigidly: translated, rotated, atoms listed in any order.
     # An sp that declares no geometry is not compared (absence of evidence is not
     # a match), as everywhere in this module.
     if not opts:

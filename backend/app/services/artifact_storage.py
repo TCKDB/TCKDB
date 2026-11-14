@@ -155,8 +155,7 @@ _MISSING_OBJECT_CODES = frozenset({"404", "NoSuchKey", "NotFound"})
 #:   accurate-sounding message on a store that answered something else.
 #:
 #: **SeaweedFS contributes no code here, deliberately.** Measured against
-#: SeaweedFS ``4.47`` (``weed mini``, the default store TCKDB ships since
-#: #541) on size-capped tmpfs volumes, every way of running out of room
+#: SeaweedFS ``4.47`` (``weed mini``, the default store TCKDB ships) on size-capped tmpfs volumes, every way of running out of room
 #: answers the same thing, ``InternalError`` at HTTP ``500`` with "We
 #: encountered an internal error, please try again.":
 #:

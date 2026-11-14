@@ -47,7 +47,7 @@ rules that between them cover every geometry:
 :func:`app.services.species_resolution.assert_geometry_composition_matches_identity`
 for a **conformer** geometry, and
 :func:`app.services.calculation_geometry_composition.assert_calculation_geometry_composition`
-for every geometry linked to a **calculation** (#143). Both refuse outright.
+for every geometry linked to a **calculation**. Both refuse outright.
 
 **Consequence for this service: ``validation_status=fail`` is no longer
 reachable through any upload path.** The ``fail`` branch fires when
@@ -318,7 +318,7 @@ def run_and_persist_geometry_validation(
 ) -> CalculationGeometryValidation | None:
     """Run geometry-identity validation for an opt calc and persist the row.
 
-    Phase-1 wiring: **species-owned opt calcs only**. This is best-effort
+    Wired for **species-owned opt calcs only**. This is best-effort
     by policy — if any required input is missing (no ``species_smiles``,
     no output geometry attached, unparseable xyz, chemistry layer
     raises) the function returns ``None`` and writes nothing, so the

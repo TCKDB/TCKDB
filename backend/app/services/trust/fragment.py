@@ -39,7 +39,7 @@ def build_transition_state_trust_fragment(
     review_status: Enum | str | None = None,
     structure_assessment: TransitionStateScopedAssessment,
 ) -> TransitionStateTrustFragment:
-    """The transition-state trust fragment: :func:`build_trust_fragment` plus the scoped structure assessment (#723).
+    """The transition-state trust fragment: :func:`build_trust_fragment` plus the scoped structure assessment.
 
     Wraps the shared builder rather than changing it. The assessment is carried beside the badge and is read by
     nothing that computes it: ``trust_status``, the completeness numbers and ``is_certified`` come from the evaluation

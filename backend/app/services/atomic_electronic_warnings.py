@@ -1,4 +1,4 @@
-"""Electronic-structure completeness of single-atom uploads (#609).
+"""Electronic-structure completeness of single-atom uploads.
 
 An isolated atom's entropy and free energy depend on its electronic partition
 function, ``q_el = sum g_i exp(-E_i / kT)``. For an S-term atom (H, N, P, ...)

@@ -1,9 +1,9 @@
-"""Isotope agreement between a calculation's geometry and its subject (#666).
+"""Isotope agreement between a calculation's geometry and its subject.
 
 Companion of :mod:`app.services.calculation_geometry_composition`, which counts
 elements and reads ``D``, ``T`` and ``[2H]`` as hydrogen (an element answer)
 and so cannot see an isotope disagreement; this rule reads the nuclide a ``D``/``T``
-spelling declares (#672). Not a separate register entry: it is the composition
+spelling declares. Not a separate register entry: it is the composition
 entry's claim ("this geometry is this species") extended to isotopes, so the one
 entry (``CHECK_CALCULATION_GEOMETRY_COMPOSITION``) is declared at the foot of this
 module, which can import both enforcing functions; only the refusal code is its own.
@@ -162,10 +162,9 @@ def _isotope_reference_for(
 def _geometry_isotope_counts(session: Session, geometry_id: int) -> IsotopeCounts:
     """Count a stored geometry's non-standard isotopes.
 
-    A ``D`` or ``T`` element spelling is an isotope declaration (#672, ADR
-    0022): ``parse_xyz`` stores it as ``H`` with ``isotope_mass_number`` 2/3, so
+    A ``D`` or ``T`` element spelling is an isotope declaration: ``parse_xyz`` stores it as ``H`` with ``isotope_mass_number`` 2/3, so
     new rows are counted from the stored mass number. A row deposited before
-    that decision holds ``D``/``T`` with a NULL mass number and cannot be
+    that spelling was read as an isotope holds ``D``/``T`` with a NULL mass number and cannot be
     rewritten (``trg_as_geometry_atom``), so the mass is read from the row's own
     symbol: ``mass = stored or implied_isotope_mass_number(element)``. Nothing is
     borrowed from a sibling record.

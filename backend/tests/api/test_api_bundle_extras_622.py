@@ -450,7 +450,7 @@ def test_reaction_bundle_transport_takes_the_bundle_provenance_defaults(client, 
 def test_reaction_bundle_transport_source_must_belong_to_its_own_species(client):
     """H2's calculation cannot be what produced H's transport.
 
-    The key resolves, so only the owner rule can catch it, and the refusal is
+    The key resolves, so only the ownership rule can catch it, and the refusal is
     coded: the same ``code`` and ``context`` the workflow's guard carries,
     asserted on ``code`` and ``context`` rather than on prose.
     The paired payload (H's own calculation) is accepted above.

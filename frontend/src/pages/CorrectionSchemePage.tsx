@@ -68,10 +68,9 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                             <div className="record-identity-kicker-row">
                                 <span className="t-kicker record-identity-kicker">Energy-correction scheme · deposited evidence</span>
                             </div>
-                            {/* Still no SOFTWARE in the TITLE here -- #439 (deployed)
-                                added `software_id`/`workflow_tool_release_id` to
-                                `energy_correction_scheme` and this page now renders
-                                both (facts list below), but this standalone page's
+                            {/* No SOFTWARE in the TITLE here -- `energy_correction_scheme`
+                                carries `software_id`/`workflow_tool_release_id` and
+                                this page renders both (facts list below), but this standalone page's
                                 own `<h1>` keeps titling from `scheme_kind` plus the
                                 level of theory it is tied to, unchanged. Software
                                 titles the PER-LOT box on `LevelOfTheoryPage.tsx`

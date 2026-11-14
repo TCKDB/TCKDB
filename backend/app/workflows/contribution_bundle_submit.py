@@ -146,7 +146,7 @@ def _append_import_audit(
 def _is_blocking(dry_run: ContributionBundleDryRunResult) -> bool:
     """Return True iff dry-run reports anything that should block import.
 
-    Strict policy (Decision 2 in the design notes): a bundle blocks the
+    Strict policy: a bundle blocks the
     submit/import path if **any** of the following is true:
 
     * ``bundle_valid`` is False — the bundle did not pass dry-run's own
@@ -235,8 +235,7 @@ def _import_thermo_bundle(
     """Import every thermo upload in ``bundle`` and return submitted-record rows.
 
     Each upload produces one ``imported`` row for the new ``thermo`` and one
-    ``linked`` row for its parent ``species_entry`` (the immediate parent
-    decided in Decision 1).
+    ``linked`` row for its parent ``species_entry`` (the immediate parent).
 
     The warnings each upload earns -- the request-derived ones and the ones
     the workflow appends -- are the ones ``POST /uploads/thermo`` returns for
@@ -581,7 +580,7 @@ def rehearse_contribution_bundle_submit(
     locks; nothing outside this call can see it.
 
     :param import_warnings_out: Filled with the upload warnings submit would
-        return for this bundle, so the dry run can report them (#647). Left
+        return for this bundle, so the dry run can report them. Left
         empty when submit would refuse.
     :returns: ``None`` when submit would succeed, otherwise the exception it
         raised -- rendered by the caller through the app's own handlers --

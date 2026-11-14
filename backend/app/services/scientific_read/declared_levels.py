@@ -1,7 +1,7 @@
 """Read-side projection of a depositor-declared energy level of theory.
 
 ``thermo.energy_level_of_theory_id`` and ``statmech.energy_level_of_theory_id``
-store what a depositor declared for the record's energy (#619). The read
+store what a depositor declared for the record's energy. The read
 layer reports it as ``levels.declared_energy``, deliberately apart from
 ``levels.energy``: the latter is re-derived from the linked calculations on
 every read, the former is a stored claim, and a record can carry one without

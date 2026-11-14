@@ -4,9 +4,9 @@
 
   Crucially, the live page emits NO ``<th>`` header row — every row is
   plain ``<td>``. The parser would otherwise treat the first H2 data
-  row as the column header (the Phase 5d dry-run dropped this bug
-  into ``payloads_dryrun/diatomic_spectroscopic.json``). The parser
-  config now declares ``configured_column_names`` for this table so
+  row as the column header and drop it from the dry-run payloads
+  (``payloads_dryrun/diatomic_spectroscopic.json``). The parser
+  config declares ``configured_column_names`` for this table so
   parsing works against the real page shape; this fixture mirrors
   that shape.
 

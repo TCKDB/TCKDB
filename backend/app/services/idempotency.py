@@ -445,7 +445,7 @@ def retry_receipt_after_commit(
     unstorable body, for instance — fails again here, and that is fine: this
     never raises into the request path. It runs inside the write session's
     commit (an ``after_commit`` hook), *before* the response is sent, because
-    ``get_write_db`` commits ahead of the response (#616); but after the
+    ``get_write_db`` commits ahead of the response; but after the
     response object was built, so a retry that succeeds cannot change the
     ``Idempotency-Receipt: failed`` header the response already carries.
     """

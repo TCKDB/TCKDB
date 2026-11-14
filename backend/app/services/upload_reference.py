@@ -52,7 +52,7 @@ Two ways of naming a row, one code per kind
 ``/uploads/thermo`` and ``/uploads/statmech`` name one by **row id**, in
 an ``existing_*_id`` field — programmatic chaining, a client quoting back
 an id this API issued it (see the schema rules' one sanctioned
-exception). Since #230 both spellings arrive here.
+exception). Both spellings arrive here.
 
 They share a code per kind of row, and that is the point rather than an
 economy. The *status* must not depend on how the

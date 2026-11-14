@@ -57,8 +57,8 @@
 /* `.data-table th` is written for COLUMN headers: small-caps, muted, the
    label typeface. Applied to a `<th scope="row">` it uppercases the cell
    contents -- and this table's row header is a username, which is the
-   reader's own data, not UI chrome. It rendered "CALVIN" for an account
-   named `calvin`, misstating the value it exists to show. `auth.css`
+   reader's own data, not UI chrome. It rendered "ADA" for an account
+   named `ada`, misstating the value it exists to show. `auth.css`
    makes the identical argument for its own field labels.
 
    The row-header semantics are worth keeping (a screen reader announces

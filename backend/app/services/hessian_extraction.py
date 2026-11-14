@@ -29,7 +29,7 @@ atom count matches the parsed matrix dimension. Zero or several input
 geometries, a missing geometry, or a ``natoms`` mismatch all mean *skip*
 rather than risk binding a Hessian to the wrong geometry.
 
-**Composition and isotopes (#680).** The bound geometry is also held to the
+**Composition and isotopes.** The bound geometry is also held to the
 calculation's subject: the same two checks every geometry link gets run before
 the row is written, because ``hessian_reanalysis`` takes its masses from this
 geometry. A refusal is not an upload failure -- it takes this hook's ordinary
@@ -40,7 +40,7 @@ so the artifact is stored and the Hessian is simply not.
 be aborted by an extraction failure — the whole body is wrapped so any
 error is logged and swallowed, matching the sibling energy hook.
 
-**Telling the depositor (#691).** When the hook located a Hessian (or was handed
+**Telling the depositor.** When the hook located a Hessian (or was handed
 a file whose whole purpose is to be one) and still stored nothing, it returns a
 warn-tier :class:`UploadWarning` naming why, as the sibling hooks do. These are
 their own codes (``hessian_not_stored_*``), not the geometry-link block codes
@@ -49,7 +49,7 @@ log that simply carries no matrix -- most freq logs, every ORCA output log --
 is not a failure and says nothing, and neither does losing a race to a
 concurrent uploader that stored the same Hessian.
 
-Three more cases are named (#744): a ``kind='hessian'`` file sent to a
+Three more cases are named: a ``kind='hessian'`` file sent to a
 calculation that is not a ``freq`` (it exists to carry a matrix, and the
 calculation-type gate needs no parse to say so); a log that carries the
 program's force-constant marker but yields no matrix (a truncated block, or
@@ -107,7 +107,7 @@ from app.services.hessian_parsing import (
 
 logger = logging.getLogger(__name__)
 
-#: Warn-tier codes for a Hessian the hook found but did not store (#691).
+#: Warn-tier codes for a Hessian the hook found but did not store.
 W_HESSIAN_NOT_STORED_GEOMETRY_MISMATCH = "hessian_not_stored_geometry_mismatch"
 W_HESSIAN_NOT_STORED_NO_UNIQUE_INPUT_GEOMETRY = "hessian_not_stored_no_unique_input_geometry"
 W_HESSIAN_NOT_STORED_UNPARSEABLE = "hessian_not_stored_unparseable"
@@ -125,7 +125,7 @@ def _not_stored(code: str, filename: str, reason: str, field: str = _FIELD, **fa
 
     ``field`` locates the artifact: ``artifacts`` on the standalone route, and
     ``calculations['<key>'].artifacts`` inside a bundle, where a bare
-    ``artifacts`` would not say which calculation (#744).
+    ``artifacts`` would not say which calculation.
     """
     return UploadWarning.from_code(
         field=field,
@@ -397,8 +397,8 @@ def _insert(
     """
     savepoint = session.begin_nested()
     try:
-        # Same composition and isotope claims as every other geometry link
-        # (#680). Inside the savepoint on purpose: a refusal takes the
+        # Same composition and isotope claims as every other geometry link.
+        # Inside the savepoint on purpose: a refusal takes the
         # existing path below -- roll back, log a warning, store nothing -- and
         # never fails the artifact upload. The geometry is normally the
         # calculation's own, already-checked input geometry, so this is a

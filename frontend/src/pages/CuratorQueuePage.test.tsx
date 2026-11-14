@@ -39,9 +39,9 @@ const QUEUE = "/api/v1/admin/machine-review/curator-tasks"
 
 const admin = {
     id: 1,
-    username: "calvin",
-    email: "calvin@example.com",
-    full_name: "Calvin Pieters",
+    username: "ada",
+    email: "ada@example.com",
+    full_name: "Ada Example",
     role: "admin",
     is_active: true,
 }

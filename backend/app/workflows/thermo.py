@@ -100,7 +100,7 @@ _THERMO_CALCULATION_KEY_REMEDY = (
 #: each accepts; the first entry is the canonical one the role is named
 #: after. Mirrors ``_STATMECH_ROLE_TO_CALC_TYPES`` including the ``sp``
 #: exception — there is no reason for the two products to disagree about
-#: what a role means, and making them agree was the whole point of #126.
+#: what a role means, and making them agree is the point of this table.
 _THERMO_ROLE_TO_CALC_TYPES: dict[
     ThermoCalculationRole, tuple[CalculationType, ...]
 ] = {
@@ -198,9 +198,9 @@ def _resolve_source_calculation(
     ``context`` naming this field. Same code as the public-ref
     spelling on ``/uploads/kinetics``, on purpose: the row that is missing
     is the same kind of row and the repair is the same, so making the code
-    depend on the spelling would rebuild the defect #195 removed from the
-    status. The id the caller supplied is *not* echoed — it goes to the
-    log, per :func:`app.services.upload_reference.unknown_reference`.
+    depend on the spelling would make the status depend on the spelling too.
+    The id the caller supplied is *not* echoed — it goes to the log, per
+    :func:`app.services.upload_reference.unknown_reference`.
     """
     field_path = f"source_calculations[{index}]"
     if entry.calculation_key is not None:
@@ -262,7 +262,7 @@ def _resolve_statmech_id(
     The 422 goes through the shared ownership guard rather than an inline
     comparison, which is what gives it
     ``thermo_statmech_owner_mismatch`` instead of the generic
-    ``validation_error`` a client cannot branch on (#195). This is the
+    ``validation_error`` a client cannot branch on. This is the
     plainest reachable case of the rule: ``existing_statmech_id`` is a row
     id the depositor supplies, so nothing in the enclosing request scoped
     it to this species entry.
@@ -287,8 +287,8 @@ def _resolve_statmech_id(
         target="thermo",
         # Named the way its two neighbours in this module are, and not as
         # the bare field: a message opening ``existing_statmech_id: `` puts
-        # a snake_case token in the code position, which is the shape #159
-        # and #164 spent two changes teaching the envelope to distrust. The
+        # a snake_case token in the code position, which is the shape the
+        # error envelope distrusts. The
         # code is declared on the exception; the sentence must not look like
         # it is declaring a second one.
         context="thermo existing_statmech_id",

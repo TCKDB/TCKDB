@@ -133,7 +133,7 @@ class NormalizedCandidate:
     """What the ordering engine knows about one eligible thermo record.
 
     Built from the record's own columns and the links it actually holds; a thermo's evidence
-    is only what it links (#645/#646), so nothing here comes from a sibling record of the
+    is only what it links, so nothing here comes from a sibling record of the
     same species entry. ``id_rank`` is the record's position when the population is ordered
     by database id: it stands in for the id as the last tie-break and is not an id.
 

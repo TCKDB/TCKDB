@@ -144,7 +144,7 @@ _CONTAINER_COLUMNS: dict[SubmissionRecordType, tuple[tuple[str, SubmissionRecord
     ),
     # Three targets, not two. ``target_transition_state_entry_id`` is easy to
     # miss -- it is the only one of the three that does not appear in the
-    # #262 brief, and dropping it would leave every correction applied to a
+    # original brief, and dropping it would leave every correction applied to a
     # transition state silently unlinked while the other two worked.
     SubmissionRecordType.applied_energy_correction: (
         ("target_species_entry_id", SubmissionRecordType.species_entry),

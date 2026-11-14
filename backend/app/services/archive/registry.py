@@ -116,7 +116,7 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "kinetics_third_body_efficiency",
         "kinetics_tunneling_application",
         "level_of_theory",
-        # #574: a merged level of theory resolves to the row named here.
+        # A merged level of theory resolves to the row named here.
         # Without it a restored archive would answer a merged ref with the
         # merged row itself.
         "level_of_theory_merge",
@@ -161,8 +161,8 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "release_selection",
         "software",
         "software_release",
-        # Who attested a software version, and the calculations it moved
-        # (issue #305). Provenance of the release a calculation cites: a
+        # Who attested a software version, and the calculations it moved.
+        # Provenance of the release a calculation cites: a
         # restore without it would keep the re-pointed release and lose the
         # only account of why.
         "software_version_attestation",

@@ -319,7 +319,7 @@ def collect_statmech_content_warnings(
         so a missing ``freq`` source is expected there and warning about it
         would fire on every atom in every deposit. Scoping to polyatomics keeps
         the signal honest without that noise. Absence of rotational constants
-        is deliberately not the test (#608).
+        is deliberately not the test.
     """
     if scientific_origin not in _COMPUTATIONAL_ORIGINS:
         return []
@@ -479,7 +479,7 @@ def collect_kinetics_content_warnings_for(
                 code=W_MISSING_TS_INTERPRETATION,
             )
         )
-    # The case #155 exists for. A caller that *has* a tunneling_application
+    # A caller that *has* a tunneling_application
     # field and left it empty gets told so; a caller that has no such field
     # gets nothing, because "attach the typed evidence" is not something it
     # can do. Note the condition is on the *evidence* being NOT_APPLICABLE,

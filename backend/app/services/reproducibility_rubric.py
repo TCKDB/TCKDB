@@ -47,7 +47,7 @@ than a chain of versioned ones. ``RUBRIC_VERSION`` labels stored rows; genuine
 staleness is detected by comparing an assessment's snapshotted
 ``context_json`` against a fresh evaluation, not by the label alone.
 
-One owner kind carries its own label (#760): a transition-state-owned statmech is graded by ``TS_STATMECH``
+One owner kind carries its own label: a transition-state-owned statmech is graded by ``TS_STATMECH``
 (``tckdb_reproducibility_ts_statmech``), the shared rubric with one question changed. Every other record,
 species-owned statmech included, keeps ``SHARED`` byte for byte. The read-time currency check compares an
 assessment with the rubric the fresh evaluation used, not with a module constant.

@@ -21,7 +21,7 @@ Three tables, children of ``statmech``:
     What one part of the model rests on, by role: a calculation (optionally the one geometry its result describes),
     imported literature parameters, or a frequency scale factor. Imported parameters need no fabricated calculation.
 
-The owner rules (a basin of the same species entry, a determination of the same transition-state entry, a source
+The ownership rules (a basin of the same species entry, a determination of the same transition-state entry, a source
 calculation of the same subject, a member of the same species entry) are database facts, enforced by triggers.
 """
 

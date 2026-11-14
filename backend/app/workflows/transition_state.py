@@ -325,7 +325,7 @@ def persist_transition_state_upload(
 
     # Evaluated last, once every calculation this request touched (primary
     # opt + additional) is flushed, so an sp deposited later in
-    # ``additional_calculations`` already counts (#292).
+    # ``additional_calculations`` already counts.
     if warnings is not None:
         warnings.extend(composite_input_warnings)
         warnings.extend(

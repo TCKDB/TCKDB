@@ -15,7 +15,7 @@
       }
     ],
     "expected": "distinct_species_entries",
-    "reason": "Identity is canonical SMILES, which keeps tautomers apart; the InChIKey is stored but is not the key (DR-0031)."
+    "reason": "Identity is canonical SMILES, which keeps tautomers apart; the InChIKey is stored but is not the key."
   },
   {
     "id": "tautomers/acetaldehyde_vs_vinyl_alcohol",

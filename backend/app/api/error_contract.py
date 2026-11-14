@@ -77,8 +77,8 @@ that lands in the code position is catalogued as
 own word for "not a code" — and is therefore not promoted. The honest
 record of a defect becomes the thing that stops it reaching a client.
 
-That record was always the second-best fix, and #178 applied the first:
-both messages now say what went wrong rather than naming the function they
+That record is the second-best fix. The first-best fix is applied:
+both messages say what went wrong rather than naming the function they
 went wrong in, so neither token is in the code position and neither is
 catalogued under any surface. The gate below is unchanged and is what
 covers the next one written the same way — an allow-list of
@@ -87,7 +87,7 @@ thought to record it.
 
 Why consulting a list is safe here, having been refused before
 --------------------------------------------------------------
-#159 declined to gate promotion on a hand-list, on the grounds that the
+An earlier design declined to gate promotion on a hand-list, on the grounds that the
 list is a second artifact to keep in step and that forgetting to register
 a new code would silently degrade it to ``validation_error`` — the same
 failure class the narrowing existed to fix. That objection was correct
@@ -226,7 +226,7 @@ _FRAMEWORK_MESSAGE_PREFIXES = ("Value error, ", "Assertion failed, ")
 #: constant — and read on every promotion.
 #:
 #: Membership, not observation, is the test. Fifty-odd catalogued codes have
-#: never been seen in a test run (tracked as #174); they are codes all the
+#: never been seen in a test run; they are codes all the
 #: same, and gating on "has the observer seen it?" would degrade exactly the
 #: refusals nobody has exercised yet.
 MESSAGE_PREFIX_CODES: frozenset[str] = frozenset(

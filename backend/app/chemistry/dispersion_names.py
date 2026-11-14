@@ -1,14 +1,14 @@
-"""Identity keys of the dispersion column, and of a dispersion folded into the method (issue #630).
+"""Identity keys of the dispersion column, and of a dispersion folded into the method.
 
-#627 made the *case* of the dispersion column part of identity and joined
-D3(BJ) spellings inside the **method** string. Two splits were left:
+The *case* of the dispersion column is part of identity, and D3(BJ) spellings
+inside the **method** string are joined. Two further splits are closed here:
 
-* the dispersion **column** kept ``d3bj``, ``gd3bj`` and
-  ``empiricaldispersion=gd3bj`` apart, though ARC's Gaussian adapter writes
+* the dispersion **column** joins ``d3bj``, ``gd3bj`` and
+  ``empiricaldispersion=gd3bj``, because ARC's Gaussian adapter writes
   ``level.dispersion`` into the route unchanged (``arc/job/adapters/gaussian.py``)
   and ARC's own matcher treats all three as one; and
-* ``b3lyp-d3bj`` (dispersion folded into the method) was a different level of
-  theory from ``b3lyp`` with ``dispersion=d3bj``.
+* ``b3lyp-d3bj`` (dispersion folded into the method) is the same level of
+  theory as ``b3lyp`` with ``dispersion=d3bj``.
 
 Dispersion column aliases
 -------------------------

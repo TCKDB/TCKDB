@@ -106,8 +106,8 @@ The groups where the call was genuinely arguable, and the argument:
   second way.
 * **"Taken" is a thing.** ``email_taken``, ``username_taken`` and
   ``release_tag_taken`` imply a second claimant, but only one party is
-  identifiable and the code says which field it is -- which was the point
-  of splitting the first two in #225. The other claimant is another
+  identifiable and the code says which field it is -- which is why the
+  first two are separate codes. The other claimant is another
   principal's row and is not ours to disclose.
 * **``artifact_integrity_failed`` is a thing**, although it is a digest
   comparison. Its name states a property of one artifact, and the two
@@ -244,16 +244,15 @@ class Surface(str, Enum):
     #: to be a snake_case identifier, so it occupies the code position and
     #: the envelope reports it as though it were a contract. Recorded
     #: rather than hidden, and never exported to a client — a fabricated
-    #: code that looks real is worse than an honestly generic one, which
-    #: is the finding #159 was opened for.
+    #: code that looks real is worse than an honestly generic one.
     #:
     #: **No entry uses this today.** The two that did —
     #: ``create_applied_group_additivity`` and ``keyset_predicate`` —
-    #: were reworded in #178 so that their refusals say what went wrong
+    #: were reworded so that their refusals say what went wrong
     #: instead of naming the function it went wrong in, and a message
     #: with no token in the code position is not an accidental prefix at
     #: all. Cataloguing one was always the second-best fix: it stopped
-    #: the token being *promoted* (#164) while leaving a depositor to
+    #: the token being *promoted* while leaving a depositor to
     #: read a function name. The value stays because the classification
     #: is what makes recording the next one cheaper than hiding it.
     accidental_prefix = "accidental_prefix"

@@ -719,7 +719,7 @@ def resolve_composite_scheme_handle(session: Session, handle: str) -> int:
 def canonical_level_of_theory_id(session: Session, lot_id: int) -> int:
     """The level of theory a row stands for: itself, or the row it was merged into.
 
-    ``merge_duplicate_levels_of_theory.py`` (#574) keeps a merged row, with
+    ``merge_duplicate_levels_of_theory.py`` keeps a merged row, with
     its ``public_ref``, and records the kept row in ``level_of_theory_merge``.
     It never merges into a row that is itself merged, so one hop is enough.
     """

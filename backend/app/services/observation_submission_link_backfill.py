@@ -1,7 +1,7 @@
 """Operator backfill: link pre-existing ``molecular_property_observation``
 rows to a submission wrapper.
 
-Closes issue #514. ``app.services.observation_identity_attach`` records the
+``app.services.observation_identity_attach`` records the
 curator's identity-attach fact as a :class:`~app.db.models.submission.
 SubmissionAuditEvent` on the submission the observation is linked to via
 ``submission_record_link`` -- an observation with no such link has nowhere

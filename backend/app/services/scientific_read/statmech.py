@@ -214,7 +214,7 @@ _TRUST_EAGER_LOADS = (
     .selectinload(StatmechSourceCalculation.calculation)
     .selectinload(Calculation.child_dependencies),
     # The opt-source check asks whether a calculation is a single atom's
-    # (#610): its geometries' atom counts, loaded per page, not per record.
+    #: its geometries' atom counts, loaded per page, not per record.
     selectinload(Statmech.source_calculations)
     .selectinload(StatmechSourceCalculation.calculation)
     .selectinload(Calculation.input_geometries)

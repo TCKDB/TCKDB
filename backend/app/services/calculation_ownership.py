@@ -14,7 +14,7 @@ Why it lives here
 -----------------
 The rule was written five times: once in ``app.workflows.thermo``, once in
 ``app.workflows.transport``, once in ``app.services.statmech_resolution``
-(moved there by #157) and twice more inline in the two bundle workflows,
+and twice more inline in the two bundle workflows,
 each spelling the same comparison and each phrasing the refusal
 differently. Only the thermo copy was pinned by a test, so the other four
 could drift without anything going red — and they had already drifted:
@@ -24,12 +24,12 @@ a cross-owner link existed for statmech and transport and not for thermo.
 One implementation cannot drift. What varies between the products is what
 they *call* the offence, and that stays a parameter: a client repairing a
 thermo link and a client repairing a torsion's scan link are doing
-different things, so they get different codes (#158).
+different things, so they get different codes.
 
 Why the module is still named for calculations
 ----------------------------------------------
 It was written for them, and five catalogue entries name this path as the
-origin of their code. #195 widened it: a thermo record cites a **statmech**
+origin of their code. It is wider than that: a thermo record cites a **statmech**
 row by ``existing_statmech_id``, and a kinetics interpretation cites one by
 ``statmech_ref`` and a **conformer selection** by content — three more
 citations of a record owned by a subject, refused by three more inline
@@ -107,7 +107,7 @@ W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH = (
 #: ``tests/api/test_api_network_pdep_ownership.py`` provokes it on the
 #: wire.
 #:
-#: ``/uploads/computed-reaction`` is the second route (#193). It does not
+#: ``/uploads/computed-reaction`` is the second route. It does not
 #: use the shared seam — it persists torsions inline — and checks the
 #: scan key's owner through this function, so one species' rotor cannot be
 #: parameterised by another's scan;
@@ -136,7 +136,7 @@ W_STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH = (
 #: An applied energy correction names a source calculation owned by
 #: another subject.
 #:
-#: Reachable since #195, and the route is the one the previous note named:
+#: Reachable, and the route is the one the previous note named:
 #: ``/uploads/computed-reaction`` resolves ``source_calculation_key`` in a
 #: namespace spanning every species in the bundle *and* the transition
 #: state, then attaches the correction to one species entry or to the TS

@@ -1,4 +1,4 @@
-"""Identity key of the free-text level-of-theory components (issue #602).
+"""Identity key of the free-text level-of-theory components.
 
 ``dispersion``, ``solvent`` and ``solvent_model`` are names, and every program
 reads them case-insensitively (``EmpiricalDispersion=GD3BJ`` and ``gd3bj``,
@@ -14,7 +14,7 @@ still what the row stores and what reads show.
 This is a case rule only. Solvent synonyms (``h2o`` for ``water``) would need
 a curated table with citations, as method names have (``method_names.py``);
 they are out of scope. Dispersion synonyms are not: the dispersion column is
-hashed through ``dispersion_names.dispersion_identity_key`` (#630), which
+hashed through ``dispersion_names.dispersion_identity_key``, which
 applies this case rule first and then a cited alias table.
 
 A level of theory carries no free-text ``keywords`` field: the settings a deck or log states are calculation

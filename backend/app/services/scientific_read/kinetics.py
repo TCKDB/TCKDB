@@ -754,7 +754,7 @@ def get_reaction_kinetics(
 
     summary = review_summary(badges[k.id] for k in kinetics_rows)
 
-    # Sort: review status, then newest (#648 rule, extended to kinetics): review status, then newest,
+    # Sort: review status, then newest,
     # then id -- the same order the exports list records in, so the read and
     # an export list the same record first. ``evidence_completeness`` and
     # ``temperature_coverage`` stay on each record as displayed fields but are

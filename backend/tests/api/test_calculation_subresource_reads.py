@@ -48,7 +48,7 @@ def _hydrogen_conformer_payload() -> dict:
             "software_release": {"name": "Gaussian", "version": "16"},
             "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
         },
-        "label": "phase2-test",
+        "label": "subresource-reads-test",
     }
 
 

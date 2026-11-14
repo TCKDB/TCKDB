@@ -1,4 +1,4 @@
-# Trimmed payload (task #264)
+# Trimmed payload
 
 The payload in this directory is a **derived copy** of the corresponding file
 under `../tckdb_payloads/computed_reaction/`, the real payload ARC produced.

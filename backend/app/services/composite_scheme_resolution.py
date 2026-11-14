@@ -468,7 +468,7 @@ def scheme_definition_hash(definition: Any, resolved: list[list[_ResolvedInput]]
 
 
 def stored_scheme_inputs(session: Session, scheme: CompositeScheme) -> tuple[Any, list[list[_ResolvedInput]]]:
-    """A stored scheme's terms and input levels, shaped like a deposited definition (#658).
+    """A stored scheme's terms and input levels, shaped like a deposited definition.
 
     Returns ``(definition, resolved)`` for :func:`scheme_definition_hash`. Each input
     level is the **canonical** one: a level merged into another
@@ -499,7 +499,7 @@ def stored_scheme_inputs(session: Session, scheme: CompositeScheme) -> tuple[Any
 
 
 def stored_scheme_definition_hash(session: Session, scheme: CompositeScheme) -> str:
-    """The ``definition_hash`` a stored user scheme has *now*, merges followed (#658).
+    """The ``definition_hash`` a stored user scheme has *now*, merges followed.
 
     Equal to ``scheme.definition_hash`` while none of its input levels has been
     merged away; different once one has, which is exactly when a fresh deposit of
@@ -654,7 +654,7 @@ def resolve_declared_scheme_level(session: Session, ref: Any) -> LevelOfTheory:
 
 
 def reunite_stale_scheme(session: Session, scheme: CompositeScheme) -> LevelOfTheory | None:
-    """Give a user scheme whose input levels were merged the scheme and level a fresh deposit would find (#658).
+    """Give a user scheme whose input levels were merged the scheme and level a fresh deposit would find.
 
     Re-derives the scheme's hash from its stored terms and inputs, merges followed
     (:func:`stored_scheme_definition_hash`). If it still equals the stored one the

@@ -698,8 +698,8 @@ describe("the renamed review surfaces keep the addresses they had", () => {
      * what path it was mounted at, and prove nothing about the routes.
      */
     const adminMe = {
-        id: 1, username: "calvin", email: "calvin@example.com",
-        full_name: "Calvin Pieters", role: "admin", is_active: true,
+        id: 1, username: "ada", email: "ada@example.com",
+        full_name: "Ada Example", role: "admin", is_active: true,
     }
 
     it("/admin/curator-queue answers, now headed Machine findings", async () => {

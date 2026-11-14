@@ -21,8 +21,7 @@ Two sets, never one
 
 What it does, and refuses to do
 -------------------------------
-It only ever **deletes or blanks**. It never picks another record to fill a gap (the substitution bug
-fixed in #767), because it runs after every service has made its picks and can only subtract from what they
+It only ever **deletes or blanks**. It never picks another record to fill a gap (the substitution bug), because it runs after every service has made its picks and can only subtract from what they
 produced. It does nothing under the default (exploratory) profile.
 
 How a withheld ref is removed (:func:`withhold_in_model`)
@@ -279,8 +278,8 @@ _REF_IN_TEXT = re.compile("(?<![a-z0-9])(?:" + _GATED_PREFIX_ALT + ")_[a-z0-9]{2
 #: record is hidden the whole block goes, including facts it carries about the hidden record. The visible
 #: record's own facts live elsewhere and stay.
 #:
-#: Seeded with the blocks that #764, #765 and #767 already hid by hand (their per-surface tests pin the
-#: shape). Each family PR registers its own.
+#: Seeded with the blocks already hidden by hand (their per-surface tests pin the
+#: shape). Each family registers its own.
 POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
     {
         StatmechSourceCalculationSummary,
@@ -311,7 +310,7 @@ POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
         TransportSourceCalculationSummary,
         # A visible observation whose conformer group is hidden stays visible with the group
         # block blanked. Registering the block is what lets the guard blank it; widening the field alone is not
-        # enough (design note, "Correction from the #770 review").
+        # enough.
         ConformerGroupCoreBlock,
         # PR-2b: the transition-state, reaction-entry (/full) and kinetics families.
         #
@@ -346,7 +345,7 @@ POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
         ValidationSummary,
         SCFStabilitySummary,
         StoredKineticsProtocolCalculationRef,
-        # #723: one assessed declared target in the transition-state trust fragment. A unit's subject is the
+        # One assessed declared target in the transition-state trust fragment. A unit's subject is the
         # declaration, so a hidden ref drops the whole unit instead of raising on a read.
         TransitionStateScopedAssessmentUnit,
         # PR-2c: the network, provenance (level of theory, corrections, literature) and analytics families.

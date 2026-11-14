@@ -14,7 +14,7 @@ class TestAppUserCreate:
         u = AppUserCreate(
             username="calvin",
             email="calvin@example.com",
-            full_name="Calvin R.",
+            full_name="Ada R.",
             affiliation="MIT",
             orcid="0000-0002-1825-0097",
         )
@@ -24,10 +24,10 @@ class TestAppUserCreate:
     def test_normalizes_whitespace(self) -> None:
         u = AppUserCreate(
             username="  calvin  ",
-            full_name="  Calvin R.  ",
+            full_name="  Ada R.  ",
         )
         assert u.username == "calvin"
-        assert u.full_name == "Calvin R."
+        assert u.full_name == "Ada R."
 
     def test_rejects_empty_username(self) -> None:
         with pytest.raises(ValidationError):
@@ -65,7 +65,7 @@ class TestAppUserRead:
     def test_from_orm(self) -> None:
         user = SimpleNamespace(
             id=1, username="calvin", email="c@example.com",
-            full_name="Calvin R.", affiliation="MIT",
+            full_name="Ada R.", affiliation="MIT",
             orcid="0000-0002-1825-0097",
             role=AppUserRole.user,
             created_at="2024-01-01T00:00:00",

@@ -69,11 +69,11 @@ The codes this module raises are *defined* in
 refusal's code and context belong to the check, not to the layer that
 happens to run it. The request-schema validators that refuse these same
 mistakes one layer earlier may not import ``app`` (the wire package's
-import-boundary test forbids it, statically and at runtime), so before
-#219 they raised a bare ``ValueError`` and a client received the generic
+import-boundary test forbids it, statically and at runtime), so without
+the shared constants they would raise a bare ``ValueError`` and a client would receive the generic
 ``request_validation_error`` with an empty ``context`` — for the very
 same mistake this module answers with a code and the list of names that
-would have worked. Which layer fired decided what the depositor was told.
+would have worked. Which layer fired would decide what the depositor was told.
 Moving the constants into the wire package is what makes both layers able
 to say the same thing; :func:`tckdb_schemas.local_key_codes.undeclared_key_context`
 is what stops them saying it differently.

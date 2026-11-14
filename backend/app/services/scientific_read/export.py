@@ -306,7 +306,7 @@ class SelectedKinetics:
 
     def to_dict(self) -> dict:
         # Field names and block shapes mirror the reaction-kinetics read
-        # surface EXACTLY (PR #41): ``KineticsRecord`` +
+        # surface EXACTLY: ``KineticsRecord`` +
         # ``PlogEntryBlock``/``ChebyshevBlock``/``FalloffBlock``/
         # ``ThirdBodyEfficiencyBlock`` in app/schemas/reads/scientific_kinetics.py
         # and the block builders in scientific_read/kinetics.py

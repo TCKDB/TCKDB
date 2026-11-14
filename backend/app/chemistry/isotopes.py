@@ -45,14 +45,13 @@ __all__ = [
 #:
 #: Wherever ``D`` has a meaning in chemistry it means deuterium (IUPAC Red Book
 #: IR-3.3.2 permits ``D`` and ``T`` as symbols for 2H and 3H; RDKit's molfile
-#: reader turns a ``D`` atom into ``[2H]``). The council that settled #672
-#: found no manual saying Gaussian, ORCA, Molpro, Psi4 or Q-Chem emit ``D`` as
-#: an element: each documents an isotope as a mass attached to an element
+#: reader turns a ``D`` atom into ``[2H]``). The manuals of Gaussian, ORCA,
+#: Molpro, Psi4 and Q-Chem do not say they emit ``D`` as an element: each documents an isotope as a mass attached to an element
 #: (``H(Iso=2)``, ``M = ...``, a ``MASS`` card, ``H@2.014101779``, a
 #: ``$isotopes`` section). A ``D`` reaches TCKDB from a hand-written xyz or
 #: input deck, not from an ESS's own output.
 #:
-#: Rows deposited *before* that decision hold ``D``/``T`` in the element column
+#: Rows deposited *before* ``D``/``T`` were read as 2H/3H hold ``D``/``T`` in the element column
 #: with a NULL mass number and cannot be rewritten
 #: (``trg_as_geometry_atom``). :func:`implied_isotope_mass_number` is how a
 #: reader recovers their meaning from the row's own symbol, and

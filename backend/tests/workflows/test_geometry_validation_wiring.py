@@ -357,7 +357,7 @@ def test_helper_skips_when_output_geometry_missing(db_conn) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 4. Non-opt calcs are not validated in phase 1
+# 4. Non-opt calcs are not validated
 # ---------------------------------------------------------------------------
 
 
@@ -532,7 +532,7 @@ def test_computed_reaction_species_opt_writes_validation_rows(db_conn) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 7. TS opt geometry validation is deferred (phase-1 boundary)
+# 7. TS opt geometry validation is not wired
 # ---------------------------------------------------------------------------
 
 
@@ -708,13 +708,13 @@ def test_ts_opt_does_not_get_geometry_validation(db_conn) -> None:
             )
         )
         assert ts_row is None, (
-            f"TS opt calc {ts_calc.id} must not get a geometry-validation row "
-            f"in phase 1; species graph-isomorphism is not a valid TS check."
+            f"TS opt calc {ts_calc.id} must not get a geometry-validation row; "
+            f"species graph-isomorphism is not a valid TS check."
         )
 
 
 def test_helper_skips_when_species_smiles_is_none(db_conn) -> None:
-    """TS opt geometry validation is intentionally NOT wired in phase 1.
+    """TS opt geometry validation is intentionally NOT wired.
 
     The current ``validate_calculation_geometry`` service takes a
     single ``species_smiles`` graph and decides identity by graph

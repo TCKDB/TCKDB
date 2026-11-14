@@ -38,8 +38,8 @@ def statement_timeout_connect_args(timeout_ms: int | None) -> dict[str, str]:
     transaction exists. That is what makes it last: a ``SET`` issued on a
     fresh connection runs inside psycopg's implicit transaction, and the
     pool's rollback-on-return undoes it, so only the connection's *first*
-    checkout kept the timeout and every later one ran with none (#604,
-    measured on a deployed instance as ``['30s', '0', '0']``). A startup
+    checkout kept the timeout and every later one ran with none
+    (measured on a deployed instance as ``['30s', '0', '0']``). A startup
     option is not part of any transaction and a rollback cannot reach it.
 
     ``None``, ``0`` or a negative value means "no app-level timeout" and
@@ -124,7 +124,7 @@ def authenticate_api_key(session: Session, raw_key: str) -> AppUser | None:
 #: connection from ``SessionLocal``'s pool, so it must never queue for one.
 #: Drawing on that shared pool stalled every stamping request for the full
 #: ``pool_timeout`` once it was saturated, lost the stamp, and left the key
-#: due again on the next request (#597 review). A separate small pool cannot
+#: due again on the next request. A separate small pool cannot
 #: be starved by requests and adds at most two connections per process --
 #: unlike ``NullPool``, which would open one per stamp and let a burst of
 #: distinct keys exceed Postgres ``max_connections``.
@@ -262,7 +262,7 @@ def get_write_db() -> Iterator[Session]:
     its ``201`` and read straight back before the rows existed, let a failed
     commit surface after the ``201`` had gone out, and let ``/auth/login`` be
     followed by a ``401`` on ``/auth/api-keys`` because the session row was
-    not yet committed (#616). With ``scope="function"`` the teardown runs as
+    not yet committed. With ``scope="function"`` the teardown runs as
     soon as the route function has returned, before the response is sent, so
     a commit-time failure is an ordinary exception that reaches the
     application's exception handlers. A database error becomes a coded
