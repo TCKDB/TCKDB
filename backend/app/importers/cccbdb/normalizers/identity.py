@@ -67,8 +67,8 @@ def normalize_inchikey(value: str | None) -> str | None:
 def normalize_smiles(value: str | None) -> str | None:
     """Whitespace-strip a SMILES string.
 
-    Does **not** call RDKit. Canonicalization (if needed) is a
-    concern that lives in the builder layer.
+    Does **not** call RDKit; the importer passes SMILES through
+    uncanonicalised.
     """
 
     return collapse_whitespace(value)

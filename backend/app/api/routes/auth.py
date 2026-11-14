@@ -199,10 +199,8 @@ def _registration_conflict_detail(exc: IntegrityError) -> str:
 
     Returns a ``"code: message"`` detail, which
     :func:`app.api.error_contract.error_envelope` promotes into the
-    ``code`` field of the body. Before this, both refusals arrived as
-    ``http_409`` with one sentence covering two fields, so a sign-up form
-    could not highlight the offending input without string-matching
-    English.
+    ``code`` field of the body. The code lets a sign-up form highlight the
+    offending field without string-matching English.
 
     Call this *before* ``session.rollback()``. Rollback does not clear
     ``exc.orig``, but reading the classification off the exception while
@@ -220,7 +218,7 @@ def _registration_conflict_detail(exc: IntegrityError) -> str:
     if detail is not None:
         return detail
     # A 23505 on some other rule, or a driver that reported no constraint
-    # at all. The old sentence is the honest answer: something unique
+    # at all. The generic sentence is the honest answer: something unique
     # collided and this function cannot say which. Logged with the
     # constraint name -- not returned with it -- so the next such refusal
     # can be classified instead of guessed at.
@@ -330,7 +328,7 @@ def logout(
     # The cookie is cleared on the Response that is returned. FastAPI merges
     # an injected ``response`` stub's headers only when the route returns a
     # non-Response value, so clearing the stub and returning a fresh
-    # ``Response`` sent no ``Set-Cookie`` at all.
+    # ``Response`` would send no ``Set-Cookie`` at all.
     cleared = Response(status_code=204)
     _clear_session_cookie(cleared)
     return cleared

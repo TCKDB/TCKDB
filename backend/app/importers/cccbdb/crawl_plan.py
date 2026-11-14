@@ -57,8 +57,9 @@ class CrawlTarget:
     :param species_key: Short kebab-case identifier used in filenames
         (``"h2"``, ``"h2o"``, ``"benzene"``). Must be filesystem-safe.
     :param source_url: Exact URL the snapshot will fetch.
-    :param page_kind: CCCBDB page family. Only
-        ``"experimental_species"`` is supported.
+    :param page_kind: CCCBDB page family: ``"experimental_species"``,
+        ``"experimental_property_table"``, ``"species_all_data"`` or
+        ``"molecule_catalog_inchi_index"``.
     :param is_validated_url: ``True`` only when the URL is known to
         resolve to per-species data without session state. CCCBDB's
         ``exp1x.asp`` family does *not* — see module docstring for
@@ -118,7 +119,7 @@ EXPERIMENTAL_PILOT: tuple[CrawlTarget, ...] = (
 # Cross-species property-table URLs (the "xp1x.asp-family"). These
 # are the *durable* CCCBDB data path: one URL = one wide table = many
 # species' rows for one property. Empirically confirmed flat single-GET
-# resources (May 2026 WebFetch survey) — no session state, no form
+# resources — no session state, no form
 # submission needed.
 #
 # Each entry's ``species_key`` is a target identifier used in archive
@@ -180,9 +181,7 @@ EXPERIMENTAL_PROPERTIES_PILOT: tuple[CrawlTarget, ...] = (
         # only (xx/yy/zz) — no isotropic scalar. The parser captures
         # all three components in raw_row, but the builder cannot
         # safely collapse them to a single ``scalar_value``, so the
-        # target is intentionally NOT workflow-ready. A future
-        # tensor-aware molecular_property_observation channel (or a
-        # dedicated quadrupole table) will flip this to True.
+        # target is intentionally NOT workflow-ready.
         workflow_ready=False,
         notes=(
             "Experimental quadrupole tensor; Debye*Angstrom; "
@@ -194,9 +193,9 @@ EXPERIMENTAL_PROPERTIES_PILOT: tuple[CrawlTarget, ...] = (
         source_url="https://cccbdb.nist.gov/pollistx.asp",
         page_kind="experimental_property_table",
         property_kind="polarizability_iso",
-        # Confirmed flat-table sibling of diplistx.asp by the
-        # May 2026 WebFetch survey; the per-column shape is inferred
-        # from the dipole page (Molecule|name|state|xx|yy|zz|iso|...).
+        # Flat-table sibling of diplistx.asp. Column shape:
+        # Molecule|name|State|Conformation|alpha|squib|commment, with
+        # the isotropic value in ``alpha``.
         # If a live fetch reveals different columns, update
         # PROPERTY_CONFIGS["polarizability_iso"] in
         # parsers/experimental_property_table.py — not this file.
@@ -211,7 +210,7 @@ EXPERIMENTAL_PROPERTIES_PILOT: tuple[CrawlTarget, ...] = (
 # but the snapshot runner *must* gate on the classifier verdict because
 # the same URL can silently redirect to the formula-entry form.
 #
-# Form POST resolvers are not used: ``exp1x_form_post`` triggered
+# This pilot does not use form POST: ``exp1x_form_post`` triggered
 # ``rate_limit_or_error_page`` in the live diagnostic, presumably
 # because Cloudflare treats programmatic form POSTs as bot traffic.
 SPECIES_ALLDATA_CAS_PILOT: tuple[CrawlTarget, ...] = (
@@ -265,9 +264,8 @@ SPECIES_ALLDATA_CAS_PILOT: tuple[CrawlTarget, ...] = (
 # Molecule catalog (IDENTITY UNIVERSE ONLY). The ``inchix.asp`` page
 # enumerates molecules with formula / name / InChI / InChIKey /
 # SMILES. Its outbound links are NOT trusted as data-page URLs — see
-# CCCBDBCatalogEntry's docstring and the README. A future search/form
-# resolver may translate catalog entries into real data URLs; until
-# then the catalog is enrichment metadata only.
+# CCCBDBCatalogEntry's docstring and the README. The catalog is
+# enrichment metadata only.
 CATALOG_PILOT: tuple[CrawlTarget, ...] = (
     CrawlTarget(
         species_key="inchix",

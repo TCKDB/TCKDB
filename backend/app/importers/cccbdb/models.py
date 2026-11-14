@@ -308,9 +308,6 @@ class CCCBDBExperimentalPropertyTable(BaseModel):
 #   * `exp1x.asp?casno=...` URL patterns do not resolve.
 #   * The data path is the cross-species property-table family
 #     (``xp1x.asp``-style flat tables).
-#   * A future search/form resolver may eventually translate a catalog
-#     entry into a real data URL via CCCBDB's POST flow — but that
-#     resolver does not exist yet.
 #
 # Therefore ``trusted_property_url`` / ``trusted_species_url`` on
 # ``CCCBDBCatalogEntry`` are typed ``None`` and the catalog parser
@@ -327,8 +324,7 @@ class CCCBDBCatalogEntry(BaseModel):
 
     ``raw_href`` is preserved verbatim for audit/debugging but is NOT
     trusted as a data-page URL. ``trusted_property_url`` and
-    ``trusted_species_url`` are reserved for a future resolver and
-    are always ``None``.
+    ``trusted_species_url`` are always ``None``.
     """
 
     model_config = ConfigDict(extra="forbid")

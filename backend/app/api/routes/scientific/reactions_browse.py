@@ -57,20 +57,11 @@ router = APIRouter(route_class=ServerFaultRoute, prefix="/reactions")
 def _drop_blank_smiles(values: list[str] | None) -> list[str]:
     """Filter out blank/whitespace-only entries so an empty value stays a no-op.
 
-    FastAPI parses a *present but empty* repeated query value
-    (``?reactant_smiles=``) as ``[""]`` for a ``list[str]`` parameter --
-    a non-empty, truthy list containing one blank string. The old scalar
-    ``str | None`` filter never had this problem: an empty string is
-    itself falsy in Python, so ``if request.reactant_smiles and ...``
-    treated ``reactant_smiles=""`` the same as "not supplied" and left
-    the catalogue unfiltered. Under the list migration that same query
-    (``?reactant_smiles=``) would otherwise reach
-    :class:`~app.schemas.reads.scientific_reactions.ReactionsBrowseRequest`
-    as ``[""]``, hit the unresolvable-SMILES guard in
-    :func:`app.services.scientific_read.reactions.browse_reactions` (no
-    species has an empty-string SMILES), and hard-empty the response --
-    a real regression. Dropping blank entries here, before the request
-    model ever sees them, restores "empty value means unconstrained".
+    ``?reactant_smiles=`` parses as ``[""]``, which would hit the
+    unresolvable-SMILES guard in
+    :func:`app.services.scientific_read.reactions.browse_reactions` and
+    hard-empty the response; dropping blank entries keeps an empty value
+    unconstrained.
     """
     if not values:
         return []
@@ -96,10 +87,9 @@ def scientific_reactions_browse(
             "(?reactant_smiles=C&reactant_smiles=[OH]), up to "
             f"{_MAX_PARTICIPANTS_PER_REACTION} per call; an empty value "
             "(?reactant_smiles=) means unfiltered, the same as omitting "
-            "it. With one value, the matched records are identical to "
-            "the old scalar filter's -- only the echoed "
-            "``request.filter.reactant_smiles`` shape changed, from a "
-            "bare string to a one-item list. With more than one value, "
+            "it. With one value, the filter matches that species; "
+            "``request.filter.reactant_smiles`` echoes a one-item list. "
+            "With more than one value, "
             "all of them are matched together as a single group against "
             "one stored side in one orientation, not independently -- "
             "which side(s) that group is tried against is governed by "
@@ -119,10 +109,9 @@ def scientific_reactions_browse(
             "(?product_smiles=N&product_smiles=[NH2]), up to "
             f"{_MAX_PARTICIPANTS_PER_REACTION} per call; an empty value "
             "(?product_smiles=) means unfiltered, the same as omitting "
-            "it. With one value, the matched records are identical to "
-            "the old scalar filter's -- only the echoed "
-            "``request.filter.product_smiles`` shape changed, from a "
-            "bare string to a one-item list. With more than one value, "
+            "it. With one value, the filter matches that species; "
+            "``request.filter.product_smiles`` echoes a one-item list. "
+            "With more than one value, "
             "all of them are matched together as a single group against "
             "one stored side in one orientation, not independently -- "
             "which side(s) that group is tried against is governed by "
@@ -141,7 +130,8 @@ def scientific_reactions_browse(
             "``product_smiles`` are matched against. The default is "
             "``forward``: ``reactant_smiles`` matches only the stored "
             "reactant side and ``product_smiles`` only the stored product "
-            "side. ``direction=either`` matches both orientations; every "
+            "side. ``direction=either`` tries both orientations and "
+            "returns a record that matches in either; every "
             "returned record carries ``matched_direction`` saying which "
             "orientation actually matched. ``direction=reverse`` swaps "
             "the single orientation tried (``reactant_smiles`` against "
@@ -187,9 +177,9 @@ def scientific_reactions_browse(
     descriptions and
     :func:`app.services.scientific_read.reactions.browse_reactions`.
 
-    ``direction`` defaults to ``forward``; pass ``direction=either`` to
-    match ``reactant_smiles`` / ``product_smiles`` against both stored
-    orientations. ``matched_direction`` on each record reports which
+    ``direction`` defaults to ``forward``; ``direction=either`` tries
+    both stored orientations and returns a record that matches in
+    either. ``matched_direction`` on each record reports which
     orientation matched.
     """
     request = caller_input(

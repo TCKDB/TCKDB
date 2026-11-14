@@ -163,7 +163,7 @@ PROPERTY_CONFIGS: dict[str, PropertyTableConfig] = {
     ),
     "quadrupole_moment": PropertyTableConfig(
         # Experimental quadrupole moments from CCCBDB's quadlistx.asp.
-        # Live header (May 2026):
+        # Live header:
         #
         #   Molecule | name | xx | yy | zz | squib | commment
         #
@@ -192,8 +192,7 @@ PROPERTY_CONFIGS: dict[str, PropertyTableConfig] = {
     ),
     "polarizability_iso": PropertyTableConfig(
         # Isotropic polarizability from CCCBDB's pollistx.asp. The
-        # live page header (verified by re-fetching pollistx.asp in
-        # May 2026) is:
+        # live page header is:
         #
         #   Molecule | name | State | Conformation | alpha | squib | commment
         #

@@ -140,8 +140,7 @@ keyed by the parsed `property_kind` token.
 ### Builders do not write to the database
 
 The builders produce *validated* dicts for the parts that fit cleanly
-and *structured side-channel* data for the rest; persistence is the DB
-import workflow's job.
+and *structured side-channel* data for the rest; nothing in the importer persists them.
 
 ### How to run builder tests
 
@@ -175,9 +174,6 @@ raw_html  ─→  parsed/*.json         ←── parser output;
 
 parsed    ─→  payloads/*.json       ←── builder output;
                                         regeneratable from parsed.
-
-payloads  ─→  TCKDB DB rows         ←── DB import workflow
-                                        (see below).
 ```
 
 Each downstream artifact is **regeneratable** from the previous one.
@@ -333,15 +329,15 @@ re-fetching.
 
 Cross-species property rows target `molecular_property_observation`
 rather than the per-species `Thermo` / `Statmech` / `Geometry` upload
-schemas. The property-table snapshot **stops at parsed JSON**; payloads
-come from the property-table builder (below).
+schemas. With `--write-payloads`, the snapshot skips builder generation
+for these targets and records a `builder_warnings` entry; payloads come
+from the property-table builder (below).
 
-### Why property tables avoid session-aware POST
+### Session requirements
 
-Reaching CCCBDB's per-species data would require a session-aware
-fetcher (POST the formula form, follow `Set-Cookie` headers, GET the
-data page). That's significant work and the property tables already
-give us most of the high-value experimental data we need without it.
+Property tables are single GETs and need no session; form-only
+per-species pages go through the session-aware form-page resolver
+(below).
 
 ## Molecule catalog (identity universe)
 
@@ -376,11 +372,11 @@ but the importer never trusts that href as a data URL.
   reserved for a search/form resolver.
 - `exp1x.asp?casno=…` URL patterns don't resolve. Constructing a property URL from a
   catalog href would just produce another Cloudflare 1015.
-- Actual data retrieval continues to use either (a) the cross-species
-  property-table URLs, or (b) a search/form
-  resolver (placeholder in `parsers/molecule_catalog.py` —
-  `resolve_species_data_page_from_search` deliberately raises
-  `NotImplementedError`).
+- Data retrieval uses the property-table URLs, direct-CAS snapshots,
+  browser-saved pages or the session-aware form-page resolver.
+  `resolve_species_data_page_from_search` in
+  `parsers/molecule_catalog.py` is a placeholder that raises
+  `NotImplementedError`.
 
 If an href looks like an absolute URL or a non-CCCBDB target, the
 parser emits an audit warning on the entry. The warning is informational
@@ -562,7 +558,7 @@ directions.
 
 ### Parser scope
 
-The species-page parser is **triage-only**: title, ordered section
+The `alldata2x.asp` parser (`parsers/species_all_data.py`) is **triage-only**: title, ordered section
 headings, and any InChI / InChIKey / SMILES / formula / molecule
 name the regex sniffs can find in the body text. Full thermochemistry
 / geometry / vibrational extraction is not done. The durable artifact
@@ -830,17 +826,15 @@ responsible for translating an InChIKey hint into a real
 `species_entry_id` (find an existing `species_entry` row by
 InChIKey) — or leaving the row as identity-unresolved.
 
-### How `identity_hint` is consumed later
+### How the DB import workflow uses `identity_hint`
 
-A future upload service should:
-
-1. Read `raw_payload_json["identity_hint"]["inchikey"]` from the
-   payload.
-2. Look up the matching `species_entry` row.
-3. If found, set `species_entry_id` on the
-   `MolecularPropertyObservationCreate` before persisting.
-4. If not found, persist with `species_entry_id=None` and a
-   `species_unresolved` warning — a maintainer can resolve later.
+The import service sets `species_entry_id` only when
+`raw_payload_json["identity_hint"]["inchikey"]` matches exactly one
+species and that species has exactly one compatible entry
+(`kind=minimum`, ground electronic state). Anything else — formula-only,
+name-only, several species or several entries — leaves
+`species_entry_id=None` and records the proposal in the disposition's
+warnings.
 
 ### Cache-only flag
 
@@ -955,7 +949,7 @@ resolver first." See ``parsers/experimental_index.FORM_ONLY_HREFS``.
 
 #### Additional flat-table candidates surfaced by the audit
 
-Verified-flat but not yet configured (future work):
+Verified-flat but not configured:
 
 | URL | Title | Notes |
 |---|---|---|
@@ -1824,10 +1818,7 @@ statmech_payload_is_valid        # gates StatmechUploadRequest
 ```
 
 When `*_is_valid=False`, the sub-payload is preserved on disk for
-inspection but is not promised to satisfy the upload schema. A future
-identity-resolution layer (InChIKey-based matching, manual SMILES
-backfill, …) can re-build the payload from the parsed JSON without
-re-fetching.
+inspection but is not promised to satisfy the upload schema.
 
 ### Target layout
 

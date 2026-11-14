@@ -111,9 +111,8 @@ def build_molecular_property_payloads_from_property_table(
     :param catalog: Optional molecule catalog for scored identity
         enrichment. When omitted, no identity hints are produced;
         scalar science still flows through unchanged.
-    :param scientific_origin: Defaults to ``experimental`` since the
-        property tables are experimental. Computed CCCBDB pages
-        pass ``computed``.
+    :param scientific_origin: Defaults to ``experimental``; the
+        property tables are experimental.
     :returns: One :class:`CCCBDBMolecularPropertyBuildResult` per row,
         in row order. The builder does **not** drop rows that fail
         to produce a payload; failure is reported per-row.
