@@ -1,16 +1,17 @@
 #!/usr/bin/env node
 // Presses Tab through each route in headless Chrome and checks the focus path.
 // Usage: node scripts/a11y/tab-order.mjs --base http://127.0.0.1:4173 --out report.json [--chrome PATH] /route ...
-// Fails a route when an element has a positive tabindex, focus lands on something with no box, a focused element has
-// no accessible name, or focus never leaves the page controls it started on (a trap). Reading order is reported as
-// the number of times focus jumps up the page by more than a screen, for a person to judge.
+// Fails a route when it never finishes loading, an element has a positive tabindex, focus lands on something with no
+// box (width and height both 0), a focused element has no accessible name, focus returns to the first stop before it
+// has left the page (a trap), or the press cap is reached before the walk ends. Reading order is reported as the
+// number of times focus jumps up the page by more than a screen, for a person to judge.
 import { spawn } from "node:child_process"
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 const args = process.argv.slice(2)
-const options = { base: "http://127.0.0.1:4173", out: "tab-order.json", chrome: "google-chrome-stable", port: "9335", presses: "80" }
+const options = { base: "http://127.0.0.1:4173", out: "tab-order.json", chrome: "google-chrome-stable", port: "9335", presses: "300" }
 const routes = []
 for (let i = 0; i < args.length; i++) {
     if (args[i].startsWith("--")) options[args[i].slice(2)] = args[++i]
@@ -31,7 +32,8 @@ const DESCRIBE = `(() => {
     const el = document.activeElement
     if (!el || el === document.body) return null
     const r = el.getBoundingClientRect()
-    const name = el.getAttribute("aria-label") || (el.labels && el.labels[0] && el.labels[0].innerText) || el.innerText || el.getAttribute("title") || el.value || ""
+    const labelledBy = (el.getAttribute("aria-labelledby") || "").split(/\\s+/).map((id) => document.getElementById(id)?.innerText ?? "").join(" ").trim()
+    const name = el.getAttribute("aria-label") || labelledBy || (el.labels && el.labels[0] && el.labels[0].innerText) || el.innerText || el.getAttribute("title") || el.value || ""
     return { tag: el.tagName.toLowerCase(), name: name.trim().replace(/\\s+/g, " ").slice(0, 60), top: Math.round(r.top + scrollY), w: Math.round(r.width), h: Math.round(r.height), tabindex: el.getAttribute("tabindex") }
 })()`
 
@@ -53,30 +55,40 @@ try {
     const key = (type, k, code, vk) => call("Input.dispatchKeyEvent", { type, key: k, code, windowsVirtualKeyCode: vk })
     for (const route of routes) {
         await call("Page.navigate", { url: options.base + route })
-        for (let i = 0; i < 100; i++) {
-            if (await ev(`!!document.querySelector("main h1") && !document.querySelector("main [aria-busy='true']")`)) break
-            await sleep(150)
+        let ready = false
+        for (let i = 0; i < 100 && !ready; i++) {
+            ready = await ev(`!!document.querySelector("main h1") && !document.querySelector("main [aria-busy='true']")`)
+            if (!ready) await sleep(150)
+        }
+        if (!ready) {
+            failed = true
+            report.push({ route, pass: false, error: "page did not finish loading" })
+            console.log(`FAIL ${route} did not finish loading`)
+            continue
         }
         await sleep(500)
         const positive = await ev(`[...document.querySelectorAll("[tabindex]")].filter((el) => Number(el.getAttribute("tabindex")) > 0).length`)
         const path = []
+        let reachedEnd = false
+        let trapped = false
         for (let n = 0; n < Number(options.presses); n++) {
             await key("rawKeyDown", "Tab", "Tab", 9)
             await key("keyUp", "Tab", "Tab", 9)
             await sleep(25)
             const here = await ev(DESCRIBE)
-            if (here === null) break
-            if (path.length > 0 && JSON.stringify(here) === JSON.stringify(path[0]) && n > 3) break
+            if (here === null) { reachedEnd = true; break }
+            if (path.length > 0 && JSON.stringify(here) === JSON.stringify(path[0])) { trapped = true; break }
             path.push(here)
         }
-        const boxless = path.filter((p) => p.w === 0 || p.h === 0).length
+        const boxless = path.filter((p) => p.w === 0 && p.h === 0).length
         const nameless = path.filter((p) => p.name === "").length
         let backJumps = 0
         for (let i = 1; i < path.length; i++) if (path[i].top < path[i - 1].top - 900) backJumps += 1
-        const pass = positive === 0 && boxless === 0 && nameless === 0 && path.length > 0
+        const capped = !reachedEnd && !trapped
+        const pass = positive === 0 && boxless === 0 && nameless === 0 && path.length > 0 && !trapped && !capped
         if (!pass) failed = true
-        report.push({ route, stops: path.length, positiveTabindex: positive, boxless, nameless, backJumps, pass, first: path.slice(0, 3).map((p) => `${p.tag} ${p.name}`), path: path.map((p) => `${p.tag}: ${p.name}${p.w === 0 || p.h === 0 ? " [no box]" : ""}`) })
-        console.log(`${pass ? "ok  " : "FAIL"} ${route} stops=${path.length} positive=${positive} boxless=${boxless} nameless=${nameless} backJumps=${backJumps}`)
+        report.push({ route, stops: path.length, reachedEnd, trapped, capped, positiveTabindex: positive, boxless, nameless, backJumps, pass, first: path.slice(0, 3).map((p) => `${p.tag} ${p.name}`), path: path.map((p) => `${p.tag}: ${p.name}${p.w === 0 && p.h === 0 ? " [no box]" : ""}`) })
+        console.log(`${pass ? "ok  " : "FAIL"} ${route} stops=${path.length} positive=${positive} boxless=${boxless} nameless=${nameless} backJumps=${backJumps}${trapped ? " TRAPPED" : ""}${capped ? ` CAP(${options.presses}) HIT` : ""}`)
     }
     ws.close()
 } finally {

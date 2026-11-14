@@ -11,7 +11,7 @@ import { evaluated, type Quantity } from "../domain/quantityFormat"
 import { useAnnounce } from "../hooks/useAnnounce"
 import { useOverflows } from "../hooks/useOverflows"
 import { Disclosure } from "./Disclosure"
-import { QuantityValue } from "./QuantityValue"
+import { QuantityValue, ROUNDED_NOTE } from "./QuantityValue"
 
 const COLUMN_COUNT = 8
 const CELL_W = 72
@@ -329,6 +329,7 @@ export function NetworkKtpHeatmap({ networkRef, network, channels, states }: {
                         </tbody>
                     </table>
                 </div>
+                <p className="note">{ROUNDED_NOTE}</p>
             </Disclosure>
         </div>
     )

@@ -64,7 +64,6 @@
     flex-direction: column;
     gap: .3rem;
     min-width: 0;
-    position: relative;
 }
 
 .browse-filter-field label {
@@ -76,8 +75,18 @@
 
 .browse-filter-field-head {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: .4rem;
+}
+
+/* The "?" is a 24 px target. */
+.browse-filter-field-head .term {
+    min-width: 1.5rem;
+    min-height: 1.5rem;
+    border: 1px solid var(--control-border);
+    border-radius: 50%;
+    color: var(--muted);
+    text-align: center;
 }
 
 /* A typed value (charge, formula, SMILES...) reads at the `--type-value`
@@ -577,14 +586,9 @@ span.browse-row-title {
     .browse-filter-grid {
         grid-template-columns: 1fr 1fr;
     }
-
-    .browse-filter-field:nth-child(even) .term-popover {
-        left: auto;
-        right: 0;
-    }
 }
 
-/* Filters in the page shell's side column: one field per row, notes in the flow. */
+/* Filters in the page shell's side column: one field per row. */
 .page-shell-side .browse-filters {
     margin: 0;
     padding: .9rem;

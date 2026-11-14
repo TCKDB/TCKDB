@@ -21,8 +21,11 @@ const ALL_STYLESHEETS: Record<string, string> = Object.fromEntries(
 /** Stylesheets left out of the check, each with the reason. */
 const UNCHECKED_STYLESHEETS = new Map<string, string>([
     ["theme.css", "tokens only; it defines no class selectors"],
-    ["design-system.css", "its type and card utilities are the shared vocabulary that design-system.css.test.ts pins, used or not"],
 ])
+
+/** Classes in `design-system.css` that are the pinned shared vocabulary, used or not: every `.t-*` type utility and these modifiers. */
+const DESIGN_SYSTEM_VOCABULARY = new Set(["card--sunken", "card--selected", "data--select"])
+const isDesignSystemVocabulary = (name: string) => /^t-/.test(name) || DESIGN_SYSTEM_VOCABULARY.has(name)
 
 const CHECKED_STYLESHEETS = Object.keys(ALL_STYLESHEETS).filter((name) => !UNCHECKED_STYLESHEETS.has(name)).sort()
 
@@ -31,6 +34,7 @@ const CHECKED_STYLESHEETS = Object.keys(ALL_STYLESHEETS).filter((name) => !UNCHE
 // say) is not actually rendered by any real page, so it would not count
 // as a live consumer here.
 const COMPONENT_SOURCES = import.meta.glob(["./**/*.tsx", "./**/*.ts"], { query: "?raw", import: "default", eager: true }) as Record<string, string>
+const isProductionSource = (path: string) => !/\.test\.|\.fixture\.|\/test\//.test(path)
 
 function stripCssComments(source: string): string {
     return source.replace(/\/\*[\s\S]*?\*\//g, "")
@@ -53,7 +57,7 @@ function stripJsComments(source: string): string {
 }
 
 const COMPONENT_TEXT = Object.entries(COMPONENT_SOURCES)
-    .filter(([path]) => !path.includes(".test."))
+    .filter(([path]) => isProductionSource(path))
     .map(([, source]) => stripJsComments(source))
     .join("\n")
 
@@ -74,16 +78,33 @@ function classNamesIn(css: string): Set<string> {
  *  its own token -- not as a substring of a longer identifier (so
  *  checking `"card"` does not count a hit inside `"card--selected"`). */
 function hasComponentConsumer(className: string): boolean {
-    const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    const pattern = new RegExp(`(?<![A-Za-z0-9_-])${escape(className)}(?![A-Za-z0-9_-])`)
+    const pattern = new RegExp(`(?<![A-Za-z0-9_-])${escapeRegExp(className)}(?![A-Za-z0-9_-])`)
     if (pattern.test(COMPONENT_TEXT)) return true
-    // A class built from a stem and a value, as in `review-chip--${tone}`.
-    for (let at = className.indexOf("-"); at !== -1; at = className.indexOf("-", at + 1)) {
-        const stem = className.slice(0, at + 1)
-        if (new RegExp(`(?<![A-Za-z0-9_-])${escape(stem)}\\$\\{`).test(COMPONENT_TEXT)) return true
-    }
-    return false
+    return BUILT_CLASS_STEMS.has(builtStemOf(className) ?? "")
 }
+
+function escapeRegExp(text: string): string {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+/** The built-class stem a class name starts with, if any. */
+function builtStemOf(className: string): string | undefined {
+    return [...BUILT_CLASS_STEMS.keys()].find((stem) => className.startsWith(stem))
+}
+
+/**
+ * Classes the source builds from a stem and a value, as in `review-chip--${tone}`. Only these stems excuse a class
+ * that never appears whole; any other template literal does not.
+ */
+const BUILT_CLASS_STEMS = new Map<string, string>([
+    ["severity-", "curator task severity is appended to the stem when the class is chosen"],
+    ["review-status-", "the review status is appended to the stem, with underscores turned into hyphens"],
+    ["review-chip--", "the chip tone is appended to the stem"],
+    ["mol-poster-atom--", "the element class is appended to the stem"],
+    ["ktp-heat-", "the heat step is appended to the stem"],
+    ["record-glyph--", "the record kind is appended to the stem"],
+    ["settings-state--", "the setting's state is appended to the stem"],
+])
 
 // Explicit allowlist, with a REASON for each entry. A `Set` here (the
 // plain list) would let an entry get added with no reason at all, silently.
@@ -103,10 +124,9 @@ const NOT_A_CLASS = new Map<string, string>([
 ])
 
 describe("every class selector in a checked stylesheet has a real consumer", () => {
-    it("discovers the checked stylesheets among what actually exists", () => {
-        for (const name of CHECKED_STYLESHEETS) {
-            expect(Object.keys(ALL_STYLESHEETS)).toContain(name)
-        }
+    it("checks every stylesheet but the token file", () => {
+        expect(CHECKED_STYLESHEETS).toHaveLength(Object.keys(ALL_STYLESHEETS).length - UNCHECKED_STYLESHEETS.size)
+        expect(CHECKED_STYLESHEETS).toContain("design-system.css")
     })
 
     it.each(CHECKED_STYLESHEETS)("%s: every class selector has at least one .tsx consumer (or a documented allowlist reason)", (stylesheetName) => {
@@ -115,8 +135,22 @@ describe("every class selector in a checked stylesheet has a real consumer", () 
         expect(classNames.size).toBeGreaterThan(0)
         const deadClasses = Array.from(classNames)
             .filter((name) => !NOT_A_CLASS.has(name))
+            .filter((name) => !(stylesheetName === "design-system.css" && isDesignSystemVocabulary(name)))
             .filter((name) => !hasComponentConsumer(name))
         expect(deadClasses).toEqual([])
+    })
+
+    it("a class no source uses is reported, even when its name starts like a used family", () => {
+        expect(hasComponentConsumer("review-zombie-xyz")).toBe(false)
+        expect(hasComponentConsumer("settings-zombie")).toBe(false)
+        expect(hasComponentConsumer("review-status-approved")).toBe(true)
+    })
+})
+
+describe("BUILT_CLASS_STEMS entries are reasoned and current", () => {
+    it.each([...BUILT_CLASS_STEMS.keys()])("%s is still built in source as a template literal", (stem) => {
+        expect(BUILT_CLASS_STEMS.get(stem)!.length).toBeGreaterThanOrEqual(20)
+        expect(new RegExp(`(?<![A-Za-z0-9_-])${escapeRegExp(stem)}\\$\\{`).test(COMPONENT_TEXT), `${stem}\${...} appears nowhere in source -- stale entry`).toBe(true)
     })
 })
 

@@ -96,7 +96,10 @@ describe("type scale: every step declares the exact font/tracking/transform", ()
 
     it("every step is applied by a rule other than its own utility class, so the scale carries no unused step", () => {
         const others = Object.entries(ALL_STYLESHEETS)
-            .map(([name, css]) => (name === "design-system.css" ? css.replace(/\.t-[a-z0-9-]+\s*\{[^}]*\}/g, "") : css))
+            .map(([name, css]) => {
+                const uncommented = css.replace(/\/\*[\s\S]*?\*\//g, "")
+                return name === "design-system.css" ? uncommented.replace(/\.t-[a-z0-9-]+\s*\{[^}]*\}/g, "") : uncommented
+            })
             .join("\n")
         for (const step of Object.keys(STEPS)) {
             expect(others, `--type-${step}-font is applied nowhere`).toMatch(new RegExp(`font:\\s*var\\(--type-${step}-font\\)`))

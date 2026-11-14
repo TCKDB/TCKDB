@@ -113,9 +113,13 @@ export function significant(value: number | null | undefined, digits: number, un
  * as 2.42543 x 10^7. `full` carries the served value when the shown one is shorter.
  */
 export function evaluated(value: number | null | undefined, unit?: string | null): Quantity | null {
-    const quantity = significant(value, DEPOSITED_FIGURES, unit)
-    if (quantity === null || value === null || value === undefined) return quantity
-    return Number(value.toPrecision(DEPOSITED_FIGURES)) === value ? quantity : { ...quantity, full: String(value) }
+    if (value === null || value === undefined || !Number.isFinite(value)) return null
+    // Round first, so a value that rounds up across 1e4 takes the same form as one that starts there.
+    const rounded = Number(value.toPrecision(DEPOSITED_FIGURES))
+    const quantity = significant(rounded, DEPOSITED_FIGURES, unit)
+    if (quantity === null) return null
+    const signed = quantity.value.startsWith("-") ? { ...quantity, value: `${MINUS}${quantity.value.slice(1)}` } : quantity
+    return rounded === value ? signed : { ...signed, full: String(value) }
 }
 
 function roundDeposited(value: number): number {

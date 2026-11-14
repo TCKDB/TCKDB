@@ -1800,7 +1800,7 @@ describe("species-entry page: failed energy reads, pictures and announcements", 
 })
 
 describe("species-entry page: writing the default selection to the address", () => {
-    it("loads once and never goes back to the loading screen", async () => {
+    it("loads once, keeps the same page, and never goes back to a loading screen", async () => {
         const counts = { entry: 0, conformers: 0 }
         server.use(
             http.get("/api/v1/scientific/species/search", ({ request }) => {
@@ -1814,16 +1814,31 @@ describe("species-entry page: writing the default selection to the address", () 
             ...handlers(),
         )
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
-        render(<App />)
-        await screen.findByRole("heading", { name: "Its 3D shapes" })
+        const loadingTexts = /Loading archive|Loading species entry/
         let loadingAgain = false
-        const watch = new MutationObserver(() => { if (screen.queryByText("Loading archive…")) loadingAgain = true })
+        // The nodes of the first loaded page, taken the moment it is drawn and before any address rewrite runs.
+        let h1: HTMLElement | null = null
+        let section: HTMLElement | null = null
+        let loaded = false
+        const watch = new MutationObserver(() => {
+            if (!loaded) {
+                section = screen.queryByRole("heading", { name: "Its 3D shapes" })
+                if (section) {
+                    loaded = true
+                    h1 = screen.getByRole("heading", { level: 1 })
+                }
+            } else if (screen.queryByText(loadingTexts)) loadingAgain = true
+        })
         watch.observe(document.body, { childList: true, subtree: true })
+        render(<App />)
+        await waitFor(() => expect(loaded).toBe(true))
         await waitFor(() => expect(window.location.search).toContain("selection=default"))
         await new Promise((resolve) => setTimeout(resolve, 300))
         watch.disconnect()
         expect(loadingAgain).toBe(false)
-        expect(screen.queryByText("Loading archive…")).not.toBeInTheDocument()
+        expect(screen.queryByText(loadingTexts)).not.toBeInTheDocument()
+        expect(screen.getByRole("heading", { level: 1 })).toBe(h1)
+        expect(screen.getByRole("heading", { name: "Its 3D shapes" })).toBe(section)
         expect(counts).toEqual({ entry: 1, conformers: 1 })
     })
 })

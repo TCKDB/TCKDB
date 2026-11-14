@@ -690,6 +690,7 @@ describe("SMILES field: a short label with its scope explained on demand", () =>
         const note = screen.getByText(SCOPE)
         expect(note).toHaveAttribute("data-open", "false")
         expect(screen.getByRole("button", { name: "About SMILES" })).toHaveAttribute("aria-describedby", note.id)
+        expect(screen.getByLabelText("SMILES")).toHaveAttribute("aria-describedby", note.id)
     })
 
     it("hovering the mark opens the note", async () => {
@@ -699,6 +700,27 @@ describe("SMILES field: a short label with its scope explained on demand", () =>
         const mark = screen.getByRole("button", { name: "About SMILES" })
         const note = screen.getByText(SCOPE)
         fireEvent.mouseEnter(mark)
+        expect(note).toHaveAttribute("data-open", "true")
+    })
+
+    it("moving off the mark closes the note again", async () => {
+        server.use(...metaHandlers())
+        renderForm("transition_state")
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+        const mark = screen.getByRole("button", { name: "About SMILES" })
+        const note = screen.getByText(SCOPE)
+        fireEvent.mouseEnter(mark)
+        fireEvent.mouseLeave(mark)
+        await waitFor(() => expect(note).toHaveAttribute("data-open", "false"))
+    })
+
+    it("a tap on the mark opens the note, with no hover first", async () => {
+        const user = userEvent.setup()
+        server.use(...metaHandlers())
+        renderForm("transition_state")
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+        const note = screen.getByText(SCOPE)
+        await user.click(screen.getByRole("button", { name: "About SMILES" }))
         expect(note).toHaveAttribute("data-open", "true")
     })
 
@@ -1042,6 +1064,10 @@ describe("Reactant and product structures: the matching rules sit in notes opene
         fireEvent.focus(screen.getByRole("button", { name: "About Reactant structures" }))
         expect(reactantNote).toHaveAttribute("data-open", "true")
         expect(productNote).toHaveAttribute("data-open", "false")
+        fireEvent.blur(screen.getByRole("button", { name: "About Reactant structures" }))
+        fireEvent.focus(screen.getByRole("button", { name: "About Product structures" }))
+        expect(productNote).toHaveAttribute("data-open", "true")
+        await waitFor(() => expect(reactantNote).toHaveAttribute("data-open", "false"))
     })
 
     it("each mark points at its own note", async () => {

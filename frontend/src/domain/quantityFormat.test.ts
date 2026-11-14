@@ -234,6 +234,33 @@ describe("evaluated", () => {
     it("shows a mid-range value in plain digits and a short one unchanged", () => {
         expect(evaluated(12.3456789)).toEqual({ value: "12.3457", unit: null, full: "12.3456789" })
         expect(evaluated(0.5)).toEqual({ value: "0.5", unit: null })
+    })
+
+    it("keeps an exact six-figure value without a served-value copy", () => {
+        expect(evaluated(123456)).toEqual({ value: "1.23456", exponent: "5", unit: null })
+        expect(evaluated(1.23456)).toEqual({ value: "1.23456", unit: null })
+    })
+
+    it("writes a small value with a minus exponent", () => {
+        expect(evaluated(0.000123456789)).toEqual({ value: "1.23457", exponent: "−4", unit: null, full: "0.000123456789" })
+    })
+
+    it("treats zero, an absent value and a non-number plainly", () => {
+        expect(evaluated(0)).toEqual({ value: "0", unit: null })
         expect(evaluated(null)).toBeNull()
+        expect(evaluated(undefined)).toBeNull()
+        expect(evaluated(Number.NaN)).toBeNull()
+        expect(evaluated(Number.POSITIVE_INFINITY)).toBeNull()
+    })
+
+    it("uses the true minus sign for a negative value", () => {
+        expect(evaluated(-12.3456789)).toEqual({ value: "−12.3457", unit: null, full: "-12.3456789" })
+        expect(evaluated(-24254345)?.value).toBe("−2.42543")
+    })
+
+    it("gives a value that rounds up to 10000 the same form as 10000", () => {
+        const rounded = evaluated(9999.995)
+        const exact = evaluated(10000)
+        expect(rounded).toMatchObject({ value: exact!.value, exponent: exact!.exponent })
     })
 })

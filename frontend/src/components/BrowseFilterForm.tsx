@@ -524,13 +524,15 @@ function TextField({ label, value, onChange, placeholder, hint }: {
     hint?: string
 }) {
     const id = fieldId(label)
+    const hintId = `${id}-hint`
     return (
         <div className="browse-filter-field">
             <div className="browse-filter-field-head">
                 <label htmlFor={id}>{label}</label>
-                {hint && <Term note={hint} label={`About ${label}`}>?</Term>}
+                {hint && <Term note={hint} label={`About ${label}`} popoverId={hintId}>?</Term>}
             </div>
             <input
+                aria-describedby={hint ? hintId : undefined}
                 id={id}
                 onChange={(event) => onChange(event.target.value)}
                 placeholder={placeholder}

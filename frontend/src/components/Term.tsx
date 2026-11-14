@@ -6,19 +6,20 @@ const CLOSE_DELAY_MS = 150
 const EDGE_GAP_PX = 8
 
 /**
- * A glossary word as a button. The explanation is always in the DOM and linked by `aria-describedby`;
- * it opens on hover, focus and tap, closes on Esc with focus kept on the button, and stays open while the pointer is over it.
+ * A word with an explanation, as a button. Give a glossary `term`, or a free-text `note` with a `label` for the
+ * button's accessible name (its visible text is then usually just a mark). The explanation is always in the DOM and
+ * linked by `aria-describedby`; `popoverId` lets the caller point a field at the same text. It opens on hover, focus
+ * and tap, closes on Esc with focus kept on the button, and stays open while the pointer is over it.
  */
-export function Term({ term, note, label, children }: {
-    term?: GlossaryKey
-    /** Free text in place of a glossary definition. */
-    note?: string
-    /** The button's accessible name, when its visible text is only a mark. */
-    label?: string
-    children?: ReactNode
-}) {
+export type TermProps = (
+    | { term: GlossaryKey; note?: undefined; label?: undefined }
+    | { note: string; label: string; term?: undefined }
+) & { children?: ReactNode; popoverId?: string }
+
+export function Term({ term, note, label, children, popoverId: givenId }: TermProps) {
     const entry = term === undefined ? undefined : GLOSSARY[term]
-    const popoverId = useId()
+    const generatedId = useId()
+    const popoverId = givenId ?? generatedId
     const wrapRef = useRef<HTMLSpanElement>(null)
     const popoverRef = useRef<HTMLSpanElement>(null)
     const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
