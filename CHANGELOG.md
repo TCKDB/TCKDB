@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Curators name species, and an operator loads reviewed names (Unreleased)
+
+- **Behaviour:** `POST /api/v1/curation/species-names` (curator or admin) gives a species a searchable name from `{species_ref, name, kind}`, and `POST /api/v1/curation/species-names/{name_ref}/retire` retires one. Both take public refs only. A name is 1 to 128 characters from the same set the name search accepts (`species_name_invalid`, 422); a live name with the same normalised form on the same species is refused (`species_name_duplicate`, 409). A retired name stays retired, and adding the same name again creates a new live row. An unknown or malformed ref is a plain 404. Merging species moves the loser's live names to the survivor; a name the survivor already holds live is retired instead. `backend/scripts/import_species_names.py --file reviewed.csv --source <external_source name> [--source-release R] [--dry-run]` loads a reviewed CSV (InChIKey, or SMILES with charge and multiplicity; name; kind) as `offline_import` rows. It writes a row only when exactly one live species matches, reports the rest with a reason, and makes no network connection. `--propose-from-cccbdb` lists names held in stored CCCBDB observations as CSV and writes nothing.
+- **Schema and migration:** none; `species_name` already carries `public_ref`. No new environment variable.
+- **Versions:** `tckdb-client` 0.208.0 (two rejection codes, two parity-ledger rows); `tckdb-schemas` 0.174.6.
+
 ## Script help, test names and site text describe behaviour only (Unreleased)
 
 - **Behaviour:** script `--help` and printed text, test names and assertion messages, and site wording state current behaviour without design-record, issue or date references. `backend/scripts/bulk_load_arc.py` takes its source directory from `--src` or the new `TCKDB_ARC_RUNS_DIR` environment variable and exits 2 naming both when neither is set. A review stamped with version 0 reads "(no version recorded)".

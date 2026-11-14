@@ -102,7 +102,13 @@ def _live_matches(session: Session, row: dict[str, str]) -> tuple[list[Species] 
 
 
 def _import_row(
-    session: Session, row: dict[str, str], *, source: ExternalSource, record_prefix: str, number: int, dry_run: bool,
+    session: Session,
+    row: dict[str, str],
+    *,
+    source: ExternalSource,
+    record_prefix: str,
+    number: int,
+    dry_run: bool,
     now: datetime,
 ) -> RowOutcome:
     name, kind = row.get("name", ""), row.get("kind", "")
@@ -114,7 +120,7 @@ def _import_row(
     if problem is not None:
         out.reason = problem
         return out
-    retrieved_at = now
+    retrieved_at: datetime | None = now
     if row.get("retrieved_at"):
         retrieved_at = _parse_time(row["retrieved_at"])
         if retrieved_at is None:
@@ -209,7 +215,9 @@ def import_species_names_csv(
     try:
         for number, row in enumerate(rows, start=2):  # row 1 is the header
             report.rows.append(
-                _import_row(session, row, source=source, record_prefix=record_prefix, number=number, dry_run=dry_run, now=now)
+                _import_row(
+                    session, row, source=source, record_prefix=record_prefix, number=number, dry_run=dry_run, now=now
+                )
             )
     finally:
         if outer is not None:

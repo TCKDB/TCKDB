@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.174.6 - 2026-11-14
+
+Two refusal codes are added: `species_name_duplicate` (409) and `species_name_invalid` (422), returned by `POST /api/v1/curation/species-names` (curator or admin). The producer contract lists both curation routes among the role-gated write routes. No model or payload shape changed.
+
 ## 0.174.5 - 2026-11-14
 
 The producer contract's further-reading list names the scientific check register once, for which checks refuse and which only warn and for the chemistry positions TCKDB enforces, and no longer links a design record. No refusal, warning, field or behaviour changes.

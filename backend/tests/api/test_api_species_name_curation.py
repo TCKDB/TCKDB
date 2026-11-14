@@ -263,7 +263,9 @@ def test_merge_retires_a_losing_name_the_survivor_already_holds(client, db_sessi
     row = db_session.scalar(select(SpeciesName).where(SpeciesName.public_ref == clash))
     assert row.retired_at is not None and row.species_id == loser.id
     live_count = db_session.scalar(
-        select(func.count()).select_from(SpeciesName).where(SpeciesName.name_key == "butene", SpeciesName.retired_at.is_(None))
+        select(func.count())
+        .select_from(SpeciesName)
+        .where(SpeciesName.name_key == "butene", SpeciesName.retired_at.is_(None))
     )
     assert live_count == 1
     assert _found(client, "butene") == [survivor.public_ref]
@@ -273,7 +275,10 @@ def test_forwarding_alone_leaves_the_species_live(db_session):
     loser, survivor = _species(db_session, "FL"), _species(db_session, "FS")
     db_session.add(
         SpeciesName(
-            species_id=loser.id, name="abc", name_key="abc", kind=SpeciesNameKind.common,
+            species_id=loser.id,
+            name="abc",
+            name_key="abc",
+            kind=SpeciesNameKind.common,
             source_kind=SpeciesNameSourceKind.curated,
         )
     )

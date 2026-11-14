@@ -15,12 +15,12 @@ from app.schemas.entities.scientific_record_supersession import (
     ScientificRecordSupersessionRead,
     ScientificRecordSupersessionRequest,
 )
+from app.schemas.entities.species_name import SpeciesNameCreate, SpeciesNameRead
 from app.schemas.entities.structure_evidence_finding import (
     StructureEvidenceFindingCreate,
     StructureEvidenceFindingPageRead,
     StructureEvidenceFindingRead,
 )
-from app.schemas.entities.species_name import SpeciesNameCreate, SpeciesNameRead
 from app.services.reproducibility_assessment import get_latest_reproducibility_assessment
 from app.services.reproducibility_rubric import evaluate_and_append_reproducibility
 from app.services.scientific_record_supersession import supersede_scientific_record

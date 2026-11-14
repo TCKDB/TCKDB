@@ -68,7 +68,10 @@ def _names(db_session, species):
 
 
 def test_dry_run_reports_and_writes_nothing(script, db_session, source, tmp_path):
-    a, b = make_species(db_session, inchi_key=next_inchi_key("IA")), make_species(db_session, inchi_key=next_inchi_key("IB"))
+    a, b = (
+        make_species(db_session, inchi_key=next_inchi_key("IA")),
+        make_species(db_session, inchi_key=next_inchi_key("IB")),
+    )
     path = _write(
         tmp_path,
         "inchikey,name,kind\n"
@@ -195,11 +198,18 @@ def test_propose_from_cccbdb_lists_new_names_and_writes_nothing(script, db_sessi
     for i, (sp, name) in enumerate(((a, "methanol"), (a, "methanol"), (b, "ethanol"), (b, "bad%"))):
         entry = make_species_entry(db_session, sp)
         make_observation(
-            db_session, species_entry=entry, reference_label=f"row{i}", raw_payload_json={"identity_hint": {"name": name}}
+            db_session,
+            species_entry=entry,
+            reference_label=f"row{i}",
+            raw_payload_json={"identity_hint": {"name": name}},
         )
     db_session.add(
         SpeciesName(
-            species_id=b.id, name="Ethanol", name_key="ethanol", kind="common", source_kind=SpeciesNameSourceKind.curated
+            species_id=b.id,
+            name="Ethanol",
+            name_key="ethanol",
+            kind="common",
+            source_kind=SpeciesNameSourceKind.curated,
         )
     )
     db_session.flush()
