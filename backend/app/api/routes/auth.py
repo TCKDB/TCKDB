@@ -73,9 +73,8 @@ REGISTRATION_CONFLICTS: dict[str, str] = {
 }
 
 #: What registration says when the write was refused by something other
-#: than the two rules above. Deliberately the sentence that was there
-#: before: an unrecognised constraint is exactly the case where naming a
-#: field would be a guess.
+#: than the two rules above. The generic sentence: an unrecognised
+#: constraint is exactly the case where naming a field would be a guess.
 REGISTRATION_CONFLICT_FALLBACK = "Username or email already in use."
 
 

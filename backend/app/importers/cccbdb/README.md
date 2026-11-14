@@ -833,8 +833,9 @@ The import service sets `species_entry_id` only when
 species and that species has exactly one compatible entry
 (`kind=minimum`, ground electronic state). Anything else — formula-only,
 name-only, several species or several entries — leaves
-`species_entry_id=None` and records the proposal in the disposition's
-warnings.
+`species_entry_id=None`. When there is a reason to report, it is in the
+disposition's warnings; formula, formula+name and CAS hints are reported as
+proposals only.
 
 ### Cache-only flag
 
