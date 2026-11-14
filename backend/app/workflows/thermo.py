@@ -418,7 +418,7 @@ def persist_thermo_upload(
 
     # Resolve source_calculation links. Each entry uses either a local
     # calculation_key (inline path) or an existing_calculation_id (the
-    # path that lets ARC link thermo to calcs already uploaded by the
+    # path that lets a producer link thermo to calcs already uploaded by the
     # conformer step). Both paths run owner-consistency and role/type
     # compatibility checks before becoming a thermo_source_calculation row.
     resolved_source_calcs: list[ThermoSourceCalculationCreate] = []

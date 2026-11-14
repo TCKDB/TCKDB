@@ -1685,7 +1685,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("level_of_theory_method_is_compound", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/refs.py",
             note=(
-                "level_of_theory.method contains '//': an energy//geometry pair (ARC's 'x//y' shorthand) written as "
+                "level_of_theory.method contains '//': an energy//geometry pair (the 'x//y' shorthand some producers use) written as "
                 "one method name. That is two ordinary levels of theory; the producer sends the single-point and the "
                 "optimization levels as separate calculations. Context carries the field and the value sent."
             )),

@@ -35,7 +35,7 @@ class CalculationOriginKind(str, Enum):
       this calculation and produced its output. Default when the
       ``tckdb_origin`` block is absent.
     - ``reused_result``: another row's value was copied/asserted as the
-      value for this row. The classic case is ARC reusing the opt
+      value for this row. The classic case is a producer reusing the opt
       energy as the SP energy when ``sp_level == opt_level``.
     - ``imported``: pulled from external source (e.g. literature DOI,
       published supporting information, prior database).

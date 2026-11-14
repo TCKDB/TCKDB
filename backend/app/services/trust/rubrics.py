@@ -3266,18 +3266,15 @@ COMPUTED_TRANSITION_STATE: EvidenceRubric = EvidenceRubric(
             runner=_check_ts_single_point_present,
         ),
         EvidenceCheckSpec(
-            # NAME UNCHANGED ON PURPOSE: "irc_evidence_present" is a
-            # stored-evaluation key (see stored `record_review`/machine-
-            # review rows that cite it by name) -- only the human-facing
-            # text below changed. The old text ("IRC evidence should be
-            # linked when available") read, on a page, as a claim about
-            # *validated* IRC evidence (pass/fail), when the runner below
-            # only checks that an IRC *calculation* exists in the source
-            # set -- the same gap that made `include=trust` say
-            # `irc_evidence_present: passed` on an entry whose read-model
-            # `validation.irc` correctly says "absent" (no structured
-            # pass/fail evidence record was ever deposited by ARC
-            # uploads). The wording now names what is actually checked.
+            # "irc_evidence_present" is a stored-evaluation key (stored
+            # `record_review`/machine-review rows cite it by name), so the
+            # name is fixed and only the human-facing text describes the
+            # check. The runner below only checks that an IRC *calculation*
+            # exists in the source set, not *validated* (pass/fail) IRC
+            # evidence: `include=trust` can say `irc_evidence_present:
+            # passed` on an entry whose read-model `validation.irc` says
+            # "absent" (that entry carried no structured pass/fail evidence
+            # record). The wording names what is actually checked.
             name="irc_evidence_present",
             kind=EvidenceCheckKind.optional,
             explain="IRC calculation present (additive only) -- this checks that an IRC calculation exists in the source set, not that structured pass/fail validation evidence was deposited.",

@@ -112,9 +112,9 @@ class Settings(BaseSettings):
     # Caps on one contribution bundle, shared by ``/bundles/dry-run`` and
     # ``/bundles/submit``. Measured on what the repo holds: the
     # example bundles are 1.4 and 1.9 KB with one record each, and the
-    # largest ARC run fixture (513 KB of output.yml, whole-run data most of
+    # largest recorded whole-run fixture (513 KB of output.yml, whole-run data most of
     # which a bundle never carries) has four species and one reaction. The
-    # defaults sit about ten times above the biggest whole ARC run file, and
+    # defaults sit about ten times above the biggest whole-run file, and
     # a hundred times above the record count of any run measured.
     #
     # ``bundle_max_body_bytes`` is enforced before the body is parsed

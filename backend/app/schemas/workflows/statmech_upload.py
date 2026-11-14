@@ -100,7 +100,7 @@ class StatmechSourceCalculationIn(StatmechSourceCalcIn):
       community contributors and general workflow tools use local string
       keys so a depositor never needs to know a database id.
     * ``existing_calculation_id`` is **programmatic chaining**: a client
-      threading ids back out of a prior TCKDB upload response (ARC's
+      threading ids back out of a prior TCKDB upload response (an
       adapter chaining from its conformer upload, or replay/admin/repair
       tooling). It is *not* the primary public upload UX.
 

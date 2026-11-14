@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.208.2 - 2026-11-14
+
+No client behaviour changed. Docstrings and comments in the client and the QCSchema adapter explain behaviour in terms of what any producer sends, naming a workflow tool only as one example.
+
 ## 0.208.1 - 2026-11-14
 
 No client behaviour changed. The changelog describes each change by its behaviour, without issue, pull-request or design-record references, and lists each version once. Comments, docstrings, docs and test names state the rule without history; two messages are reworded without a change to when they fire: the builder's dependency-role error says `supported shapes are freq->opt, sp->opt, opt-><any>` (it carried a phase label), and the QCSchema adapter's scan-coordinate refusal states what is wrong with the series without citing a design record or a migration.

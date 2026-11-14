@@ -708,7 +708,7 @@ def persist_computed_species_upload(
 
     # Provenance-presence warnings, the same ones /uploads/thermo and
     # /uploads/statmech return. A depositor using the bundle route — which
-    # is the route the ARC adapter uses — must get the same refusal and
+    # is the route workflow-tool adapters use — must get the same refusal and
     # annotation, so the record is not silently less complete than the
     # identical field-by-field deposit.
     #

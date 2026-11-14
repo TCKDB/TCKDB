@@ -1,7 +1,7 @@
 """Kinetics builder + factory and the SDK's small unit vocabulary.
 
 The builder exposes :meth:`Kinetics.modified_arrhenius` only — that covers
-the kinetics fits ARC / Arkane produce today. Future factories
+the kinetics fits workflow tools such as ARC and Arkane produce today. Future factories
 (plain Arrhenius, Lindemann, multi-channel PDep) plug in here without
 disturbing the wire shape of existing uploads.
 """

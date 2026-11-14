@@ -154,7 +154,7 @@ def _compare_refs(
         mismatches["name"] = (declared.name, parsed.name)
 
     # Compare version. Two readings of one release at different precision
-    # agree: ARC reads Molpro's ``NAME : 2015.1.37`` header while the banner
+    # agree: a producer may read Molpro's ``NAME : 2015.1.37`` header while the banner
     # line says ``Version 2015.1``. Whole dot-components are compared, so
     # ``2015.1`` never agrees with ``2015.10``. Agreement is not a fill: the
     # declared (non-NULL) version stands and nothing is re-pointed.

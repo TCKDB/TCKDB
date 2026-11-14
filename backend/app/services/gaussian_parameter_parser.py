@@ -995,7 +995,7 @@ def _sp_archive_hf(line: str, lines: list[str], idx: int) -> float | None:
 def parse_sp_energy(text: str) -> float | None:
     """Electronic energy (Hartree) from a Gaussian single-point output.
 
-    Mirrors ARC's Gaussian adapter for the single-value method families
+    Handles the single-value method families
     (DFT/HF ``SCF Done``, ``CCSD(T)=``, ``MP2 =``, ``E(CORR)=``, the
     ``E2(...)/E(...)`` line, and the archive ``HF=`` fallback). The last
     matching value wins, matching Gaussian's re-print order.

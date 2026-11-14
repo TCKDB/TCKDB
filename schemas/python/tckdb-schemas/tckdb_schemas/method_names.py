@@ -1,18 +1,18 @@
 """The identity key of a level-of-theory method name.
 
-A method name is written in whatever case a producer prefers. ARC lower-cases
-every method it emits (``arc/level.py``, ``Level.lower``); Gaussian, ORCA and
-Molpro inputs are written in mixed or upper case:
+A method name is written in whatever case a producer prefers. Some producers
+lower-case every method they emit (ARC does: ``arc/level.py``, ``Level.lower``);
+Gaussian, ORCA and Molpro inputs are written in mixed or upper case:
 
 ====================  =======================  =======================
-method                ARC                      Gaussian / ORCA / Molpro
+method                lower-cased (e.g. ARC)   Gaussian / ORCA / Molpro
 ====================  =======================  =======================
 DLPNO-CCSD(T)-F12     ``dlpno-ccsd(t)-f12``    ``DLPNO-CCSD(T)-F12``
 CCSD(T)-F12a          ``ccsd(t)-f12a``         ``CCSD(T)-F12a``
 B3LYP                 ``b3lyp``                ``B3LYP``
 ====================  =======================  =======================
 
-``level_of_theory.lot_hash`` hashed the method as written, so an ARC upload
+``level_of_theory.lot_hash`` hashed the method as written, so an upload
 of ``ccsd(t)-f12/cc-pvtz-f12`` and a stored ``CCSD(T)-F12/cc-pVTZ-F12`` were
 two levels of theory.
 
@@ -71,7 +71,7 @@ The table is deliberately small and stays out of anything it cannot cite:
 member are separate keys. A split is recoverable, because the merge script
 joins it later; a false merge is not.
 
-The canonical key of each alias is the spelling ARC and Gaussian write.
+The canonical key of each alias is Gaussian's keyword spelling, lower-cased.
 
 Named composite methods
 ----------------------------------
@@ -154,8 +154,8 @@ NAME_ALIASES: tuple[MethodAlias, ...] = (
             "(hyb_mgga_x_m06_2x + mgga_c_m06_2x); Q-Chem and Psi4 write M06-2X.",
         ),
     ),
-    # Named composite methods. The canonical key is the Gaussian /
-    # ARC spelling, so rows stored that way keep their hash. Every spelling
+    # Named composite methods. The canonical key is the Gaussian
+    # spelling, so rows stored that way keep their hash. Every spelling
     # below names the same recipe in every program that accepts it; only
     # Gaussian documents these as keywords (the server's composite-method catalogue).
     MethodAlias(

@@ -195,7 +195,7 @@ class ThermoProvenance(BaseModel):
     they are kept in separate fields:
 
     - ``software_release`` / ``workflow_tool_release`` — what computed
-      *this thermochemistry* (e.g. Arkane, run by ARC). Sourced strictly
+      *this thermochemistry* (e.g. Arkane, run by a workflow tool). Sourced strictly
       from ``thermo.software_release_id`` / ``thermo.workflow_tool_release_id``
       — the thermo row's own FKs, never a calculation's. When the thermo
       carries no software of its own (a value fitted or transcribed

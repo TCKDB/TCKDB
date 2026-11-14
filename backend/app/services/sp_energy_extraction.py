@@ -14,7 +14,7 @@ tool reported against the value re-derived from the log by
 **Where it runs:** every path that persists an output-log artifact — the
 dedicated artifacts route (``POST /calculations/{id}/artifacts``) and output
 logs attached *inline* through the contribution-bundle workflows
-(``computed_species`` / ``computed_reaction``, which ARC uses in bundle mode).
+(``computed_species`` / ``computed_reaction``, which producers use for bundle uploads).
 The bundle workflows accumulate the returned warnings and their routes merge
 them into the upload response, so coverage matches the standalone route.
 

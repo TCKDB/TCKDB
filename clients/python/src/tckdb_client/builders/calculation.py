@@ -190,7 +190,7 @@ class Calculation:
     depends_on: list["Calculation"] = field(default_factory=list)
     label: str | None = None
     # Local-only annotation kept on the builder for producer / adapter
-    # ergonomics (e.g. ARC-style "lowest-energy converged structure;
+    # ergonomics (e.g. "lowest-energy converged structure;
     # conformer search history retained as artifacts"). Today's bundle
     # schemas do NOT carry a per-calc note field — see
     # ``_calc_payload`` in ``uploads.py`` — so this value is preserved

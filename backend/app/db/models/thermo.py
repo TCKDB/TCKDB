@@ -108,8 +108,9 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
       data using the older 1 atm convention should record 1.01325).
       ``NULL`` means the reference pressure was not specified. There is
       no origin default: a QC computed upload that omits it stays
-      ``NULL``, because the dominant computed producer (ARC) computes
-      entropy at 1 atm and records no pressure anywhere in its output --
+      ``NULL``, because many statistical-mechanics codes (ARC and
+      RMG among them) compute entropy at 1 atm and an upload that does not
+      state its pressure gives TCKDB nothing to tell 1 atm from 1 bar --
       a default would be the same class of invisible, plausible-looking
       error the enthalpy reference declaration exists to prevent.
     * ``phase`` records the physical phase (gas by default for computed

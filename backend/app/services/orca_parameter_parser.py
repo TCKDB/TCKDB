@@ -1335,7 +1335,7 @@ def parse_orca_log(
 def parse_sp_energy(text: str) -> float | None:
     """Electronic energy (Hartree) from an ORCA single-point output.
 
-    Mirrors ARC's ORCA adapter: the authoritative value is the last
+    The authoritative value is the last
     ``FINAL SINGLE POINT ENERGY`` line — for DLPNO-CCSD(T), DFT, HF, or MP2
     alike it carries the final electronic energy. Returned in Hartree
     (ORCA's native unit); ``None`` when no such line is present.

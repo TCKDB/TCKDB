@@ -396,8 +396,8 @@ def _tckdb_origin_block(record: QCRecord, driver: str | None) -> dict:
     # way to tell those apart, and "executed" (per
     # tckdb_schemas.fragments.calculation_origin.CalculationOriginMetadata's
     # own docstring) names the case where *this* pipeline directly
-    # orchestrated the ESS run (TCKDB's ARC adapter, reading output.yml
-    # produced by a run ARC itself drove) -- not "read a standalone result
+    # orchestrated the ESS run (a workflow-tool adapter reading the output of
+    # a run the tool itself drove) -- not "read a standalone result
     # file". "imported" is explicitly "pulled from external source (e.g.
     # literature DOI, published supporting information, prior database)",
     # which is exactly this adapter's actual contract regardless of how

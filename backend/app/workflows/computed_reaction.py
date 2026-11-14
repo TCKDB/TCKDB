@@ -511,7 +511,7 @@ def _collect_bundle_provenance_warnings(
             )
             # (Whether the subject is an atom is decided by a geometry, then
             # ``rigid_rotor_kind``, then the identity -- not the absence of
-            # rotational constants, which 26 of 45 real ARC polyatomics lack.)
+            # rotational constants, which a polyatomic deposit can lack.)
             #
             # The species route has reported this since statmech landed
             # there; the reaction route reported nothing, so the same
@@ -1673,8 +1673,7 @@ def persist_computed_reaction_upload(
                     ),
                     species_entry_id=species_entry.id,
                 )
-                # The fourth statmech write path, and the one ARC actually
-                # deposits through: the same role/type rule as the other
+                # The fourth statmech write path (computed-reaction bundles): the same role/type rule as the other
                 # three, from the same shared service.
                 assert_statmech_role_compatible(
                     calc_row,
