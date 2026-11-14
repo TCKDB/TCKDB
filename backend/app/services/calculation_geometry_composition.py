@@ -38,8 +38,8 @@ has exactly two answers. Both references already existed:
   reachable.
 
 Deriving the TS reference any other way would refuse correct science on the
-first deposit: all 31 calculation geometries in the fixture payloads under
-``tests/fixtures/arc_runs/`` are TS-owned, and every one of them is the whole reacting
+first deposit: every transition-state-owned calculation geometry in the
+fixture payloads under ``tests/fixtures/arc_runs/`` is the whole reacting
 system rather than any participant.
 
 Output geometries are checked too, contrary to the note that stood here

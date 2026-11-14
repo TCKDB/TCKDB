@@ -8772,10 +8772,10 @@ Unknown keys are refused.
 
   1. If ``version`` has no internal whitespace, it is not a banner
      shape at all -- return silently. This also deliberately leaves
-     the unrelated literal string ``"None"`` alone (86 rows in the
-     ``tests/fixtures/arc_runs/`` payloads; a different defect -- something serialised
-     Python's ``None`` through ``str()`` upstream -- with no comma,
-     space, or structure a version/revision split could act on).
+     the unrelated literal string ``"None"`` alone (a different defect --
+     something serialised Python's ``None`` through ``str()`` upstream --
+     with no comma, space, or structure a version/revision split could
+     act on).
 
   2. Split off the leading whitespace-delimited token. If it does
      **not** case-insensitively match the declared ``name``, this
