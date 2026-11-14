@@ -4,7 +4,7 @@ import "../data-table.css"
 import "../entry-numbers.css"
 import type { SpeciesOverview } from "../api/speciesOverviewApi"
 import { numbersOrderSentence } from "../domain/entryNumbers"
-import { versionFacts } from "../domain/entryVersions"
+import { versionName } from "../domain/entryVersions"
 import { speciesValueRows, valueRecordLinks, type SpeciesValueRow } from "../domain/speciesValues"
 import { useSpeciesValues } from "../hooks/useSpeciesValues"
 import { ListNotes, NumbersTable, WalkStatus } from "./NumbersTable"
@@ -19,7 +19,7 @@ export function SpeciesValues({ species }: { species: SpeciesOverview }) {
     const data = state.status === "ready" ? state.data : null
     const rows = useMemo(() => (data ? speciesValueRows(data) : []), [data])
     const labels = useMemo(
-        () => new Map(species.entries.map((entry) => [entry.species_entry_ref, versionFacts(entry)])),
+        () => new Map(species.entries.map((entry, index) => [entry.species_entry_ref, versionName(entry, index + 1)])),
         [species],
     )
     return (
@@ -57,8 +57,7 @@ export function SpeciesValues({ species }: { species: SpeciesOverview }) {
                         version={(row) => (row.entryRef
                             ? <>
                                 <span className="entry-numbers-key">Version:</span>{" "}
-                                <Link to={`/species-entries/${row.entryRef}`} aria-describedby={`${row.kind}-${row.ref}-version-ref`}>{labels.get(row.entryRef) ?? "Another version"}</Link>{" "}
-                                <code id={`${row.kind}-${row.ref}-version-ref`} className="t-preserve-case">{row.entryRef}</code>
+                                <Link to={`/species-entries/${row.entryRef}`}>{labels.get(row.entryRef) ?? "Another version"}</Link>
                             </>
                             : <>Version not stated by the archive</>)}
                     />

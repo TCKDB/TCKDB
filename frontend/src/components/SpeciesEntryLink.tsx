@@ -6,7 +6,7 @@ import { participantChips, type ParticipantFacets } from "../domain/participantF
 /**
  * The "Species entry" link every record page that owns a species points at
  * `/species-entries/:ref`. The link text is `SpeciesFace` (SMILES, then the
- * formula in parentheses), or the entry's own ref when neither is served.
+ * formula in parentheses), or the words "Species entry" when neither is served.
  *
  * It never prints anything from `species_entry_label`. That string is the
  * server's joined discriminator (stereo, state kind, state label, term symbol,
@@ -26,7 +26,7 @@ export function SpeciesEntryLink({ speciesEntryRef, smiles, formula, facets }: {
     const chips = participantChips(facets)
     const base = (smiles || formula)
         ? <SpeciesFace smiles={smiles} formula={formula} />
-        : <code className="data">{speciesEntryRef}</code>
+        : <span>Species entry</span>
     return (
         <Link to={`/species-entries/${speciesEntryRef}`}>
             {base}

@@ -55,3 +55,11 @@ describe("reaction-entry.css: transition-state status stages", () => {
         expect(stylesheet).toMatch(/\.reaction-ts-stages\s*\{[^}]*flex-wrap:\s*wrap/)
     })
 })
+
+describe("reaction-entry.css: the reaction-entries table fits a narrow screen", () => {
+    it("stacks its cells under their labels at phone width instead of scrolling sideways", () => {
+        const block = /@media \(max-width: 680px\)\s*\{\s*\.reaction-entries-table \{ min-width: 0; \}([\s\S]*?)\n\}/.exec(stylesheet)?.[1] ?? ""
+        expect(block).toMatch(/\.reaction-entries-table td\s*\{\s*display:\s*block/)
+        expect(block).toMatch(/content:\s*attr\(data-label\)/)
+    })
+})

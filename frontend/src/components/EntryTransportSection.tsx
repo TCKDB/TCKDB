@@ -1,5 +1,10 @@
 import type { ReactNode } from "react"
-import { Link } from "react-router-dom"
+import { RecordNumbersProvider } from "./RecordNumbers"
+import { numberedWords } from "../domain/recordNumbers"
+import { useRecordNumbers } from "../hooks/useRecordNumbers"
+import { RecordLink } from "./RecordLink"
+import { RefsDisclosure } from "./RefsDisclosure"
+import { supersessionRefs } from "../domain/supersession"
 import "../conformer-group.css"
 import "../entry-science.css"
 import {
@@ -110,7 +115,7 @@ function TransportList({ listKey, meta, onPage, linkedNote, response }: {
     const [reviewState, openReview] = useTransportSection<TransportRecord["review_history"]>(listKey, "review")
 
     return (
-        <>
+        <RecordNumbersProvider refs={records.map((record) => record.transport.transport_ref)} offset={pagination.offset}>
             <section className="ledger-section" aria-labelledby="transport-heading">
                 <div className="ledger-heading">
                     <p className="eyebrow">Deposited evidence</p>
@@ -137,7 +142,7 @@ function TransportList({ listKey, meta, onPage, linkedNote, response }: {
                             fallback={(
                                 <article className="science-record card" role="alert">
                                     <p className="empty-projection">
-                                        Record <code>{record.transport.transport_ref}</code> could not be
+                                        A transport record could not be
                                         displayed. Other records on this page are unaffected.
                                     </p>
                                 </article>
@@ -187,24 +192,24 @@ function TransportList({ listKey, meta, onPage, linkedNote, response }: {
                     </div>
                 ) : <p className="empty-projection">The archive returned no review-history rows.</p>)}
             </TransportLazySection>
-        </>
+        </RecordNumbersProvider>
     )
 }
 
 function TransportRecordCard({ record }: { record: TransportRecord }) {
     const core = record.transport
+    const numbers = useRecordNumbers()
     return (
         <article className="science-record card" aria-labelledby={`transport-heading-${core.transport_ref}`}>
             <div className="science-record-heading">
-                <h3 id={`transport-heading-${core.transport_ref}`}>{statusLabel(core.scientific_origin)} transport record</h3>
+                <h3 id={`transport-heading-${core.transport_ref}`}>{numberedWords(`${statusLabel(core.scientific_origin)} transport record`, core.transport_ref, numbers)}</h3>
                 <span className="value-pill value-pill--muted">{statusLabel(core.review.status)}</span>
-                <code className="data">{core.transport_ref}</code>
             </div>
 
-            {record.supersession && <SupersessionNotice supersession={record.supersession} />}
+            {record.supersession && <SupersessionNotice kind="transport" supersession={record.supersession} />}
 
             <p className="note">
-                Species entry: <Link className="data" to={`/species-entries/${record.species.species_entry_ref}`}>{record.species.species_entry_ref}</Link>
+                Species entry: <RecordLink kind="species-entry" to={`/species-entries/${record.species.species_entry_ref}`} label="Species entry" />
                 {record.species.canonical_smiles ? ` (${record.species.canonical_smiles})` : ""}
             </p>
 
@@ -241,6 +246,7 @@ function TransportRecordCard({ record }: { record: TransportRecord }) {
                 {" · "}Literature:{" "}
                 {record.literature ? <LiteratureCitation literature={record.literature} /> : "not recorded"}
             </p>
+            <RefsDisclosure refs={[{ label: "Transport record", value: core.transport_ref }, ...supersessionRefs(record.supersession)]} />
         </article>
     )
 }
@@ -263,6 +269,7 @@ function TransportLazySection<T>({
     rowState: (record: TransportRecord, data: T | undefined) => "not-present" | "empty" | "populated"
     children: (record: TransportRecord, data: T) => ReactNode
 }) {
+    const numbers = useRecordNumbers()
     const headingId = `section-${heading.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}`
     if (records.length === 0) return null
     if (!available) {
@@ -292,14 +299,14 @@ function TransportLazySection<T>({
                 {state.status === "error" && state.message}
                 {state.status === "ready" && `${heading} loaded.`}
             </p>
-            {state.status === "ready" && records.map((record) => {
+            {state.status === "ready" && records.map((record, index) => {
                 const ref = record.transport.transport_ref
                 const data = state.dataByRef.get(ref)
                 const status = rowState(record, data)
                 return (
                     <div key={ref} className="science-record card">
                         <div className="science-record-heading">
-                            <h3>{ref}</h3>
+                            <h3>{`Transport record ${numbers.get(ref) ?? index + 1}`}</h3>
                         </div>
                         {status === "populated" && data !== undefined
                             ? (

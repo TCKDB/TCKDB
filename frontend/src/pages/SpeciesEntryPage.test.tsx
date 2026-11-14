@@ -63,7 +63,7 @@ type HandlerOptions = {
     // calc_sp_1b is computed at a second level of theory.
     twoLevels?: boolean
     // What the relative-energies read answers for the second shape.
-    energyAnswer?: "value" | "absent" | "disagree" | "reference_unavailable" | "multiple_recipes"
+    energyAnswer?: "value" | "absent" | "disagree" | "reference_unavailable" | "multiple_recipes" | "two_calculations"
     // calc_sp_3 (the second shape's energy) was run with ORCA, the reference's with Gaussian.
     twoPrograms?: boolean
     optFails?: boolean
@@ -436,6 +436,8 @@ function handlers(options: HandlerOptions = {}) {
                     ? member({ status: "absent", relative_energy_kj_mol: null, value_hartree: null, energy_calculation_refs: [], absent_reason: "multiple_recipes_at_level" })
                     : options.energyAnswer === "reference_unavailable"
                         ? member({ relative_energy_kj_mol: null, detail: ["reference_unavailable"] })
+                        : options.energyAnswer === "two_calculations"
+                            ? member({ energy_calculation_refs: ["calc_sp_3", "calc_sp_1b"] })
                         : options.energyAnswer === "disagree"
                             ? member({
                                 status: "unresolved", relative_energy_kj_mol: null, value_hartree: null, absent_reason: "repeat_values_disagree",
@@ -469,6 +471,14 @@ function handlers(options: HandlerOptions = {}) {
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
 afterEach(() => { server.resetHandlers(); relativeEnergyBodies.length = 0; cleanup(); window.history.replaceState({}, "", "/") })
 afterAll(() => server.close())
+
+/** Links to one record, found by their target; the link text is words, never the ref. */
+const linksTo = (href: string) => waitFor(() => {
+    const found = Array.from(document.querySelectorAll(`a[href="${href}"]`))
+    expect(found.length).toBeGreaterThan(0)
+    return found
+})
+const linksNow = (href: string) => Array.from(document.querySelectorAll(`a[href="${href}"]`))
 
 describe("species-entry page: identity and errors", () => {
     it("renders the CH3 identity without the removed availability card grid", async () => {
@@ -751,8 +761,8 @@ describe("species-entry page: conformer picker", () => {
         // Thermo/statmech/transport are entry-scoped lists, independent of
         // whether any conformer basin is projected -- they still render.
         await user.click(screen.getByRole("tab", { name: "Thermochemistry" }))
-        expect(await within(await screen.findByRole("tabpanel")).findByText("thm_one")).toBeVisible()
-        expect(within(screen.getByRole("tabpanel")).getByText("thm_two")).toBeVisible()
+        expect(await within(await screen.findByRole("tabpanel")).findByText("thm_one")).toBeInTheDocument()
+        expect(within(screen.getByRole("tabpanel")).getByText("thm_two")).toBeInTheDocument()
     })
 
     it("shows ONE empty state and no tab strip when the entry has nothing recorded at all (the N2 case)", async () => {
@@ -822,17 +832,14 @@ describe("species-entry page: tabs are a real, keyboard-operable ARIA tablist", 
         await screen.findByRole("heading", { name: "Its 3D shapes" })
 
         await user.click(screen.getByRole("tab", { name: "Thermochemistry" }))
-        expect(await within(screen.getByRole("tabpanel")).findByText("thm_one")).toBeVisible()
+        expect(await within(screen.getByRole("tabpanel")).findByText("thm_one")).toBeInTheDocument()
         // Only one tabpanel is ever mounted at a time -- the statmech
         // record's own heading text must not appear on the thermo panel.
         expect(within(screen.getByRole("tabpanel")).queryByText("Statistical mechanics")).not.toBeInTheDocument()
 
         await user.click(screen.getByRole("tab", { name: "Statistical mechanics" }))
-        // Match on the visible record card's own `<code>` ref -- "sm_1" may
-        // also appear inside the "Conformer context & review history"
-        // disclosure once its own (separately gated) fetches are ready.
-        const smRefs = await within(screen.getByRole("tabpanel")).findAllByText("sm_1")
-        expect(smRefs.some((node) => node.tagName === "CODE")).toBe(true)
+        // The record's card is found by its own heading id.
+        await waitFor(() => expect(screen.getByRole("tabpanel").querySelector("#statmech-heading-sm_1")).not.toBeNull())
         expect(within(screen.getByRole("tabpanel")).queryByText("thm_one")).not.toBeInTheDocument()
         expect(within(screen.getByRole("tabpanel")).queryByText("Thermochemistry")).not.toBeInTheDocument()
     })
@@ -897,16 +904,16 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
         await screen.findByRole("heading", { name: "Its 3D shapes" })
-        expect((await screen.findAllByRole("link", { name: "geom_g1" })).length).toBeGreaterThan(0)
-        expect(screen.queryByText("geom_g3")).not.toBeInTheDocument()
+        await waitFor(() => expect(document.querySelector('a[href="/geometries/geom_g1"]')).not.toBeNull())
+        expect(document.querySelector('a[href="/geometries/geom_g3"]')).toBeNull()
 
         await user.click(within(cardFor("Conformer Group 2")).getByRole("button", { name: /Conformer Group 2/ }))
-        expect((await screen.findAllByRole("link", { name: "geom_g3" })).length).toBeGreaterThan(0)
-        expect(screen.queryByText("geom_g1")).not.toBeInTheDocument()
+        await waitFor(() => expect(document.querySelector('a[href="/geometries/geom_g3"]')).not.toBeNull())
+        expect(document.querySelector('a[href="/geometries/geom_g1"]')).toBeNull()
         expect(new URLSearchParams(window.location.search).get("conformer")).toBe(groupTwoRef)
 
         await user.click(screen.getByRole("tab", { name: "Single-point energy" }))
-        expect((await screen.findAllByRole("link", { name: "calc_sp_3" })).length).toBeGreaterThan(0)
+        expect((await linksTo("/calculations/calc_sp_3")).length).toBeGreaterThan(0)
         // The conformer choice is still the query param after a tab switch.
         expect(new URLSearchParams(window.location.search).get("conformer")).toBe(groupTwoRef)
     })
@@ -918,10 +925,10 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         // co_1 has two sp calculations -- both must render as their OWN row
         // (two "co_1" observation links), not just the first.
         // (the tab's two rows plus the shape's own calculations row)
-        expect(await screen.findAllByRole("link", { name: "co_1" })).toHaveLength(3)
-        expect(screen.getAllByRole("link", { name: "co_2" }).length).toBeGreaterThan(0)
-        expect(screen.getAllByRole("link", { name: "calc_sp_1" }).length).toBeGreaterThan(0)
-        expect(screen.getAllByRole("link", { name: "calc_sp_1b" }).length).toBeGreaterThan(0)
+        expect(await linksTo("/conformer-observations/co_1")).toHaveLength(3)
+        expect(linksNow("/conformer-observations/co_2").length).toBeGreaterThan(0)
+        expect(linksNow("/calculations/calc_sp_1").length).toBeGreaterThan(0)
+        expect(linksNow("/calculations/calc_sp_1b").length).toBeGreaterThan(0)
         expect(screen.getByText("no single-point calculation recorded")).toBeVisible()
     })
 
@@ -929,7 +936,7 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}/sp`)
         render(<App />)
-        await screen.findAllByRole("link", { name: "calc_sp_1" })
+        await linksTo("/calculations/calc_sp_1")
         // Two DIFFERENT calculations on the same observation must show
         // their OWN energy, not one value copied onto both rows.
         expect((await screen.findAllByText(/-76\.111111 hartree/)).length).toBeGreaterThan(0)
@@ -965,7 +972,7 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         )
         window.history.replaceState({}, "", `/species-entries/${entryRef}/sp`)
         render(<App />)
-        expect((await screen.findAllByRole("link", { name: "calc_sp_1" })).length).toBeGreaterThan(0)
+        expect((await linksTo("/calculations/calc_sp_1")).length).toBeGreaterThan(0)
         expect(screen.getByText(/still being read from the archive/)).toBeVisible()
         await waitFor(() => expect(screen.queryByText(/still being read from the archive/)).not.toBeInTheDocument())
     })
@@ -974,7 +981,7 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         server.use(...handlers({ spEnergiesFail: true }))
         window.history.replaceState({}, "", `/species-entries/${entryRef}/sp`)
         render(<App />)
-        expect((await screen.findAllByRole("link", { name: "calc_sp_1" })).length).toBeGreaterThan(0)
+        expect((await linksTo("/calculations/calc_sp_1")).length).toBeGreaterThan(0)
         await waitFor(() => expect(screen.queryByText(/still being read from the archive/)).not.toBeInTheDocument())
         const table = screen.getByRole("table", { name: "Single-point energies" })
         const cells = () => Array.from(table.querySelectorAll('td[data-label="Energy"]')).map((cell) => cell.textContent)
@@ -987,7 +994,7 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         server.use(...handlers({ omitSp1b: true }))
         window.history.replaceState({}, "", `/species-entries/${entryRef}/sp`)
         render(<App />)
-        expect((await screen.findAllByRole("link", { name: "calc_sp_1b" })).length).toBeGreaterThan(0)
+        expect((await linksTo("/calculations/calc_sp_1b")).length).toBeGreaterThan(0)
         await waitFor(() => expect(screen.queryByText(/still being read from the archive/)).not.toBeInTheDocument())
         const table = screen.getByRole("table", { name: "Single-point energies" })
         const cells = Array.from(table.querySelectorAll('td[data-label="Energy"]')).map((cell) => cell.textContent)
@@ -1001,10 +1008,10 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         render(<App />)
         // co_1 has TWO opt calculations (calc_opt_1a, calc_opt_1b); co_2 has one.
         expect(await screen.findByText((_, element) => (
-            element?.tagName === "LI" && element.textContent === "co_1 — 2 optimization calculations"
+            element?.tagName === "LI" && element.textContent === "Observation 1 — 2 optimization calculations"
         ))).toBeVisible()
         expect(screen.getByText((_, element) => (
-            element?.tagName === "LI" && element.textContent === "co_2 — 1 optimization calculation"
+            element?.tagName === "LI" && element.textContent === "Observation 2 — 1 optimization calculation"
         ))).toBeVisible()
     })
 
@@ -1012,8 +1019,8 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}/thermo`)
         render(<App />)
-        expect(await within(await screen.findByRole("tabpanel")).findByText("thm_one")).toBeVisible()
-        expect(within(screen.getByRole("tabpanel")).getByText("thm_two")).toBeVisible()
+        expect(await within(await screen.findByRole("tabpanel")).findByText("thm_one")).toBeInTheDocument()
+        expect(within(screen.getByRole("tabpanel")).getByText("thm_two")).toBeInTheDocument()
         // thm_three is linked to a DIFFERENT conformer than the one
         // selected -- present (never deleted) but demoted into the
         // collapsed "other conformers" disclosure, so it's in the document
@@ -1032,16 +1039,16 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         const fromOne = groupHeadings[0].closest(".conformer-evidence-group") as HTMLElement
         const fromTwo = groupHeadings[1].closest(".conformer-evidence-group") as HTMLElement
         const noLink = groupHeadings[2].closest(".conformer-evidence-group") as HTMLElement
-        expect(within(fromOne).getByText("thm_one")).toBeVisible()
+        expect(within(fromOne).getByText("thm_one")).toBeInTheDocument()
         expect(within(fromOne).queryByText("thm_two")).not.toBeInTheDocument()
         expect(within(fromOne).queryByText("thm_three")).not.toBeInTheDocument()
         // thm_three is linked to Conformer Group 2, NOT the selected Conformer Group 1
         // -- it must land under its own named group, never under "No
         // conformer link" (the exact regression this replaced).
-        expect(within(fromTwo).getByText("thm_three")).toBeVisible()
+        expect(within(fromTwo).getByText("thm_three")).toBeInTheDocument()
         expect(within(fromTwo).queryByText("thm_one")).not.toBeInTheDocument()
         expect(within(fromTwo).queryByText("thm_two")).not.toBeInTheDocument()
-        expect(within(noLink).getByText("thm_two")).toBeVisible()
+        expect(within(noLink).getByText("thm_two")).toBeInTheDocument()
         expect(within(noLink).queryByText("thm_one")).not.toBeInTheDocument()
         expect(within(noLink).queryByText("thm_three")).not.toBeInTheDocument()
     })
@@ -1110,14 +1117,14 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         const fromOne = groupHeadings[0].closest(".conformer-evidence-group") as HTMLElement
         const fromTwo = groupHeadings[1].closest(".conformer-evidence-group") as HTMLElement
         const noLink = groupHeadings[2].closest(".conformer-evidence-group") as HTMLElement
-        expect(within(fromOne).getAllByText("sm_1").some((node) => node.tagName === "CODE")).toBe(true)
-        expect(within(fromOne).queryByText("sm_2")).not.toBeInTheDocument()
-        expect(within(fromOne).queryByText("sm_3")).not.toBeInTheDocument()
-        expect(within(fromTwo).getAllByText("sm_3").some((node) => node.tagName === "CODE")).toBe(true)
-        expect(within(fromTwo).queryByText("sm_1")).not.toBeInTheDocument()
-        expect(within(noLink).getAllByText("sm_2").some((node) => node.tagName === "CODE")).toBe(true)
-        expect(within(noLink).queryByText("sm_1")).not.toBeInTheDocument()
-        expect(within(noLink).queryByText("sm_3")).not.toBeInTheDocument()
+        expect(fromOne.querySelector("#statmech-heading-sm_1")).not.toBeNull()
+        expect(fromOne.querySelector("#statmech-heading-sm_2")).toBeNull()
+        expect(fromOne.querySelector("#statmech-heading-sm_3")).toBeNull()
+        expect(fromTwo.querySelector("#statmech-heading-sm_3")).not.toBeNull()
+        expect(fromTwo.querySelector("#statmech-heading-sm_1")).toBeNull()
+        expect(noLink.querySelector("#statmech-heading-sm_2")).not.toBeNull()
+        expect(noLink.querySelector("#statmech-heading-sm_1")).toBeNull()
+        expect(noLink.querySelector("#statmech-heading-sm_3")).toBeNull()
     })
 
     it("shows every statmech record ungrouped, with a status line, when the conformers include fails -- never zero records for a nonzero count", async () => {
@@ -1134,9 +1141,7 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
             /Showing every record on this page, ungrouped, until the conformer link resolves\./,
         )).toBeVisible()
         expect(screen.getByText((_, element) => element?.textContent === "3 records · review: 3 not reviewed")).toBeVisible()
-        expect(screen.getAllByText("sm_1").some((node) => node.tagName === "CODE")).toBe(true)
-        expect(screen.getAllByText("sm_2").some((node) => node.tagName === "CODE")).toBe(true)
-        expect(screen.getAllByText("sm_3").some((node) => node.tagName === "CODE")).toBe(true)
+        for (const ref of ["sm_1", "sm_2", "sm_3"]) expect(document.getElementById(`statmech-heading-${ref}`)).not.toBeNull()
     })
 })
 
@@ -1241,7 +1246,7 @@ describe("species-entry page: tab clicks and Back are client-side, no re-fetch (
         // The FIRST click: sectionless URL -> `:section` URL. This is the one
         // that would remount the page.
         await user.click(screen.getByRole("tab", { name: "Single-point energy" }))
-        expect((await screen.findAllByRole("link", { name: "calc_sp_1" })).length).toBeGreaterThan(0)
+        expect((await linksTo("/calculations/calc_sp_1")).length).toBeGreaterThan(0)
         expect(screen.queryByRole("heading", { name: "Loading species entry" })).not.toBeInTheDocument()
         expect(counts).toEqual({ species: 1, conformers: 1 })
         expect(document.querySelector(".entry-page")).toBe(entryPageNodeBefore)
@@ -1250,7 +1255,7 @@ describe("species-entry page: tab clicks and Back are client-side, no re-fetch (
         // already worked before the fix -- kept here so a regression that
         // reintroduces the asymmetry in the other direction is caught too.
         await user.click(screen.getByRole("tab", { name: "Thermochemistry" }))
-        expect(await within(await screen.findByRole("tabpanel")).findByText("thm_one")).toBeVisible()
+        expect(await within(await screen.findByRole("tabpanel")).findByText("thm_one")).toBeInTheDocument()
         expect(screen.queryByRole("heading", { name: "Loading species entry" })).not.toBeInTheDocument()
         expect(counts).toEqual({ species: 1, conformers: 1 })
         expect(document.querySelector(".entry-page")).toBe(entryPageNodeBefore)
@@ -1266,7 +1271,7 @@ describe("species-entry page: tab clicks and Back are client-side, no re-fetch (
         expect(counts).toEqual({ species: 1, conformers: 1 })
 
         await user.click(screen.getByRole("tab", { name: "Single-point energy" }))
-        await screen.findAllByRole("link", { name: "calc_sp_1" })
+        await linksTo("/calculations/calc_sp_1")
         expect(counts).toEqual({ species: 1, conformers: 1 })
         // See the node-identity comment in the test above: this is what
         // actually isolates the routing fix from the caching fix.
@@ -1340,7 +1345,7 @@ describe("species-entry page: tab clicks and Back are client-side, no re-fetch (
         // Revisit Thermochemistry -- `EntryThermoSection` remounts. Without
         // the cache, this is a second `GET .../thermo`.
         await user.click(screen.getByRole("tab", { name: "Thermochemistry" }))
-        expect(await within(await screen.findByRole("tabpanel")).findByText("thm_one")).toBeVisible()
+        expect(await within(await screen.findByRole("tabpanel")).findByText("thm_one")).toBeInTheDocument()
         expect(thermoRequests).toBe(1)
     })
 })
@@ -1556,7 +1561,9 @@ describe("species-entry page: relative energies on the shape cards", () => {
     it("fills in the only level, says the first card is the reference only because it is listed first, and shows a signed value that links to its calculation", async () => {
         await openEntry()
         expect(await within(cardFor("Conformer Group 2")).findByText("+12.35")).toBeVisible()
-        expect(within(cardFor("Conformer Group 2")).getByRole("link", { name: "calc_sp_3" })).toHaveAttribute("href", "/calculations/calc_sp_3")
+        const sourceLink = within(cardFor("Conformer Group 2")).getByRole("link", { name: "Calculation" })
+        expect(sourceLink).toHaveAttribute("href", "/calculations/calc_sp_3")
+        expect(sourceLink.textContent).not.toContain("calc_sp_3")
         expect(within(cardFor("Conformer Group 1")).getByText(/the reference shape/)).toBeVisible()
         expect(screen.getByText(/Only level with energies\./)).toBeVisible()
         expect(screen.getByText(/Conformer Group 1 is the reference only because it is listed first/)).toBeVisible()
@@ -1608,8 +1615,16 @@ describe("species-entry page: relative energies on the shape cards", () => {
 
     it("writes the program beside each value and in the table caption", async () => {
         await openEntry()
-        await waitFor(() => expect(cardFor("Conformer Group 2")).toHaveTextContent(/\+12\.35 kJ\/mol with Gaussian 16, from calc_sp_3/))
+        await waitFor(() => expect(cardFor("Conformer Group 2")).toHaveTextContent(/\+12\.35 kJ\/mol with Gaussian 16, from Calculation/))
         expect(screen.getByRole("table", { name: /relative to Conformer Group 1 at b3lyp\/def2tzvp with Gaussian 16/ })).toBeVisible()
+    })
+
+    it("numbers the calculations a value comes from when there are several, and names a single one plainly", async () => {
+        await openEntry({ energyAnswer: "two_calculations" })
+        const card = cardFor("Conformer Group 2")
+        await waitFor(() => expect(card).toHaveTextContent(/from Calculation 1, Calculation 2/))
+        expect(within(card).getByRole("link", { name: "Calculation 2" })).toHaveAttribute("href", "/calculations/calc_sp_1b")
+        expect(within(cardFor("Conformer Group 1")).queryByRole("link", { name: /Calculation \d/ })).not.toBeInTheDocument()
     })
 
     it("words more than one recipe as not compared, never as a disagreement", async () => {
@@ -1627,9 +1642,10 @@ describe("species-entry page: relative energies on the shape cards", () => {
         await openEntry({ energyAnswer: "disagree" })
         const card = cardFor("Conformer Group 2")
         expect(await within(card).findByText(/Records disagree\./)).toBeVisible()
-        expect(card).toHaveTextContent(/Stored values: \u221276\.100000 hartree \(d1\), \u221276\.200000 hartree \(d2\)\./)
-        // The determinations have no page of their own, so they are plain refs, not links.
-        expect(within(card).queryByRole("link", { name: "d1" })).not.toBeInTheDocument()
+        expect(card).toHaveTextContent(/Stored values: \u221276\.100000 hartree \(determination 1\), \u221276\.200000 hartree \(determination 2\)\./)
+        // The determinations have no page of their own, so they are numbered words, not links, and no ref is printed.
+        expect(within(card).queryByRole("link", { name: /determination/ })).not.toBeInTheDocument()
+        expect(card.textContent).not.toMatch(/\bd1\b|\bd2\b/)
     })
 
     it("explains an unavailable reference instead of showing differences", async () => {
@@ -1643,11 +1659,13 @@ describe("species-entry page: which records use each shape", () => {
     it("states the ensemble thermo once above the cards, and lists thermo and rate records on the shapes that name them", async () => {
         await openEntry()
         expect(await screen.findByText(/Describes all shapes together:/)).toBeVisible()
-        expect(screen.getByRole("link", { name: "thm_ensemble" })).toHaveAttribute("href", `/species-entries/${entryRef}/thermo?conformer=${groupOneRef}#thermo-heading-thm_ensemble`)
+        const ensemble = document.querySelector(`a[href="/species-entries/${entryRef}/thermo?conformer=${groupOneRef}#thermo-heading-thm_ensemble"]`) as HTMLElement
+        expect(ensemble).toHaveAccessibleName("Thermo record")
+        expect(ensemble.textContent).toBe("Thermo record")
         const one = within(cardFor("Conformer Group 1"))
-        expect(await one.findByRole("link", { name: "thm_one" })).toHaveAttribute("href", expect.stringContaining("/thermo?conformer=cg_one#thermo-heading-thm_one"))
+        expect(await one.findByRole("link", { name: "Thermo record" })).toHaveAttribute("href", expect.stringContaining("/thermo?conformer=cg_one#thermo-heading-thm_one"))
         const two = within(cardFor("Conformer Group 2"))
-        expect(await two.findByRole("link", { name: "kin_one" })).toHaveAttribute("href", "/reaction-entries/rxe_one#kinetics-heading")
+        expect(await two.findByRole("link", { name: "Record" })).toHaveAttribute("href", "/reaction-entries/rxe_one#kinetics-kin_one")
         expect(two.getByText(/This shape was merged into/)).toBeVisible()
         expect(screen.getByText("Not listed by default: 2 rejected records.")).toBeVisible()
     })
@@ -1665,15 +1683,15 @@ describe("species-entry page: calculations of the selected shape", () => {
         const region = await screen.findByRole("region", { name: "Table of calculations" })
         const rows = within(region).getAllByRole("row")
         expect(rows).toHaveLength(3)
-        expect(within(rows[1]).getByRole("link", { name: "co_1" })).toBeVisible()
-        expect(within(rows[1]).getAllByRole("link", { name: "calc_opt_1a" }).length).toBeGreaterThan(0)
+        expect(within(rows[1]).getByRole("link", { name: "Conformer observation: Observation 1" })).toHaveAttribute("href", "/conformer-observations/co_1")
+        expect(rows[1].querySelectorAll('a[href="/calculations/calc_opt_1a"]').length).toBeGreaterThan(0)
         // Two single-point energies and the final energy of each of two optimisations, on one geometry.
         await waitFor(() => expect(within(rows[1]).getAllByRole("link", { name: /^[\u2212-]7\d\.\d+ hartree/ })).toHaveLength(4))
         expect(within(rows[1]).getAllByText(/final energy of the optimisation/)).toHaveLength(2)
-        expect(within(rows[2]).getAllByRole("link", { name: "calc_opt_2" }).length).toBeGreaterThan(0)
-        expect(within(rows[2]).queryByRole("link", { name: "calc_sp_1" })).not.toBeInTheDocument()
-        await waitFor(() => expect(document.querySelector(".shape-spread")).toHaveTextContent(/Single-point energies at b3lyp\/def2tzvp with Gaussian 16 differ by up to 291\.\d{2} kJ\/mol across 2 calculations/))
-        expect(document.querySelector(".shape-spread")).toHaveTextContent(/Final energies of the optimisations at b3lyp\/def2tzvp with Gaussian 16 differ by up to 393\.\d{2} kJ\/mol across 3 calculations/)
+        expect(rows[2].querySelectorAll('a[href="/calculations/calc_opt_2"]').length).toBeGreaterThan(0)
+        expect(rows[2].querySelector('a[href="/calculations/calc_sp_1"]')).toBeNull()
+        await waitFor(() => expect(document.querySelector(".shape-spread")).toHaveTextContent(/Single-point energies at b3lyp\/def2tzvp · Gaussian 16 differ by up to 291\.\d{2} kJ\/mol across 2 calculations/))
+        expect(document.querySelector(".shape-spread")).toHaveTextContent(/Final energies of the optimisations at b3lyp\/def2tzvp · Gaussian 16 differ by up to 393\.\d{2} kJ\/mol across 3 calculations/)
         expect(screen.getAllByText(/This order is not a recommendation/).length).toBeGreaterThan(1)
     })
 
@@ -1705,7 +1723,7 @@ describe("species-entry page: the stage and the keyboard", () => {
         await waitFor(() => expect(second).toHaveAttribute("aria-pressed", "true"))
         expect(await screen.findByRole("heading", { name: "Evidence for Conformer Group 2" })).toBeVisible()
         const region = await screen.findByRole("region", { name: "Table of calculations" })
-        expect(within(region).getByRole("link", { name: "co_3" })).toBeVisible()
+        expect(region.querySelector('a[href="/conformer-observations/co_3"]')).toBeVisible()
     })
 
     it("moves between the evidence tabs with the arrow keys", async () => {

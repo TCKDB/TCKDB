@@ -1,9 +1,14 @@
 import { GuideLink } from "../components/GuideLink"
+import { calculationWords, versionWords } from "../domain/recordWords"
+import { numberRefs } from "../domain/recordNumbers"
+import { transitionStateWords } from "../domain/recordWords"
+import { RecordLink } from "../components/RecordLink"
+import { geometryWords } from "../domain/recordWords"
 import { useMemo, type ReactNode } from "react"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../transition-state-entry.css"
-import { loadReactionEntryParticipants } from "../api/reactionEntryApi"
+import { loadReactionEntryKinetics } from "../api/reactionEntryApi"
 import { BROWSE_KIND_PATHS } from "../api/browseApi"
 import type { StructureAssessment, TransitionStateEntryRecord } from "../api/transitionStateEntryApi"
 import { loadTransitionStateEntry } from "../api/transitionStateEntryApi"
@@ -12,7 +17,7 @@ import { DepositorNote } from "../components/DepositorNote"
 import { Disclosure } from "../components/Disclosure"
 import { EnergyProfile } from "../components/EnergyProfile"
 import { ListPager } from "../components/ListPager"
-import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
+import { LevelLabel } from "../components/LevelLabel"
 import { PageShell } from "../components/PageShell"
 import { RecordMap } from "../components/RelationshipMap"
 import { transitionStateEntryNodes } from "../domain/recordMapNodes"
@@ -163,8 +168,10 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
     } = record
     const trust = record.trust ?? null
 
-    const participants = useLoaded(loadReactionEntryParticipants, reaction.reaction_entry_ref ?? null)
+    const participants = useLoaded(loadReactionEntryKinetics, reaction.reaction_entry_ref ?? null)
     const species = participants.status === "ready" ? participants.data.species : null
+    // The numbers the reaction entry's own page gives its records.
+    const entryRecordNumbers = useMemo(() => (participants.status === "ready" ? numberRefs((participants.data.kinetics ?? []).map((item) => item.kinetics_ref)) : undefined), [participants])
     const reactants = useMemo(() => species?.reactants ?? [], [species])
     const products = useMemo(() => species?.products ?? [], [species])
     const equationKnown = reactants.length > 0 && products.length > 0
@@ -246,7 +253,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                 to: `/reactions/${reaction.reaction_ref}`,
             }]
             : []),
-        ...(reaction.reaction_entry_ref ? [{ label: "This deposited version", to: `/reaction-entries/${reaction.reaction_entry_ref}` }] : []),
+        ...(reaction.reaction_entry_ref ? [{ label: participants.status === "ready" ? versionWords(participants.data.reaction_entry.deposit_position) : "This deposited version", to: `/reaction-entries/${reaction.reaction_entry_ref}` }] : []),
         { label: "This transition state" },
     ]
 
@@ -288,7 +295,13 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                 )}
             >
                 {reaction.reaction_entry_ref ? (
-                    <EnergyProfile entryRef={reaction.reaction_entry_ref} speciesLabels={speciesLabels} onlyTransitionState={entry.transition_state_entry_ref} />
+                    <EnergyProfile
+                        entryRef={reaction.reaction_entry_ref}
+                        speciesLabels={speciesLabels}
+                        onlyTransitionState={entry.transition_state_entry_ref}
+                        recordNumbers={entryRecordNumbers}
+                        recordsAt={{ to: `/reaction-entries/${reaction.reaction_entry_ref}`, version: participants.status === "ready" ? versionWords(participants.data.reaction_entry.deposit_position) : null }}
+                    />
                 ) : (
                     <section className="energy-profile" aria-labelledby="energy-heading">
                         <SectionHeading id="energy-heading">Energy hill</SectionHeading>
@@ -391,7 +404,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                             <div>
                                 <dt>Reaction record</dt>
                                 <dd>
-                                    <Link to={`/reactions/${reaction.reaction_ref}`}>{reaction.reaction_ref}</Link>
+                                    <RecordLink kind="reaction" to={`/reactions/${reaction.reaction_ref}`} label="All versions" />
                                 </dd>
                             </div>
                         )}
@@ -419,14 +432,14 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                     </p>
                     {siblings.length === 0 && <p className="empty-projection">No other saddle points are on this page.</p>}
                     <ul className="tse-siblings-list">
-                        {siblings.map((sibling) => {
+                        {siblings.map((sibling, siblingIndex) => {
                             const summary = summariseSiblingStage(sibling.calculations ?? [])
                             const primary = summary?.calculation ?? null
                             const siblingRef = sibling.transition_state_entry.transition_state_entry_ref
                             const reviewStatus = sibling.transition_state_entry.review.status
                             return (
                                 <li key={siblingRef}>
-                                    {/* The link text is the sibling's own ref, never
+                                    {/* The link text is its position in this list, never
                                         `sibling.transition_state.label` (house rule: no depositor-typed labels on
                                         public pages -- siblings on one reaction can
                                         all carry the identical label, so it cannot
@@ -434,9 +447,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                         date + level of theory + software below already
                                         do the differentiating work the label never
                                         could. */}
-                                    <Link to={`/transition-state-entries/${siblingRef}`}>
-                                        {siblingRef}
-                                    </Link>
+                                    <RecordLink kind="transition-state" to={`/transition-state-entries/${siblingRef}`} label={transitionStateWords((siblingsMeta?.pagination.offset ?? 0) + siblingIndex + 1)} />
                                     <span>deposited {isoDate(sibling.transition_state_entry.created_at)}</span>
                                     {summary && summary.varies ? (
                                         <span>
@@ -447,9 +458,9 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                         <>
                                             <span>
                                                 {summary ? `${statusLabel(summary.stage)} stage: ` : ""}
-                                                {primary?.level_of_theory ? <LevelOfTheoryLink levelOfTheory={primary.level_of_theory} /> : "level of theory not recorded"}
+                                                {primary?.level_of_theory ? <LevelLabel levelOfTheory={primary.level_of_theory} program={primary.software_release ? softwareCellText(primary.software_release) : null} /> : "level of theory not recorded"}
                                             </span>
-                                            <span>{primary?.software_release ? (softwareCellText(primary.software_release) ?? "software not recorded") : "software not recorded"}</span>
+                                            {!primary?.level_of_theory && <span>{primary?.software_release ? (softwareCellText(primary.software_release) ?? "software not recorded") : "software not recorded"}</span>}
                                         </>
                                     )}
                                     <span className={reviewPillClass(reviewStatus)}>
@@ -472,11 +483,11 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
 
             <section className="ledger-section" aria-labelledby="calc-ledger">
                 <SectionHeading id="calc-ledger">Calculation evidence</SectionHeading>
-                <EvidencePills evidence={evidence} entryRef={entry.transition_state_entry_ref} />
+                <EvidencePills evidence={evidence} />
                 {calculationsAvailability === "populated" ? (
                     <>
                         <p className="note calculation-order-note">{CALCULATION_ROW_ORDER_NOTE}</p>
-                        <CalculationTable calculations={calculations} entryRef={entry.transition_state_entry_ref} />
+                        <CalculationTable calculations={calculations} />
                     </>
                 ) : (
                     <SectionEmptyMessage
@@ -502,7 +513,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                 <div className="geometry-links">
                                     {finalGeometries.map((geometry) => (
                                         <div className="geometry-link geometry-link--final" key={geometry.geometry_ref}>
-                                            <Link to={`/geometries/${geometry.geometry_ref}`}>{geometry.geometry_ref}</Link>
+                                            <RecordLink kind="geometry" to={`/geometries/${geometry.geometry_ref}`} label={geometryWords(geometry.natoms)} />
                                             <span>final{geometry.natoms != null ? ` · ${geometry.natoms} atoms` : ""}</span>
                                         </div>
                                     ))}
@@ -527,14 +538,14 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                 >
                                     {ircCalc && (role === "irc_forward" || role === "irc_reverse") && (
                                         <p className="note">
-                                            From <Link to={`/calculations/${ircCalc.calculation_ref}`}>{ircCalc.calculation_ref}</Link>.
+                                            From <RecordLink kind="calculation" to={`/calculations/${ircCalc.calculation_ref}`} label={calculationWords("irc")} />.
                                         </p>
                                     )}
                                     <ol className="tse-irc-point-list">
                                         {roleGeometries.map((geometry, index) => (
                                             <li key={geometry.geometry_ref}>
                                                 <span>{index + 1}</span>
-                                                <Link to={`/geometries/${geometry.geometry_ref}`}>{geometry.geometry_ref}</Link>
+                                                <RecordLink kind="geometry" to={`/geometries/${geometry.geometry_ref}`} label={geometryWords(geometry.natoms)} />
                                             </li>
                                         ))}
                                     </ol>
@@ -558,7 +569,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                         <p className="empty-projection">Not yet reviewed — no review events recorded.</p>
                     ) : (
                         <div className="table-scroll">
-                            <table className="data-table" aria-label={`Review history for ${entry.transition_state_entry_ref}`}>
+                            <table className="data-table" aria-label="Review history">
                                 <thead>
                                     <tr>
                                         <th scope="col">Status</th>
@@ -609,7 +620,7 @@ function SaddlePointStatement({ saddlePoint, evidence }: {
         }
         return <p className="tse-saddle-point">No frequency calculation deposited for this entry.</p>
     }
-    const lotText = saddlePoint.level_of_theory ? <LevelOfTheoryLink levelOfTheory={saddlePoint.level_of_theory} /> : "level of theory not recorded"
+    const lotText = saddlePoint.level_of_theory ? <LevelLabel levelOfTheory={saddlePoint.level_of_theory} /> : "level of theory not recorded"
     // Programs print the mode negative or with an i; TCKDB keeps the depositor's sign, so the magnitude is shown with an i.
     const stored = saddlePoint.imag_freq_cm1
     const quantity = formatQuantity("ts_imaginary_frequency_cm1", stored == null ? null : Math.abs(stored))
@@ -636,7 +647,7 @@ function SaddlePointStatement({ saddlePoint, evidence }: {
             <dl className="kv-list">
                 <div><dt>Imaginary frequency</dt><dd>{freq ?? "not recorded"}</dd></div>
                 <div><dt>Level of theory</dt><dd>{lotText}</dd></div>
-                <div><dt>Frequency calculation</dt><dd><Link to={`/calculations/${saddlePoint.calculation_ref}`}>{saddlePoint.calculation_ref}</Link></dd></div>
+                <div><dt>Frequency calculation</dt><dd><RecordLink kind="calculation" to={`/calculations/${saddlePoint.calculation_ref}`} label={calculationWords("freq")} /></dd></div>
             </dl>
             {saddlePoint.imaginary_mode_structural_flag && <p>Flagged as a higher-order saddle point.</p>}
             {saddlePoint.basis === "declared_curvature_witness" && <p>This is the frequency result the declared saddle target pins.</p>}
@@ -722,10 +733,10 @@ const EVIDENCE_PILL_KINDS: Array<{ key: keyof EvidenceSummary; label: string }> 
  * row) this is the one place a reader can see the full seven-kind set at
  * a glance rather than reconstructing it from an implicit omission.
  */
-function EvidencePills({ evidence, entryRef }: { evidence: EvidenceSummary; entryRef: string }) {
+function EvidencePills({ evidence }: { evidence: EvidenceSummary }) {
     return (
         <>
-            <ul className="tse-evidence-pills" aria-label={`Evidence present on ${entryRef}`}>
+            <ul className="tse-evidence-pills" aria-label="Evidence present on this transition state">
                 {EVIDENCE_PILL_KINDS.map(({ key, label }) => {
                     const present = Boolean(evidence[key])
                     return (
@@ -775,7 +786,7 @@ function IrcStatus({ validation, evidence, ircCalc, forwardPointCount, reversePo
         <>
             <p>
                 <strong>IRC ran</strong> — {forwardPointCount} forward · {reversePointCount} reverse points
-                {ircCalc && <> · <Link to={`/calculations/${ircCalc.calculation_ref}`}>{ircCalc.calculation_ref}</Link></>}
+                {ircCalc && <> · <RecordLink kind="calculation" to={`/calculations/${ircCalc.calculation_ref}`} label={calculationWords("irc")} /></>}
             </p>
             <p>Endpoint identity (reactant/product) not deposited — no structured pass/fail validation evidence record exists for this entry.</p>
         </>
@@ -800,10 +811,10 @@ function SectionEmptyMessage({ availability, emptyText, contradicted }: {
     )
 }
 
-function CalculationTable({ calculations, entryRef }: { calculations: Calculation[]; entryRef: string }) {
+function CalculationTable({ calculations }: { calculations: Calculation[] }) {
     return (
         <div className="table-scroll tse-scroll tse-calc-scroll" tabIndex={0} role="region" aria-label="Calculations of this transition state">
-        <table className="data-table" aria-label={`Calculations for ${entryRef}`}>
+        <table className="data-table" aria-label="Calculations of this transition state">
             <thead>
                 <tr>
                     <th scope="col">Stage</th>
@@ -819,7 +830,7 @@ function CalculationTable({ calculations, entryRef }: { calculations: Calculatio
                     <tr key={calculation.calculation_ref}>
                         <td data-label="Stage">{calculation.type}</td>
                         <td data-label="Level of theory">
-                            {calculation.level_of_theory ? <LevelOfTheoryLink levelOfTheory={calculation.level_of_theory} /> : "not recorded"}
+                            {calculation.level_of_theory ? <LevelLabel levelOfTheory={calculation.level_of_theory} /> : "not recorded"}
                         </td>
                         <td data-label="Software / workflow">
                             {softwareCellText(calculation.software_release) ?? "not recorded"}
@@ -836,7 +847,7 @@ function CalculationTable({ calculations, entryRef }: { calculations: Calculatio
                             {calculation.review ? statusLabel(calculation.review.status) : "not recorded"}
                         </td>
                         <td data-label="Record">
-                            <Link to={`/calculations/${calculation.calculation_ref}`}>{calculation.calculation_ref}</Link>
+                            <RecordLink kind="calculation" to={`/calculations/${calculation.calculation_ref}`} label={calculationWords(calculation.type)} />
                         </td>
                     </tr>
                 ))}

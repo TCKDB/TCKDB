@@ -291,3 +291,31 @@ def test_kinetics_filter_echo_reports_the_match_mode(db_session):
     response = search_kinetics(db_session, KineticsSearchRequest(reactants=["KEC_A"]))
 
     assert response.request.filter["match"] == "contains"
+
+
+def test_search_records_carry_the_entry_deposit_position_beyond_page_one_and_past_an_entry_with_no_visible_record(db_session):
+    rs = make_species(db_session, smiles="DP1", inchi_key=next_inchi_key("DPR"))
+    ps = make_species(db_session, smiles="DP2", inchi_key=next_inchi_key("DPP"))
+    chem = make_chem_reaction(db_session, reactants=[rs], products=[ps])
+    reactant_entry = make_species_entry(db_session, rs)
+    product_entry = make_species_entry(db_session, ps)
+    entries = [
+        make_reaction_entry(db_session, reaction=chem, reactant_entries=[reactant_entry], product_entries=[product_entry])
+        for _ in range(4)
+    ]
+    records = [make_kinetics(db_session, reaction_entry=entry) for entry in entries]
+    # The second entry has no visible record, so it is absent from the results and leaves a gap in the numbering.
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.kinetics,
+        record_id=records[1].id,
+        status=RecordReviewStatus.rejected,
+    )
+
+    seen: dict[int, int] = {}
+    for offset in (0, 2):
+        page = search_kinetics(db_session, KineticsSearchRequest(reactants=["DP1"], products=["DP2"], limit=2, offset=offset))
+        assert len(page.records) <= 2
+        seen.update({rec.reaction.reaction_entry_id: rec.reaction.deposit_position for rec in page.records})
+
+    assert seen == {entries[0].id: 1, entries[2].id: 3, entries[3].id: 4}

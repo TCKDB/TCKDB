@@ -27,7 +27,7 @@ function point(calc: string, hartree: number, extra: Record<string, unknown> = {
     return { calculation_ref: calc, energy_type: "single_point", electronic_energy_hartree: hartree, software: software("16"), review_status: "not_reviewed", convergence_unrecorded: false, ...extra }
 }
 
-function profile(tse: string, level: ReturnType<typeof lot>, program: string, kj: [number, number, number], extra: Record<string, unknown> = {}) {
+function profile(tse: string, level: ReturnType<typeof lot> & Record<string, unknown>, program: string, kj: [number, number, number], extra: Record<string, unknown> = {}) {
     return {
         transition_state_entry_ref: tse,
         transition_state_entry_review_status: "not_reviewed",
@@ -134,12 +134,12 @@ describe("EnergyProfile", () => {
         expect(screen.getByText(/By TS entry, then level and program\./)).toBeInTheDocument()
     })
 
-    it("adds the level ref to picker options that would otherwise read the same", async () => {
-        const twin = profile("tse_one", { level_of_theory_ref: "lot_other", method: "wb97xd", basis: "def2tzvp" }, "Gaussian", [0, 10, -5])
+    it("adds the differing qualifier, never a ref, to picker options that would otherwise read the same", async () => {
+        const twin = profile("tse_one", { level_of_theory_ref: "lot_other", method: "wb97xd", basis: "def2tzvp", dispersion: "d3bj" }, "Gaussian", [0, 10, -5])
         mount(read({ profiles: [FIRST, twin] }))
         await loaded()
         const options = within(screen.getByLabelText("Profile")).getAllByRole("option").map((option) => option.textContent)
-        expect(options).toEqual(["wb97xd/def2tzvp, Gaussian [lot_a]", "wb97xd/def2tzvp, Gaussian [lot_other]"])
+        expect(options).toEqual(["wb97xd/def2tzvp, Gaussian", "wb97xd/def2tzvp · dispersion d3bj, Gaussian"])
     })
 
     it("marks sum members as part of the sum above, and has no scroll region while nothing overflows", async () => {
@@ -196,8 +196,8 @@ describe("EnergyProfile", () => {
         mount(read())
         await loaded()
         const options = within(screen.getByLabelText("Profile")).getAllByRole("option").map((option) => option.textContent)
-        expect(options[0]).toBe("tse_one, wb97xd/def2tzvp, Gaussian")
-        expect(options[2]).toBe("tse_two, wb97xd/def2tzvp, Gaussian")
+        expect(options[0]).toBe("Transition state 1, wb97xd/def2tzvp, Gaussian")
+        expect(options[2]).toBe("Transition state 2, wb97xd/def2tzvp, Gaussian")
     })
 
     it("shows no picker for a single profile", async () => {
@@ -230,27 +230,68 @@ describe("EnergyProfile", () => {
         expect(screen.getByText("No complete energy profile is available for this reaction entry.")).toBeInTheDocument()
     })
 
-    it("lists energies a rate record cites in a table of their own, never inside the profile table", async () => {
+    it("lists energies a record cites in a table of their own, never inside the profile table", async () => {
         mount(read({
             cited_by_kinetics: [{
                 kinetics_ref: "kin_x",
                 calculations: [
-                    { role: "ts_energy", calculation_ref: "calc_cited", review_status: "approved", transition_state_entry_ref: "tse_one", level_of_theory_ref: "lot_c", energy_type: "single_point", electronic_energy_hartree: -115.19, software: software("16") },
+                    { role: "ts_energy", calculation_ref: "calc_cited", review_status: "approved", transition_state_entry_ref: "tse_one", level_of_theory_ref: "lot_c", level_of_theory: lot("lot_c", "ccsdt"), energy_type: "single_point", electronic_energy_hartree: -115.19, software: software("16") },
                     { role: "reactant_energy", calculation_ref: "calc_nulls", review_status: "not_reviewed", species_entry_ref: "spe_a", electronic_energy_hartree: null },
                 ],
             }],
         }))
         await loaded()
-        const cited = screen.getByRole("table", { name: /Calculations cited by each rate record/ })
-        expect(screen.getByText("Energies a rate record cites")).toBeInTheDocument()
-        expect(cited).toHaveTextContent("kin_x")
+        const cited = screen.getByRole("table", { name: /Calculations cited by each record/ })
+        expect(screen.getByText("Energies a record cites")).toBeInTheDocument()
+        expect(cited).toHaveTextContent("Record 1")
+        expect(cited).not.toHaveTextContent("Rate record")
+        expect(cited).not.toHaveTextContent("kin_x")
         expect(cited).toHaveTextContent("Transition-state energy")
         expect(within(cited).getByText("Level of theory", { selector: "th" })).toBeInTheDocument()
-        expect(within(cited).getByRole("link", { name: "lot_c" })).toHaveAttribute("href", "/methods/lot_c")
+        expect(within(cited).queryByRole("link", { name: "Level of theory" })).toBeNull()
+        expect(cited).not.toHaveTextContent("not named here")
+        expect(within(cited).getByRole("link", { name: /^ccsdt\/def2tzvp/ })).toHaveAttribute("href", "/methods/lot_c")
         expect(cited).toHaveTextContent("not recorded")
         const profileTable = screen.getByRole("table", { name: /Every point of the selected profile/ })
         expect(profileTable).not.toHaveTextContent("calc_cited")
         expect(profileTable).not.toHaveTextContent("kin_x")
+    })
+
+    it("names the level of a cited energy from the calculation itself, and says so when it has none", async () => {
+        mount(read({
+            profiles: [profile("tse_one", lot("lot_a", "wb97xd"), "Gaussian", [0, 3, -2])],
+            cited_by_kinetics: [{
+                kinetics_ref: "kin_x",
+                calculations: [
+                    { role: "ts_energy", calculation_ref: "calc_known", review_status: "approved", transition_state_entry_ref: "tse_one", level_of_theory_ref: "lot_elsewhere", level_of_theory: lot("lot_elsewhere", "b3lyp"), energy_type: "single_point", electronic_energy_hartree: -1.5, software: software("16") },
+                    { role: "ts_energy", calculation_ref: "calc_unknown", review_status: "approved", transition_state_entry_ref: "tse_one", level_of_theory_ref: null, level_of_theory: null, energy_type: "single_point", electronic_energy_hartree: -1.6, software: software("16") },
+                ],
+            }],
+        }))
+        await loaded()
+        const cited = screen.getByRole("table", { name: /Calculations cited by each record/ })
+        const [known, unknown] = [...cited.querySelectorAll("tbody tr")].map((row) => row.querySelector('[data-label="Level of theory"]')?.textContent)
+        expect(known).toContain("b3lyp/def2tzvp")
+        expect(unknown).toBe("not recorded")
+        expect(cited.querySelector("tbody tr th")).toHaveClass("energy-profile-record")
+        expect(cited.querySelector('[data-label="Level of theory"] .level-label-cell')).not.toBeNull()
+    })
+
+    it("numbers the cited records by the page's numbering when it is given, and by the cited order when it is not", async () => {
+        const cited = (ref: string) => ({ kinetics_ref: ref, calculations: [{ role: "ts_energy", calculation_ref: `calc_${ref}`, review_status: "approved", transition_state_entry_ref: "tse_one", energy_type: "single_point", electronic_energy_hartree: -1.5 }] })
+        server.use(http.get(`/api/v1/scientific/reaction-entries/${REF}/energy-profile`, () => HttpResponse.json(read({ cited_by_kinetics: [cited("kin_b"), cited("kin_a")] }))))
+        render(
+            <MemoryRouter>
+                <EnergyProfile entryRef={REF} speciesLabels={new Map()} recordNumbers={new Map([["kin_a", 1], ["kin_b", 2]])} />
+            </MemoryRouter>,
+        )
+        await loaded()
+        const rows = () => [...screen.getByRole("table", { name: /Calculations cited by each record/ }).querySelectorAll("tbody th a")].map((anchor) => [anchor.getAttribute("href"), anchor.textContent])
+        expect(rows()).toEqual([["#kinetics-kin_b", "Record 2"], ["#kinetics-kin_a", "Record 1"]])
+        cleanup()
+        mount(read({ cited_by_kinetics: [cited("kin_b"), cited("kin_a")] }))
+        await loaded()
+        expect(rows()).toEqual([["#kinetics-kin_b", "Record 1"], ["#kinetics-kin_a", "Record 2"]])
     })
 
     it("says what the default view left out, by kind", async () => {

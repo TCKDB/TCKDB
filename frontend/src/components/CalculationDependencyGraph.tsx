@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react"
 import { Link } from "react-router-dom"
+import { RecordLink } from "./RecordLink"
 import "../calculation-dependency-graph.css"
 import type { CalculationDependency } from "../api/calculationApi"
 import {
@@ -160,7 +161,7 @@ export function CalculationDependencyGraph({ dependencies, ownRef, ownType, cent
                 className="dep-graph-svg"
                 viewBox={`0 0 ${layout.width} ${layout.height}`}
                 role="img"
-                aria-label={`Dependency graph for ${ownRef}: ${ariaLabel}`}
+                aria-label={`Dependency graph for this calculation: ${ariaLabel}`}
                 // `width: 100%` (calculation-dependency-graph.css) lets the
                 // graph fill its container UP TO this cap -- but `minWidth`
                 // pins the SAME value as a FLOOR too, so the SVG renders at
@@ -225,10 +226,10 @@ export function CalculationDependencyGraph({ dependencies, ownRef, ownType, cent
                     </g>
                 ))}
                 {layout.nodes.map((node) => (
-                    <DependencyGraphNode key={`${node.tier}-${node.ref}`} node={node} centreLinked={centreLinked} centreSubject={centreSubject} />
+                    <DependencyGraphNode key={`${node.tier}-${node.ref}`} node={node} words={neighbourWords(model, node.tier, node.ref)} centreLinked={centreLinked} centreSubject={centreSubject} />
                 ))}
             </svg>
-            <DependencySentenceList dependencies={dependencies} />
+            <DependencySentenceList dependencies={dependencies} model={model} />
         </div>
     )
 }
@@ -239,8 +240,16 @@ const TIER_ARIA_PREFIX: Record<LayoutNode["tier"], string> = {
     child: "Child calculation",
 }
 
-function DependencyGraphNode({ node, centreLinked, centreSubject }: {
+/** "Parent calculation 2": a neighbour by its position among the neighbours of its side; plain when it is the only one. */
+function neighbourWords(model: { parentRefs: readonly string[]; childRefs: readonly string[] }, tier: LayoutNode["tier"], ref: string): string {
+    if (tier === "centre") return TIER_ARIA_PREFIX.centre
+    const refs = tier === "parent" ? model.parentRefs : model.childRefs
+    return refs.length > 1 ? `${TIER_ARIA_PREFIX[tier]} ${refs.indexOf(ref) + 1}` : TIER_ARIA_PREFIX[tier]
+}
+
+function DependencyGraphNode({ node, words, centreLinked, centreSubject }: {
     node: LayoutNode
+    words: string
     centreLinked: boolean
     centreSubject?: CentreSubject | null
 }) {
@@ -293,7 +302,7 @@ function DependencyGraphNode({ node, centreLinked, centreSubject }: {
                     {pill.label}
                 </text>
                 <text x={node.x} y={refY} className="dep-graph-node-ref" textAnchor="middle" dominantBaseline="middle">
-                    {node.ref}
+                    {words}
                 </text>
             </>
         )
@@ -303,7 +312,7 @@ function DependencyGraphNode({ node, centreLinked, centreSubject }: {
                     ? (
                         <Link
                             to={`/calculations/${node.ref}`}
-                            aria-label={`${pill.label} ${node.ref}`}
+                            aria-label={pill.label}
                             className="dep-graph-node-link"
                         >
                             {content}
@@ -325,7 +334,7 @@ function DependencyGraphNode({ node, centreLinked, centreSubject }: {
                 {centreSubject && (
                     <Link
                         to={centreSubject.href}
-                        aria-label={`${centreSubject.label} ${centreSubject.ref}`}
+                        aria-label={centreSubject.label}
                         className="dep-graph-node-subject-link"
                         data-testid={`dep-node-subject-${node.ref}`}
                     >
@@ -349,12 +358,12 @@ function DependencyGraphNode({ node, centreLinked, centreSubject }: {
         <g className={`dep-graph-node dep-graph-node--${node.tier}`} data-testid={`dep-node-${node.tier}-${node.ref}`}>
             <Link
                 to={`/calculations/${node.ref}`}
-                aria-label={`${TIER_ARIA_PREFIX[node.tier]} ${node.ref}`}
+                aria-label={words}
                 className="dep-graph-node-link"
             >
                 {rect}
                 <text x={node.x} y={node.y} className="dep-graph-node-ref" textAnchor="middle" dominantBaseline="middle">
-                    {node.ref}
+                    {words}
                 </text>
             </Link>
         </g>
@@ -367,7 +376,7 @@ function DependencyGraphNode({ node, centreLinked, centreSubject }: {
  * `domain/dependencyWording.ts` table the graph's edge labels use), just
  * demoted to `.dep-graph-sentences` (`.note`-sized: `--type-note-font` /
  * `--muted`) rather than the section's primary content. */
-function DependencySentenceList({ dependencies }: { dependencies: CalculationDependency[] }) {
+function DependencySentenceList({ dependencies, model }: { dependencies: CalculationDependency[]; model: { parentRefs: readonly string[]; childRefs: readonly string[] } }) {
     return (
         <ul className="dep-graph-sentences" aria-label="Dependency edges, as text">
             {dependencies.map((dep, index) => {
@@ -378,7 +387,7 @@ function DependencySentenceList({ dependencies }: { dependencies: CalculationDep
                 return (
                     <li key={`${dep.role}-${dep.direction}-${linkRef}-${index}`}>
                         {before}
-                        <Link to={`/calculations/${linkRef}`}>{linkRef}</Link>
+                        <RecordLink kind="calculation" to={`/calculations/${linkRef}`} label={neighbourWords(model, isChildSide ? "parent" : "child", linkRef)} />
                         {after}
                     </li>
                 )

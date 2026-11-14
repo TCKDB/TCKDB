@@ -206,25 +206,11 @@ function ddFor(container: HTMLElement, term: string): string {
     return dt.nextElementSibling?.textContent ?? ""
 }
 
-/**
- * Finds the `<code>` element whose immediately preceding text node
- * contains `precedingText`, and returns its own text. Used to bind a
- * supersession pointer to ITS OWN sentence rather than merely asserting
- * both refs appear somewhere in the notice — `getByText(/thm_beta_v2/)`
- * matches identically whether `superseded_by`/`current` are rendered in
- * the correct order or swapped, since both refs are present either way.
- * A plain-string/regex `getByText` also cannot span the `<p>`/`<code>`
- * boundary at all here (testing-library's default text matcher reads only
- * an element's own direct text-node children, not descendant elements —
- * see the `CalculationDetailPage.test.tsx` caveat-sentence comment for the
- * same limitation), so this reads the DOM directly instead.
- */
-function codeAfter(container: HTMLElement, precedingText: string): string {
-    const codes = Array.from(container.querySelectorAll("code"))
-    for (const code of codes) {
-        if ((code.previousSibling?.textContent ?? "").includes(precedingText)) return code.textContent ?? ""
-    }
-    throw new Error(`No <code> immediately preceded by text containing "${precedingText}" found`)
+/** The value of the labelled row in a card's References: binds each ref to its role, so a swap of the two correction pointers shows. */
+function refValue(container: HTMLElement, label: string): string {
+    const row = Array.from(container.querySelectorAll(".ref-item")).find((item) => item.querySelector(".ref-item-label")?.textContent === label)
+    if (!row) throw new Error(`No reference labelled "${label}" found`)
+    return row.querySelector(".ref-item-value")?.textContent ?? ""
 }
 
 /**
@@ -248,9 +234,9 @@ describe("EntryThermoSection", () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
         await screen.findByText("thm_alpha")
-        expect(screen.getByText("thm_alpha")).toBeVisible()
-        expect(screen.getByText("thm_beta")).toBeVisible()
-        expect(screen.getByText("thm_gamma")).toBeVisible()
+        expect(screen.getByText("thm_alpha")).toBeInTheDocument()
+        expect(screen.getByText("thm_beta")).toBeInTheDocument()
+        expect(screen.getByText("thm_gamma")).toBeInTheDocument()
         expect(screen.getByText("3 records · review: 1 approved · 2 not reviewed")).toBeVisible()
     })
 
@@ -569,7 +555,21 @@ describe("EntryThermoSection", () => {
         expect(within(alphaCard).queryByText("Model kind")).not.toBeInTheDocument()
         // The heading itself is unaffected -- this isn't "nothing about
         // the model kind renders at all".
-        expect(within(alphaCard).getByText("NASA 7-coefficient polynomial thermo record")).toBeVisible()
+        expect(within(alphaCard).getByText("NASA 7-coefficient polynomial thermo record 1")).toBeVisible()
+    })
+
+    it("names the replacing record by its number on the page and links to its card, when it is listed", async () => {
+        const [alpha, beta, gamma] = mockRecords()
+        const pointing = { ...beta, supersession: { superseded_by: "thm_gamma", current: "thm_alpha", reason: "corrected", superseded_at: "2026-08-15T00:00:00", chain_length: 2 } }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [alpha, pointing, gamma] }))))
+        page()
+        await screen.findByText("thm_beta")
+        const card = screen.getByText("thm_beta").closest("article") as HTMLElement
+        const notice = card.querySelector(".supersession-notice") as HTMLElement
+        expect(within(notice).getByRole("link", { name: "Thermo record 3" })).toHaveAttribute("href", "#thermo-heading-thm_gamma")
+        expect(within(notice).getByRole("link", { name: "Thermo record 1" })).toHaveAttribute("href", "#thermo-heading-thm_alpha")
+        expect(notice.textContent).not.toMatch(/thm_/)
+        expect(document.getElementById("thermo-heading-thm_gamma")).not.toBeNull()
     })
 
     it("never hides a superseded record — renders the notice alongside the record, not instead of it", async () => {
@@ -585,8 +585,11 @@ describe("EntryThermoSection", () => {
         // direction swap (superseded_by <-> current) renders identically
         // under a presence-only check, since both refs are on the card
         // either way. See `codeAfter`'s docstring.
-        expect(codeAfter(betaCard, "replaced by")).toBe("thm_beta_v2")
-        expect(codeAfter(betaCard, "current record in this chain is")).toBe("thm_beta_v3")
+        expect(betaCard).toHaveTextContent("replaced by a newer record")
+        expect(betaCard).toHaveTextContent("current record in this chain is a newer record")
+        expect(betaCard.querySelector(".supersession-notice code")).toBeNull()
+        expect(refValue(betaCard, "Replaced by")).toBe("thm_beta_v2")
+        expect(refValue(betaCard, "Current record in this chain")).toBe("thm_beta_v3")
         expect(within(betaCard).getByText(/corrected transcription error/)).toBeVisible()
         // The record's own data is still fully present, not replaced by the
         // notice. `getByText` only reads an element's own direct text-node
@@ -641,20 +644,20 @@ describe("EntryThermoSection", () => {
         const alphaCard = screen.getByText("thm_alpha").closest("article") as HTMLElement
 
         // calc_alpha_sp: exactly ONE link, under a row naming BOTH roles.
-        const spLinks = within(alphaCard).getAllByRole("link", { name: "calc_alpha_sp" })
+        const spLinks = within(alphaCard).getAllByRole("link", { name: "Calculation: Single-point energy" })
         expect(spLinks).toHaveLength(1)
         expect(spLinks[0]).toHaveAttribute("href", "/calculations/calc_alpha_sp")
-        expect(ddFor(alphaCard, "Primary calculation / Single-point calculation")).toBe("calc_alpha_sp")
+        expect(ddFor(alphaCard, "Primary calculation / Single-point calculation")).toBe("Single-point energy")
         expect(within(alphaCard).queryByText("Primary calculation")).not.toBeInTheDocument()
         expect(within(alphaCard).queryByText("Single-point calculation")).not.toBeInTheDocument()
 
         // calc_alpha_freq is a genuinely DIFFERENT calculation -- its own
         // row, own link, never folded into the merged row above.
-        expect(within(alphaCard).getByRole("link", { name: "calc_alpha_freq" })).toHaveAttribute("href", "/calculations/calc_alpha_freq")
-        expect(ddFor(alphaCard, "Frequency calculation")).toBe("calc_alpha_freq")
+        expect(within(alphaCard).getByRole("link", { name: "Calculation: Frequency calculation" })).toHaveAttribute("href", "/calculations/calc_alpha_freq")
+        expect(ddFor(alphaCard, "Frequency calculation")).toBe("Frequency calculation")
 
-        expect(within(alphaCard).getByText("sm_alpha")).toBeVisible()
-        expect(within(alphaCard).queryByRole("link", { name: "sm_alpha" })).not.toBeInTheDocument()
+        expect(ddFor(alphaCard, "Statmech")).toBe("linked")
+        expect(within(alphaCard).queryByRole("link", { name: /^Statmech/ })).not.toBeInTheDocument()
     })
 
     it("keeps Primary/Frequency/Single-point calculation as three separate rows when all three cite different refs", async () => {
@@ -672,9 +675,11 @@ describe("EntryThermoSection", () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [distinctRefs] }))))
         page()
         const card = (await screen.findByText("thm_distinct_refs")).closest("article") as HTMLElement
-        expect(ddFor(card, "Primary calculation")).toBe("calc_primary")
-        expect(ddFor(card, "Frequency calculation")).toBe("calc_freq")
-        expect(ddFor(card, "Single-point calculation")).toBe("calc_sp")
+        expect(ddFor(card, "Primary calculation")).toBe("Calculation")
+        expect(ddFor(card, "Frequency calculation")).toBe("Frequency calculation")
+        expect(ddFor(card, "Single-point calculation")).toBe("Single-point energy")
+        const hrefs = Array.from(card.querySelectorAll("dd a")).map((link) => link.getAttribute("href"))
+        expect(hrefs).toEqual(expect.arrayContaining(["/calculations/calc_primary", "/calculations/calc_freq", "/calculations/calc_sp"]))
     })
 
 
@@ -772,8 +777,28 @@ describe("EntryThermoSection", () => {
         // Last page: Next is disabled, Previous goes back to the start.
         expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
         fireEvent.click(screen.getByRole("button", { name: "Previous" }))
-        expect(await screen.findByText("thm_alpha")).toBeVisible()
+        expect(await screen.findByText("thm_alpha")).toBeInTheDocument()
         expect(seen.at(-1)).toEqual({ offset: "0", limit: "2" })
+    })
+
+    it("numbers the records of a later page after those of the earlier pages, not from 1 again", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const url = new URL(request.url)
+            const start = Number(url.searchParams.get("offset") ?? 0)
+            const size = Number(url.searchParams.get("limit") ?? 2)
+            const all = mockRecords()
+            return HttpResponse.json(mockResponse({
+                records: all.slice(start, start + size),
+                pagination: { offset: start, limit: size, returned: all.slice(start, start + size).length, total: all.length },
+            }))
+        }))
+        page()
+        await screen.findByText("thm_alpha")
+        const numberOf = () => screen.getAllByRole("heading", { level: 3 }).flatMap((heading) => (/thermo record (\d+)$/.exec(heading.textContent ?? "") ? [Number(/(\d+)$/.exec(heading.textContent ?? "")![1])] : []))
+        expect(numberOf()).toEqual([1, 2])
+        fireEvent.click(await screen.findByRole("button", { name: "Next" }))
+        await screen.findByText(/Showing 3/)
+        expect(numberOf()).toEqual([3])
     })
 
     function pagedHandler(seen: Array<{ offset: number; limit: number }>) {
@@ -819,7 +844,7 @@ describe("EntryThermoSection", () => {
         server.use(pagedHandler(seen))
         renderAt("#thermo-heading-thm_missing")
         expect(await screen.findByText("The linked record isn't in this list.")).toBeVisible()
-        expect(screen.getByText("thm_alpha")).toBeVisible()
+        expect(screen.getByText("thm_alpha")).toBeInTheDocument()
         expect(screen.getByText("Showing 1\u20132 of 3 thermochemistry records.")).toBeVisible()
         expect(seen.length).toBeLessThanOrEqual(2)
         for (const request of seen) expect(request.offset).toBeGreaterThanOrEqual(0)
@@ -926,7 +951,7 @@ describe("EntryThermoSection", () => {
         page(conformerGroups[1], conformerGroups) // conformer_2 selected
         await screen.findByRole("heading", { name: "From Conformer Group 2" })
         const primaryGroup = screen.getByRole("heading", { name: "From Conformer Group 2" }).closest(".conformer-evidence-group") as HTMLElement
-        expect(within(primaryGroup).getByText("thm_alpha")).toBeVisible()
+        expect(within(primaryGroup).getByText("thm_alpha")).toBeInTheDocument()
         expect(document.querySelector(".conformer-attribution-other")).toBeNull()
     })
 
@@ -952,7 +977,7 @@ describe("EntryThermoSection", () => {
         // as a plain (ungrouped) card -- never the "N records with
         // identical values" wrapper a same-bucket duplicate would get.
         const primaryGroup = screen.getByRole("heading", { name: "From Conformer Group 1" }).closest(".conformer-evidence-group") as HTMLElement
-        expect(within(primaryGroup).getByText("thm_g1")).toBeVisible()
+        expect(within(primaryGroup).getByText("thm_g1")).toBeInTheDocument()
         expect(within(primaryGroup).queryByText("thm_g2")).not.toBeInTheDocument()
         expect(within(primaryGroup).queryByText(/records with identical values/)).not.toBeInTheDocument()
 
@@ -1030,22 +1055,18 @@ describe("EntryThermoSection: the reproducibility assessment states what it was 
     })
 })
 
-describe("EntryThermoSection: provenance refs render as .data, like every other ref on the card", () => {
-    it("Level of theory ref and Statmech ref are wrapped in .data when present", async () => {
+describe("EntryThermoSection: provenance reads as words, never as refs", () => {
+    it("has no Level of theory ref row, and reads the statmech link as 'linked' with no ref", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
         await screen.findByText("thm_alpha")
         const alphaCard = screen.getByText("thm_alpha").closest("article") as HTMLElement
 
-        const lotDt = Array.from(alphaCard.querySelectorAll("dt")).find((el) => el.textContent === "Level of theory ref")!
-        const lotDd = lotDt.nextElementSibling as HTMLElement
-        expect(lotDd).toHaveTextContent("lot_alpha")
-        expect(lotDd.querySelector(".data")).not.toBeNull()
-
-        const statmechDt = Array.from(alphaCard.querySelectorAll("dt")).find((el) => el.textContent === "Statmech ref")!
-        const statmechDd = statmechDt.nextElementSibling as HTMLElement
-        expect(statmechDd).toHaveTextContent("sm_alpha")
-        expect(statmechDd.querySelector(".data")).not.toBeNull()
+        expect(Array.from(alphaCard.querySelectorAll("dt")).some((el) => el.textContent === "Level of theory ref")).toBe(false)
+        expect(Array.from(alphaCard.querySelectorAll("dt")).some((el) => el.textContent === "Statmech ref")).toBe(false)
+        expect(ddFor(alphaCard, "Statmech")).toBe("linked")
+        const provenance = alphaCard.querySelector(".kv-list") as HTMLElement
+        expect(provenance.textContent).not.toMatch(/lot_alpha|sm_alpha/)
     })
 
     it("shows 'none' for the statmech and every calculation ref of an UNLINKED record, in the card and in the table", async () => {
@@ -1068,29 +1089,26 @@ describe("EntryThermoSection: provenance refs render as .data, like every other 
         await screen.findByText("thm_unlinked")
         const card = screen.getByText("thm_unlinked").closest("article") as HTMLElement
 
-        expect(ddFor(card, "Statmech ref")).toBe("none")
+        expect(ddFor(card, "Statmech")).toBe("none")
         expect(ddFor(card, "Primary calculation")).toBe("none")
         expect(ddFor(card, "Frequency calculation")).toBe("none")
         expect(ddFor(card, "Single-point calculation")).toBe("none")
         expect(card.textContent).not.toContain("sm_alpha")
     })
 
-    it("renders plain 'none' text (no empty .data span) when either ref is absent and nothing is linked", async () => {
+    it("renders plain 'none' for the conformer, and no Level of theory ref row, when nothing is linked", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
         await screen.findByText("thm_beta")
         const betaCard = screen.getByText("thm_beta").closest("article") as HTMLElement
 
-        const lotDt = Array.from(betaCard.querySelectorAll("dt")).find((el) => el.textContent === "Level of theory ref")!
-        const lotDd = lotDt.nextElementSibling as HTMLElement
-        expect(lotDd).toHaveTextContent("none")
-        expect(lotDd.querySelector(".data")).toBeNull()
+        expect(Array.from(betaCard.querySelectorAll("dt")).some((el) => el.textContent === "Level of theory ref")).toBe(false)
         expect(ddFor(betaCard, "Conformer")).toBe("none")
         // Software is the record's own nullable column, not a link.
         expect(ddFor(betaCard, "Software")).toBe("not recorded")
     })
 
-    it("says 'not recorded' (not 'none') for the level and conformer of a record that IS linked but whose fields are NULL", async () => {
+    it("says 'not recorded' (not 'none') for the conformer of a record that IS linked but whose fields are NULL", async () => {
         const [alpha] = mockRecords()
         const linkedNoLevel = {
             ...alpha,
@@ -1101,11 +1119,11 @@ describe("EntryThermoSection: provenance refs render as .data, like every other 
         page()
         await screen.findByText("thm_alpha")
         const card = screen.getByText("thm_alpha").closest("article") as HTMLElement
-        expect(ddFor(card, "Level of theory ref")).toBe("not recorded")
+        expect(Array.from(card.querySelectorAll("dt")).some((el) => el.textContent === "Level of theory ref")).toBe(false)
         expect(ddFor(card, "Conformer")).toBe("not recorded")
     })
 
-    it("reads 'none' in the identical-group table's Statmech ref cell for unlinked records", async () => {
+    it("reads 'none' in the identical-group table's Statmech cell for unlinked records", async () => {
         const [alpha] = mockRecords()
         const unlinked = (ref: string) => ({
             ...alpha,
@@ -1121,8 +1139,9 @@ describe("EntryThermoSection: provenance refs render as .data, like every other 
         page()
         await screen.findByText("2 records with identical values")
         const refsTable = screen.getByRole("table", { name: "Records sharing these identical values" })
-        const row = within(refsTable).getByText("thm_u1").closest("tr") as HTMLElement
-        expect(cellAt(row, "Statmech ref")).toBe("none")
+        const row = refsTable.querySelector("tbody tr") as HTMLElement
+        expect(cellAt(row, "Record")).toBe("Record 1")
+        expect(cellAt(row, "Statmech")).toBe("none")
         expect(cellAt(row, "Primary calculation")).toBe("none")
     })
 })
@@ -1149,7 +1168,7 @@ describe("EntryThermoSection: thermo records register in the ToC", () => {
         // the data commit, but a ToC entry registers from an effect that
         // lands a tick later -- under full-suite load that tick was
         // sometimes still pending, and the sync query missed the link.
-        const link = await screen.findByRole("link", { name: "NASA 7-coefficient polynomial thermo record" })
+        const link = await screen.findByRole("link", { name: "NASA 7-coefficient polynomial thermo record 1" })
         expect(link).toHaveAttribute("href", "#thermo-heading-thm_alpha")
         // The href doesn't merely look plausible -- the id it points to is
         // a real element actually on the page.
@@ -1157,9 +1176,9 @@ describe("EntryThermoSection: thermo records register in the ToC", () => {
 
         // The two other present model kinds register too, each under its
         // own label -- not just NASA-7.
-        expect(await screen.findByRole("link", { name: "NASA 9-coefficient polynomial thermo record" }))
+        expect(await screen.findByRole("link", { name: "NASA 9-coefficient polynomial thermo record 2" }))
             .toHaveAttribute("href", "#thermo-heading-thm_beta")
-        expect(await screen.findByRole("link", { name: "Wilhoit polynomial thermo record" }))
+        expect(await screen.findByRole("link", { name: "Wilhoit polynomial thermo record 3" }))
             .toHaveAttribute("href", "#thermo-heading-thm_gamma")
     })
 
@@ -1200,7 +1219,7 @@ describe("EntryThermoSection: thermo records register in the ToC", () => {
         expect(screen.getByText("No NASA-7 polynomial recorded for this record.")).toBeVisible()
     })
 
-    it("disambiguates two records of the same model kind rather than repeating one label", async () => {
+    it("numbers two records of the same model kind by their place in the list rather than repeating one label", async () => {
         const [alpha, beta, gamma] = mockRecords()
         const secondNasa = { ...gamma, thermo_ref: "thm_delta", model_kind: "nasa", nasa: alpha.nasa, nasa9: null, wilhoit: null, points: null }
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [alpha, beta, gamma, secondNasa] }))))
@@ -1208,9 +1227,10 @@ describe("EntryThermoSection: thermo records register in the ToC", () => {
         await screen.findByText("thm_delta")
 
         const first = await screen.findByRole("link", { name: "NASA 7-coefficient polynomial thermo record 1" })
-        const second = await screen.findByRole("link", { name: "NASA 7-coefficient polynomial thermo record 2" })
+        const second = await screen.findByRole("link", { name: "NASA 7-coefficient polynomial thermo record 4" })
         // Absence asserted after the positive waits, so the nav has registered.
         expect(screen.queryByRole("link", { name: "NASA 7-coefficient polynomial thermo record" })).not.toBeInTheDocument()
+        expect(document.getElementById("thermo-heading-thm_delta")).toHaveTextContent("NASA 7-coefficient polynomial thermo record 4")
         expect(first).toHaveAttribute("href", "#thermo-heading-thm_alpha")
         expect(second).toHaveAttribute("href", "#thermo-heading-thm_delta")
     })
@@ -1252,13 +1272,15 @@ describe("EntryThermoSection: identical-value records group under one card", () 
         // detail -- jsdom's default queries do not filter those out by
         // visibility, so this reads the DOM structure directly instead).
         const ownHeadingRow = groupCard.querySelector(":scope > .science-record-heading") as HTMLElement
-        expect(ownHeadingRow.querySelector("h3")?.textContent).toBe("NASA 7-coefficient polynomial thermo record")
-        // Every ref is still listed, in the always-visible group-refs table
-        // (not hidden behind "show all").
+        expect(ownHeadingRow.querySelector("h3")?.textContent).toBe("NASA 7-coefficient polynomial thermo record 1")
+        // Every record is still listed, by number, in the always-visible
+        // group table (not hidden behind "show all"), with no ref printed.
         const refsTable = within(groupCard).getByRole("table", { name: "Records sharing these identical values" })
-        expect(within(refsTable).getByText("thm_g1")).toBeVisible()
-        expect(within(refsTable).getByText("thm_g2")).toBeVisible()
-        expect(within(refsTable).getByText("thm_g3")).toBeVisible()
+        expect(within(refsTable).getAllByRole("columnheader")[0]).toHaveTextContent("Record")
+        expect(within(refsTable).getByText("Record 1")).toBeInTheDocument()
+        expect(within(refsTable).getByText("Record 2")).toBeInTheDocument()
+        expect(within(refsTable).getByText("Record 3")).toBeInTheDocument()
+        expect(refsTable.textContent).not.toMatch(/thm_g/)
         // The shared scientific content itself renders once in the group's
         // own body (outside the collapsed detail) -- not once per record.
         const detail = groupCard.querySelector(".identical-record-group-detail") as HTMLElement
@@ -1274,8 +1296,8 @@ describe("EntryThermoSection: identical-value records group under one card", () 
         await screen.findByText("3 records with identical values")
         const refsTable = screen.getByRole("table", { name: "Records sharing these identical values" })
         const rows = within(refsTable).getAllByRole("row").slice(1)
-        const g1Row = rows.find((row) => within(row).queryByText("thm_g1"))!
-        const g3Row = rows.find((row) => within(row).queryByText("thm_g3"))!
+        const g1Row = rows.find((row) => cellAt(row, "Record") === "Record 1")!
+        const g3Row = rows.find((row) => cellAt(row, "Record") === "Record 3")!
         expect(cellAt(g1Row, "Software")).toBe("not recorded")
         expect(cellAt(g3Row, "Software")).toBe("Arkane 1.0")
     })
@@ -1288,11 +1310,11 @@ describe("EntryThermoSection: identical-value records group under one card", () 
         const detail = screen.getByText("Show all 3 records individually").closest("details") as HTMLDetailsElement
         expect(detail.open).toBe(false)
         // Three member cards mounted inside it -- one full `<article>` per
-        // record in the group, each carrying its own ref as a `<code>`.
+        // record in the group, each anchored by its own heading id.
         const memberCards = within(detail).getAllByRole("article") as HTMLElement[]
         expect(memberCards).toHaveLength(3)
-        const memberRefs = memberCards.map((card) => card.querySelector("code")?.textContent)
-        expect(memberRefs.sort()).toEqual(["thm_g1", "thm_g2", "thm_g3"])
+        const memberIds = memberCards.map((card) => card.querySelector("h3")?.id)
+        expect(memberIds.sort()).toEqual(["thermo-heading-thm_g1", "thermo-heading-thm_g2", "thermo-heading-thm_g3"])
 
         fireEvent.click(screen.getByText("Show all 3 records individually"))
         expect(detail.open).toBe(true)
@@ -1316,9 +1338,9 @@ describe("EntryThermoSection: identical-value records group under one card", () 
         page()
         await screen.findByText("thm_alpha")
         expect(screen.queryByText(/records with identical values/)).not.toBeInTheDocument()
-        expect(screen.getByText("thm_alpha")).toBeVisible()
-        expect(screen.getByText("thm_beta")).toBeVisible()
-        expect(screen.getByText("thm_gamma")).toBeVisible()
+        expect(screen.getByText("thm_alpha")).toBeInTheDocument()
+        expect(screen.getByText("thm_beta")).toBeInTheDocument()
+        expect(screen.getByText("thm_gamma")).toBeInTheDocument()
     })
 
     /**
@@ -1358,18 +1380,19 @@ describe("EntryThermoSection: identical-value records group under one card", () 
         expect(detail.contains(refsTable)).toBe(false)
 
         const rows = within(refsTable).getAllByRole("row").slice(1)
-        const rowFor = (ref: string) => rows.find((row) => within(row).queryByText(ref))!
+        expect(rows).toHaveLength(3)
 
-        for (const suffix of ["c1", "c2", "c3"]) {
-            const row = rowFor(`thm_${suffix}`)
-            expect(cellAt(row, "Primary calculation")).toBe(`calc_${suffix}_primary`)
-            expect(cellAt(row, "Freq calculation")).toBe(`calc_${suffix}_freq`)
-            expect(cellAt(row, "SP calculation")).toBe(`calc_${suffix}_sp`)
-            expect(cellAt(row, "Statmech ref")).toBe(`sm_${suffix}`)
-            // The Statmech ref cell renders as
-            // `.data`, like every other ref column in this table.
-            const statmechCell = row.querySelector('td[data-label="Statmech ref"]') as HTMLElement
-            expect(statmechCell.querySelector(".data")).not.toBeNull()
+        for (const [index, suffix] of ["c1", "c2", "c3"].entries()) {
+            const row = rows[index]
+            expect(cellAt(row, "Record")).toBe(`Record ${index + 1}`)
+            // Each record's own calculations stay distinct: same words, own link target.
+            expect(cellAt(row, "Primary calculation")).toBe("Optimisation")
+            expect(cellAt(row, "Freq calculation")).toBe("Frequency calculation")
+            expect(cellAt(row, "SP calculation")).toBe("Single-point energy")
+            const hrefs = Array.from(row.querySelectorAll('a[href^="/calculations/"]')).map((link) => link.getAttribute("href"))
+            expect(hrefs).toEqual([`/calculations/calc_${suffix}_primary`, `/calculations/calc_${suffix}_freq`, `/calculations/calc_${suffix}_sp`])
+            expect(cellAt(row, "Statmech")).toBe("linked")
+            expect(row.textContent).not.toMatch(/calc_|sm_/)
         }
 
         // The shared body (outside the table, outside "Show all") never
@@ -1423,28 +1446,29 @@ describe("EntryThermoSection: identical-value records group under one card", () 
         await screen.findByText("2 records with identical values")
 
         const refsTable = screen.getByRole("table", { name: "Records sharing these identical values" })
-        const row = within(refsTable).getByText("thm_overlap").closest("tr") as HTMLElement
+        const tableRows = within(refsTable).getAllByRole("row").slice(1)
+        const row = tableRows.find((candidate) => cellAt(candidate, "Record") === "Record 2") as HTMLElement
 
-        // Primary keeps its own ref, linked -- the anchor every other
+        // Primary keeps its own link, in words -- the anchor every other
         // column is compared against.
-        expect(cellAt(row, "Primary calculation")).toBe("calc_shared")
-        expect(within(row).getByRole("link", { name: "calc_shared" })).toHaveAttribute("href", "/calculations/calc_shared")
+        expect(cellAt(row, "Primary calculation")).toBe("Optimisation")
+        expect(within(row).getByRole("link", { name: "Calculation: Optimisation" })).toHaveAttribute("href", "/calculations/calc_shared")
 
-        // Freq cites the IDENTICAL ref -- collapsed to prose, never a
-        // second link to the same record, never the raw ref repeated.
+        // Freq cites the IDENTICAL calculation -- collapsed to prose, never a
+        // second link to the same record.
         expect(cellAt(row, "Freq calculation")).toBe("same as primary")
-        expect(within(row).queryAllByRole("link", { name: "calc_shared" })).toHaveLength(1)
+        expect(row.querySelectorAll('a[href="/calculations/calc_shared"]')).toHaveLength(1)
 
-        // SP cites a DIFFERENT ref -- stays its own link, never hidden or
+        // SP cites a DIFFERENT calculation -- stays its own link, never hidden or
         // collapsed just because a sibling column collapsed.
-        expect(cellAt(row, "SP calculation")).toBe("calc_distinct_sp")
-        expect(within(row).getByRole("link", { name: "calc_distinct_sp" })).toHaveAttribute("href", "/calculations/calc_distinct_sp")
+        expect(cellAt(row, "SP calculation")).toBe("Single-point energy")
+        expect(within(row).getByRole("link", { name: "Calculation: Single-point energy" })).toHaveAttribute("href", "/calculations/calc_distinct_sp")
 
         // The sibling row's null Freq ref hits the cell's third branch --
         // "none" (an absent link reads "none", never a borrowed ref),
         // plain text, never a link and never confused with the "same as
         // primary" collapse (a null ref is not a match).
-        const plainRow = within(refsTable).getByText("thm_plain").closest("tr") as HTMLElement
+        const plainRow = tableRows.find((candidate) => cellAt(candidate, "Record") === "Record 1") as HTMLElement
         expect(cellAt(plainRow, "Freq calculation")).toBe("none")
         const plainFreqCell = plainRow.querySelector('td[data-label="Freq calculation"]') as HTMLElement
         expect(within(plainFreqCell).queryByRole("link")).toBeNull()
@@ -1780,9 +1804,9 @@ describe("EntryThermoSection -- geometry/frequency/energy levels of theory", () 
             const headers = within(refsTable).getAllByRole("columnheader").map((cell) => cell.textContent)
             expect(headers).toEqual(expect.arrayContaining(["Geometry", "Frequencies", "Energy"]))
             expect(headers).not.toContain("Level of theory")
-            const g3Row = within(refsTable).getByText("thm_g3").closest("tr") as HTMLElement
+            const g3Row = (within(refsTable).getByText("Record 3", { selector: "td" }).closest("tr") as HTMLElement)
             expect(cellAt(g3Row, "Energy")).toContain("ccsd(t)/cc-pvtz")
-            const g1Row = within(refsTable).getByText("thm_g1").closest("tr") as HTMLElement
+            const g1Row = (within(refsTable).getByText("Record 1", { selector: "td" }).closest("tr") as HTMLElement)
             expect(cellAt(g1Row, "Energy")).toContain("b3lyp/def2tzvp")
         })
 
@@ -1804,9 +1828,9 @@ describe("EntryThermoSection -- geometry/frequency/energy levels of theory", () 
             const refsTable = screen.getByRole("table", { name: "Records sharing these identical values" })
             await within(refsTable).findByText("ccsd(t)/cc-pvtz")
 
-            const g1Row = within(refsTable).getByText("thm_g1").closest("tr") as HTMLElement
-            const g2Row = within(refsTable).getByText("thm_g2").closest("tr") as HTMLElement
-            const g3Row = within(refsTable).getByText("thm_g3").closest("tr") as HTMLElement
+            const g1Row = (within(refsTable).getByText("Record 1", { selector: "td" }).closest("tr") as HTMLElement)
+            const g2Row = (within(refsTable).getByText("Record 2", { selector: "td" }).closest("tr") as HTMLElement)
+            const g3Row = (within(refsTable).getByText("Record 3", { selector: "td" }).closest("tr") as HTMLElement)
             expect(cellAt(g1Row, "Energy")).toContain("single point on the optimised geometry")
             expect(cellAt(g2Row, "Energy")).toContain("single point on the optimised geometry")
             expect(cellAt(g3Row, "Energy")).toContain("single point on the optimised geometry")
@@ -1825,7 +1849,7 @@ describe("EntryThermoSection -- geometry/frequency/energy levels of theory", () 
             const refsTable = screen.getByRole("table", { name: "Records sharing these identical values" })
             await within(refsTable).findAllByText("ccsd(t)/cc-pvtz")
 
-            const g1Row = within(refsTable).getByText("thm_g1").closest("tr") as HTMLElement
+            const g1Row = (within(refsTable).getByText("Record 1", { selector: "td" }).closest("tr") as HTMLElement)
             const energyCell = g1Row.querySelector('td[data-label="Energy"]') as HTMLElement
             expect(within(energyCell).getByText("ambiguous")).toHaveClass("value-pill", "value-pill--muted")
             expect(energyCell).not.toHaveTextContent("not recorded")

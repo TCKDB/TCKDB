@@ -1,5 +1,5 @@
 import { useRef } from "react"
-import { Link } from "react-router-dom"
+import { RecordLink } from "./RecordLink"
 import { loadGeometryAtoms } from "../api/geometryApi"
 import { loadTransitionStateGeometries } from "../api/transitionStateEntryApi"
 import { stageGeometryRef } from "../domain/transitionStateStage"
@@ -31,7 +31,7 @@ export function TransitionStateStage({ transitionStateEntryRef, geometryRef: kno
                 <>
                     <ViewerStage key={geometryRef} atoms={atoms} formula={`transition state ${transitionStateEntryRef}`} xyzText={geometry.status === "ready" ? geometry.data.xyz_text ?? null : null} />
                     <p className="note">
-                        First deposited final geometry: <Link to={`/geometries/${geometryRef}`}><code className="t-preserve-case">{geometryRef}</code></Link>.
+                        First deposited final geometry: <RecordLink kind="geometry" to={`/geometries/${geometryRef}`} label="Geometry" />.
                     </p>
                 </>
             )}

@@ -1,4 +1,6 @@
 import { useMemo } from "react"
+import { RecordLink } from "../components/RecordLink"
+import { geometryWords } from "../domain/recordWords"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../record-identity-header.css"
@@ -147,7 +149,6 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                                             <SpeciesEntryLink speciesEntryRef={entryRef} smiles={species.canonical_smiles} formula={species.formula} facets={species} />
                                         </dd>
                                     </div>
-                                    <div><dt>Species ref</dt><dd><code className="data">{species.species_ref}</code></dd></div>
                                     <div><dt>Structure</dt><dd>{species.canonical_smiles ? <code>{species.canonical_smiles}</code> : "not projected"}</dd></div>
                                     {species.inchi_key && <div><dt>InChIKey</dt><dd><code>{species.inchi_key}</code></dd></div>}
                                     {(species.charge !== null && species.charge !== undefined
@@ -221,7 +222,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                         <div className="geometry-links">
                             {geometries.map(({ geometry, calculationRefs }) => (
                                 <div className="geometry-link" key={geometry.geometry_ref}>
-                                    <Link to={`/geometries/${geometry.geometry_ref}`}>{geometry.geometry_ref}</Link>
+                                    <RecordLink kind="geometry" to={`/geometries/${geometry.geometry_ref}`} label={geometryWords(geometry.natoms)} />
                                     <span>
                                         produced by <CalcLinks refs={calculationRefs} />
                                         {geometry.natoms != null ? ` · ${geometry.natoms} atoms` : ""}
@@ -277,7 +278,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                     </SectionHeading>
                     {showReviewTable ? (
                         <div className="table-scroll" tabIndex={0} role="region" aria-label="Table of review history">
-                            <table className="data-table" aria-label={`Review history for ${core.conformer_observation_ref}`}>
+                            <table className="data-table" aria-label="Review history">
                                 <thead>
                                     <tr>
                                         <th scope="col">Status</th>
@@ -336,9 +337,7 @@ function SiblingRow({ sibling, currentStatus }: { sibling: SiblingObservation; c
     const statusDiffers = core.review.status !== currentStatus
     return (
         <li>
-            <Link to={`/conformer-observations/${core.conformer_observation_ref}`}>
-                {core.conformer_observation_ref}
-            </Link>
+            <RecordLink kind="conformer-observation" to={`/conformer-observations/${core.conformer_observation_ref}`} label="Another observation" />
             {statusDiffers && <>{" "}<ReviewChip status={core.review.status} explain={false} /></>}
         </li>
     )

@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom"
 import "../entry-numbers.css"
 import type { SpeciesOverview } from "../api/speciesOverviewApi"
-import { hiddenVersionsNote, versionFacts, versionHolds } from "../domain/entryVersions"
+import { hiddenVersionsNote, versionHolds, versionName } from "../domain/entryVersions"
 import { SectionHeading } from "./PageSections"
 import { RecordGlyph } from "./RecordGlyph"
 import { ReviewChip } from "./ReviewChip"
@@ -17,18 +17,16 @@ export function SpeciesVersions({ species }: { species: SpeciesOverview }) {
                 <p className="empty-projection">No versions are currently listed for this molecule.</p>
             ) : (
                 <ul className="entry-versions-list">
-                    {species.entries.map((version) => {
-                        const refId = `version-ref-${version.species_entry_ref}`
+                    {species.entries.map((version, index) => {
                         return (
                             <li key={version.species_entry_ref} className="entry-versions-item">
                                 <p className="entry-versions-title">
                                     <RecordGlyph kind="species-entry" />{" "}
-                                    <Link to={`/species-entries/${version.species_entry_ref}`} aria-describedby={refId}>{versionFacts(version)}</Link>
+                                    <Link to={`/species-entries/${version.species_entry_ref}`}>{versionName(version, index + 1)}</Link>
                                 </p>
                                 <p className="entry-versions-meta">{versionHolds(version)}</p>
                                 <p className="entry-versions-meta">
-                                    <ReviewChip status={version.review.status} explain={false} />{" "}
-                                    <code id={refId} className="t-preserve-case">{version.species_entry_ref}</code>
+                                    <ReviewChip status={version.review.status} explain={false} />
                                 </p>
                             </li>
                         )

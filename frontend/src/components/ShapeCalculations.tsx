@@ -1,4 +1,6 @@
-import { Link } from "react-router-dom"
+import { RecordLink } from "./RecordLink"
+import { LevelDetails, LevelLabel } from "./LevelLabel"
+import { calculationWords, observationWords } from "../domain/recordWords"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { conformerLabel } from "../domain/conformerEvidence"
 import { calculationDid } from "../domain/calculationTypeFormat"
@@ -12,8 +14,9 @@ import { ValueLink } from "./ValueLink"
 function Where({ calculation }: { calculation: ShapeCalculation }) {
     return (
         <>
-            {calculation.levelLabel ? <>at <span className="t-preserve-case">{calculation.levelLabel}</span></> : "level not recorded"},{" "}
-            {calculation.program ? <>with <span className="t-preserve-case">{calculation.program}</span></> : "program not recorded"}
+            {calculation.level
+                ? <>at <LevelLabel levelOfTheory={calculation.level} program={calculation.program} plain />{!calculation.program && ", program not recorded"}</>
+                : <>level not recorded, {calculation.program ? <>with <span className="t-preserve-case">{calculation.program}</span></> : "program not recorded"}</>}
         </>
     )
 }
@@ -57,9 +60,9 @@ export function ShapeCalculations({ conformer, singlePoints, optimisations }: {
                         <ul className="shape-spread">
                             {spreads.map((line) => (
                                 <li key={`${line.kind}-${line.levelLabel}-${line.program}`}>
-                                    {line.kind === "sp" ? "Single-point energies" : "Final energies of the optimisations"} at <span className="t-preserve-case">{line.levelLabel}</span> with{" "}
-                                    <span className="t-preserve-case">{line.program}</span> differ by up to {line.kjMol.toFixed(2)} <span className="t-preserve-case">kJ/mol</span> across{" "}
+                                    {line.kind === "sp" ? "Single-point energies" : "Final energies of the optimisations"} at {line.level ? <LevelLabel levelOfTheory={line.level} program={line.program} plain /> : <span className="t-preserve-case">{line.levelLabel} · {line.program}</span>} differ by up to {line.kjMol.toFixed(2)} <span className="t-preserve-case">kJ/mol</span> across{" "}
                                     {line.count} calculations.
+                                    {line.level && <LevelDetails levelOfTheory={line.level} program={line.program} />}
                                 </li>
                             ))}
                         </ul>
@@ -75,16 +78,17 @@ export function ShapeCalculations({ conformer, singlePoints, optimisations }: {
                                 </tr>
                             </thead>
                             <tbody>
-                                {rows.map((row) => (
+                                {rows.map((row, index) => (
                                     <tr key={row.observationRef}>
-                                        <th scope="row"><Link to={`/conformer-observations/${row.observationRef}`}><code className="t-preserve-case">{row.observationRef}</code></Link></th>
+                                        <th scope="row"><RecordLink kind="conformer-observation" to={`/conformer-observations/${row.observationRef}`} label={observationWords(index + 1)} /></th>
                                         <td data-label="Optimisation and frequency calculations">
                                             {row.foundBy.length === 0 ? <span className="shape-energy-absent">No calculation recorded.</span> : (
                                                 <ul className="shape-cell-list">
                                                     {row.foundBy.map((calculation) => (
                                                         <li key={calculation.ref}>
                                                             {calculationDid(calculation.type) ?? calculation.type} <Where calculation={calculation} />{" "}
-                                                            <Link to={`/calculations/${calculation.ref}`}><code className="t-preserve-case">{calculation.ref}</code></Link>
+                                                            <RecordLink kind="calculation" to={`/calculations/${calculation.ref}`} label={calculationWords(calculation.type)} />
+                                                            {calculation.level && <LevelDetails levelOfTheory={calculation.level} program={calculation.program} />}
                                                         </li>
                                                     ))}
                                                 </ul>
@@ -99,8 +103,9 @@ export function ShapeCalculations({ conformer, singlePoints, optimisations }: {
                                                                 ? <span className="shape-energy-absent">{(energy.kind === "sp" ? singlePoints : optimisations).status === "failed" ? "Could not be read" : "Energy not recorded"}</span>
                                                                 : <ValueLink value={formatHartree(energy.hartree)} unit="hartree" to={`/calculations/${energy.ref}`} />}
                                                             {" "}({KIND_WORDS[energy.kind]}){" "}{!row.foundBy.some((calculation) => calculation.ref === energy.ref) && <><Where calculation={energy} />{" "}</>}
-                                                            <Link to={`/calculations/${energy.ref}`}><code className="t-preserve-case">{energy.ref}</code></Link>
+                                                            <RecordLink kind="calculation" to={`/calculations/${energy.ref}`} label={calculationWords(energy.kind)} />
                                                             {energy.review && <>{" "}<ReviewChip status={energy.review} explain={false} /></>}
+                                                            {energy.level && !row.foundBy.some((calculation) => calculation.ref === energy.ref) && <LevelDetails levelOfTheory={energy.level} program={energy.program} />}
                                                         </li>
                                                     ))}
                                                 </ul>

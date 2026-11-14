@@ -22,6 +22,26 @@ function setup(pressure: number) {
     )
 }
 
+describe("NumbersTable source lines", () => {
+    function named(...refs: string[]) {
+        return refs.map((ref) => ({ ...row(1), ref }))
+    }
+
+    it("names same-kind records by their number so their source links read differently", () => {
+        render(
+            <MemoryRouter>
+                <NumbersTable rows={named("thm_a", "thm_b", "thm_c")} caption="Values" label="Values table" groupLabels={new Map()} hrefs={() => ({ to: null, entryPath: null })} />
+            </MemoryRouter>,
+        )
+        expect([...document.querySelectorAll(".value-source")].map((source) => source.textContent?.match(/Thermo record( \d)?/)?.[0])).toEqual(["Thermo record", "Thermo record", "Thermo record"].map((text, index) => `${text} ${index + 1}`))
+    })
+
+    it("leaves the only record of its kind unnumbered", () => {
+        setup(1)
+        expect(document.querySelector(".value-source")?.textContent).toMatch(/^Source Thermo record(?! \d)/)
+    })
+})
+
 describe("NumbersTable rounding", () => {
     it("shows a reference pressure to 6 significant figures with the stored value as title and one note", () => {
         setup(1.0132500001)

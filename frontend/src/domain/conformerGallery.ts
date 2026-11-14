@@ -1,4 +1,5 @@
 import type { ConformerProjection } from "../api/speciesEntryApi"
+import { baseLabel, inlineQualifiers, inlineText, levelKey } from "./levelLabel"
 import type { OrderEcho } from "../api/listEnvelope"
 import { orderWords } from "./paging"
 import type { RelativeEnergies, RelativeEnergyMember } from "../api/relativeEnergyApi"
@@ -109,15 +110,16 @@ const joinWords = (parts: readonly string[]) => parts.join(" and ")
 
 export type LevelChoice = { ref: string; label: string; programs: string[] }
 
+
 /** Levels of theory the page's shapes carry energies at, in the order first met; each with the programs seen at it. */
 export function levelChoices(
     conformers: readonly ConformerProjection[],
     energyRecords: readonly SpeciesCalculationEnergyRecord[],
 ): LevelChoice[] {
-    const byRef = new Map<string, { label: string; programs: Set<string> }>()
+    const byRef = new Map<string, { level: LevelOfTheory; programs: Set<string> }>()
     const add = (level: LevelOfTheory | null | undefined, program: string | null) => {
         if (!level?.level_of_theory_ref) return
-        const entry = byRef.get(level.level_of_theory_ref) ?? { label: lotLabel(level), programs: new Set<string>() }
+        const entry = byRef.get(level.level_of_theory_ref) ?? { level, programs: new Set<string>() }
         if (program) entry.programs.add(program)
         byRef.set(level.level_of_theory_ref, entry)
     }
@@ -129,7 +131,13 @@ export function levelChoices(
         }
     }
     for (const record of energyRecords) add(record.level_of_theory, softwareLabel(record.software_release))
-    return [...byRef].map(([ref, { label, programs }]) => ({ ref, label, programs: [...programs] }))
+    // Two levels that read alike differ in a qualifier; the choice says which.
+    const inline = inlineQualifiers([...byRef.values()].map((entry) => entry.level))
+    return [...byRef].map(([ref, { level, programs }]) => ({
+        ref,
+        label: [baseLabel(level), ...(inline.get(levelKey(level)) ?? []).map(inlineText)].join(" · "),
+        programs: [...programs],
+    }))
 }
 
 // ---------------------------------------------------------------------------
@@ -247,6 +255,8 @@ export type ShapeCalculation = {
     type: string
     levelRef: string | null
     levelLabel: string | null
+    /** The structured level the label comes from. */
+    level: LevelOfTheory | null
     program: string | null
     workflowTool: string | null
     review: string | null
@@ -270,6 +280,7 @@ const describeCalculation = (calculation: ObservationCalculation): ShapeCalculat
         type: calculation.type,
         levelRef: level?.level_of_theory_ref ?? null,
         levelLabel: level ? lotLabel(level) : null,
+        level: level ?? null,
         program: softwareLabel(calculation.software_release),
         workflowTool: toolReleaseLabel(calculation.workflow_tool_release),
         review: typeof calculation.review?.status === "string" ? calculation.review.status : null,
@@ -281,6 +292,7 @@ const recordCalculation = (record: SpeciesCalculationEnergyRecord): ShapeCalcula
     type: record.calculation.calculation_type,
     levelRef: record.level_of_theory?.level_of_theory_ref ?? null,
     levelLabel: record.level_of_theory ? lotLabel(record.level_of_theory) : null,
+    level: record.level_of_theory ?? null,
     program: softwareLabel(record.software_release),
     workflowTool: null,
     review: null,
@@ -314,6 +326,7 @@ export function shapeRows(
                 kind: calculation.type as EnergyKind,
                 levelRef: own.levelRef ?? fromRecord?.levelRef ?? null,
                 levelLabel: own.levelLabel ?? fromRecord?.levelLabel ?? null,
+                level: own.level ?? fromRecord?.level ?? null,
                 program: own.program ?? fromRecord?.program ?? null,
                 hartree: record?.energy?.energy_hartree ?? null,
                 review: reviewOf(record),
@@ -336,15 +349,15 @@ export function shapeRows(
     })
 }
 
-export type SpreadLine = { kind: EnergyKind; levelLabel: string; program: string; count: number; kjMol: number }
+export type SpreadLine = { kind: EnergyKind; levelLabel: string; level: LevelOfTheory | null; program: string; count: number; kjMol: number }
 
 /** For each kind of energy, level and program with two or more values in the rows: the largest difference. Other pairs are never compared. */
 export function spreadLines(rows: readonly ShapeRow[]): SpreadLine[] {
-    const groups = new Map<string, { kind: EnergyKind; levelLabel: string; program: string; values: number[] }>()
+    const groups = new Map<string, { kind: EnergyKind; levelLabel: string; level: LevelOfTheory | null; program: string; values: number[] }>()
     for (const energy of rows.flatMap((row) => row.energies)) {
         if (energy.hartree === null || !energy.levelRef || !energy.program) continue
         const key = `${energy.kind}\n${energy.levelRef}\n${energy.program}`
-        const group = groups.get(key) ?? { kind: energy.kind, levelLabel: energy.levelLabel ?? energy.levelRef, program: energy.program, values: [] }
+        const group = groups.get(key) ?? { kind: energy.kind, levelLabel: energy.levelLabel ?? "level of theory", level: energy.level, program: energy.program, values: [] }
         group.values.push(energy.hartree)
         groups.set(key, group)
     }
@@ -353,6 +366,7 @@ export function spreadLines(rows: readonly ShapeRow[]): SpreadLine[] {
         .map((group) => ({
             kind: group.kind,
             levelLabel: group.levelLabel,
+            level: group.level,
             program: group.program,
             count: group.values.length,
             kjMol: (Math.max(...group.values) - Math.min(...group.values)) * KJ_MOL_PER_HARTREE,

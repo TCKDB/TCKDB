@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom"
+import { RecordLink } from "./RecordLink"
+import { calculationWords, recordWords } from "../domain/recordWords"
 import type { ReactionFullCalculationEvidence, ReactionKineticsRecord, ReactionTransitionStateInFull } from "../api/reactionEntryApi"
 import { formatQuantity } from "../domain/quantityFormat"
 import { formatArrheniusValue } from "../domain/kineticsTable"
@@ -71,8 +72,10 @@ function softwareCellText(release: { software: string; version?: string | null }
     return softwareLabel(release)
 }
 
-export function ReactionKineticsSection({ kinetics, calculations, transitionStates, networksStatus, networkRefs }: {
+export function ReactionKineticsSection({ kinetics, calculations, transitionStates, networksStatus, networkRefs, recordNumbers }: {
     kinetics: ReactionKineticsRecord[]
+    /** The page's one "Record N" numbering, by kinetics ref; the list order when absent. */
+    recordNumbers?: ReadonlyMap<string, number>
     calculations: ReactionFullCalculationEvidence[] | null | undefined
     transitionStates: ReactionTransitionStateInFull[]
     /** Whether this entry's network membership is known yet, and whether it has any — decides the empty-kinetics wording. */
@@ -86,10 +89,12 @@ export function ReactionKineticsSection({ kinetics, calculations, transitionStat
                 <>
                     <p className="empty-projection">
                         No rate coefficient deposited on this entry; phenomenological k(T,P) for this system is
-                        served by {networkRefs.length === 1 ? "network" : `${networkRefs.length} networks, none preferred over another:`}{" "}
-                        {networkRefs.map((ref, index) => (
-                            <span key={ref}>{index > 0 && ", "}<a href="#network-heading">{ref}</a></span>
-                        ))}.
+                        served by {networkRefs.length === 1
+                            ? <a href="#network-heading">the network below</a>
+                            : <>{networkRefs.length} networks, none preferred over another:{" "}
+                                {networkRefs.map((ref, index) => (
+                                    <span key={ref}>{index > 0 && ", "}<a href="#network-heading">{`Network ${index + 1}`}</a></span>
+                                ))}</>}.
                     </p>
                     <p className="note">
                         A network-only reaction never renders channel kinetics as if they were this entry's own —
@@ -103,6 +108,7 @@ export function ReactionKineticsSection({ kinetics, calculations, transitionStat
 
     const calculationsByRef = buildCalculationsByRef(calculations)
     const dependencyEdgesByChildRef = buildDependencyEdgesByChildRef(transitionStates)
+    const numbers = recordNumbers ?? new Map(kinetics.map((record, index) => [record.kinetics_ref, index + 1] as const))
 
     return (
         <>
@@ -112,6 +118,7 @@ export function ReactionKineticsSection({ kinetics, calculations, transitionStat
                     <KineticsRecordCard
                         key={record.kinetics_ref}
                         record={record}
+                        position={numbers.get(record.kinetics_ref) ?? 1}
                         calculationsByRef={calculationsByRef}
                         dependencyEdgesByChildRef={dependencyEdgesByChildRef}
                     />
@@ -126,13 +133,14 @@ export function ReactionKineticsSection({ kinetics, calculations, transitionStat
                 table equivalent -- both after the per-record cards. A PLOG/
                 Chebyshev/falloff/third-body record is listed there by ref
                 and reason, never plotted. */}
-            <ArrheniusChart kinetics={kinetics} />
+            <ArrheniusChart kinetics={kinetics} recordNumbers={numbers} />
         </>
     )
 }
 
-function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildRef }: {
+function KineticsRecordCard({ record, position, calculationsByRef, dependencyEdgesByChildRef }: {
     record: ReactionKineticsRecord
+    position: number
     calculationsByRef: ReturnType<typeof buildCalculationsByRef>
     dependencyEdgesByChildRef: ReturnType<typeof buildDependencyEdgesByChildRef>
 }) {
@@ -162,9 +170,9 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
     const unitLabel = aUnitsWord(record.parameters.A_units)
     const recordAnchor = `#kinetics-${record.kinetics_ref}`
     const sourceLevels = [
-        { role: "geometry", label: resolvedLevels.geometry ? lotLabel(resolvedLevels.geometry) : "" },
-        { role: "frequency", label: resolvedLevels.frequency ? lotLabel(resolvedLevels.frequency) : "" },
-        { role: "energy", label: resolvedLevels.energy ? lotLabel(resolvedLevels.energy) : "" },
+        { role: "geometry", label: resolvedLevels.geometry ? lotLabel(resolvedLevels.geometry) : "", level: resolvedLevels.geometry ?? undefined },
+        { role: "frequency", label: resolvedLevels.frequency ? lotLabel(resolvedLevels.frequency) : "", level: resolvedLevels.frequency ?? undefined },
+        { role: "energy", label: resolvedLevels.energy ? lotLabel(resolvedLevels.energy) : "", level: resolvedLevels.energy ?? undefined },
     ]
     const sourceProgram = softwareCellText(record.provenance.primary_software)
 
@@ -183,6 +191,7 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
 
     return (
         <div className="card" id={`kinetics-${record.kinetics_ref}`}>
+            <h3 className="t-heading-2">{recordWords(position)}</h3>
             <dl className="kv-list">
                 <div><dt>Model kind</dt><dd><WordOrCode word={modelKindWord(record.model_kind)} code={record.model_kind} /></dd></div>
                 <div><dt>Origin</dt><dd><WordOrCode word={originWord(record.scientific_origin)} code={record.scientific_origin} /></dd></div>
@@ -216,6 +225,7 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
             <p className="kinetics-record-source">
                 <ValueSource
                     source={{ recordType: "kinetics", ref: record.kinetics_ref, to: recordAnchor }}
+                    own
                     levels={sourceLevels}
                     programs={sourceProgram ? [sourceProgram] : []}
                     review={record.review.status}
@@ -247,7 +257,7 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
 
             {record.provenance.network_kinetics_ref && (
                 <p className="note">
-                    Bridged to pressure-dependent network kinetics <code className="data">{record.provenance.network_kinetics_ref}</code>.
+                    Bridged to pressure-dependent network kinetics.
                 </p>
             )}
 
@@ -256,7 +266,7 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
                     <dt>TS opt calculation (kinetics' own link)</dt>
                     <dd>
                         {record.provenance.ts_opt_calculation_ref
-                            ? <Link to={`/calculations/${record.provenance.ts_opt_calculation_ref}`}><code className="data">{record.provenance.ts_opt_calculation_ref}</code></Link>
+                            ? <RecordLink kind="calculation" to={`/calculations/${record.provenance.ts_opt_calculation_ref}`} label={calculationWords("opt")} />
                             : <span className="record-identity-absent-inline">not recorded</span>}
                     </dd>
                 </div>
@@ -264,7 +274,7 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
                     <dt>TS freq calculation (kinetics' own link)</dt>
                     <dd>
                         {record.provenance.ts_freq_calculation_ref
-                            ? <Link to={`/calculations/${record.provenance.ts_freq_calculation_ref}`}><code className="data">{record.provenance.ts_freq_calculation_ref}</code></Link>
+                            ? <RecordLink kind="calculation" to={`/calculations/${record.provenance.ts_freq_calculation_ref}`} label={calculationWords("freq")} />
                             : <span className="record-identity-absent-inline">not recorded</span>}
                     </dd>
                 </div>
@@ -272,7 +282,7 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
                     <dt>TS sp calculation (kinetics' own link)</dt>
                     <dd>
                         {record.provenance.ts_sp_calculation_ref
-                            ? <Link to={`/calculations/${record.provenance.ts_sp_calculation_ref}`}><code className="data">{record.provenance.ts_sp_calculation_ref}</code></Link>
+                            ? <RecordLink kind="calculation" to={`/calculations/${record.provenance.ts_sp_calculation_ref}`} label={calculationWords("sp")} />
                             : <span className="record-identity-absent-inline">not recorded</span>}
                         {spNote && <div className="note">({spNote})</div>}
                     </dd>
@@ -280,7 +290,7 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
                 {record.provenance.transition_state_entry_ref && (
                     <div>
                         <dt>Transition-state entry used</dt>
-                        <dd><Link to={`/transition-state-entries/${record.provenance.transition_state_entry_ref}`}>{record.provenance.transition_state_entry_ref}</Link></dd>
+                        <dd><RecordLink kind="transition-state" to={`/transition-state-entries/${record.provenance.transition_state_entry_ref}`} label="Transition state" /></dd>
                     </div>
                 )}
             </dl>

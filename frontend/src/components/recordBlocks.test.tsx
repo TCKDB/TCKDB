@@ -72,6 +72,8 @@ describe("ValueSource", () => {
         />)
         const line = document.querySelector(".value-source") as HTMLElement
         expect(within(line).getByRole("link")).toHaveAttribute("href", "/calculations/calc_a")
+        expect(within(line).getByRole("link")).toHaveAccessibleName("Source: Single-point energy")
+        expect(line.textContent).not.toContain("calc_a")
         for (const text of ["Source", "single-point", "geometry wB97X-D/def2-TZVP", "energy CCSD(T)-F12/cc-pVTZ-F12", "ORCA 5.0.3, Molpro 2024.1", "Review of this record: not reviewed"]) {
             expect(line).toHaveTextContent(text)
         }
@@ -85,7 +87,9 @@ describe("ValueSource", () => {
     it("links a thermo record to its own row on the species entry that shows it", () => {
         inRouter(<ValueSource source={{ recordType: "thermo", ref: "thm_a", container: { recordType: "species_entry", ref: "spe_a" } }} />)
         expect(screen.getByRole("link")).toHaveAttribute("href", "/species-entries/spe_a#thermo-thm_a")
-        expect(screen.getByRole("link")).toHaveTextContent("thm_a")
+        expect(screen.getByRole("link")).toHaveTextContent("Thermo record")
+        expect(screen.getByRole("link")).toHaveAccessibleName("Source: Thermo record")
+        expect(screen.getByRole("link").textContent).not.toContain("thm_a")
     })
 
     it("uses a same-page link when given one", () => {
@@ -96,51 +100,60 @@ describe("ValueSource", () => {
     it("sends a transition state ref (ts_) nowhere it is not, and a transition state entry to its page", () => {
         inRouter(<ValueSource source={{ recordType: "transition_state", ref: "ts_a" }} />)
         expect(screen.queryByRole("link")).toBeNull()
-        expect(document.querySelector(".value-source code")).toHaveTextContent("ts_a")
+        expect(document.querySelector(".value-source")).toHaveTextContent("Source Record")
+        expect(document.querySelector(".value-source")?.textContent).not.toContain("ts_a")
         cleanup()
         inRouter(<ValueSource source={{ recordType: "transition_state_entry", ref: "tse_a" }} />)
         expect(screen.getByRole("link")).toHaveAttribute("href", "/transition-state-entries/tse_a")
     })
 
-    it("shows an unknown record type as a plain code, with no link", () => {
+    it("on the record's own card names what it was made from, not the record itself", () => {
+        inRouter(<ValueSource own source={{ recordType: "kinetics", ref: "kin_a", to: "#kinetics-kin_a" }} position={1} programs={["Gaussian 16"]} review="approved" />)
+        expect(screen.queryByRole("link")).toBeNull()
+        const line = document.querySelector(".value-source")?.textContent ?? ""
+        expect(line).toMatch(/^Gaussian 16 · Review of this record: approved/)
+        expect(line).not.toMatch(/Source|Record 1/)
+    })
+
+    it("shows an unknown record type as plain words, with no link and no ref", () => {
         inRouter(<ValueSource source={{ recordType: "something_new", ref: "xyz_a" }} />)
         expect(screen.queryByRole("link")).toBeNull()
-        expect(document.querySelector(".value-source")?.textContent).toBe("Source xyz_a")
+        expect(document.querySelector(".value-source")?.textContent).toBe("Source Record")
     })
 
     it.each([
-        ["opt", "optimisation"], ["freq", "frequency"], ["sp", "single-point"], ["irc", "IRC"],
-        ["scan", "scan"], ["path_search", "path search"], ["conf", "conformer"], ["composite", "composite"],
-    ])("shows the calculation type %s as %s", (code, words) => {
+        ["opt", "Optimisation", "optimisation"], ["freq", "Frequency calculation", "frequency"], ["sp", "Single-point energy", "single-point"], ["irc", "IRC calculation", "IRC"],
+        ["scan", "Scan calculation", "scan"], ["path_search", "Path search calculation", "path search"], ["conf", "Conformer calculation", "conformer"], ["composite", "Composite calculation", "composite"],
+    ])("shows the calculation type %s as %s in the link and %s after it", (code, linkWords, words) => {
         inRouter(<ValueSource source={source} did={code} />)
-        expect(document.querySelector(".value-source")?.textContent).toBe(`Source calc_a · ${words}`)
+        expect(document.querySelector(".value-source")?.textContent).toBe(`Source ${linkWords} · ${words}`)
     })
 
     it("omits a calculation type code it has no wording for, and never shows the raw code", () => {
         inRouter(<ValueSource source={source} did="DEPOSITOR_SENTINEL_kind" />)
-        expect(document.querySelector(".value-source")?.textContent).toBe("Source calc_a")
+        expect(document.querySelector(".value-source")?.textContent).not.toMatch(/calc_a|DEPOSITOR/i)
         cleanup()
         inRouter(<ValueSource source={source} did="toString" />)
-        expect(document.querySelector(".value-source")?.textContent).toBe("Source calc_a")
+        expect(document.querySelector(".value-source")?.textContent).not.toMatch(/calc_a|toString/)
     })
 
     it("shows nothing for a part the record lacks and never invents one", () => {
         inRouter(<ValueSource source={source} />)
         const line = document.querySelector(".value-source") as HTMLElement
-        expect(line.textContent).toBe("Source calc_a")
+        expect(line.textContent).toBe("Source Calculation")
         expect(line.querySelector(".review-chip")).toBeNull()
     })
 
     it("treats empty levels, programs and review as missing", () => {
         inRouter(<ValueSource source={source} levels={[{ role: "energy", label: "" }]} programs={["", ""]} review="" />)
-        expect(document.querySelector(".value-source")?.textContent).toBe("Source calc_a")
+        expect(document.querySelector(".value-source")?.textContent).toBe("Source Calculation")
     })
 
     it("has a short form that is only a link", () => {
         inRouter(<ValueSource source={source} programs={["ORCA"]} compact />)
         const line = document.querySelector(".value-source") as HTMLElement
         expect(line).toHaveClass("value-source--compact")
-        expect(line.textContent).toBe("from calc_a")
+        expect(line.textContent).toBe("from Calculation")
     })
 })
 

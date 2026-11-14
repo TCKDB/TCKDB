@@ -1,4 +1,6 @@
 import { GuideLink } from "./GuideLink"
+import { RecordLink } from "./RecordLink"
+import { usedByWords } from "../domain/recordWords"
 import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import "../molecule-page.css"
@@ -33,7 +35,7 @@ function CalculationLinks({ refs }: { refs: readonly string[] }) {
     return (
         <>
             {refs.map((ref, index) => (
-                <span key={ref}>{index > 0 && ", "}<Link to={`/calculations/${ref}`}><code className="t-preserve-case">{ref}</code></Link></span>
+                <span key={ref}>{index > 0 && ", "}<RecordLink kind="calculation" to={`/calculations/${ref}`} label={refs.length > 1 ? `Calculation ${index + 1}` : "Calculation"} /></span>
             ))}
         </>
     )
@@ -70,7 +72,7 @@ function EnergyText({ energy }: { energy: CardEnergy }) {
                         <>
                             {" "}Stored values:{" "}
                             {energy.values.map((value, index) => (
-                                <span key={value.determinationRef}>{index > 0 && ", "}{formatHartree(value.hartree)} <span className="u t-preserve-case">hartree</span> (<code className="t-preserve-case">{value.determinationRef}</code>)</span>
+                                <span key={value.determinationRef}>{index > 0 && ", "}{formatHartree(value.hartree)} <span className="u t-preserve-case">hartree</span> {`(determination ${index + 1})`}</span>
                             ))}
                             .
                         </>
@@ -239,9 +241,7 @@ export function ConformerGallery({
                             {usageData.ensembleThermoRefs.map((ref, index) => (
                                 <span key={ref}>
                                     {index > 0 && ", "}
-                                    <Link to={`/species-entries/${entryRef}/thermo${selectedRef ? `?conformer=${encodeURIComponent(selectedRef)}` : ""}#thermo-heading-${ref}`}>
-                                        <code className="t-preserve-case">{ref}</code>
-                                    </Link>
+                                    <RecordLink kind="thermo" to={`/species-entries/${entryRef}/thermo${selectedRef ? `?conformer=${encodeURIComponent(selectedRef)}` : ""}`} hash={`thermo-heading-${ref}`} label={usedByWords("Thermo record", index, usageData.ensembleThermoRefs.length)} />
                                 </span>
                             ))}
                         </p>

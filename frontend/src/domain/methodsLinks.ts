@@ -5,7 +5,7 @@
  *
  * Kept as one-line functions in their own module (not inlined at each call
  * site) so the three route shapes are declared exactly once -- `App.tsx`'s
- * route table and every call site below (`LevelOfTheoryLink.tsx`, the
+ * route table and every call site below (`LevelLabel.tsx`, the
  * dead-ref edits across `src/components`/`src/pages`) share this one
  * source of truth for what the path looks like.
  */

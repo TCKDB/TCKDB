@@ -8,7 +8,14 @@ from starlette.requests import Request
 
 from app.api.rate_limit import _classify
 from app.chemistry.units import HARTREE_TO_KJ_MOL
-from app.db.models.common import CalculationType, KineticsCalculationRole, RecordReviewStatus, SubmissionRecordType
+from app.db.models.common import (
+    CalculationType,
+    CoreTreatment,
+    KineticsCalculationRole,
+    PnoTruncation,
+    RecordReviewStatus,
+    SubmissionRecordType,
+)
 from app.db.models.kinetics import KineticsSourceCalculation
 from app.db.models.record_review import RecordReview
 from tests.services.scientific_read._factories import (
@@ -231,6 +238,8 @@ def test_a_sibling_reaction_entry_never_lends_a_point(client, db_session, world)
 
 def test_kinetics_citations_are_their_own_block(client, db_session, world):
     _complete(db_session, world)
+    world["lot"].core_treatment = CoreTreatment.frozen_core
+    world["lot"].pno_truncation = PnoTruncation.tight
     cited = _sp(db_session, owner=world["a"], lot=world["lot"], release=world["gaussian"], energy=-39.0)
     kinetics = make_kinetics(db_session, reaction_entry=world["rxn"])
     other_kinetics = make_kinetics(db_session, reaction_entry=world["rxn"])
@@ -248,6 +257,9 @@ def test_kinetics_citations_are_their_own_block(client, db_session, world):
     (calc,) = block["calculations"]
     assert calc["role"] == "reactant_energy" and calc["calculation_ref"] == cited.public_ref
     assert calc["electronic_energy_hartree"] == -39.0 and calc["software"]["program"] == "gaussian"
+    assert calc["level_of_theory"]["level_of_theory_ref"] == calc["level_of_theory_ref"] == world["lot"].public_ref
+    assert calc["level_of_theory"]["method"] == "wb97xd" and calc["level_of_theory"]["basis"] == "def2tzvp"
+    assert calc["level_of_theory"]["core_treatment"] == "frozen_core" and calc["level_of_theory"]["pno_truncation"] == "tight"
     assert calc["species_entry_ref"] == world["a"].public_ref
     # The profiles stay as they were: the cited energy is not merged in.
     assert body["profiles"][0]["energy_hartree"]["reactants"] == pytest.approx(-115.0)

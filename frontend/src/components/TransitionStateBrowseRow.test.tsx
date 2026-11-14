@@ -112,13 +112,13 @@ describe("TransitionStateBrowseRow: pill is status only, no depositor label anyw
 // software and the deposited date (truncated to a plain date) are not
 // enough on their own, since real same-reaction deposits share all three.
 describe("TransitionStateBrowseRow: the reaction deposit ref distinguishes same-reaction rows", () => {
-    it("renders 'from reaction entry <ref>' in the footer", () => {
+    it("renders 'from a reaction entry' in the footer, without the deposit ref", () => {
         renderRow(record())
         const row = document.querySelector(".ts-browse-row") as HTMLElement
         const deposit = row.querySelector(".browse-row-deposit") as HTMLElement
         expect(deposit).toBeTruthy()
-        expect(deposit.textContent).toContain("from reaction entry")
-        expect(within(deposit).getByText("rxe_deposit_one")).toBeVisible()
+        expect(deposit.textContent).toBe("from a reaction entry")
+        expect(row.textContent).not.toContain("rxe_deposit_one")
     })
 
     it("renders nothing deposit-shaped when the archive gave no reaction entry ref", () => {
@@ -127,7 +127,7 @@ describe("TransitionStateBrowseRow: the reaction deposit ref distinguishes same-
         expect(row.querySelector(".browse-row-deposit")).toBeNull()
     })
 
-    it("gives two rows that would otherwise be identical (same LOT, software, status, deposited date) a distinct deposit ref", () => {
+    it("prints no deposit ref on either of two otherwise identical rows, but each row's link still targets its own entry", () => {
         const shared = record()
         const other = record({
             transition_state_entry: {
@@ -139,12 +139,13 @@ describe("TransitionStateBrowseRow: the reaction deposit ref distinguishes same-
         })
         const { unmount } = renderRow(shared)
         const rowA = document.querySelector(".ts-browse-row") as HTMLElement
-        expect(within(rowA).getByText("rxe_deposit_one")).toBeVisible()
+        expect(rowA.textContent).not.toContain("rxe_deposit_one")
+        expect(within(rowA).getByRole("link")).toHaveAttribute("href", "/transition-state-entries/tse_one")
         unmount()
         renderRow(other)
         const rowB = document.querySelector(".ts-browse-row") as HTMLElement
-        expect(within(rowB).getByText("rxe_deposit_two")).toBeVisible()
-        expect(within(rowB).queryByText("rxe_deposit_one")).not.toBeInTheDocument()
+        expect(rowB.textContent).not.toContain("rxe_deposit_two")
+        expect(within(rowB).getByRole("link")).toHaveAttribute("href", "/transition-state-entries/tse_two")
     })
 })
 
@@ -178,8 +179,9 @@ describe("TransitionStateBrowseRow: provenance line (level of theory, software, 
     it("shows the opt and sp levels of theory together", () => {
         renderRow(record())
         const row = document.querySelector(".ts-browse-row") as HTMLElement
-        expect(within(row).getByText(/opt wb97xd\/def2tzvp/)).toBeVisible()
-        expect(within(row).getByText(/sp MRCI\+Davidson\/aug-cc-pV\(T\+d\)Z/)).toBeVisible()
+        const provenance = row.querySelector(".browse-row-provenance") as HTMLElement
+        expect(provenance.textContent).toMatch(/opt wb97xd\/def2tzvp/)
+        expect(provenance.textContent).toMatch(/sp MRCI\+Davidson\/aug-cc-pV\(T\+d\)Z/)
     })
 
     it("states software distinctly per stage when it differs (opt on orca, sp on molpro)", () => {
@@ -294,7 +296,7 @@ describe("TransitionStateBrowseRow: provenance line (level of theory, software, 
             } as TransitionStateBrowseRecord["evidence_summary"],
         }))
         const row = document.querySelector(".ts-browse-row") as HTMLElement
-        expect(within(row).getByText(/opt wb97xd\/def2tzvp/)).toBeVisible()
+        expect((row.querySelector(".browse-row-provenance") as HTMLElement).textContent).toMatch(/opt wb97xd\/def2tzvp/)
         expect(within(row).queryByText(/software/)).not.toBeInTheDocument()
     })
 
@@ -310,7 +312,7 @@ describe("TransitionStateBrowseRow: provenance line (level of theory, software, 
 // sit OUTSIDE the link element, the inverse of the old test suite (which
 // asserted they were INSIDE it).
 describe("TransitionStateBrowseRow: link wraps only the equation", () => {
-    it("has an accessible name of exactly the equation plus the reaction deposit, never the depositor label", () => {
+    it("has an accessible name of exactly the equation, never the deposit ref or the depositor label", () => {
         renderRow(record())
         const link = screen.getByRole("link")
         // Exact, not a length bound or a substring match: an aria-label
@@ -321,11 +323,11 @@ describe("TransitionStateBrowseRow: link wraps only the equation", () => {
         // whole-row link produced (equation + family + charge/spin + both
         // pills + evidence text + ref) is gone, and so is the depositor
         // label ("TS0").
-        expect(link).toHaveAccessibleName("A <=> B (deposit rxe_deposit_one)")
+        expect(link).toHaveAccessibleName("A <=> B")
         expect(link).toHaveAttribute("href", "/transition-state-entries/tse_one")
     })
 
-    it("falls back to the bare equation for the accessible name when no reaction entry ref was served", () => {
+    it("keeps the bare equation as the accessible name when no reaction entry ref was served", () => {
         renderRow(record({ reaction: { reaction_ref: "rxn_one", reaction_entry_ref: null, equation: "A <=> B", reversible: true, family: "R_Addition_MultipleBond" } }))
         expect(screen.getByRole("link")).toHaveAccessibleName("A <=> B")
     })
@@ -339,18 +341,14 @@ describe("TransitionStateBrowseRow: link wraps only the equation", () => {
         expect(within(link).queryByText(/Evidence:/)).not.toBeInTheDocument()
     })
 
-    it("renders the ref, pills and evidence line as ordinary text OUTSIDE the link, in the same row", () => {
+    it("renders the pills and evidence line as ordinary text OUTSIDE the link, in the same row, with no ref text", () => {
         renderRow(record())
         const row = document.querySelector(".ts-browse-row") as HTMLElement
-        // Present in the row overall...
-        expect(within(row).getByText("tse_one")).toBeVisible()
         expect(within(row).getByText("optimized")).toBeVisible()
         expect(within(row).getByText(/Evidence:/)).toBeVisible()
-        // ...but not reachable via the link's own subtree (checked above),
-        // and the ref is a plain <code>, never an anchor descendant, so a
-        // drag-select over it cannot start a link drag.
-        const refCode = within(row).getByText("tse_one")
-        expect(refCode.closest("a")).toBeNull()
+        expect(within(row).queryByText("tse_one")).not.toBeInTheDocument()
+        expect(row.textContent).not.toMatch(/tse_one/)
+        expect(within(row).getByText("optimized").closest("a")).toBeNull()
     })
 
     it("does not change WHERE the row links -- exactly transition_state_entry.transition_state_entry_ref, not the reaction ref", () => {
@@ -408,13 +406,11 @@ describe("TransitionStateBrowseRow: design-system primitive adoption", () => {
         expect(row).toHaveClass("browse-row")
     })
 
-    it("the ref renders through .browse-ref and .data (the shared data step), not .browse-row-ref", () => {
+    it("the row has no .browse-ref element and prints no ref", () => {
         renderRow(record())
         const row = document.querySelector(".ts-browse-row") as HTMLElement
-        const ref = within(row).getByText("tse_one")
-        expect(ref).toHaveClass("browse-ref")
-        expect(ref).toHaveClass("data")
-        expect(ref).not.toHaveClass("browse-row-ref")
+        expect(row.querySelector(".browse-ref")).toBeNull()
+        expect(row.textContent).not.toMatch(/tse_one|ts_one|rxn_one|rxe_deposit_one/)
     })
 
     it("the evidence line carries its own .browse-row-evidence class", () => {

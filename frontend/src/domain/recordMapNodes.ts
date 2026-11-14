@@ -1,5 +1,6 @@
 import type { RecordKind } from "../components/RecordGlyph"
 import type { NeighbourNode, ParticipantInput } from "./neighbourNodes"
+import { versionWords } from "./recordWords"
 
 /**
  * Nodes for the "Where this record sits" map on every record page except the species entry, built only from what the
@@ -300,14 +301,15 @@ const OVERVIEW_PARTICIPANTS_PER_SIDE = 1
 
 /** Reaction page: some of its reaction entries ("N more" when there are others), then the molecule versions of the first. */
 export function reactionOverviewNodes(input: {
-    entryRefs: readonly string[]
+    /** The entries of the first page, each with the version number the table shows for it. */
+    entries: readonly { ref: string; position: number }[]
     total: number
     reactants: ParticipantInput[]
     products: ParticipantInput[]
 }): NeighbourNode[] {
-    const shown = input.entryRefs.slice(0, OVERVIEW_ENTRIES)
-    const nodes: NeighbourNode[] = shown.map((ref, index) => ({
-        id: ref, kind: "reaction", label: input.total > 1 ? `Reaction version ${index + 1}` : "Reaction version", relation: "A deposited version of this reaction",
+    const shown = input.entries.slice(0, OVERVIEW_ENTRIES)
+    const nodes: NeighbourNode[] = shown.map(({ ref, position }) => ({
+        id: ref, kind: "reaction", label: versionWords(position), relation: "A deposited version of this reaction",
         ref, to: `/reaction-entries/${enc(ref)}`, found: null,
     }))
     const more = input.total - shown.length
@@ -317,10 +319,12 @@ export function reactionOverviewNodes(input: {
             relation: "Listed under Reaction entries", to: "#entries-heading", found: null,
         })
     }
-    const firstEntry = input.entryRefs[0] ? `/reaction-entries/${enc(input.entryRefs[0])}` : null
+    const first = input.entries[0]
+    const firstEntry = first ? `/reaction-entries/${enc(first.ref)}` : null
+    const firstName = first ? versionWords(first.position) : "the first version"
     nodes.push(...participantNodes(
-        input.reactants, input.products, OVERVIEW_PARTICIPANTS_PER_SIDE, ", first reaction version", firstEntry,
-        "Listed on the first reaction version",
+        input.reactants, input.products, OVERVIEW_PARTICIPANTS_PER_SIDE, `, ${firstName}`, firstEntry,
+        `Listed on ${firstName}`,
     ))
     return nodes
 }

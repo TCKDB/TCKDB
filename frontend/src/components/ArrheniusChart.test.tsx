@@ -120,11 +120,12 @@ function readTicks(svg: HTMLElement | SVGSVGElement, axisClass: string, pixelAtt
 }
 
 describe("ArrheniusChart -- a single plottable record", () => {
-    it("renders one panel, one legend chip carrying the kin_ ref, and the k(T) table beneath it", () => {
+    it("renders one panel, one legend chip naming the record in words, and the k(T) table beneath it", () => {
         render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
 
         expect(screen.getByRole("img", { name: /Arrhenius plot/ })).toBeInTheDocument()
-        expect(screen.getByTestId("arrhenius-legend-kin_spkzatwjlvmmnja3i5im4fl7hq")).toHaveTextContent("kin_spkzatwjlvmmnja3i5im4fl7hq")
+        expect(screen.getByTestId("arrhenius-legend-kin_spkzatwjlvmmnja3i5im4fl7hq")).toHaveTextContent("Record 1")
+        expect(screen.getByTestId("arrhenius-legend-kin_spkzatwjlvmmnja3i5im4fl7hq").textContent).not.toContain("kin_")
         expect(screen.getByTestId("arrhenius-line-kin_spkzatwjlvmmnja3i5im4fl7hq")).toBeInTheDocument()
 
         // The table is the accessible text equivalent, directly beneath.
@@ -169,13 +170,14 @@ describe("ArrheniusChart -- per-unit panel split on a mixed fixture", () => {
 })
 
 describe("ArrheniusChart -- PLOG/Chebyshev/falloff/third-body exclusion", () => {
-    it("a PLOG record is listed with its own ref and a reason naming PLOG, never plotted as a line", () => {
+    it("a PLOG record is listed by its record number with a reason naming PLOG, never plotted as a line", () => {
         render(<ArrheniusChart kinetics={[plogRecord()]} />)
         expect(screen.queryByRole("img", { name: /Arrhenius plot/ })).not.toBeInTheDocument()
         expect(screen.queryByTestId("arrhenius-line-kin_plog_record")).not.toBeInTheDocument()
 
         const note = screen.getByText(/is not plotted/)
-        expect(note.textContent).toContain("kin_plog_record")
+        expect(note.textContent).toContain("Record 1")
+        expect(note.textContent).not.toContain("kin_plog_record")
         expect(note.textContent).toMatch(/PLOG/)
     })
 
@@ -190,9 +192,9 @@ describe("ArrheniusChart -- PLOG/Chebyshev/falloff/third-body exclusion", () => 
             />,
         )
         const notes = screen.getAllByText(/is not plotted/).map((el) => el.textContent ?? "")
-        expect(notes.some((text) => text.includes("kin_cheb") && /Chebyshev/.test(text))).toBe(true)
-        expect(notes.some((text) => text.includes("kin_falloff") && /falloff/.test(text))).toBe(true)
-        expect(notes.some((text) => text.includes("kin_third_body") && /third-body/.test(text))).toBe(true)
+        expect(notes.some((text) => text.includes("Record 1 ") && /Chebyshev/.test(text))).toBe(true)
+        expect(notes.some((text) => text.includes("Record 2 ") && /falloff/.test(text))).toBe(true)
+        expect(notes.some((text) => text.includes("Record 3 ") && /third-body/.test(text))).toBe(true)
     })
 
     it("a mix of one plottable and one excluded record: the plottable one still gets a panel, the excluded one is only listed", () => {
@@ -200,7 +202,8 @@ describe("ArrheniusChart -- PLOG/Chebyshev/falloff/third-body exclusion", () => 
         expect(screen.getAllByRole("img", { name: /Arrhenius plot/ })).toHaveLength(1)
         expect(screen.getByTestId("arrhenius-line-kin_spkzatwjlvmmnja3i5im4fl7hq")).toBeInTheDocument()
         const excludedNote = screen.getByText(/is not plotted/)
-        expect(excludedNote.textContent).toContain("kin_plog_record")
+        expect(excludedNote.textContent).toContain("Record 2")
+        expect(excludedNote.textContent).not.toContain("kin_plog_record")
     })
 })
 
@@ -440,7 +443,8 @@ describe("ArrheniusChart -- a third-body record gets neither a curve nor a k(T) 
         expect(screen.queryByTestId("arrhenius-line-kin_third_body_only")).not.toBeInTheDocument()
         expect(document.querySelector(".kinetics-k-table")).toBeNull()
         const note = screen.getByText(/is not plotted/)
-        expect(note.textContent).toContain("kin_third_body_only")
+        expect(note.textContent).toContain("Record 1")
+        expect(note.textContent).not.toContain("kin_third_body_only")
         expect(note.textContent).toMatch(/third-body/)
     })
 })

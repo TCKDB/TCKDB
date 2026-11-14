@@ -10,7 +10,7 @@ afterEach(() => cleanup())
  * The "Species entry" fact never renders `species_entry_label` ALONE as
  * the link text (a bare "R", no context): link text is `SpeciesFace` (SMILES leads,
  * formula follows in parentheses), with the label (expanded via
- * `stereoChip`) appended when present, and the ref as a data run only
+ * `stereoChip`) appended when present, and the words "Species entry"
  * when there is neither SMILES nor formula.
  */
 function renderLink(props: { speciesEntryRef: string; smiles?: string | null; formula?: string | null; speciesEntryLabel?: string | null }) {
@@ -67,28 +67,20 @@ describe("SpeciesEntryLink", () => {
         expect(link.querySelector("code.data")?.textContent).toBe("[N-]=[NH2+]")
     })
 
-    // When there is neither a SMILES nor a formula (any
-    // caller, on an entry whose species SMILES does not parse), the base
-    // text falls back to the entry's own ref as `<code className="data">`
-    // -- NEVER the literal words "Species entry", which would repeat the
-    // enclosing <dt> ("Species entry / Species entry · R enantiomer") and
-    // say nothing new.
-    it("falls back to the entry ref, styled as a data code run, when there is no SMILES, no formula, and no label", () => {
+    // With neither a SMILES nor a formula the link reads as words, never the ref.
+    it("falls back to the words 'Species entry', not the ref, when there is no SMILES, no formula, and no label", () => {
         const { container } = renderLink({ speciesEntryRef: "se_abc123", smiles: null, formula: null })
         const link = container.querySelector("a")!
-        expect(link.textContent).toBe("se_abc123")
-        const code = link.querySelector("code")
-        expect(code).not.toBeNull()
-        expect(code).toHaveClass("data")
-        expect(code!.textContent).toBe("se_abc123")
-        // Never the redundant literal text.
-        expect(link.textContent).not.toContain("Species entry")
+        expect(link.textContent).toBe("Species entry")
+        expect(link.textContent).not.toContain("se_abc123")
+        expect(link.querySelector("code")).toBeNull()
+        expect(link.getAttribute("href")).toBe("/species-entries/se_abc123")
     })
 
-    it("treats an empty-string SMILES and formula the same as absent -- falls back to the ref", () => {
+    it("treats an empty-string SMILES and formula the same as absent -- falls back to the words", () => {
         const { container } = renderLink({ speciesEntryRef: "se_abc123", smiles: "", formula: "" })
         const link = container.querySelector("a")!
-        expect(link.textContent).toBe("se_abc123")
+        expect(link.textContent).toBe("Species entry")
     })
 
     it("no SMILES served but a formula is: falls back to the formula alone (subscripted), matching SpeciesFace's own fallback", () => {

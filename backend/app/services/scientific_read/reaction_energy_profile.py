@@ -558,6 +558,7 @@ def build_cited_energies(
             Calculation.id,
             Calculation.public_ref,
             LevelOfTheory.public_ref,
+            Calculation.lot_id,
             SpeciesEntry.public_ref,
             TransitionStateEntry.public_ref,
             Software.name,
@@ -588,8 +589,9 @@ def build_cited_energies(
                 )
             ).all():
                 energies[cid] = (energy_type, energy)
+    lot_summaries = _bulk_lot_summaries(session, {row[5] for row in cites if row[5] is not None})
     out: dict[int, list[CitedCalculation]] = defaultdict(list)
-    for kid, role, cid, ref, lot_ref, se_ref, ts_ref, name, version, revision, build in cites:
+    for kid, role, cid, ref, lot_ref, lot_id, se_ref, ts_ref, name, version, revision, build in cites:
         energy_type, energy = energies.get(cid, (None, None))
         out[kid].append(
             CitedCalculation(
@@ -599,6 +601,7 @@ def build_cited_energies(
                 species_entry_ref=se_ref,
                 transition_state_entry_ref=ts_ref,
                 level_of_theory_ref=lot_ref,
+                level_of_theory=lot_summaries.get(lot_id),
                 software=(
                     EnergyProfileSoftware(program=name, version=version, revision=revision, build=build)
                     if name is not None

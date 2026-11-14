@@ -12,6 +12,7 @@ type Over = Record<string, unknown>
 function entry(ref: string, over: Over = {}, levels: Over = { energy: lotA }, software: object | null = gaussian): ReactionKineticsEntry {
     return {
         entryRef: "rxe_one",
+        entryPosition: 1,
         record: {
             kinetics_ref: ref, scientific_origin: "computed", model_kind: "modified_arrhenius", direction: "forward", review: { status: "not_reviewed" },
             parameters: { A: 1e10, A_units: "cm3_mol_s", n: 1, Ea_kj_mol: 40 }, is_third_body: false, uncertainty: {},

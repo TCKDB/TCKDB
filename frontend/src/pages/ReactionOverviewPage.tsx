@@ -24,6 +24,8 @@ import { SectionHeading } from "../components/PageSections"
 import { ReactionEquation } from "../components/ReactionEquation"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton } from "../components/RefsDisclosure"
+import { ParticipantLines, RecordLink } from "../components/RecordLink"
+import { versionWords } from "../domain/recordWords"
 import { participantChips } from "../domain/participantFacets"
 import { listMetaOf } from "../api/listEnvelope"
 import { chooserHeaderSourceNote } from "../domain/reactionChooser"
@@ -87,7 +89,7 @@ function ReactionChooser({ reactionRef }: { reactionRef: string }) {
         <ChooserDocument
             reactionRef={reactionRef}
             headerRecord={firstPage.record.records[0]}
-            firstPageEntryRefs={firstPage.record.records.map((record) => record.reaction_entry_ref)}
+            firstPageEntries={firstPage.record.records.map((record) => ({ ref: record.reaction_entry_ref, position: record.deposit_position }))}
             total={firstPage.record.pagination.total}
             kineticsTotal={firstPage.record.records.reduce((sum, record) => sum + record.availability.kinetics_count, 0)}
             records={shown?.records ?? []}
@@ -99,12 +101,12 @@ function ReactionChooser({ reactionRef }: { reactionRef: string }) {
     )
 }
 
-function ChooserDocument({ reactionRef, headerRecord, firstPageEntryRefs, total, kineticsTotal, records, pageStatus, reviewSummary, meta, onPage }: {
+function ChooserDocument({ reactionRef, headerRecord, firstPageEntries, total, kineticsTotal, records, pageStatus, reviewSummary, meta, onPage }: {
     reactionRef: string
     /** The first entry of the first page: the source of the title and equation, whatever page the table is on. */
     headerRecord: ReactionOverviewRecord
-    /** The refs of the first page of entries, the same page the header comes from. */
-    firstPageEntryRefs: readonly string[]
+    /** The first page of entries with their version numbers, the same page the header comes from. */
+    firstPageEntries: readonly { ref: string; position: number }[]
     total: number
     /** Kinetics records across the first page of entries; the compare link is offered from two. */
     kineticsTotal: number
@@ -115,12 +117,12 @@ function ChooserDocument({ reactionRef, headerRecord, firstPageEntryRefs, total,
     reviewSummary: { approved: number; under_review: number; not_reviewed: number; deprecated: number; rejected: number; total: number }
 }) {
     const first = headerRecord
-    const headerSourceNote = chooserHeaderSourceNote(first.reaction_entry_ref, total)
+    const headerSourceNote = chooserHeaderSourceNote(total, first.deposit_position)
     const formulaOnly = !equationNeedsStructure(first.reactants, first.products)
     useDocumentTitle("Reaction", equationText(first.reactants, first.products, first.reversible))
     const mapParticipant = (p: (typeof first.reactants)[number]) => ({ entryRef: p.species_entry_ref, formula: p.formula, smiles: p.smiles })
     const mapNodes = reactionOverviewNodes({
-        entryRefs: firstPageEntryRefs,
+        entries: firstPageEntries,
         total,
         reactants: first.reactants.map(mapParticipant),
         products: first.products.map(mapParticipant),
@@ -175,7 +177,7 @@ function ChooserDocument({ reactionRef, headerRecord, firstPageEntryRefs, total,
                     {pageStatus !== "ready" && <p className="note" role="status">{pageStatus === "loading" || pageStatus === "retrying" ? "Loading this page of entries…" : "This page of entries could not be loaded."}</p>}
                     {meta && <ListPager meta={meta} noun="reaction entry" nounPlural="reaction entries" onPage={onPage} label="Reaction entries paging" />}
                     <div className="table-scroll">
-                        <table className="data-table" aria-label={`Reaction entries for ${reactionRef}`}>
+                        <table className="data-table reaction-entries-table" aria-label="Reaction entries">
                             <thead>
                                 <tr>
                                     <th scope="col">Entry</th>
@@ -190,16 +192,16 @@ function ChooserDocument({ reactionRef, headerRecord, firstPageEntryRefs, total,
                             <tbody>
                                 {records.map((record) => (
                                     <tr key={record.reaction_entry_ref}>
-                                        <td data-label="Entry"><Link to={`/reaction-entries/${record.reaction_entry_ref}`}>{record.reaction_entry_ref}</Link></td>
+                                        <td data-label="Entry"><RecordLink kind="reaction-entry" to={`/reaction-entries/${record.reaction_entry_ref}`} label={versionWords(record.deposit_position)} /></td>
                                         <td data-label="Reactants">
-                                            {record.reactants.map((p, i) => (
-                                                <ParticipantCell key={p.species_entry_ref} participant={p} separator={i > 0} />
-                                            ))}
+                                            <ParticipantLines>
+                                                {record.reactants.map((p) => <ParticipantCell key={p.species_entry_ref} participant={p} />)}
+                                            </ParticipantLines>
                                         </td>
                                         <td data-label="Products">
-                                            {record.products.map((p, i) => (
-                                                <ParticipantCell key={p.species_entry_ref} participant={p} separator={i > 0} />
-                                            ))}
+                                            <ParticipantLines>
+                                                {record.products.map((p) => <ParticipantCell key={p.species_entry_ref} participant={p} />)}
+                                            </ParticipantLines>
                                         </td>
                                         <td data-label="Review"><ReviewChip status={record.review.status} explain={false} /></td>
                                         <td data-label="Has kinetics">
@@ -241,34 +243,18 @@ function ChooserDocument({ reactionRef, headerRecord, firstPageEntryRefs, total,
 }
 
 /**
- * One reactant/product cell: SMILES-leads-formula-in-brackets link (`../
- * components/Formula.tsx`'s `SpeciesFace`, used here
- * because two entries under the same reaction can legitimately be
- * different isomers of the SAME formula, which a formula-only link could
- * not tell apart), the participant's own `spe_` ref with a copy button,
- * and the participant's label.
+ * One reactant/product: its SMILES-leads-formula link (two entries of one
+ * reaction can be different isomers of the same formula) and its facet
+ * chips in parentheses.
  */
-function ParticipantCell({ participant, separator }: { participant: ReactionOverviewParticipant; separator: boolean }) {
+function ParticipantCell({ participant }: { participant: ReactionOverviewParticipant }) {
+    const face = [participant.smiles, participant.formula && `(${participant.formula})`].filter(Boolean).join(" ")
     return (
-        // No `className` here -- there is no CSS rule for this wrapper
-        // (a styling hook with nothing hooked to it), and
-        // this component needs no styling of its own beyond the inline
-        // flow its children already produce.
-        <span>
-            {separator && " · "}
-            <Link to={`/species-entries/${participant.species_entry_ref}`}>
+        <>
+            <RecordLink kind="species-entry" to={`/species-entries/${participant.species_entry_ref}`} label={face || "Species"}>
                 <SpeciesFace smiles={participant.smiles} formula={participant.formula} />
-            </Link>
-            {" "}
-            <code className="data">{participant.species_entry_ref}</code>
-            <CopyButton value={participant.species_entry_ref} label="Species entry" srLabel="reference" />
-            {/* Parenthesised, NOT another " · " -- the between-participant
-                separator above is ALSO " · ", so a stereo-label chip using
-                the same glyph read as a third product in a multi-
-                participant cell ("H2 ... · H2N2 ... · Z isomer"). Parentheses keep
-                the chip visually bound
-                to the participant it immediately follows. */}
+            </RecordLink>
             <ParticipantChips chips={participantChips(participant)} style="paren" />
-        </span>
+        </>
     )
 }

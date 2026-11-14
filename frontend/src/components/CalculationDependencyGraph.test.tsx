@@ -67,24 +67,26 @@ describe("CalculationDependencyGraph — nodes", () => {
         expect(document.querySelectorAll("[data-testid^='dep-node-']")).toHaveLength(4)
     })
 
-    it("shows the ref alone (no type pill) on a parent/child node -- the payload never carries the other calculation's type", () => {
+    it("shows words alone (no type pill, no ref) on a parent/child node -- the payload never carries the other calculation's type", () => {
         renderGraph([
             { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
         ])
         const parentNode = screen.getByTestId("dep-node-parent-calc_opt_parent")
-        expect(within(parentNode).getByText("calc_opt_parent")).toBeInTheDocument()
+        expect(within(parentNode).getByText("Parent calculation")).toBeInTheDocument()
+        expect(within(parentNode).queryByText("calc_opt_parent")).toBeNull()
         // No pill-styled text node on a satellite -- only the centre node
         // gets `.dep-graph-node-pill-text`.
         expect(parentNode.querySelector(".dep-graph-node-pill-text")).toBeNull()
     })
 
-    it("shows a type pill and the ref on the centre node -- the one node whose type IS known", () => {
+    it("shows a type pill and 'This calculation' on the centre node -- the one node whose type IS known", () => {
         renderGraph([
             { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
         ], "calc_own_ref", "freq")
         const centreNode = screen.getByTestId("dep-node-centre-calc_own_ref")
         expect(within(centreNode).getByText("Frequency")).toBeInTheDocument()
-        expect(within(centreNode).getByText("calc_own_ref")).toBeInTheDocument()
+        expect(within(centreNode).getByText("This calculation")).toBeInTheDocument()
+        expect(within(centreNode).queryByText("calc_own_ref")).toBeNull()
     })
 
     it("links every parent/child node to /calculations/<ref>", () => {
@@ -124,33 +126,24 @@ describe("CalculationDependencyGraph — centreLinked opt-in", () => {
         expect(link).toHaveAttribute("href", "/calculations/calc_own_ref")
     })
 
-    it("names the linked centre node from its own visible pill text and ref, concatenated", () => {
+    it("names the linked centre node from its visible pill text, without printing the ref", () => {
         renderGraph([
             { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
         ], "calc_own_ref", "opt", true)
         const centreNode = screen.getByTestId("dep-node-centre-calc_own_ref")
         const link = within(centreNode).getByRole("link")
-        expect(link).toHaveAccessibleName("Optimisation calc_own_ref")
+        expect(link).toHaveAccessibleName("Optimisation")
     })
 
-    // SC 2.5.3 Label in Name: the accessible name must not insert
-    // the word "calculation" between the pill text and the ref
-    // ("Optimisation calculation calc_own_ref"), a word that never appears
-    // on screen, which breaks the two VISIBLE text runs (pill, then ref)
-    // into two non-contiguous pieces of the accessible name. Neither
-    // visible run is a substring check alone would catch that (both
-    // "Optimisation" and "calc_own_ref" are still individually present) --
-    // this asserts the exact concatenation, the only shape where nothing
-    // sits between them.
-    it("never inserts a word between the visible pill text and the visible ref text in the accessible name", () => {
+    it("never puts the ref in the linked centre node's accessible name, and names it exactly by the visible pill text", () => {
         renderGraph([
             { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
         ], "calc_own_ref", "opt", true)
         const centreNode = screen.getByTestId("dep-node-centre-calc_own_ref")
         const link = within(centreNode).getByRole("link")
         const pillText = within(centreNode).getByText("Optimisation").textContent
-        const refText = within(centreNode).getByText("calc_own_ref").textContent
-        expect(link).toHaveAccessibleName(`${pillText} ${refText}`)
+        expect(link).toHaveAccessibleName(pillText as string)
+        expect(link.getAttribute("aria-label")).not.toContain("calc_own_ref")
     })
 
     it("still shows no link when centreLinked is explicitly false", () => {
@@ -183,13 +176,11 @@ describe("CalculationDependencyGraph — centreSubject opt-in", () => {
         const subjectLink = within(centreNode).getByTestId("dep-node-subject-calc_own_ref")
         expect(subjectLink).toHaveTextContent("Transition state")
         expect(subjectLink).toHaveAttribute("href", "/transition-state-entries/tse_own1")
-        // Folds the subject's own ref into the accessible name, even
-        // though the visible text is the short label alone -- the ref
-        // stays reachable (screen reader) without being printed twice.
-        expect(subjectLink).toHaveAccessibleName("Transition state tse_own1")
+        // The accessible name is the words alone; the ref is not folded in.
+        expect(subjectLink).toHaveAccessibleName("Transition state")
         // A SEPARATE link from the calc link -- an SVG <a> cannot nest
         // inside another, and clicking each must go to a different place.
-        const calcLink = within(centreNode).getByRole("link", { name: /Optimisation calc_own_ref/ })
+        const calcLink = within(centreNode).getByRole("link", { name: "Optimisation" })
         expect(calcLink).not.toBe(subjectLink)
         expect(calcLink).toHaveAttribute("href", "/calculations/calc_own_ref")
         expect(within(centreNode).getAllByRole("link")).toHaveLength(2)
@@ -350,9 +341,10 @@ describe("CalculationDependencyGraph — accessibility", () => {
         const list = screen.getByRole("list", { name: "Dependency edges, as text" })
         const item = within(list).getByRole("listitem")
         expect(item.textContent).toBe(
-            "This is the fine optimisation; its starting geometry came from calc_htgb7s5nakuw52eqhcxpvilpoq",
+            "This is the fine optimisation; its starting geometry came from Parent calculation",
         )
-        expect(within(list).getByRole("link", { name: "calc_htgb7s5nakuw52eqhcxpvilpoq" })).toHaveAttribute(
+        expect(item.textContent).not.toContain("calc_htgb7s5nakuw52eqhcxpvilpoq")
+        expect(within(list).getByRole("link", { name: "Calculation: Parent calculation" })).toHaveAttribute(
             "href", "/calculations/calc_htgb7s5nakuw52eqhcxpvilpoq",
         )
     })
@@ -361,11 +353,12 @@ describe("CalculationDependencyGraph — accessibility", () => {
         renderGraph([
             { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_htgb7s5nakuw52eqhcxpvilpoq", child_calculation_ref: "calc_own_ref" },
         ], "calc_own_ref")
-        // Exactly one link named plainly after the ref (the sentence list).
-        expect(screen.getAllByRole("link", { name: "calc_htgb7s5nakuw52eqhcxpvilpoq" })).toHaveLength(1)
+        // Exactly one link named by the record link's noun and words (the sentence list).
+        expect(screen.getAllByRole("link", { name: "Calculation: Parent calculation" })).toHaveLength(1)
         // The graph node's own link carries a DIFFERENT accessible name.
         const nodeLink = within(screen.getByTestId("dep-node-parent-calc_htgb7s5nakuw52eqhcxpvilpoq")).getByRole("link")
-        expect(nodeLink).not.toHaveAccessibleName("calc_htgb7s5nakuw52eqhcxpvilpoq")
+        expect(nodeLink).toHaveAccessibleName("Parent calculation")
+        expect(nodeLink).not.toHaveAccessibleName("Calculation: Parent calculation")
     })
 })
 

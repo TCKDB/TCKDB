@@ -120,19 +120,19 @@ export function pointGroupParts(value: string): { symbol: string; subscript: str
 
 function levelsOf(levels: ProductLevels): SourceLevel[] {
     const out: SourceLevel[] = []
-    if (levels.geometry) out.push({ role: "geometry", label: lotLabel(levels.geometry) })
-    if (levels.frequency) out.push({ role: "frequency", label: lotLabel(levels.frequency) })
-    if (levels.energy) out.push({ role: "energy", label: lotLabel(levels.energy) })
+    if (levels.geometry) out.push({ role: "geometry", label: lotLabel(levels.geometry), level: levels.geometry })
+    if (levels.frequency) out.push({ role: "frequency", label: lotLabel(levels.frequency), level: levels.frequency })
+    if (levels.energy) out.push({ role: "energy", label: lotLabel(levels.energy), level: levels.energy })
     return out
 }
 
 /** Levels as "label (roles)" parts, one per distinct label, in first-seen order. */
-export function levelParts(levels: readonly SourceLevel[]): { label: string; roles: string[] }[] {
-    const parts: { label: string; roles: string[] }[] = []
+export function levelParts(levels: readonly SourceLevel[]): { label: string; level?: SourceLevel["level"]; roles: string[] }[] {
+    const parts: { label: string; level?: SourceLevel["level"]; roles: string[] }[] = []
     for (const level of levels) {
         const part = parts.find((candidate) => candidate.label === level.label)
         if (part) part.roles.push(level.role)
-        else parts.push({ label: level.label, roles: [level.role] })
+        else parts.push({ label: level.label, level: level.level, roles: [level.role] })
     }
     return parts
 }
@@ -235,7 +235,7 @@ function transportLevels(record: TransportRecord): SourceLevel[] {
     for (const calculation of record.source_calculations ?? []) {
         const level: LevelOfTheory | null | undefined = calculation.level_of_theory
         if (!level) continue
-        const next = { role: words(calculation.role) ?? calculation.role, label: lotLabel(level) }
+        const next = { role: words(calculation.role) ?? calculation.role, label: lotLabel(level), level }
         if (!out.some((existing) => existing.role === next.role && existing.label === next.label)) out.push(next)
     }
     return out

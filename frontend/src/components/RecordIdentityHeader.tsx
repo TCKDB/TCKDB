@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 import "../record-identity-header.css"
 import { CopyButton } from "./RefsDisclosure"
+import { RecordLink } from "./RecordLink"
 import { SpeciesEntryLink } from "./SpeciesEntryLink"
 import { RecordGlyph, type RecordKind } from "./RecordGlyph"
 import { ReviewChip } from "./ReviewChip"
@@ -82,7 +83,7 @@ type OwnerProps =
     | { identity?: never; ownFacts: ReactNode }
 
 export function RecordIdentityHeader({
-    kicker, pill, glyph, review, lede, title, intro,
+    kicker, pill, glyph, review, lede, title, subtitle, intro,
     identity, facets, submissionRef, explainTransitionStateIdentity = true, ownRef, ownFacts,
 }: OwnerProps & {
     kicker: ReactNode
@@ -95,6 +96,8 @@ export function RecordIdentityHeader({
     lede?: LedeText
     /** A human label (a name, a formula or an equation), never the record's ref. */
     title: ReactNode
+    /** A short line directly under the title that tells records sharing the title apart. */
+    subtitle?: ReactNode
     /** An optional descriptive sentence
      *  between the h1 and the identity tier -- the same slot/role
      *  `SectionHeading`'s own `intro` prop plays for an in-page section,
@@ -129,6 +132,7 @@ export function RecordIdentityHeader({
             <h1 className="t-display-2 record-identity-title">
                 {title}
             </h1>
+            {subtitle && <p className="t-value record-identity-subtitle">{subtitle}</p>}
             {lede ? <Lede>{lede}</Lede> : intro && <p className="t-body section-intro">{intro}</p>}
             {identity ? (
                 <IdentityTier identity={identity} explainTransitionStateIdentity={explainTransitionStateIdentity} ownRef={ownRef} />
@@ -197,12 +201,17 @@ function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
                     identity below is left unresolved — see the owner list to disambiguate by calculation.
                 </p>
                 <ul className="record-identity-ambiguous-owners">
-                    {identity.owners.map((owner) => (
-                        <li key={`${owner.kind}-${owner.ref}`}>
-                            <span className="t-label">{owner.kind.replaceAll("_", " ")}</span>
-                            <code>{owner.ref}</code>
-                        </li>
-                    ))}
+                    {identity.owners.map((owner, index) => {
+                        const kind = owner.kind === "species_entry" ? "species-entry" : "transition-state"
+                        const noun = owner.kind === "species_entry" ? "Species entry" : "Transition state"
+                        const sameKind = identity.owners.filter((other) => other.kind === owner.kind)
+                        const words = sameKind.length > 1 ? `${noun} ${sameKind.indexOf(owner) + 1}` : noun
+                        return (
+                            <li key={`${owner.kind}-${owner.ref}-${index}`}>
+                                <RecordLink kind={kind} to={`${owner.kind === "species_entry" ? "/species-entries/" : "/transition-state-entries/"}${owner.ref}`} label={words} />
+                            </li>
+                        )
+                    })}
                 </ul>
             </div>
         )
@@ -230,9 +239,7 @@ function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
                             {/* Delegates to `SpeciesEntryLink` (`./SpeciesEntryLink.tsx`)
                                 rather than re-deriving the same link text here: the entry's own formula (the SAME
                                 `Formula` component the h1 uses, so subscripts match) when served,
-                                falling back to the entry ref as `<code className="data">` -- never the literal
-                                words "Species entry" (the `<dt>` beside this `<dd>` already says
-                                "Species entry"). `species_entry_label` is never printed:
+                                falling back to the words "Species entry". `species_entry_label` is never printed:
                                 it joins in depositor-typed parts (see
                                 `SpeciesEntryLink`). */}
                             <SpeciesEntryLink
@@ -287,7 +294,9 @@ function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
                     {chargeDisplay(identity.charge)} / {spinDisplay(identity.multiplicity)}
                 </IdentityFact>
                 {identity.transitionStateEntryRef && (
-                    <IdentityFact label="Transition state entry" copy={identity.transitionStateEntryRef}><code>{identity.transitionStateEntryRef}</code></IdentityFact>
+                    <IdentityFact label="Transition state entry" copy={identity.transitionStateEntryRef}>
+                        <RecordLink kind="transition-state" to={`/transition-state-entries/${identity.transitionStateEntryRef}`} label="Transition state" />
+                    </IdentityFact>
                 )}
             </dl>
         </div>

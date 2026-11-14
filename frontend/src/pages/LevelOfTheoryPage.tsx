@@ -1,4 +1,7 @@
 import { useId, useState } from "react"
+import { calculationWords } from "../domain/recordWords"
+import { baseLabel, inlineText, levelKey, levelLine, qualifiersOf } from "../domain/levelLabel"
+import { RecordLink } from "../components/RecordLink"
 import { GuideLink } from "../components/GuideLink"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
@@ -6,7 +9,7 @@ import "../methods.css"
 import { CompositeSchemeLink } from "../components/CompositeSchemeLink"
 import { CorrectionSchemeTable } from "../components/CorrectionSchemeTable"
 import { Disclosure } from "../components/Disclosure"
-import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
+import { LevelLabel } from "../components/LevelLabel"
 import { scaleKindLabel } from "../domain/frequencyScaleFormat"
 import { recordRoute } from "../domain/recordRoute"
 import { usageIntro } from "../domain/usageIntro"
@@ -59,9 +62,11 @@ export default function LevelOfTheoryPage() {
 
 function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
     const lot = record.level_of_theory
-    // The full label tells all-electron and frozen-core levels of one method and basis apart.
-    const title = lot.label ?? (lot.basis ? `${lot.method}/${lot.basis}` : lot.method)
-    useDocumentTitle("Level of theory", title)
+    // The heading is the short label (the facts below list every qualifier); the tab title adds them so levels sharing a short label differ.
+    const title = baseLabel(lot)
+    // Levels sharing a method and basis differ only in these, so the line under the heading states them.
+    const stated = qualifiersOf(lot).map(inlineText).join(" · ")
+    useDocumentTitle("Level of theory", levelLine(lot, new Map([[levelKey(lot), qualifiersOf(lot)]])))
 
     const mapNodes = levelOfTheoryNodes({
         calculationCount: record.evidence_summary.calculation_usage_count,
@@ -86,6 +91,7 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
                             glyph="level-of-theory"
                             lede={LEVEL_OF_THEORY_LEDE}
                             title={title}
+                            subtitle={stated || undefined}
                             ownRef={{ label: "Level of theory ref", value: lot.level_of_theory_ref }}
                             ownFacts={(
                                 <>
@@ -97,9 +103,9 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
                                     <div><dt>Core treatment</dt><dd>{lot.core_treatment ? words(lot.core_treatment) : "not recorded"}</dd></div>
                                     {lot.aux_basis && <div><dt>Auxiliary basis</dt><dd>{lot.aux_basis}</dd></div>}
                                     {lot.cabs_basis && <div><dt>CABS basis</dt><dd>{lot.cabs_basis}</dd></div>}
-                                    {lot.relativistic_hamiltonian && <div><dt>Relativistic Hamiltonian</dt><dd>{lot.relativistic_hamiltonian}</dd></div>}
-                                    {lot.pno_truncation && <div><dt>PNO truncation</dt><dd>{lot.pno_truncation}</dd></div>}
-                                    {lot.ri_approximation && <div><dt>RI approximation</dt><dd>{lot.ri_approximation}</dd></div>}
+                                    {lot.relativistic_hamiltonian && <div><dt>Relativistic Hamiltonian</dt><dd>{words(lot.relativistic_hamiltonian)}</dd></div>}
+                                    {lot.pno_truncation && <div><dt>PNO truncation</dt><dd>{words(lot.pno_truncation)}</dd></div>}
+                                    {lot.ri_approximation && <div><dt>RI approximation</dt><dd>{words(lot.ri_approximation)}</dd></div>}
                                     {lot.composite_scheme && (
                                         <div>
                                             <dt>Composite recipe</dt>
@@ -311,7 +317,7 @@ function CorrectionSchemeBox({ scheme }: { scheme: EnergyCorrectionSchemeRecord 
             <dl className="kv-list">
                 <div>
                     <dt>Scheme ref</dt>
-                    <dd><Link to={correctionSchemePath(ref)}><code className="data">{ref}</code></Link></dd>
+                    <dd><RecordLink kind="scheme" to={correctionSchemePath(ref)} label="Energy-correction scheme" /></dd>
                 </div>
                 {releaseRef && (
                     <div>
@@ -326,7 +332,7 @@ function CorrectionSchemeBox({ scheme }: { scheme: EnergyCorrectionSchemeRecord 
                     <dt>Frequency level</dt>
                     <dd>
                         {scheme.frequency_level_of_theory
-                            ? <LevelOfTheoryLink levelOfTheory={scheme.frequency_level_of_theory} />
+                            ? <LevelLabel levelOfTheory={scheme.frequency_level_of_theory} />
                             : "not recorded"}
                     </dd>
                 </div>
@@ -383,12 +389,10 @@ function FrequencyScaleFactorSection({ groups, available }: { groups: LevelOfThe
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {group.frequency_scale_factors.map((item) => (
+                                        {group.frequency_scale_factors.map((item, position) => (
                                             <tr key={item.frequency_scale_factor_ref}>
-                                                <td data-label="Ref">
-                                                    <Link to={frequencyScaleFactorPath(item.frequency_scale_factor_ref)}>
-                                                        <code className="data">{item.frequency_scale_factor_ref}</code>
-                                                    </Link>
+                                                <td data-label="Scale factor">
+                                                    <RecordLink kind="scheme" to={frequencyScaleFactorPath(item.frequency_scale_factor_ref)} label={`Frequency scale factor ${position + 1}`} />
                                                 </td>
                                                 <td data-label="Software">{softwareLabel(item.software_release) ?? "not recorded"}</td>
                                                 <td data-label="Workflow tool">{toolReleaseLabel(item.workflow_tool_release) ?? "not recorded"}</td>
@@ -433,9 +437,9 @@ function UsageSection({ rows, available, total }: { rows: LevelOfTheoryUsage[] |
                             </tr>
                         </thead>
                         <tbody>
-                            {list.map((row) => (
+                            {list.map((row, position) => (
                                 <tr key={row.calculation_ref}>
-                                    <td data-label="Calculation"><Link className="data" to={`/calculations/${row.calculation_ref}`}>{row.calculation_ref}</Link></td>
+                                    <td data-label="Calculation"><RecordLink kind="calculation" to={`/calculations/${row.calculation_ref}`} label={`${calculationWords(row.type)} ${position + 1}`} /></td>
                                     <td data-label="Type">{words(row.type)}</td>
                                     <td data-label="Owner">
                                         {row.record_ref && row.record_type
@@ -456,5 +460,5 @@ function UsageSection({ rows, available, total }: { rows: LevelOfTheoryUsage[] |
 
 function OwnerRecord({ type, recordRef }: { type: string; recordRef: string }) {
     const to = recordRoute(type, recordRef)
-    return to ? <Link className="data" to={to}>{recordRef}</Link> : <span className="data">{recordRef}</span>
+    return to ? <Link to={to} aria-label={`${words(type) ?? "Record"}`}>{words(type) ?? "Record"}</Link> : <span>{words(type) ?? "Record"}</span>
 }

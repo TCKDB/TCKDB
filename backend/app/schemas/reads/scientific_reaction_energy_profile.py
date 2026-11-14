@@ -125,6 +125,7 @@ class CitedCalculation(BaseModel):
     species_entry_ref: str | None = None
     transition_state_entry_ref: str | None = None
     level_of_theory_ref: str | None = None
+    level_of_theory: LevelOfTheorySummary | None = None
     software: EnergyProfileSoftware | None = None
     energy_type: Literal["single_point", "optimization"] | None = None
     electronic_energy_hartree: float | None = None

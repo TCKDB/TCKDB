@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
+import { numberRefs } from "../domain/recordNumbers"
+import { versionWords } from "../domain/recordWords"
 import { ParticipantChips } from "../components/ParticipantChips"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
@@ -26,6 +28,7 @@ import { PageShell } from "../components/PageShell"
 import { ReactionNetworkRail } from "../components/ReactionNetworkRail"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
+import { RecordLink } from "../components/RecordLink"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { formatQuantity } from "../domain/quantityFormat"
 import { levelOfTheoryPath } from "../domain/methodsLinks"
@@ -107,7 +110,8 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
     const entry = record.reaction_entry
     const species = record.species ?? { reactants: [], products: [] }
     useDocumentTitle("Reaction entry", equationText(species.reactants, species.products, entry.reversible))
-    const kinetics = record.kinetics ?? []
+    const kinetics = useMemo(() => record.kinetics ?? [], [record.kinetics])
+    const recordNumbers = useMemo(() => numberRefs(kinetics.map((item) => item.kinetics_ref)), [kinetics])
     const transitionStates = record.transition_states ?? []
     const networksState = useReactionEntryNetworks(entry.reaction_entry_ref, record.networks)
     const formulaOnly = !equationNeedsStructure(species.reactants, species.products)
@@ -154,7 +158,7 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
     return (
         <section className="conformer-page tse-page">
             <PageShell
-                side={<RelationshipMap selfKind="reaction" selfLabel="This entry" state={neighbours}>
+                side={<RelationshipMap selfKind="reaction" selfLabel={versionWords(entry.deposit_position)} state={neighbours}>
                     {networksState.status === "ready" && (
                         <ReactionNetworkRail networkRefs={networksState.networks.map((network) => network.network_ref)} reactionEntryRef={entry.reaction_entry_ref} />
                     )}
@@ -164,13 +168,13 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                         <Breadcrumbs crumbs={[
                             { label: "Reactions", to: BROWSE_KIND_PATHS.reaction },
                             { label: equation, to: `/reactions/${entry.reaction_ref}` },
-                            { label: "This deposited version" },
+                            { label: versionWords(entry.deposit_position) },
                         ]} />
                         <header className="basin-header">
                             <div className="record-identity-header">
                                 <div className="record-identity-kicker-row">
                                     <RecordGlyph kind="reaction" size={16} />
-                                    <span className="t-kicker record-identity-kicker">Reaction · one deposited version</span>
+                                    <span className="t-kicker record-identity-kicker">{`Reaction · ${versionWords(entry.deposit_position)}`}</span>
                                     <ReviewChip status={entry.review.status} />
                                 </div>
                                 <h1 className="t-display-2 record-identity-title">
@@ -188,7 +192,7 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                                         </div>
                                         <div>
                                             <dt>All versions of this reaction</dt>
-                                            <dd><Link to={`/reactions/${entry.reaction_ref}`}>{entry.reaction_ref}</Link></dd>
+                                            <dd><RecordLink kind="reaction" to={`/reactions/${entry.reaction_ref}`} label="All versions" /></dd>
                                         </div>
                                         <div><dt>Family</dt><dd>{entry.family ? statusLabel(entry.family) : <span className="record-identity-absent-inline">not recorded</span>}</dd></div>
                                         <div><dt>Reversible</dt><dd>{entry.reversible ? "yes" : "no"}</dd></div>
@@ -219,7 +223,7 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                     <ParticipantsTable label="Products" participants={species.products} />
                 </section>
 
-                <EnergyProfile entryRef={entry.reaction_entry_ref} speciesLabels={speciesLabels} />
+                <EnergyProfile entryRef={entry.reaction_entry_ref} speciesLabels={speciesLabels} recordNumbers={recordNumbers} />
 
                 <section className="ledger-section" aria-labelledby="evidence-heading">
                     <SectionHeading id="evidence-heading">Evidence on this entry</SectionHeading>
@@ -270,6 +274,7 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                     {kinetics.length >= 2 && <p><Link className="compare-link" to={`/reactions/${entry.reaction_ref}/compare`}>Compare these values</Link></p>}
                     <ReactionKineticsSection
                         kinetics={kinetics}
+                        recordNumbers={recordNumbers}
                         calculations={record.calculations}
                         transitionStates={transitionStates}
                         networksStatus={networksState.status === "ready" ? (networksState.networks.length ? "populated" : "empty") : "loading"}
@@ -359,7 +364,6 @@ function ParticipantsTable({ label, participants }: {
                     <thead>
                         <tr>
                             <th scope="col">Species</th>
-                            <th scope="col">Ref</th>
                             <th scope="col">Review</th>
                         </tr>
                     </thead>
@@ -367,16 +371,12 @@ function ParticipantsTable({ label, participants }: {
                         {participants.map((participant) => (
                             <tr key={participant.species_entry_ref}>
                                 <td data-label="Species">
-                                    <Link to={`/species-entries/${participant.species_entry_ref}`}>
+                                    <RecordLink kind="species-entry" to={`/species-entries/${participant.species_entry_ref}`} label={[participant.smiles, participant.formula && `(${participant.formula})`].filter(Boolean).join(" ") || "Species"}>
                                         <SpeciesFace smiles={participant.smiles} formula={participant.formula} />
-                                    </Link>
+                                    </RecordLink>
                                     {participantChips(participant).length > 0 && (
                                         <span className="reaction-equation-chip"><ParticipantChips chips={participantChips(participant)} /></span>
                                     )}
-                                </td>
-                                <td data-label="Ref">
-                                    <code className="data">{participant.species_entry_ref}</code>
-                                    <CopyButton value={participant.species_entry_ref} label="Species entry" srLabel="reference" />
                                 </td>
                                 <td data-label="Review"><ReviewChip status={participant.review.status} explain={false} /></td>
                             </tr>
@@ -402,7 +402,6 @@ function NetworkSection({ state }: { state: NetworksState }) {
                 <thead>
                     <tr>
                         <th scope="col">Network</th>
-                        <th scope="col">Ref</th>
                         <th scope="col">Solve T range</th>
                         <th scope="col">Solve P range</th>
                         <th scope="col">Channels</th>
@@ -410,13 +409,10 @@ function NetworkSection({ state }: { state: NetworksState }) {
                     </tr>
                 </thead>
                 <tbody>
-                    {state.networks.map((network) => (
+                    {state.networks.map((network, index) => (
                         <tr key={network.network_ref}>
-                            <td data-label="Network">Pressure-dependent network</td>
-                            <td data-label="Ref">
-                                {/* `/networks/:ref` is the network record page. */}
-                                <Link to={`/networks/${network.network_ref}`}><code className="data">{network.network_ref}</code></Link>
-                                <CopyButton value={network.network_ref} label="Network" srLabel="reference" />
+                            <td data-label="Network">
+                                <RecordLink kind="network" to={`/networks/${network.network_ref}`} label={state.networks.length > 1 ? `Network ${index + 1}` : "Pressure-dependent network"} />
                             </td>
                             <td className="num" data-label="Solve T range">
                                 {network.solve_temperature_min_k != null && network.solve_temperature_max_k != null

@@ -4,10 +4,9 @@ import "../relationship-map.css"
 import { RecordGlyph, type RecordKind } from "./RecordGlyph"
 import { useNearViewport, useSpeciesEntryNeighbours, type NeighboursState } from "../hooks/useNeighbours"
 import { wrapLabel } from "../domain/wrapLabel"
-import { shortRefs } from "../domain/shortRefs"
 import type { NeighbourNode } from "../domain/neighbourNodes"
 import type { SpeciesOverview } from "../api/speciesOverviewApi"
-import { versionFacts } from "../domain/entryVersions"
+import { versionName } from "../domain/entryVersions"
 
 const WIDTH = 224
 const PAD = 4
@@ -18,7 +17,7 @@ const NODE_W = WIDTH - NODE_X - 4
 const TEXT_X = NODE_X + 34
 
 const nodeAria = (node: NeighbourNode) =>
-    [node.label, node.relation, node.ref, node.sub, node.found].filter((part): part is string => !!part).join(", ")
+    [node.label, node.relation, node.sub, node.found].filter((part): part is string => !!part).join(", ")
 
 /**
  * Shows where the record sits, sized for the 14rem side column: this entry on top, what it connects to stacked below.
@@ -37,10 +36,9 @@ export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This e
     const headingId = useId()
     const { pathname } = useLocation()
     const { nodes } = state
-    const shorts = shortRefs(nodes.map((node) => node.ref ?? ""))
-    const rows = nodes.map((node, index) => {
+    const rows = nodes.map((node) => {
         const lines = wrapLabel(node.label)
-        const noteLines = node.ref ? wrapLabel(shorts[index]) : wrapLabel(node.drawnNote ?? node.sub ?? node.found ?? node.relation)
+        const noteLines = wrapLabel(node.drawnNote ?? node.sub ?? node.found ?? node.relation)
         return { lines, noteLines, height: 22 + 16 * (lines.length + noteLines.length) }
     })
     const tops: number[] = []
@@ -79,7 +77,7 @@ export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This e
                                         <tspan key={lineIndex} x={TEXT_X} dy={lineIndex === 0 ? 0 : 16}>{line}</tspan>
                                     ))}
                                 </text>
-                                <text x={TEXT_X} y={boxTop + 18 + 16 * lines.length} className={node.ref ? "rel-map-note rel-map-ref" : "rel-map-note"}>
+                                <text x={TEXT_X} y={boxTop + 18 + 16 * lines.length} className="rel-map-note">
                                     {noteLines.map((line, lineIndex) => (
                                         <tspan key={lineIndex} x={TEXT_X} dy={lineIndex === 0 ? 0 : 16}>{line}</tspan>
                                     ))}
@@ -102,7 +100,7 @@ export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This e
                         <RecordGlyph kind={node.kind} />
                         {" "}
                         {node.to === null ? <span>{node.label}</span> : <Link to={node.to} aria-describedby={`${headingId}-${node.id}-note`}>{node.label}</Link>}
-                        <span className="rel-map-item-note" id={`${headingId}-${node.id}-note`}>{[node.relation, node.ref, node.sub, node.found].filter(Boolean).join(", ")}</span>
+                        <span className="rel-map-item-note" id={`${headingId}-${node.id}-note`}>{[node.relation, node.sub, node.found].filter(Boolean).join(", ")}</span>
                     </li>
                 ))}
             </ul>
@@ -124,10 +122,10 @@ const MAP_VERSIONS = 8
 /** The map for a molecule page: no reads connect a molecule to reactions or networks, so its nodes are its own versions. */
 export function SpeciesRelationshipMap({ species }: { species: SpeciesOverview }) {
     const shown = species.entries.slice(0, MAP_VERSIONS)
-    const nodes: NeighbourNode[] = shown.map((version) => ({
+    const nodes: NeighbourNode[] = shown.map((version, index) => ({
         id: version.species_entry_ref,
         kind: "species-entry",
-        label: versionFacts(version),
+        label: versionName(version, index + 1),
         relation: "A version of this molecule",
         ref: version.species_entry_ref,
         to: `/species-entries/${version.species_entry_ref}`,

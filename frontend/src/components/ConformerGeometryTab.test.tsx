@@ -43,17 +43,17 @@ describe("ConformerGeometryTab", () => {
             }] as unknown as ConformerProjection["observations"],
             [{ calculation_ref: "calc_opt_1", geometry: { geometry_ref: "geom_g1", natoms: 4, geom_hash: "hashg1000000", role: "final" } }] as unknown as ConformerProjection["geometries"],
         )
-        await screen.findByRole("link", { name: "co_1" })
+        await screen.findByRole("link", { name: "Observation 1" })
         // The observation summary line stays byte-identical -- an external
         // test (SpeciesEntryPage.test.tsx) asserts its exact text.
         expect(screen.getByText((_, element) => (
-            element?.tagName === "LI" && element.textContent === "co_1 — 1 optimization calculation"
+            element?.tagName === "LI" && element.textContent === "Observation 1 — 1 optimization calculation"
         ))).toBeVisible()
         // Attribution row: calculation, level of theory, and the geometry
         // it produced, all on one row a reader can actually click through.
-        expect(screen.getByRole("link", { name: "calc_opt_1" })).toHaveAttribute("href", "/calculations/calc_opt_1")
+        expect(screen.getByRole("link", { name: "Optimisation" })).toHaveAttribute("href", "/calculations/calc_opt_1")
         expect(screen.getByText(/B3LYP\/6-31G\(d\)/)).toBeVisible()
-        expect(screen.getByRole("link", { name: "geom_g1" })).toHaveAttribute("href", "/geometries/geom_g1")
+        expect(screen.getByRole("link", { name: /^Geometry/ })).toHaveAttribute("href", "/geometries/geom_g1")
     })
 
     it("styles the observation and calculation refs as links -- colour and underline, not plain black monospace", async () => {
@@ -71,11 +71,11 @@ describe("ConformerGeometryTab", () => {
             }] as unknown as ConformerProjection["observations"],
             [{ calculation_ref: "calc_opt_1", geometry: { geometry_ref: "geom_g1", natoms: 4, geom_hash: "hashg1000000", role: "final" } }] as unknown as ConformerProjection["geometries"],
         )
-        const observationLink = await screen.findByRole("link", { name: "co_1" })
+        const observationLink = await screen.findByRole("link", { name: "Observation 1" })
         for (const link of [
             observationLink,
-            screen.getByRole("link", { name: "calc_opt_1" }),
-            screen.getByRole("link", { name: "geom_g1" }),
+            screen.getByRole("link", { name: "Optimisation" }),
+            screen.getByRole("link", { name: /^Geometry/ }),
         ]) {
             const style = link.getAttribute("style") ?? ""
             expect(style).toContain("color: var(--accent)")
@@ -103,9 +103,9 @@ describe("ConformerGeometryTab", () => {
                 { calculation_ref: "calc_opt_1b", geometry: { geometry_ref: "geom_g1", natoms: 4, geom_hash: "hashg1000000", role: "final" } },
             ] as unknown as ConformerProjection["geometries"],
         )
-        expect(await screen.findByRole("link", { name: "geom_g1" })).toHaveAttribute("href", "/geometries/geom_g1")
-        expect(screen.getByRole("link", { name: "calc_opt_1a" })).toBeVisible()
-        expect(screen.getByRole("link", { name: "calc_opt_1b" })).toBeVisible()
+        expect(await screen.findByRole("link", { name: /^Geometry/ })).toHaveAttribute("href", "/geometries/geom_g1")
+        expect(screen.getByRole("link", { name: "Optimisation 1" })).toBeVisible()
+        expect(screen.getByRole("link", { name: "Optimisation 2" })).toBeVisible()
     })
 
     it("says the geometry is not recorded for an opt calculation with no matching geometry link, rather than dropping the row", async () => {
@@ -116,7 +116,7 @@ describe("ConformerGeometryTab", () => {
             }] as unknown as ConformerProjection["observations"],
             [],
         )
-        const link = await screen.findByRole("link", { name: "calc_opt_1" })
+        const link = await screen.findByRole("link", { name: "Optimisation" })
         const row = link.closest("li") as HTMLElement
         expect(within(row).getByText(/geometry not recorded/)).toBeVisible()
     })

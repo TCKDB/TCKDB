@@ -76,7 +76,7 @@ describe("ReactionTransitionStatesSection — centre node link", () => {
     it("links the dependency graph's centre node to /calculations/<ts_opt ref>", () => {
         renderSection()
         const centreNode = screen.getByTestId("dep-node-centre-calc_opt1")
-        const calcLink = within(centreNode).getByRole("link", { name: /Optimisation calc_opt1/ })
+        const calcLink = within(centreNode).getByRole("link", { name: "Optimisation" })
         expect(calcLink).toHaveAttribute("href", "/calculations/calc_opt1")
     })
 })
@@ -88,7 +88,7 @@ describe("ReactionTransitionStatesSection — subject lives on the node, not in 
         const subjectLink = within(centreNode).getByTestId("dep-node-subject-calc_opt1")
         expect(subjectLink).toHaveTextContent("Transition state")
         expect(subjectLink).toHaveAttribute("href", "/transition-state-entries/tse_test1")
-        expect(subjectLink).toHaveAccessibleName("Transition state tse_test1")
+        expect(subjectLink).toHaveAccessibleName("Transition state")
     })
 
     // No caption above the graph repeats the reaction (the page's own <h1> already
@@ -137,9 +137,10 @@ describe("ReactionTransitionStatesSection — no dependency edges", () => {
 describe("ReactionTransitionStatesSection — calculations-by-stage table has no unservable columns", () => {
     it("renders only Stage / Level of theory / Software-workflow / Record -- no Energy or Review column, no /full jargon anywhere", () => {
         renderSection()
-        const table = screen.getByRole("table", { name: "Calculations for tse_test1" })
+        const table = screen.getByRole("table", { name: "Calculations for transition state" })
         const headers = within(table).getAllByRole("columnheader").map((h) => h.textContent)
         expect(headers).toEqual(["Stage", "Level of theory", "Software / workflow", "Record"])
+        expect(table.textContent).not.toMatch(/calc_opt1|tse_test1/)
         expect(table.textContent).not.toMatch(/\/full/)
         expect(screen.queryByText(/not served by/)).toBeNull()
         expect(screen.queryByText(/structurally absent from this view/)).toBeNull()

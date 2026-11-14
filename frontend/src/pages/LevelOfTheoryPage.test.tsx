@@ -271,16 +271,18 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         // The 10 distinct underlying refs are still all present in the
         // document (inside the disclosure body) -- never collapsed away,
         // only demoted behind the closed `<details>`.
-        const refLinks = within(disclosure).getAllByRole("link", { name: /^fsf_/ })
+        const refLinks = within(disclosure).getAllByRole("link", { name: /^Scheme: Frequency scale factor \d+$/ })
         expect(refLinks).toHaveLength(10)
+        expect(refLinks[0]).toHaveAccessibleName("Scheme: Frequency scale factor 1")
         expect(refLinks[0]).toHaveAttribute("href", "/methods/frequency-scale-factors/fsf_0")
+        expect(disclosure.textContent).not.toContain("fsf_")
     })
 
-    it("links each correction scheme's own ref into its standalone /methods/schemes/:ecsRef page", async () => {
+    it("links each correction scheme, by words, into its standalone /methods/schemes/:ecsRef page", async () => {
         server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord()))))
         page()
         await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })
-        const links = screen.getAllByRole("link", { name: "ecs_atom" })
+        const links = screen.getAllByRole("link", { name: "Scheme: Energy-correction scheme" })
         expect(links.length).toBeGreaterThan(0)
         expect(links[0]).toHaveAttribute("href", "/methods/schemes/ecs_atom")
     })
@@ -440,7 +442,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         expect(refValue.closest("a")).toBeNull()
     })
 
-    it("titles the page, and its breadcrumb, with the server's full label so core treatments are told apart", async () => {
+    it("titles the page and its breadcrumb with the short label, never the server's long one, and lists the qualifiers in the facts and the tab title", async () => {
         const record = baseRecord()
         server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse({
             ...record,
@@ -453,9 +455,46 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
             },
         }))))
         page()
-        expect(await screen.findByRole("heading", { level: 1, name: "CCSD(T)/cc-pCVTZ (core=all_electron)" })).toBeInTheDocument()
+        expect(await screen.findByRole("heading", { level: 1, name: "CCSD(T)/cc-pCVTZ" })).toBeInTheDocument()
         const crumb = screen.getByRole("navigation", { name: "Breadcrumb" })
-        expect(crumb.querySelector("[aria-current='page']")?.textContent).toBe("CCSD(T)/cc-pCVTZ (core=all_electron)")
+        expect(crumb.querySelector("[aria-current='page']")?.textContent).toBe("CCSD(T)/cc-pCVTZ")
+        expect(document.body.textContent).not.toContain("core=all_electron")
+        expect(screen.getByText("Core treatment").nextElementSibling).toHaveTextContent("all electron")
+        expect(document.title).toContain("CCSD(T)/cc-pCVTZ · all electron")
+    })
+
+    it("states the qualifiers under the heading so levels with one method and basis do not read alike, and nothing when there are none", async () => {
+        const record = baseRecord()
+        const served = (extra: Record<string, unknown>) => server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse({
+            ...record, level_of_theory: { ...record.level_of_theory, ...extra },
+        }))))
+        served({ pno_truncation: "tight", core_treatment: "frozen_core" })
+        const first = page()
+        const heading = await screen.findByRole("heading", { level: 1, name: "b3lyp/def2tzvp" })
+        expect(heading.nextElementSibling).toHaveTextContent(/^frozen core · PNO tight$/)
+        expect(first.container.querySelectorAll(".record-identity-subtitle")).toHaveLength(1)
+    })
+
+    it("prints no line under the heading when the level states no qualifier", async () => {
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord()))))
+        page()
+        await screen.findByRole("heading", { level: 1, name: "b3lyp/def2tzvp" })
+        expect(document.querySelector(".record-identity-subtitle")).toBeNull()
+    })
+
+    it("tells the calculations at this level apart by visible numbered words", async () => {
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord({
+            used_by: [
+                { calculation_ref: "calc_u1", endpoint: "x", type: "opt" },
+                { calculation_ref: "calc_u2", endpoint: "x", type: "opt" },
+                { calculation_ref: "calc_u3", endpoint: "x", type: "sp" },
+            ],
+        })))))
+        page()
+        const table = await screen.findByRole("table", { name: "Calculations at this level of theory" })
+        const texts = within(table).getAllByRole("link").filter((link) => link.getAttribute("href")?.startsWith("/calculations/")).map((link) => link.textContent)
+        expect(texts).toEqual(["Optimisation 1", "Optimisation 2", "Single-point energy 3"])
+        expect(new Set(texts).size).toBe(3)
     })
 
     it("shows each stated method qualifier, and prints no row for one that is not stated", async () => {
@@ -479,7 +518,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         expect(screen.queryByText("Keywords")).toBeNull()
     })
 
-    it("keeps method/basis as the title when the payload carries no label", async () => {
+    it("titles the page with method/basis when the payload carries no label", async () => {
         server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord()))))
         page()
         expect(await screen.findByRole("heading", { level: 1, name: "b3lyp/def2tzvp" })).toBeInTheDocument()
@@ -520,7 +559,7 @@ describe("LevelOfTheoryPage: wording, links and counts", () => {
         server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord()))))
         page()
         await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })
-        expect(screen.getByRole("link", { name: "spe_one" })).toHaveAttribute("href", "/species-entries/spe_one")
+        expect(screen.getByRole("link", { name: "species entry" })).toHaveAttribute("href", "/species-entries/spe_one")
         expect(screen.getByText(/calculations; first 50 listed\./)).toBeVisible()
     })
 

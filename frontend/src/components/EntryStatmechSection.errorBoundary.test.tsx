@@ -168,21 +168,20 @@ describe("EntryStatmechSection — a broken Torsions row", () => {
 
         page()
         await screen.findByText("sm_bad")
-        expect(screen.getByText("sm_good")).toBeVisible()
+        expect(document.getElementById("statmech-heading-sm_good")).toBeVisible()
 
         fireEvent.click(screen.getByText("Torsions", { selector: "summary" }))
         const torsionsSection = screen.getByText("Torsions", { selector: "summary" }).closest("details") as HTMLElement
         await within(torsionsSection).findByText("Torsions loaded.")
 
         // The failing row's own fallback — not a page-wide crash message.
-        const badRow = within(torsionsSection).getByText("sm_bad").closest("div.science-record") as HTMLElement
+        const [badRow, goodRow] = Array.from(torsionsSection.querySelectorAll("div.science-record")) as HTMLElement[]
         expect(within(badRow).getByRole("alert")).toHaveTextContent(/This row could not be displayed/)
         expect(within(badRow).queryByText(/torsions rendered fine/)).not.toBeInTheDocument()
 
         // The SIBLING row, in the SAME lazy section, is unaffected — this
         // is what proves per-row isolation rather than "the crash just
         // happened not to propagate this time".
-        const goodRow = within(torsionsSection).getByText("sm_good").closest("div.science-record") as HTMLElement
         expect(within(goodRow).getByText("torsions rendered fine (1 row)")).toBeVisible()
         expect(within(goodRow).queryByRole("alert")).not.toBeInTheDocument()
 
@@ -194,8 +193,8 @@ describe("EntryStatmechSection — a broken Torsions row", () => {
         // inside the opened Torsions disclosure, so an unscoped query would
         // be ambiguous.
         const recordsSection = screen.getByRole("heading", { name: "Statistical mechanics" }).closest("section") as HTMLElement
-        expect(within(recordsSection).getByText("sm_bad")).toBeVisible()
-        expect(within(recordsSection).getByText("sm_good")).toBeVisible()
+        expect(recordsSection.querySelector("#statmech-heading-sm_bad")).toBeVisible()
+        expect(recordsSection.querySelector("#statmech-heading-sm_good")).toBeVisible()
         expect(screen.getByText("2 records · review: 2 not reviewed")).toBeVisible()
         expect(screen.getByText("Source calculations", { selector: "summary" })).toBeVisible()
         // "Electronic levels" has no record on this entry (both fixtures

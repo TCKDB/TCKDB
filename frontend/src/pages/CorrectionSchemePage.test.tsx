@@ -84,8 +84,8 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
         expect(within(paramTable).getByText("C-C")).toBeVisible()
 
         const appTable = screen.getByRole("table", { name: "Applications of this correction scheme" })
-        expect(within(appTable).getByText("spe_one")).toBeVisible()
-        const calcLink = within(appTable).getByRole("link", { name: "calc_one" })
+        expect(within(appTable).getByRole("link", { name: "species entry" })).toBeVisible()
+        const calcLink = within(appTable).getByRole("link", { name: "Calculation" })
         expect(calcLink).toHaveAttribute("href", "/calculations/calc_one")
     })
 
@@ -189,9 +189,9 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
         page()
         await screen.findByRole("heading", { level: 1 })
         const table = screen.getByRole("table", { name: "Applications of this correction scheme" })
-        expect(within(table).getByRole("link", { name: "spe_one" })).toHaveAttribute("href", "/species-entries/spe_one")
+        expect(within(table).getByRole("link", { name: "species entry" })).toHaveAttribute("href", "/species-entries/spe_one")
         expect(within(table).queryByRole("link", { name: "sm_one" })).not.toBeInTheDocument()
-        expect(within(table).getByText("sm_one")).toBeVisible()
+        expect(within(table).getByText("statmech")).toBeVisible()
         expect(table).toHaveTextContent("-3.6 kcal/mol")
         expect(table).toHaveTextContent("1.5 kJ/mol")
         expect(table).not.toHaveTextContent("kcal_mol")
@@ -263,7 +263,7 @@ describe("CorrectionSchemePage -- no depositor-typed text", () => {
         server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(value)))
         page()
         expect(await screen.findByRole("heading", { name: "Petersson bond-additivity correction, Gaussian", level: 1 })).toBeVisible()
-        expect(within(screen.getByRole("table", { name: "Applications of this correction scheme" })).getByText("spe_one")).toBeVisible()
+        expect(within(screen.getByRole("table", { name: "Applications of this correction scheme" })).getByRole("link", { name: "species entry" })).toBeVisible()
 
         expectNoDepositorText()
         expectNoAdversarialText()

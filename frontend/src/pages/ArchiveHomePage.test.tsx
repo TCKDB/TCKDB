@@ -285,9 +285,10 @@ describe("ArchiveHomePage: the example record", () => {
         const card = await screen.findByRole("article", { name: "Example record" })
         expect(screen.getByText(COPY)).toBeInTheDocument()
         expect(within(card).getByRole("link", { name: "Open this molecule" })).toHaveAttribute("href", `/species-entries/${ENTRY}`)
-        expect(within(card).getByText(ENTRY)).toBeInTheDocument()
+        expect(within(card).queryByText(ENTRY)).not.toBeInTheDocument()
         expect(await within(card).findByRole("heading", { name: "Numbers for this entry" })).toBeInTheDocument()
-        await waitFor(() => expect(card.textContent).toContain("thm_0"), { timeout: 2000 }).catch(() => { throw new Error(card.textContent ?? "") })
+        await waitFor(() => expect(card.textContent).toContain("Enthalpy of formation, 298 K"), { timeout: 2000 }).catch(() => { throw new Error(card.textContent ?? "") })
+        expect(card.textContent).not.toMatch(/thm_|spe_/)
         expect(within(card).getAllByRole("heading").every((heading) => heading.tagName === "H3")).toBe(true)
         expect(screen.queryByRole("link", { name: "Browse molecules" })).not.toBeInTheDocument()
     })
@@ -410,7 +411,7 @@ describe("ArchiveHomePage: the example record", () => {
         })
         server.use(configJson(REACTION_ENTRY), ...countHandlers(), http.get(`/api/v1/scientific/reaction-entries/${REACTION_ENTRY}/full`, () => HttpResponse.json({
             reaction_entry: {
-                reaction_entry_ref: REACTION_ENTRY, reaction_ref: "rxn_test1", equation: "[CH3] <=> C", reversible: false,
+                reaction_entry_ref: REACTION_ENTRY, deposit_position: 1, reaction_ref: "rxn_test1", equation: "[CH3] <=> C", reversible: false,
                 family: null, review: { status: "not_reviewed" }, atom_maps: [],
             },
             review_summary: summary,

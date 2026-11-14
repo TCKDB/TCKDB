@@ -1,3 +1,4 @@
+import { versionWords } from "./recordWords"
 import type { ScientificSpeciesEntrySummary } from "../api/scientificSpeciesSchemas"
 import { chargeText, spinDisplay } from "./chemistryFormat"
 import { facetChips } from "./recordFacets"
@@ -14,6 +15,12 @@ export function versionLabel(molecule: { charge: number; multiplicity: number },
 /** The facts that tell versions of one molecule apart (state, stereochemistry, isotopes), without the charge and spin they share. */
 export function versionFacts(version: ScientificSpeciesEntrySummary): string {
     return facetChips(version).join(" · ")
+}
+
+/** "Version 2 · minimum · ground state": the version's position in the list the page shows, then the facts that tell it apart. */
+export function versionName(version: ScientificSpeciesEntrySummary, position: number): string {
+    const facts = versionFacts(version)
+    return facts ? `${versionWords(position)} · ${facts}` : versionWords(position)
 }
 
 /** What a version holds: its calculation count and the kinds of result deposited. */

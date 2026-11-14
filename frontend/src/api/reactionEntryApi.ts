@@ -72,6 +72,7 @@ const atomMapBadgeSchema = z.object({
 
 const reactionEntrySummarySchema = z.object({
     reaction_entry_ref: z.string(),
+    deposit_position: z.number().int(),
     reaction_ref: z.string(),
     equation: z.string(),
     reversible: z.boolean(),
@@ -379,6 +380,16 @@ export async function loadReactionEntryParticipants(
 ): Promise<Pick<ReactionFullRecord, "reaction_entry" | "species">> {
     const payload = await fetchFull(ref, ["species"], signal, onRateLimited)
     return parseScientificResponse(reactionFullResponseSchema.pick({ reaction_entry: true, species: true }), payload, "reaction entry")
+}
+
+/** The entry, its participating species and its kinetics records in the order the entry's own page lists them. */
+export async function loadReactionEntryKinetics(
+    ref: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<Pick<ReactionFullRecord, "reaction_entry" | "species" | "kinetics">> {
+    const payload = await fetchFull(ref, ["species", "kinetics"], signal, onRateLimited)
+    return parseScientificResponse(reactionFullResponseSchema.pick({ reaction_entry: true, species: true, kinetics: true }), payload, "reaction entry")
 }
 
 // ---------------------------------------------------------------------------

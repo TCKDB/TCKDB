@@ -173,10 +173,9 @@ describe("ConformerEvidenceLinkage", () => {
         expect(within(geometries).getByText("distinct stored geometries")).toBeVisible()
         // Not present in this step under a swap: the observation count.
         expect(within(geometries).queryByText("3")).not.toBeInTheDocument()
-        expect(within(geometries).getByText("geom_a")).toBeVisible()
-        expect(within(geometries).getByText(/4 calculation outputs/)).toBeVisible()
-        expect(within(geometries).getByText("geom_b")).toBeVisible()
-        expect(within(geometries).getByText(/3 calculation outputs/)).toBeVisible()
+        expect(within(geometries).getByText(/^Geometry 1 .* 4 calculation outputs/)).toBeVisible()
+        expect(within(geometries).getByText(/^Geometry 2 .* 3 calculation outputs/)).toBeVisible()
+        expect(geometries.textContent).not.toMatch(/geom_a|geom_b/)
     })
 
     it("prints the archive's PUBLISHED calculation_count even when the row breakdown hasn't loaded -- never recomputed from a missing list", () => {
@@ -218,7 +217,7 @@ describe("ConformerEvidenceLinkage", () => {
         openMechanics()
         expect(within(step("geometries")).getByText("2")).toBeVisible()
         expect(within(step("geometries")).getByText("breakdown not loaded")).toBeVisible()
-        expect(within(step("geometries")).queryByText("geom_a")).not.toBeInTheDocument()
+        expect(within(step("geometries")).queryByText(/^Geometry 1/)).not.toBeInTheDocument()
     })
 
     it("labels stage coverage as a share of the 3 OBSERVATIONS, not of the 7 calculation rows", () => {

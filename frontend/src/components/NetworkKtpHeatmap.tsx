@@ -289,11 +289,7 @@ export function NetworkKtpHeatmap({ networkRef, network, channels, states }: {
                     <span className="t-preserve-case">{`k in ${unit}, for ${chosen.label}. `}</span>
                     {"Stronger colour is larger, within this record only. † is outside the stated range ("}
                     <span className="t-preserve-case">{rangeText(fit)}</span>
-                    {"). Record "}
-                    <code className="t-preserve-case">{fit.network_kinetics_ref}</code>
-                    {", solve "}
-                    <code className="t-preserve-case">{fit.network_solve_ref}</code>
-                    {". The table has the same values."}
+                    {"). The table has the same values."}
                 </figcaption>
             </figure>
             <Disclosure summary="Table of the same values, every record of this channel">

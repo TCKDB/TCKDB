@@ -22,6 +22,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Reaction-entry reads carry `deposit_position` (Unreleased)
+
+- **Behaviour:** the reaction-entry summary in `GET /scientific/reactions/search`, `GET /scientific/reactions/browse` and `GET /scientific/reaction-entries/{id}/full` gains `deposit_position`, a 1-based integer: the entry's place among all entries of the same reaction, ordered by `(created_at, id)`. It is computed over every entry of the reaction, so it ignores the read filter, paging, the hidden-by-default rule and review status: a hidden entry leaves a gap, a later page reports the global number, and a review change never renumbers.
+- **Kinetics read:** each record's `reaction` block in `GET /scientific/kinetics/search` carries the same `deposit_position` for its entry, so every record can name its version whatever page it is on. Each cited calculation in `GET /scientific/reaction-entries/{id}/energy-profile` (`cited_by_kinetics[].calculations[]`) gains `level_of_theory`, the structured level summary (including its qualifiers), beside `level_of_theory_ref`.
+- **Schema and migration:** none. No new environment variable.
+- **Versions:** no distributed package changed.
+
 ## Source prose describes behaviour for any producer (Unreleased)
 
 - **Behaviour:** none. Comments, docstrings, OpenAPI field descriptions and the generated producer contract no longer explain TCKDB behaviour in terms of one workflow tool: a rule is stated for any producer, ARC is named only as one example among others or as a plain source citation, and code that parses real software tokens is unchanged. The species browse `workflow_tool` filter description now reads "e.g. 'ARC' or 'TorsionDrive'".

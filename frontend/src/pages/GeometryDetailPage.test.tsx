@@ -128,8 +128,8 @@ describe("GeometryDetailPage identity", () => {
         page()
         expect(await screen.findByRole("heading", { name: /^Geometry of CH4/ })).toBeVisible()
         expect(screen.getByTestId("record-identity-ambiguous")).toHaveTextContent(/more than one distinct owner/)
-        expect(screen.getByText("spe_a")).toBeVisible()
-        expect(screen.getByText("spe_b")).toBeVisible()
+        expect(screen.getByRole("link", { name: "Species entry 1" })).toHaveAttribute("href", "/species-entries/spe_a")
+        expect(screen.getByRole("link", { name: "Species entry 2" })).toHaveAttribute("href", "/species-entries/spe_b")
     })
 
     it("a transition-state owner never renders an empty SMILES field", async () => {
@@ -314,7 +314,7 @@ describe("GeometryDetailPage", () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
         await screen.findByRole("heading", { name: /^Geometry of CH4/ })
-        const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+        const table = screen.getByRole("table", { name: "Coordinates" })
         const rows = within(table).getAllByRole("row").slice(1)
         expect(rows).toHaveLength(5)
 
@@ -423,18 +423,24 @@ describe("GeometryDetailPage", () => {
         await screen.findByRole("heading", { name: /^Geometry of CH4/ })
         const section = screen.getByRole("heading", { name: "Produced by" }).closest("section") as HTMLElement
 
-        const rowOne = within(section).getByRole("link", { name: "calc_opt_two" }).closest("tr") as HTMLElement
+        const rowOne = section.querySelector('a[href="/calculations/calc_opt_two"]')!.closest("tr") as HTMLElement
         expect(within(rowOne).getByText("final")).toBeVisible()
         expect(within(rowOne).queryByText("coarse")).not.toBeInTheDocument()
 
-        const rowTwo = within(section).getByRole("link", { name: "calc_opt_one" }).closest("tr") as HTMLElement
+        const rowTwo = section.querySelector('a[href="/calculations/calc_opt_one"]')!.closest("tr") as HTMLElement
         expect(within(rowTwo).getByText("coarse")).toBeVisible()
         expect(within(rowTwo).queryByText("final")).not.toBeInTheDocument()
 
         // Row order is read verbatim from the payload, not re-sorted.
         const rows = within(section).getAllByRole("row").slice(1)
-        const refs = rows.map((row) => within(row).getByRole("link").textContent)
-        expect(refs).toEqual(["calc_opt_two", "calc_opt_one"])
+        const hrefs = rows.map((row) => within(row).getByRole("link").getAttribute("href"))
+        expect(hrefs).toEqual(["/calculations/calc_opt_two", "/calculations/calc_opt_one"])
+        // Each row is told apart by its position within the section.
+        expect(rows.map((row) => within(row).getByRole("link").getAttribute("aria-label"))).toEqual([
+            "Calculation: Optimisation 1, Produced by",
+            "Calculation: Optimisation 2, Produced by",
+        ])
+        expect(section.textContent).not.toMatch(/calc_/)
     })
 
     it("never merges producer and consumer rows, even for a calculation that appears in both lists", async () => {
@@ -447,33 +453,34 @@ describe("GeometryDetailPage", () => {
 
         // calc_opt_two is genuinely in both lists — each section shows it
         // exactly once, with that section's own role semantics.
-        expect(within(producedSection).getAllByRole("link", { name: "calc_opt_two" })).toHaveLength(1)
-        expect(within(consumedSection).getAllByRole("link", { name: "calc_opt_two" })).toHaveLength(1)
-        const producedRow = within(producedSection).getByRole("link", { name: "calc_opt_two" }).closest("tr") as HTMLElement
+        const hrefIn = (section: HTMLElement, ref: string) => section.querySelectorAll(`a[href="/calculations/${ref}"]`)
+        expect(hrefIn(producedSection, "calc_opt_two")).toHaveLength(1)
+        expect(hrefIn(consumedSection, "calc_opt_two")).toHaveLength(1)
+        const producedRow = hrefIn(producedSection, "calc_opt_two")[0].closest("tr") as HTMLElement
         expect(within(producedRow).getByText("final")).toBeVisible()
 
         // calc_opt_one only produced it — never listed as a consumer.
-        expect(within(producedSection).getByRole("link", { name: "calc_opt_one" })).toBeVisible()
-        expect(within(consumedSection).queryByRole("link", { name: "calc_opt_one" })).not.toBeInTheDocument()
+        expect(hrefIn(producedSection, "calc_opt_one")[0]).toBeVisible()
+        expect(hrefIn(consumedSection, "calc_opt_one")).toHaveLength(0)
 
         // calc_freq_one and calc_sp_one only consumed it — never listed as producers.
-        expect(within(consumedSection).getByRole("link", { name: "calc_freq_one" })).toBeVisible()
-        expect(within(consumedSection).getByRole("link", { name: "calc_sp_one" })).toBeVisible()
-        expect(within(producedSection).queryByRole("link", { name: "calc_freq_one" })).not.toBeInTheDocument()
-        expect(within(producedSection).queryByRole("link", { name: "calc_sp_one" })).not.toBeInTheDocument()
+        expect(hrefIn(consumedSection, "calc_freq_one")[0]).toBeVisible()
+        expect(hrefIn(consumedSection, "calc_sp_one")[0]).toBeVisible()
+        expect(hrefIn(producedSection, "calc_freq_one")).toHaveLength(0)
+        expect(hrefIn(producedSection, "calc_sp_one")).toHaveLength(0)
 
         // Every provenance link's href, not just its visible text — the
         // spec line for this route is "producer/consumer links", and a
         // mutation that pointed these at `/geometries/...` instead of
         // `/calculations/...` (or any other wrong target) would still
         // satisfy every name-only assertion above.
-        expect(within(producedSection).getByRole("link", { name: "calc_opt_two" }))
+        expect(within(producedSection).getByRole("link", { name: "Calculation: Optimisation 1, Produced by" }))
             .toHaveAttribute("href", "/calculations/calc_opt_two")
-        expect(within(producedSection).getByRole("link", { name: "calc_opt_one" }))
+        expect(within(producedSection).getByRole("link", { name: "Calculation: Optimisation 2, Produced by" }))
             .toHaveAttribute("href", "/calculations/calc_opt_one")
-        expect(within(consumedSection).getByRole("link", { name: "calc_freq_one" }))
+        expect(within(consumedSection).getByRole("link", { name: "Calculation: Frequency calculation 1, Used as input by" }))
             .toHaveAttribute("href", "/calculations/calc_freq_one")
-        expect(within(consumedSection).getByRole("link", { name: "calc_sp_one" }))
+        expect(within(consumedSection).getByRole("link", { name: "Calculation: Single-point energy 3, Used as input by" }))
             .toHaveAttribute("href", "/calculations/calc_sp_one")
 
         // No role column at all on the consumer table — CalculationInputGeometry
@@ -641,7 +648,7 @@ describe("GeometryDetailPage", () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
             page()
             await screen.findByRole("heading", { name: /^Geometry of CH4/ })
-            const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+            const table = screen.getByRole("table", { name: "Coordinates" })
             const section = table.closest("section") as HTMLElement
             expect(within(section).getByRole("button", { name: "Å" })).toHaveAttribute("aria-pressed", "true")
             expect(within(section).getByRole("button", { name: "bohr" })).toHaveAttribute("aria-pressed", "false")
@@ -656,7 +663,7 @@ describe("GeometryDetailPage", () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
             page()
             await screen.findByRole("heading", { name: /^Geometry of CH4/ })
-            const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+            const table = screen.getByRole("table", { name: "Coordinates" })
             const section = table.closest("section") as HTMLElement
 
             fireEvent.click(within(section).getByRole("button", { name: "bohr" }))
@@ -681,7 +688,7 @@ describe("GeometryDetailPage", () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
             page()
             await screen.findByRole("heading", { name: /^Geometry of CH4/ })
-            const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+            const table = screen.getByRole("table", { name: "Coordinates" })
             const section = table.closest("section") as HTMLElement
             // Finding #9: plain wording, no `coordinate_units`-on-the-wire jargon --
             // the guarantee (stored in ångström; bohr is a display conversion) stays.
@@ -700,7 +707,7 @@ describe("GeometryDetailPage", () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
             page()
             await screen.findByRole("heading", { name: /^Geometry of CH4/ })
-            const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+            const table = screen.getByRole("table", { name: "Coordinates" })
             const section = table.closest("section") as HTMLElement
             expect(within(table).getByRole("columnheader", { name: "x (Å)" })).toBeVisible()
             expect(within(table).getByRole("columnheader", { name: "y (Å)" })).toBeVisible()
@@ -728,7 +735,7 @@ describe("GeometryDetailPage", () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
             page()
             await screen.findByRole("heading", { name: /^Geometry of CH4/ })
-            const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+            const table = screen.getByRole("table", { name: "Coordinates" })
             const section = table.closest("section") as HTMLElement
             for (const name of ["x (Å)", "y (Å)", "z (Å)"]) {
                 expect(getComputedStyle(within(table).getByRole("columnheader", { name })).textTransform).toBe("none")
@@ -765,7 +772,7 @@ describe("GeometryDetailPage", () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json(record)))
             page()
             await screen.findByRole("heading", { name: /^Geometry of CH4/ })
-            const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+            const table = screen.getByRole("table", { name: "Coordinates" })
             const firstDataRow = within(table).getAllByRole("row")[1]
             const shown = within(firstDataRow).getByText("1.078957", { selector: "[data-column='x'] data" })
             expect(shown).toBeVisible()
@@ -788,7 +795,7 @@ describe("GeometryDetailPage", () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
             page()
             await screen.findByRole("heading", { name: /^Geometry of CH4/ })
-            const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+            const table = screen.getByRole("table", { name: "Coordinates" })
             const section = table.closest("section") as HTMLElement
             const firstDataRow = within(table).getAllByRole("row")[1]
             const xCell = firstDataRow.querySelector("[data-column='x']") as HTMLElement
@@ -804,7 +811,7 @@ describe("GeometryDetailPage", () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
             page()
             await screen.findByRole("heading", { name: /^Geometry of CH4/ })
-            const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+            const table = screen.getByRole("table", { name: "Coordinates" })
             const section = table.closest("section") as HTMLElement
             expect(within(section).getByRole("button", { name: "Symbol" })).toHaveAttribute("aria-pressed", "true")
 
@@ -827,7 +834,7 @@ describe("GeometryDetailPage", () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json(record)))
             page()
             await screen.findByRole("heading", { name: /^Geometry of Xx/ })
-            const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+            const table = screen.getByRole("table", { name: "Coordinates" })
             const section = table.closest("section") as HTMLElement
 
             fireEvent.click(within(section).getByRole("button", { name: "Number" }))
@@ -872,7 +879,7 @@ describe("GeometryDetailPage", () => {
             page()
             await screen.findByRole("heading", { name: /^Geometry of CH4/ })
 
-            const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+            const table = screen.getByRole("table", { name: "Coordinates" })
             const coordSection = table.closest("section") as HTMLElement
             fireEvent.click(within(coordSection).getByRole("button", { name: "bohr" }))
 
@@ -970,7 +977,7 @@ describe("GeometryDetailPage -- wording and keyboard", () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
         await screen.findByRole("heading", { name: /^Geometry of CH4/ })
-        const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+        const table = screen.getByRole("table", { name: "Coordinates" })
         // 0.11 stored, 0.110000 shown: the same number, so a `<data>` hover would add nothing.
         const rows = within(table).getAllByRole("row")
         expect(rows[1].querySelector("data")).toBeNull()
@@ -1034,7 +1041,7 @@ describe("GeometryDetailPage -- no depositor-typed text", () => {
         page()
         // The fixture reached the page: the geometry's ref and its transition-state entry ref rendered.
         await screen.findByRole("heading", { name: /^Geometry of CH4/ })
-        expect(screen.getAllByText("tse_demo").length).toBeGreaterThan(0)
+        expect(screen.getAllByRole("link", { name: "Transition state" })[0]).toHaveAttribute("href", "/transition-state-entries/tse_demo")
 
         expectNoDepositorText()
         expectNoAdversarialText()

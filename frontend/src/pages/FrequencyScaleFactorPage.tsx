@@ -1,7 +1,9 @@
-import { Link, useParams } from "react-router-dom"
+import { useParams } from "react-router-dom"
+import { RecordLink } from "../components/RecordLink"
+import { recordWords } from "../domain/recordWords"
 import "../conformer-group.css"
 import "../methods.css"
-import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
+import { LevelLabel } from "../components/LevelLabel"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { Stored } from "../components/QuantityValue"
@@ -66,7 +68,7 @@ function FrequencyScaleFactorDetail({ record }: { record: FrequencyScaleFactorRe
                                         <dt>Level of theory</dt>
                                         <dd>
                                             {record.level_of_theory
-                                                ? <LevelOfTheoryLink levelOfTheory={record.level_of_theory} />
+                                                ? <LevelLabel levelOfTheory={record.level_of_theory} program={softwareLabel(record.software_release)} />
                                                 : <span className="record-identity-absent-inline">not tied to a specific level of theory</span>}
                                         </dd>
                                     </div>
@@ -106,13 +108,13 @@ function UsageSection({ rows, available, total }: { rows: FrequencyScaleFactorUs
                             </tr>
                         </thead>
                         <tbody>
-                            {rows.map((row) => (
+                            {rows.map((row, index) => (
                                 <tr key={row.record_ref}>
                                     <td data-label="Record type">{words(row.record_type)}</td>
                                     <td data-label="Record">
                                         {recordRoute(row.record_type, row.record_ref)
-                                            ? <Link className="data" to={recordRoute(row.record_type, row.record_ref) ?? ""}>{row.record_ref}</Link>
-                                            : <span className="data">{row.record_ref}</span>}
+                                            ? <RecordLink kind="statmech" to={recordRoute(row.record_type, row.record_ref) ?? ""} label={recordWords(index + 1)} />
+                                            : recordWords(index + 1)}
                                     </td>
                                 </tr>
                             ))}

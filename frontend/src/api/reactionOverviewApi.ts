@@ -38,6 +38,7 @@ const availabilitySchema = z.object({
 const reactionRecordSchema = z.object({
     reaction_ref: z.string(),
     reaction_entry_ref: z.string(),
+    deposit_position: z.number().int(),
     equation: z.string(),
     reversible: z.boolean(),
     family: z.string().nullable().optional(),

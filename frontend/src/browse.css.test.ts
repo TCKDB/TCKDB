@@ -72,11 +72,10 @@ describe(".browse-row-evidence -- --type-note", () => {
     })
 })
 
-describe("the ref is a data run, not an 11px faint one-off", () => {
-    it(".browse-ref declares no font of its own -- typography comes from the .data class applied alongside it", () => {
-        const rule = extractRule(css, ".browse-ref")
-        expect(rule).not.toMatch(/font:/)
-        expect(rule).not.toMatch(/font-size:/)
+describe("browse rows do not print a ref", () => {
+    it(".browse-ref has no rule: rows show words, not the public ref", () => {
+        expect(css).not.toMatch(/\.browse-ref\s*\{/)
+        expect(css).not.toMatch(/\.search-result-ref\s*\{/)
     })
 
     it("the old .browse-row-ref selector has no rule of its own", () => {

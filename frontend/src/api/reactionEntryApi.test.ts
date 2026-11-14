@@ -12,6 +12,7 @@ afterAll(() => server.close())
 
 const baseReactionEntry = {
     reaction_entry_ref: ENTRY_REF,
+    deposit_position: 1,
     reaction_ref: "rxn_zicx5swji2nqkg2v263rnwxn4m",
     equation: "O + [CH3] <=> C + [OH]",
     reversible: true,

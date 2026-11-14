@@ -45,13 +45,12 @@ describe("SpeciesBrowseRow: design-system primitive adoption", () => {
         expect(row).toHaveClass("browse-row")
     })
 
-    it("the ref renders through .browse-ref and .data (the shared data step), not .browse-row-ref", () => {
+    it("the row prints no public ref", () => {
         renderRow(record())
         const row = document.querySelector(".species-browse-row") as HTMLElement
-        const ref = within(row).getByText("spc_one")
-        expect(ref).toHaveClass("browse-ref")
-        expect(ref).toHaveClass("data")
-        expect(ref).not.toHaveClass("browse-row-ref")
+        expect(within(row).queryByText("spc_one")).not.toBeInTheDocument()
+        expect(row.textContent).not.toMatch(/spc_|spe_/)
+        expect(row.querySelector(".browse-ref")).toBeNull()
     })
 
     it("the review-status pill uses the shared .value-pill--muted variant, alongside the classification .value-pill", () => {

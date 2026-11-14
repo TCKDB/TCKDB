@@ -139,7 +139,7 @@ describe("composite calculation page", () => {
         expect(within(terms).getAllByRole("row").slice(1).map((r) => r.querySelector("td")?.textContent)).toEqual(["1", "2"])
         const inputs = screen.getByRole("table", { name: "Calculations this composite is built from" })
         expect(within(inputs).getAllByRole("row").slice(1).map((r) => r.querySelector("td")?.textContent)).toEqual(["1", "2"])
-        expect(within(inputs).getByRole("link", { name: "calc_in_a" })).toHaveAttribute("href", "/calculations/calc_in_a")
+        expect(within(inputs).getByRole("link", { name: "Calculation, term 1" })).toHaveAttribute("href", "/calculations/calc_in_a")
         expect(within(inputs).getByText("high side")).toBeInTheDocument()
     })
 
@@ -153,6 +153,6 @@ describe("composite calculation page", () => {
     it("never shows a depositor's conformer group label", async () => {
         await load(record({ conformer: { conformer_observation_ref: "cobs_1", conformer_group_ref: "cg_1", conformer_group_label: "conformer_1" } }, ASSEMBLED))
         expect(screen.queryByText("conformer_1")).not.toBeInTheDocument()
-        expect(screen.getByRole("link", { name: "group cg_1" })).toHaveAttribute("href", "/conformer-groups/cg_1")
+        expect(screen.getAllByRole("link", { name: "Conformer group" })[0]).toHaveAttribute("href", "/conformer-groups/cg_1")
     })
 })

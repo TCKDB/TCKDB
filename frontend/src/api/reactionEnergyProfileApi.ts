@@ -76,6 +76,7 @@ const citedCalculationSchema = z.object({
     species_entry_ref: z.string().nullish(),
     transition_state_entry_ref: z.string().nullish(),
     level_of_theory_ref: z.string().nullish(),
+    level_of_theory: levelOfTheorySchema.nullish(),
     software: softwareSchema.nullish(),
     energy_type: energyType.nullish(),
     electronic_energy_hartree: z.number().nullish(),

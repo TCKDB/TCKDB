@@ -1,9 +1,9 @@
-import { Link } from "react-router-dom"
+import { RecordLink } from "./RecordLink"
 import "../molecule-page.css"
 import { calculationDid } from "../domain/calculationTypeFormat"
 import { formatHartree, type ShapeCalculation, type ShapeRow } from "../domain/conformerGallery"
 import type { SinglePointsState } from "../hooks/useSpeciesSinglePoints"
-import { LevelOfTheoryLink } from "./LevelOfTheoryLink"
+import { LevelDetails, LevelLabel } from "./LevelLabel"
 import { ReviewChip } from "./ReviewChip"
 import { ValueLink } from "./ValueLink"
 import { ValueSource } from "./ValueSource"
@@ -13,10 +13,9 @@ const KIND_WORDS = { sp: "single-point energy", opt: "final energy of the optimi
 function Where({ calculation }: { calculation: ShapeCalculation }) {
     return (
         <>
-            {calculation.levelLabel ? (
-                <>at <span className="t-preserve-case"><LevelOfTheoryLink levelOfTheory={{ method: calculation.levelLabel, label: calculation.levelLabel, level_of_theory_ref: calculation.levelRef ?? undefined }} /></span></>
-            ) : "level not recorded"},{" "}
-            {calculation.program ? <>with <span className="t-preserve-case">{calculation.program}</span></> : "program not recorded"}
+            {calculation.level
+                ? <>at <LevelLabel levelOfTheory={calculation.level} program={calculation.program} plain />{!calculation.program && ", program not recorded"}</>
+                : <>level not recorded, {calculation.program ? <>with <span className="t-preserve-case">{calculation.program}</span></> : "program not recorded"}</>}
             {calculation.workflowTool && <>, run by <span className="t-preserve-case">{calculation.workflowTool}</span></>}
         </>
     )
@@ -57,8 +56,9 @@ export function ObservationEvidence({ row, singlePoints, optimisations }: {
                             {row.foundBy.map((calculation) => (
                                 <li key={calculation.ref}>
                                     {calculationDid(calculation.type) ?? calculation.type} <Where calculation={calculation} />{" "}
-                                    <Link to={`/calculations/${calculation.ref}`}><code className="t-preserve-case">{calculation.ref}</code></Link>
+                                    <RecordLink kind="calculation" to={`/calculations/${calculation.ref}`} label="Calculation" />
                                     {calculation.review && <>{" "}<ReviewChip status={calculation.review} explain={false} /></>}
+                                    {calculation.level && <LevelDetails levelOfTheory={calculation.level} program={calculation.program} />}
                                 </li>
                             ))}
                         </ul>
@@ -74,7 +74,7 @@ export function ObservationEvidence({ row, singlePoints, optimisations }: {
                                 const state = energy.kind === "sp" ? singlePoints : optimisations
                                 // A part of the source line that the same calculation's "Found by" row already shows is left out.
                                 const found = row.foundBy.find((calculation) => calculation.ref === energy.ref)
-                                const level = !found?.levelLabel && energy.levelLabel ? [{ role: "at", label: energy.levelLabel }] : []
+                                const level = !found?.levelLabel && energy.levelLabel ? [{ role: "at", label: energy.levelLabel, level: energy.level ?? undefined }] : []
                                 const program = !found?.program && energy.program ? [energy.program] : []
                                 return (
                                     <li key={energy.ref} className="observation-energy">
@@ -86,6 +86,7 @@ export function ObservationEvidence({ row, singlePoints, optimisations }: {
                                         <ValueSource
                                             source={{ recordType: "calculation", ref: energy.ref }}
                                             did={found ? undefined : energy.type}
+                                            showDetails
                                             levels={level}
                                             programs={program}
                                             review={found?.review ? undefined : energy.review}
