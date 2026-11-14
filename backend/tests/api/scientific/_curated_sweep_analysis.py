@@ -18,8 +18,8 @@ def fmt(route: tuple[str, str], text: str) -> str:
 #: Top-level and nested keys that describe the request or the page, not the records. Compared by key name.
 REQUEST_KEYS = frozenset({"request", "review_visibility", "pagination", "review_summary", "review_status_by_ref"})
 
-#: Counts that legitimately differ between profiles because they answer "what would the list return" (owner decision
-#: D5: population summaries follow the floor in the service). They are not facts about a visible record, so the
+#: Counts that legitimately differ between profiles because they answer "what would the list return":
+#: population summaries follow the floor in the service. They are not facts about a visible record, so the
 #: withholding-only comparison does not hold them to "equal or null". Grow this only with a reason.
 POPULATION_KEYS = frozenset(
     {
@@ -39,7 +39,7 @@ POPULATION_KEYS = frozenset(
         "has_kinetics",
         "has_calculations",
         "ids",
-        # PR-2b (D5): the transition-state and reaction counts and flags follow the floor like the species-side ones.
+        # The transition-state and reaction counts and flags follow the floor like the species-side ones.
         "kinetics_count",
         "has_transition_state",
         "has_path_search",
@@ -55,7 +55,7 @@ POPULATION_KEYS = frozenset(
         "has_scf_stability",
         "entry_count",
         "by_status",
-        # PR-2c (D5): the network, level-of-theory, correction, literature and analytics counts and flags follow the
+        # The network, level-of-theory, correction, literature and analytics counts and flags follow the
         # floor. Each is pinned against what the list endpoints serve by test_curated_ref_guard_network_and_provenance_
         # family.py, because this comparator cannot hold a count to "equal or null".
         "solve_count",
@@ -82,7 +82,7 @@ POPULATION_KEYS = frozenset(
         "distinct_software_count",
         "partial_sources",
         "has_channel_barriers",
-        # ADR 0023 (step 3): the counts and flags of a returned record's linked evidence follow the evidence rule, so a
+        # the evidence rule: the counts and flags of a returned record's linked evidence follow the evidence rule, so a
         # rejected or deprecated calculation is not counted. Each is pinned against the withheld calculation in
         # test_curated_evidence_counts_and_levels.py, because this comparator cannot hold a count to "equal or null".
         "geometry_count",
@@ -92,19 +92,19 @@ POPULATION_KEYS = frozenset(
         "has_opt_calculation",
         "has_freq_calculation",
         "has_sp_calculation",
-        # Step 7 review: a group's observations, an observation's siblings and a calculation's dependency edges follow the
+        # A group's observations, an observation's siblings and a calculation's dependency edges follow the
         # evidence rule like the keys above (pinned by test_curated_detail_consistency.py).
         "observation_count",
         "has_observations",
         "has_dependencies",
         "by_scientific_origin",
-        # A candidate's ordinal among the population's own (guard PR-3): it stands in for the database id as the last
+        # A candidate's ordinal among the population's own: it stands in for the database id as the last
         # tie-break. The population is the profile's, so the same record has another ordinal under curated.
         "id_rank",
     }
 )
 
-#: Counts and flags of a returned record's linked EVIDENCE (ADR 0023, step 3). They are the evidence rule's, not the record
+#: Counts and flags of a returned record's linked EVIDENCE. They are the evidence rule's, not the record
 #: floor's, so the sweep holds them to it when it is given a ``mode``: in the unlisted state (linked evidence that is merely
 #: unreviewed) a count or flag EQUALS the exploratory one; in the withheld state (rejected / deprecated) it is never higher
 #: (a number is <=, a flag may only go True -> False). Without a ``mode`` they are skipped like the population keys.
@@ -132,7 +132,7 @@ EVIDENCE_COUNT_KEYS = frozenset(
         "has_sp_calculation",
         "has_statmech_provenance",
         "has_transition_state_provenance",
-        # Step 7 review: a group's observations, an observation's siblings and a calculation's dependency edges are counted
+        # A group's observations, an observation's siblings and a calculation's dependency edges are counted
         # over the same evidence-rule population the page lists, so they shrink with a withheld record.
         "observation_count",
         "has_observations",
@@ -181,13 +181,13 @@ DESCRIBES_THE_READ_KEYS = frozenset(
 DESCRIBES_THE_READ_PATHS = frozenset(
     {
         "review.effective_floor",
-        # D5 (PR-2b): the validation tokens and the per-type entry coverage count only the evidence the floor shows.
+        # The validation tokens and the per-type entry coverage count only the evidence the floor shows.
         "validation.irc",
         "validation.energy_ordering",
         "validation.imaginary_mode",
-        # D5 (PR-2b): the kinetics evidence checklist counts the calculation types the profile shows.
+        # The kinetics evidence checklist counts the calculation types the profile shows.
         "evidence_completeness",
-        # D5 (PR-2c): a literature record's linked-record counts are of the records the profile shows.
+        # A literature record's linked-record counts are of the records the profile shows.
         "record_counts",
         # The trust fragment and the public assessment are verdicts over the evidence the profile shows.
         "trust",
@@ -203,7 +203,7 @@ DESCRIBES_THE_READ_PATHS = frozenset(
 #: with fixed keys. A slot whose calculation is hidden is removed from the map; the key of a model is never removed.
 REMOVABLE_MAP_FIELDS = frozenset({"calculations", "levels_of_theory"})
 #: Maps keyed by calculation type that are only a map at this exact path (a bare ``software`` field elsewhere is a model).
-#: The type of a hidden calculation is removed from them, as from ``levels_of_theory`` (owner decision D5).
+#: The type of a hidden calculation is removed from them, as from ``levels_of_theory``.
 REMOVABLE_MAP_PATHS = ("evidence_summary.software",)
 
 #: Key stem -> world kind, for the integer-id check.
@@ -334,10 +334,10 @@ def _at(node: Any, keys: tuple[str, ...]) -> Any:
 def subject_leaks(
     text: str, hidden_refs: dict[str, str], identity: tuple[str, ...] | None = None
 ) -> set[tuple[str, str]]:
-    """``(hidden key, json path)`` where an UNLISTED record is the subject of the answer (ADR 0023).
+    """``(hidden key, json path)`` where an UNLISTED record is the subject of the answer.
 
     A record below the approved floor may be named nested, badged; it must never BE a LISTED answer: not a row of ``records``,
-    not a candidate. The ``record`` of a detail read is not checked: since step 7 it serves anything but the withheld set. The subject's identity is the path the guard's registry declares for its model
+    not a candidate. The ``record`` of a detail read is not checked: it serves anything but the withheld set. The subject's identity is the path the guard's registry declares for its model
     (``identity``, from :func:`route_subject_identities`); a ref anywhere else on the row is linked evidence and is allowed.
     A candidate of a selection is checked by :data:`CANDIDATE_IDENTITY_KEYS`.
     """
@@ -364,7 +364,7 @@ def subject_leaks(
 def subject_rows(text: str, identity: tuple[str, ...] | None) -> list[tuple[str | None, Any]]:
     """``(identity ref, row)`` for every LISTED subject row (``records[*]``) of a JSON body.
 
-    The ``record`` of a detail read is not a row the floor can drop (step 7), so it is not returned.
+    The ``record`` of a detail read is not a row the floor can drop, so it is not returned.
     """
     kind, obj = parse_body(text)
     return _rows_of(kind, obj, identity)
@@ -538,7 +538,7 @@ def withholding_violations(
     return [] if _same_modulo_placeholders(exp, cur) else [f"{path}<value changed>"]
 
 
-#: A hidden ref inside a selection document is a placeholder token (guard PR-3), so a curated string that differs from
+#: A hidden ref inside a selection document is a placeholder token, so a curated string that differs from
 #: the exploratory one only where a token stands in a ref's place is a withholding, not a different value.
 _TOKEN = re.compile(r"withheld:[1-9][0-9]*")
 _GATED_REF = re.compile("(?:" + "|".join(ref_guard.GATED_TYPES) + ")_[a-z0-9]{26}")
@@ -556,7 +556,7 @@ def _same_modulo_placeholders(exp: Any, cur: Any) -> bool:
 
 
 #: Routes whose default order sorts on the availability flags (``has_kinetics``, ``has_transition_state``). Those flags
-#: follow the floor (D5), so a curated page can order the same records differently: it is compared by record, not by
+#: follow the floor, so a curated page can order the same records differently: it is compared by record, not by
 #: position.
 FLAG_SORTED_ROUTES = frozenset({"/api/v1/scientific/reactions/browse", "/api/v1/scientific/reactions/search"})
 

@@ -1,4 +1,4 @@
-"""R2'-R5 for a linked ``composite`` energy (ADR 0021, decision 4).
+"""R2'-R5 for a linked ``composite`` energy.
 
 A linked ``composite`` is the record's energy calculation in place of the
 ``sp``s, so the ensemble-aware rules of ``app.services.calculation_levels``
@@ -255,7 +255,7 @@ def test_a_legacy_composite_role_on_an_sp_is_not_a_composite_for_these_rules(cli
     """The legacy shape stays accepted: an sp under role ``composite`` joins no composite rule.
 
     It would otherwise be counted as a second energy next to the real ``sp``
-    and refused, which would turn the warn tier of decision 7 into a refusal.
+    and refused, which would turn a warning into a refusal.
     """
     url, payload = _payload(
         "thermo",

@@ -441,8 +441,8 @@ _SHAPES = {
 def test_the_family_predicate_stays_small_and_does_not_grow_with_the_levels_searched(client, db_session):
     """Kills: a stem-key expression that repeats itself, so one filtered request plans a multi-megabyte statement.
 
-    Every reference to a derived key used to be a full copy of the expression that built it; the predicate compiled
-    to about 7 MB and a single filtered search spent seconds planning it, whatever the data. The ``unclassified`` shape
+    A reference to a derived key must not be a full copy of the expression that built it; the predicate would compile
+    to about 7 MB and a single filtered search would spend seconds planning it, whatever the data. The ``unclassified`` shape
     named the key twice, so it is measured too, and the size is that of the statement as executed, with the expanding
     ``IN`` lists filled in, not only of the compiled text.
     """
@@ -495,7 +495,7 @@ def test_the_family_predicate_stays_small_and_does_not_grow_with_the_levels_sear
     many = {shape: executed_statements(families) for shape, families in _SHAPES.items()}
 
     for shape in _SHAPES:
-        # The statements that carry the filter are the large ones. A level that now matches is read back row by row,
+        # The statements that carry the filter are the large ones. A level that matches is read back row by row,
         # which adds small statements, but must not make the filter's own statement any bigger.
         sizes_few = {len(s) for s in few[shape] if len(s) > 5_000}
         sizes_many = {len(s) for s in many[shape] if len(s) > 5_000}

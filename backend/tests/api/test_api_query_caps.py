@@ -5,7 +5,7 @@ Covers the limit/offset/geometry/full caps defined in
 
 What the cap family publishes, and what it must not
 ---------------------------------------------------
-Since 2026-08-18 every cap code is a
+Every cap code is a
 ``app.api.code_catalogue.Shape.relationship``: a refusal that does not
 state the limit cannot be acted on without guessing, and these caps are
 settings, so no document a client can read has the right number in it.
@@ -242,7 +242,7 @@ def test_include_all_does_not_bypass_caps(client, db_session, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# The caps now say what the cap is (2026-08-18)
+# The caps say what the cap is
 # ---------------------------------------------------------------------------
 
 
@@ -403,13 +403,13 @@ def test_query_too_expensive_publishes_the_cap_but_not_the_row_count(
     low, sweeps every record, and reads TCKDB's holdings profile and
     roughly its upload schedule off a stream of cheap 422s. That is the
     enumeration exposure ``docs/specs/public_identifier_policy.md``
-    (§"Why this matters now", item 3) refuses to leak through primary
+    (§"Why this matters", item 3) refuses to leak through primary
     keys, and it would be worse here: a key leaks the count once, a
     countable refusal leaks it per query, forever.
 
     The absence is asserted over the **whole serialized body**, not just
-    ``context``. ``detail`` is published too, and it carried the count
-    until this change -- an omission from one and not the other would be
+    ``context``. ``detail`` is published too, and it carries the count
+    so an omission from one and not the other would be
     decorative.
     """
     entry = _seed_reaction_entry_with_n_calculations(db_session, label="Q", n=7)

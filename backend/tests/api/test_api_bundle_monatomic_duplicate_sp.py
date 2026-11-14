@@ -1,4 +1,4 @@
-"""An sp-only atom cannot link two single points on one geometry (#610).
+"""An sp-only atom cannot link two single points on one geometry.
 
 "At most one ``sp`` per optimisation" is enforced against the linked ``opt``.
 An atom's honest shape has no ``opt``, so the rule had nothing to bite on:

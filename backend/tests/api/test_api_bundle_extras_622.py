@@ -1,7 +1,7 @@
-"""What the two bundles can now say: transport, rejected rotors, who measured stability.
+"""What the two bundles can say: transport, rejected rotors, who measured stability.
 
-Issue #622. Four things a depositor could say through a standalone route or
-the conformer route and could not say through ``/uploads/computed-species`` or
+Four things a depositor can say through a standalone route or
+the conformer route and can also say through ``/uploads/computed-species`` or
 ``/uploads/computed-reaction``:
 
 * a **transport** record for the species (Lennard-Jones parameters and the
@@ -298,7 +298,7 @@ def test_transport_provenance_gaps_are_annotated_under_the_transport_prefix(clie
 def test_transport_source_key_must_be_declared(client):
     """A typo is a 422 that names the key, before anything is written.
 
-    The schema and the workflow answer identically (ADR 0017), so this pins
+    The schema and the workflow answer identically, so this pins
     the wire behaviour, not the layer. Mutation: resolve the key with a plain
     subscript instead of ``resolve_calculation_key`` in both layers; a
     ``KeyError`` surfaces as a 500.
@@ -451,8 +451,8 @@ def test_reaction_bundle_transport_source_must_belong_to_its_own_species(client)
     """H2's calculation cannot be what produced H's transport.
 
     The key resolves, so only the owner rule can catch it, and the refusal is
-    coded: the same ``code`` and ``context`` the workflow's guard carries
-    (ADR 0017), asserted on ``code`` and ``context`` rather than on prose.
+    coded: the same ``code`` and ``context`` the workflow's guard carries,
+    asserted on ``code`` and ``context`` rather than on prose.
     The paired payload (H's own calculation) is accepted above.
 
     Mutation: make the schema validator raise a bare ``ValueError`` instead
@@ -600,7 +600,7 @@ def test_stability_verdict_names_the_job_that_measured_it(client, db_session):
 
 
 def test_stability_without_a_key_keeps_no_source(client, db_session):
-    """Omitting the key is the old behaviour: the carrying calculation measured it.
+    """Omitting the key is the default: the carrying calculation measured it.
 
     Mutation: default the source to the first additional calculation; the
     ``None`` assertion fails.
@@ -617,7 +617,7 @@ def test_stability_without_a_key_keeps_no_source(client, db_session):
 def test_stability_source_key_must_be_declared(client):
     """An unknown key is a coded 422 naming the field.
 
-    The schema and the workflow answer identically (ADR 0017), so dropping
+    The schema and the workflow answer identically, so dropping
     the schema validator does not change this test; the workflow layer is
     pinned on its own in ``tests/services/test_scf_stability_sources.py``.
     Mutation: drop the lookup from both layers and the block is stored with

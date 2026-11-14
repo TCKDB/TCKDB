@@ -1,8 +1,8 @@
-"""Two spellings of one basis set upload to one level of theory (#574).
+"""Two spellings of one basis set upload to one level of theory.
 
 Through the real upload route, because the defect was in what the route
 stored: Psi4 writes ``def2-tzvp`` and Gaussian/ARC write ``def2tzvp``, and
-before #574 the same method at those two spellings became two
+the same method at those two spellings must not become two
 ``level_of_theory`` rows.
 """
 
@@ -46,7 +46,7 @@ def _rows(db_session, method: str) -> list[LevelOfTheory]:
 @pytest.mark.parametrize(
     ("first", "second"),
     [
-        ("def2-tzvp", "def2tzvp"),  # Psi4, then ARC/Gaussian (#572)
+        ("def2-tzvp", "def2tzvp"),  # Psi4, then ARC/Gaussian
         ("Def2TZVP", "def2-TZVP"),  # Gaussian, then ORCA
         ("cc-pVTZ", "cc-pvtz"),  # Molpro, then Psi4
     ],

@@ -1,4 +1,4 @@
-"""Network declarations through the live upload route and the scientific read route (chunk 1).
+"""Network declarations through the live upload route and the scientific read route.
 
 The route turns a wire refusal into a coded 422 whose ``context.field`` names the declaration, and
 an accepted upload reads back through ``/scientific/network-solves/{ref}`` carrying what was

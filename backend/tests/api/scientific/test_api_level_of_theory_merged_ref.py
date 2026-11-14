@@ -1,4 +1,4 @@
-"""A merged level of theory's ref still resolves, to the row it was merged into (#574).
+"""A merged level of theory's ref still resolves, to the row it was merged into.
 
 ``merge_duplicate_levels_of_theory.py`` keeps a duplicate row, with its
 ``public_ref``, and records it in ``level_of_theory_merge``. A published release froze that
@@ -118,7 +118,7 @@ def test_the_legacy_listing_omits_merged_rows(client, db_session, merged):
 
 
 # ---------------------------------------------------------------------------
-# Integer ids agree with refs on every route (#591)
+# Integer ids agree with refs on every route
 # ---------------------------------------------------------------------------
 
 

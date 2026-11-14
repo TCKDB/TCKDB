@@ -5,7 +5,7 @@ Before this change every TS-owned statmech read ``hard_failed`` / ``species_entr
 first, and a TS-owned record has none. The record is internally consistent and validly owned; the
 badge was a defect, not a verdict.
 
-The records here are made through the real reaction bundle (``transition_state.statmech``, #621), so
+The records here are made through the real reaction bundle, so
 the read path under test is the public one.
 """
 

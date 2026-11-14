@@ -134,7 +134,7 @@ def test_an_electron_carrying_a_conformer_is_refused(client):
     422 naming ``species['e'].conformers['e-conf'].geometry`` at the schema
     seam, instead of a composition error raised part-way through a
     transaction that had already resolved three other species. The rule is
-    also now stated once for every geometry an electron could carry, rather
+    also stated once for every geometry an electron could carry, rather
     than holding for conformers alone.
 
     Asserted on the error's *location* and type, not on a substring of the

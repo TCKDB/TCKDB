@@ -1,4 +1,4 @@
-"""Two opposite repairs that used to share one sentence, on the wire.
+"""Two opposite repairs that must not share one sentence, on the wire.
 
 What was wrong
 --------------
@@ -10,14 +10,14 @@ raised one bare ``ValueError``:
 
     conformer_selection content locator must resolve exactly one selection.
 
-Measured before the change, both arrived byte-identically as
+Collapsed to one answer, both would arrive byte-identically as
 ``422 {"code": "validation_error", "context": {}}``. They are opposite
 repairs. **Zero** matched means the row is not there: deposit it, or fix
 the species entry named. **Several** matched means every row the
 description could mean exists and the description was under-determined. A
-client got one string and could not tell which.
+client given one string could not tell which.
 
-Now: zero is ``404 unknown_conformer_selection``, several is
+Zero is ``404 unknown_conformer_selection``, several is
 ``422 ambiguous_conformer_selection_locator``.
 
 Why these are on the wire
@@ -78,9 +78,9 @@ def _payload(
     one of the four guards above it.
 
     ``conformer_group_ref`` is added to the locator only when given, so
-    every payload built without it is byte-identical to the one this
-    helper produced before the field existed. The tests that assert the
-    old behaviour is unchanged are therefore asserting it about the same
+    every payload built without it is byte-identical to the one a
+    locator without the field produces. The tests that assert the
+    unchanged behaviour therefore assert it about the same
     request body, not about a near-miss of it.
     """
     locator = {
@@ -233,10 +233,10 @@ def test_two_unlabelled_groups_fall_back_to_the_group_ref(client, db_session) ->
 
 
 def test_a_third_group_is_counted_and_listed(client, db_session) -> None:
-    """``match_count`` is the real count, not the old ``limit(2)`` fetch.
+    """``match_count`` is the real count, not a ``limit(2)`` fetch.
 
-    The lookup used to stop at two rows because it only needed to know
-    whether the answer was exactly one. A refusal that says how many
+    The lookup must not stop at two rows merely to know
+    whether the answer is exactly one. A refusal that says how many
     matched has to actually count them, and "2" for three matches is the
     shape of wrong that reads as right.
     """
@@ -403,7 +403,7 @@ def test_a_group_ref_naming_a_group_of_another_species_entry_is_refused(
     assert body["code"] == _GROUP_OWNER_MISMATCH, body
     assert body["context"]["field"] == _GROUP_FIELD, body
     assert body["context"]["owner_kind"] == "species_entry", body
-    # DR-0028 Requirement 2: the entry that does own it is not disclosed.
+    # the entry that does own it is not disclosed.
     rendered = str(body)
     for row_id in (entries["oh"].id, foreign.id):
         assert not id_in_text(row_id, rendered), (row_id, rendered)
@@ -441,7 +441,7 @@ def test_a_named_group_holding_no_such_selection_is_the_selection_404(
 
     Distinguished from the two refusals above on purpose: this one *is*
     repaired by depositing a selection, so it keeps
-    ``unknown_conformer_selection`` -- and the 404 now echoes the group
+    ``unknown_conformer_selection`` -- and the 404 echoes the group
     ref, so a depositor can see which group was searched.
     """
     entries, statmechs = _seed_participants(db_session)
@@ -486,7 +486,7 @@ def test_the_new_field_is_optional_and_its_absence_still_refuses(
         _AMBIGUOUS,
     ), without.text[:400]
     assert with_ref.status_code == 201, with_ref.text[:800]
-    # And the refusal now names a field the payload can actually set,
+    # And the refusal names a field the payload can actually set,
     # which is the whole point of the widening.
     context = without.json()["context"]
     assert context["discriminator"] == "conformer_group_ref", context

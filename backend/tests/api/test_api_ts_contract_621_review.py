@@ -1,4 +1,4 @@
-"""Review fixes for #621: finite values, comparable sources, mixed levels.
+"""Finite values, comparable sources and mixed levels.
 
 Over the real endpoints, on the reaction bundle (which has the species
 calculations an ordering needs). The imaginary-mode-against-stored-result rules
@@ -158,7 +158,7 @@ def _bare_proton_bundle() -> dict:
 
     ``[H+]`` has no electrons, so its electronic energy is exactly 0, and no
     vibrations, so its zero-point energy is 0 and its E0 is 0.0 as well. The
-    cited calculations store what the record states (issue #638).
+    cited calculations store what the record states.
     """
     record = _energy_ordering()
     record["energies"][0] = _energy("ts", "electronic", -39.5, "ts-sp")

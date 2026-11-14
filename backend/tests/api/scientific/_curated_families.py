@@ -1,6 +1,6 @@
-"""The route families the curated ref guard was rolled out by (PR-2a, PR-2b, PR-2c).
+"""The route families of the curated ref guard.
 
-The guard itself has no allowlist any more (PR-5): it applies to every scientific route that is not exempt. These
+The guard itself has no allowlist: it applies to every scientific route that is not exempt. These
 groups survive only so the per-family tests keep selecting the routes they were written for.
 """
 

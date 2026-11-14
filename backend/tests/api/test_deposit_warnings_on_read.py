@@ -326,7 +326,7 @@ def test_a_sub_tolerance_mode_on_a_minimum_is_stored_on_the_frequency_calculatio
 
 
 # ---------------------------------------------------------------------------
-# Review round: reads, artifacts without a submission, isolation, the curated guard
+# Reads, artifacts without a submission, isolation, the curated guard
 # ---------------------------------------------------------------------------
 
 

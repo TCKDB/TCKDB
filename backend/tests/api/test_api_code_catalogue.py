@@ -190,12 +190,12 @@ def _code_positions(
     The distinction it exists to make is between a code and a *token that
     happens to look like one*. ``keyset_predicate`` is written in
     ``keyset.py`` twice over: once as the name of the function in
-    ``__all__``, and once (until #178) as the leading token of a refusal.
+    ``__all__``, and once as the leading token of a refusal.
     The regex this replaced could not tell those apart, because both are
     a double quote followed by the token. So it accepted the export --
     which meant rewording the refusal, the thing the guard exists to
     catch, left it green. The guard was blindest exactly where the defect
-    was, and #164 reworded a message under it without noticing.
+    was, and a reworded message under it went unnoticed.
 
     Positions are therefore about *syntax*, not spelling. A bare code
     counts where it is used as a value -- passed to a call, stored in a
@@ -366,7 +366,7 @@ def test_every_raise_site_code_is_catalogued() -> None:
     raises inside, so a scan of raise sites saw nothing.
 
     Only one of the six -- ``level_of_theory_handle_conflict`` -- is
-    emitted anywhere in the three gates (measured against the runtime
+    emitted anywhere in the three gates (against the runtime
     observer's record of 101 distinct ``(status, code)`` pairs), so the
     other five have no runtime coverage at all. ``test_error_contract_
     catalogue_gate.py`` reaches them by a second static route, following
@@ -401,8 +401,8 @@ def test_the_origin_detector_can_say_no() -> None:
     The ``__all__`` rejection is the one this test was reopened for. The
     regex this detector replaced answered *yes* for a module that merely
     exports a function of that name, so ``keyset_predicate`` was
-    "defined" by ``__all__`` -- and #164 reworded its refusal with the
-    guard staying green. A code and an identifier are the same shape;
+    "defined" by ``__all__`` -- and rewording its refusal left the
+    guard green. A code and an identifier are the same shape;
     only position tells them apart.
     """
     assert _defines_code('raise ValueError("missing_filter: at least one")', "missing_filter")
@@ -510,11 +510,10 @@ def test_client_facing_excludes_what_a_client_cannot_use() -> None:
     Exporting ``validation_error`` would invite a branch that tells the
     caller nothing the 422 did not. Exporting a function name that landed
     in the code position would publish a fabricated code as though it were
-    real, which is worse than an honestly generic one -- the finding #159
-    was opened for.
+    real, which is worse than an honestly generic one.
 
-    No entry carries ``accidental_prefix`` since #178 reworded the last
-    two messages, so that half of the rule is now held by the count below
+    No entry carries ``accidental_prefix``,
+    so that half of the rule is held by the count below
     and by the two names pinned out of the catalogue: an exclusion loop
     over an empty set is the failure this file exists to avoid, and a
     surface with no members would have made it one silently.
@@ -562,7 +561,7 @@ def test_the_status_fallback_family_is_not_exported() -> None:
     """``http_404`` and friends are the status line, spelled twice.
 
     The pattern is exercised in both directions before it is trusted, and
-    #192 added the floor under ``exported``: the final assertion is an
+    A floor sits under ``exported``: the final assertion is an
     absence over a derived set, and an empty ``client_facing()`` would
     satisfy it while the client enum published nothing at all.
     """
@@ -667,30 +666,25 @@ def test_a_refusal_that_is_not_science_is_importable_by_a_client() -> None:
         assert code not in scientific, f"{code} has been added to the scientific check register"
 
 
-#: The codes #184 and #186 classified as guards. Named here rather than
+#: The codes classified as guards. Named here rather than
 #: derived, because the value of the classification is that flipping one
 #: back is a deliberate act with a test to change, not a silent widening
 #: of the client contract.
 #:
-#: It was three until #195, and the removal is the mechanism working; #622
-#: removed the last ownership guard the same way (see below).
-#: ``applied_energy_correction_source_calculation_owner_mismatch`` was
-#: classified a guard because its three call sites all read a calculation
-#: the enclosing block had scoped to the target -- and its note named the
-#: fourth and fifth, in ``/uploads/computed-reaction``, which resolve the
-#: same key across the whole bundle and refused with a bare ``ValueError``.
-#: Routing those through the shared guard made the code reachable, so it
-#: left this tuple, gained ``Reach.request``, and is now exported.
+#: Ownership codes leave this tuple once a request can reach them:
+#: ``applied_energy_correction_source_calculation_owner_mismatch`` has call sites
+#: in ``/uploads/computed-reaction`` that resolve a key across the whole bundle;
+#: they route through the shared guard, so the code is reachable
+#: (``Reach.request``) and exported.
 _GUARD_CODES = ("idempotency_in_progress",)
 
-#: Codes that were ``Reach.guard`` and are not any more. Kept so the
-#: reclassification cannot silently reverse: a code that goes back to
-#: being a guard has stopped being reachable, which means a write path
-#: was removed, and that deserves the same deliberate edit the promotion
-#: did.
+#: Codes promoted from ``Reach.guard`` to a reachable class. Kept so the
+#: reclassification cannot silently reverse: a code that goes back to being a
+#: guard has stopped being reachable, which means a write path was removed,
+#: and that deserves a deliberate edit.
 _PROMOTED_FROM_GUARD = (
     "applied_energy_correction_source_calculation_owner_mismatch",
-    # #622: persist_bundle_transport resolves transport source keys across the
+    # persist_bundle_transport resolves transport source keys across the
     # computed-reaction bundle's whole namespace, so a sibling species'
     # calculation is a request a client can send.
     "transport_source_calculation_owner_mismatch",
@@ -939,15 +933,15 @@ def test_no_ownership_code_is_a_guard_any_more() -> None:
     target's owner.
 
     ``transport_source_calculation_owner_mismatch`` was the last ownership
-    code where neither clause held. #622 gave transport a bundle block
+    code where neither clause held. The bundle gives transport a block
     (``TransportInBundle``) whose ``source_calculations`` resolve in the
     computed-reaction bundle's namespace, which spans every species, so the
-    second clause now holds and the code is reachable and exported. That is
-    asserted as the field's existence, and measured on the wire in
+    second clause holds and the code is reachable and exported. That is
+    asserted as the field's existence, and exercised on the wire in
     ``tests/api/test_api_bundle_extras_622.py``, which posts a sibling
     species' calculation and reads the code and context back.
 
-    The two #622 codes for stability sources are reachable for the same
+    The two codes for stability sources are reachable for the same
     reason. A guard that returns would have to be added to ``_GUARD_CODES``
     on purpose.
     """
@@ -971,7 +965,7 @@ def test_no_ownership_code_is_a_guard_any_more() -> None:
 # Shape: does the code owe a client structured facts?
 # ---------------------------------------------------------------------------
 #
-# ``Shape`` classifies every entry by Calvin's rule (2026-08-17): a code
+# ``Shape`` classifies every entry by this rule: a code
 # naming a relationship -- conflict, mismatch, ambiguity -- owes a client a
 # populated ``context``, because it asserts something about two or more
 # things and names none of them; a code naming a thing does not, because the

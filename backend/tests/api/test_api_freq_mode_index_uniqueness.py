@@ -25,7 +25,7 @@ serialiser that concatenated two blocks, a producer that restarted its
 counter — and asserts nothing about the potential energy surface. It
 belongs in ``app.api.code_catalogue``, which enumerates what the API can
 return and claims nothing about chemistry, and it reaches the client enum
-from there. That split is what #161 built the catalogue for, and it is
+from there. That split is what the catalogue is for, and it is
 why this file sits beside the scientific one rather than inside it.
 
 What is asserted
@@ -168,13 +168,13 @@ def _two_bad_freq_calculations() -> dict:
 def test_two_repeated_mode_indices_report_no_single_code_and_no_facts(
     client,
 ) -> None:
-    """#236, on the wire: ``code`` and ``context`` must agree.
+    """On the wire: ``code`` and ``context`` must agree.
 
     A request that fails twice is two things to fix, so the envelope
     declines to name one — ``validation_detail_code`` has always fallen
     back on more than one failure, whatever codes they carry.
-    ``validation_detail_context`` used to fall back only on more than one
-    *distinct* code, so these two failures (same code, twice) produced
+    ``validation_detail_context`` must not fall back only on more than one
+    *distinct* code, or these two failures (same code, twice) would produce
     the generic code beside a populated ``context``: the facts of the
     second freq result, ``{"duplicate_mode_indices": [7], "mode_count":
     2}``, attached to a code naming neither result, with the first

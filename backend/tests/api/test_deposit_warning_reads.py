@@ -234,7 +234,7 @@ def test_an_anonymous_read_carries_neither_a_label_nor_a_local_key(client, db_se
     response = client.post("/api/v1/uploads/computed-reaction", json=payload)
     assert response.status_code == 201, response.text[:300]
     body = response.json()
-    # The depositor's own response carries the same TCKDB sentence; the label is under the marked key (#838).
+    # The depositor's own response carries the same TCKDB sentence; the label is under the marked key.
     assert not any("TS0" in w["message"] for w in body["warnings"])
     assert any(
         "TS0" in json.dumps((w["context"] or {}).get("depositor_supplied")) for w in body["warnings"]
@@ -288,7 +288,7 @@ def test_the_deposit_owner_and_curators_get_the_depositor_text_and_nobody_else_d
     for key in (owner_key, curator_key):
         read = _ts_read(client, db_session, body, {"X-API-Key": key})
         (irc,) = [i for i in _items(read) if i["code"] == "transition_state_missing_irc_evidence"]
-        # Rows deposited since #838 store TCKDB's sentence, so the owner's copy is the public one, and the label is
+        # Rows store TCKDB's sentence, so the owner's copy is the public one, and the label is
         # under the marked key in the context.
         assert irc["depositor_message"] == irc["message"]
         assert irc["context"]["depositor_supplied"] == {"transition_state_label": "TS0"}

@@ -1,12 +1,11 @@
-"""The no-optimisation duplicate rule recognises the same molecule with its atoms listed in another order (#679).
+"""The no-optimisation duplicate rule recognises the same molecule with its atoms listed in another order.
 
-#667/#676 recognised a rigidly moved copy but compared atoms in the order
-given, so listing the same geometry's atoms in another order walked past the
-rule. The rule now searches for a relabelling that lays one geometry on the
-other (``app.chemistry.permuted_rigid_match``) and then applies the same Kabsch
+A rigidly moved copy is recognised even when its atoms are listed in another
+order: the rule searches for a relabelling that lays one geometry on the other
+(``app.chemistry.permuted_rigid_match``) and then applies the same Kabsch
 test and tolerance; it never exchanges atoms of different element or isotope,
 never lets a mirror image match, and is bounded: past a cap the pair is
-*different* (the behaviour before the search).
+*different*.
 
 API tests drive the standalone thermo and statmech uploads; the service tests
 call ``assert_role_consistency`` on stored rows directly, which is the same
@@ -160,7 +159,7 @@ def test_a_search_that_hits_the_cap_falls_back_to_different(client, product, mon
 
 @PRODUCTS
 def test_the_same_order_path_is_not_behind_the_cap(client, product, monkeypatch):
-    """A moved copy in the order given is #676's comparison and needs no search, so the cap cannot reach it."""
+    """A moved copy in the order given is the same-order comparison and needs no search, so the cap cannot reach it."""
     monkeypatch.setattr(prm, "MAX_FITS_PER_PAIR", 0)
     monkeypatch.setattr(prm, "MAX_ATOMS", 0)
     ethanol = _round(_embedded("CCO"))

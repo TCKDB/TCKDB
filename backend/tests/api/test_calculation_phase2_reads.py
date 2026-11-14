@@ -1,4 +1,4 @@
-"""Tests for Phase 2 calculation sub-resource endpoints.
+"""Tests for calculation sub-resource endpoints.
 
 All test data is seeded via raw ORM inserts (no upload workflow creates
 scan/IRC/path-search/parameter/artifact/validation data). A conformer

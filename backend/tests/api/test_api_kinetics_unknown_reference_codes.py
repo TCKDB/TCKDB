@@ -6,11 +6,11 @@ A kinetics deposit cites already-stored records by public ref: the
 statmech an interpretation was built from, the transition-state entry the
 rate is anchored to, the calculation a tunneling correction was read out
 of, the artifact holding its output, the network solve it came from. Every
-one of those lookups used to raise a bare ``ValueError``, so a depositor
-received **422 ``validation_error`` with an empty ``context``** and had to
+one of those lookups must not raise a bare ``ValueError``, or a depositor
+receives **422 ``validation_error`` with an empty ``context``** and has to
 read English prose to find out which of five refs was wrong.
 
-Both halves of that were wrong:
+Both halves of that are wrong:
 
 * **422 says "your message is malformed, fix it and resend".** Nothing a
   depositor can retype makes a missing statmech exist. The honest answer
@@ -18,7 +18,7 @@ Both halves of that were wrong:
   needs in order to retry differently (deposit the dependency, *then*
   resend) instead of resending forever.
 * **A generic code with no context** left the client string-matching a
-  sentence. Each refusal now carries its own code and a ``context``
+  sentence. Each refusal carries its own code and a ``context``
   naming the field, the kind of row and the ref that failed.
 
 It was also inconsistent *across upload roots*, which is the part no
@@ -38,7 +38,7 @@ The shape of every test here
 * a **neighbouring request that must still be accepted**, because a test
   asserting only "a 4xx arrived" passes against a handler that refuses
   everything;
-* no database primary key anywhere in the body (DR-0028 Requirement 2).
+* no database primary key anywhere in the body.
 
 One refusal here is deliberately *not* a separate test
 -------------------------------------------------------
@@ -407,16 +407,14 @@ def test_the_thermo_root_already_answered_404_for_the_same_condition(
 ):
     """``/uploads/thermo`` was the precedent, and it is pinned here.
 
-    Before #204 the status for "you named a record that is not there"
-    depended on whether the caller spelled the name as a row id (404, on
-    thermo and statmech) or as a public ref (422, on kinetics). This test
-    holds the half that did *not* change, so a later edit cannot restore
-    the split by moving thermo instead of kinetics.
+    The status for "you named a record that is not there" must not depend on
+    whether the caller spelled the name as a row id (404, on thermo and
+    statmech) or as a public ref (kinetics). This test holds the thermo half,
+    so a later edit cannot restore the split by moving thermo instead of
+    kinetics.
 
-    What this test used to record as still owed is now paid. #230 gave the
-    ``existing_*_id`` 404s the same codes their public-ref counterparts
-    carry — the *status* is untouched, only the code and ``context`` — so
-    the code asserted here is ``unknown_statmech_ref`` and not the generic
+    The ``existing_*_id`` 404s carry the same codes as their public-ref
+    counterparts, so the code asserted here is ``unknown_statmech_ref`` and not the generic
     ``resource_not_found``. The full assertions for that root live in
     ``test_api_upload_existing_id_reference_codes.py``; this one keeps the
     cross-root agreement pinned from the kinetics side.

@@ -6,7 +6,7 @@ Held here, each over HTTP so the code and context reach the client:
   declaration reads ``absent`` and is never given a recipe;
 * a conformer upload can state a determination that pins its own calculations by local key; the rows record the
   owner, the basin's observation, the evaluated geometry and each role, and nothing the upload did not say;
-* a transition-state upload can do the same for its saddle point, on the calculation keys it now accepts;
+* a transition-state upload can do the same for its saddle point, on the calculation keys it accepts;
 * a determination that does not fit its owner, names a key nothing declared, or states two claims for one
   determination is refused with a code, and a refusal writes nothing.
 """

@@ -274,7 +274,7 @@ def test_get_search_by_transition_state_entry_ref(client, db_session):
 def test_get_search_unknown_species_entry_ref_returns_empty(
     client, db_session
 ):
-    """Phase C semantics: unknown filter ref short-circuits to empty."""
+    """An unknown filter ref short-circuits to empty."""
     body = client.get(
         SEARCH_URL + "?species_entry_ref=spe_doesnotexist"
     ).json()
@@ -1882,7 +1882,7 @@ def test_search_include_parameters_returns_summaries(client, db_session):
     assert isinstance(rows, list) and len(rows) == 1
     assert rows[0]["raw_key"] == "ScfConv"
     assert rows[0]["canonical_key"] == "scf.convergence"
-    # Default Phase D: parameter_id stripped.
+    # Default parameter_id stripped.
     assert "parameter_id" not in rows[0]
 
 
@@ -2061,7 +2061,7 @@ def test_search_include_constraints_returns_summaries(client, db_session):
     assert rows[0]["constraint_kind"] == "bond"
     assert rows[0]["atom_indices"] == [1, 2]
     assert rows[0]["target_value"] == 1.42
-    # Default Phase D: calculation_id stripped on the constraint summary too.
+    # Default calculation_id stripped on the constraint summary too.
     assert "calculation_id" not in rows[0]
 
 
@@ -2195,7 +2195,7 @@ def test_search_include_review_returns_entries(client, db_session):
     assert len(record["review_history"]) == 1
     entry = record["review_history"][0]
     assert entry["status"] == "approved"
-    # Default Phase D: review_id stripped.
+    # Default review_id stripped.
     assert "review_id" not in entry
 
 

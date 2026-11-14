@@ -19,7 +19,7 @@ with nothing in the record saying so.
 This is the failure the four-role split exists to catch. A torsion is a
 *result*; its scan is that result's *provenance*. A rotor potential taken
 from a different molecule is not weaker evidence for this one -- it is
-evidence about something else, and ADR 0008 puts that in the ``block``
+evidence about something else, and the blocking-tier rule puts that in the ``block``
 tier because no correct deposit can produce it.
 
 Why these tests are on the wire
@@ -31,15 +31,15 @@ was catalogued long before anything on this route could produce it.
 
 Scope, stated rather than left to inference
 -------------------------------------------
-A **transition state** now carries a ``statmech`` block on this route
-(#621), and its torsion scan keys are narrowed at the schema layer to the
+A **transition state** carries a ``statmech`` block on this route,
+and its torsion scan keys are narrowed at the schema layer to the
 saddle point's own calculations, so the TS case is refused one layer earlier
 than this seam, with ``calculation_key_undeclared``
 (``tests/api/test_api_ts_contract_621.py``). Through
 ``/uploads/networks/pdep`` it is enforced at this seam and provoked by
 ``tests/api/test_api_network_pdep_ownership.py``. The rule in both places is
 the same one, and it is the strict one: a torsion's scan must belong to the
-torsion's own subject. Decided 2026-08-15 -- a
+torsion's own subject. A
 depositor who genuinely approximated one rotor with another molecule's
 scan has no way to record that today, and gaining one is a schema change
 that says so explicitly, not a silently accepted link.
@@ -93,7 +93,7 @@ def test_a_torsion_citing_another_species_scan_is_refused(client) -> None:
     body = resp.json()
     assert body["code"] == _TORSION_OWNER_MISMATCH, body
     # The context names the field the depositor wrote and the kind of
-    # owner that disagreed -- never a row id (DR-0028 Requirement 2).
+    # owner that disagreed -- never a row id.
     assert body["context"]["target"] == "statmech torsion", body
     assert "ch4-scan" in body["context"]["field"], body
     assert body["context"]["owner_kind"] == "species_entry", body
@@ -109,7 +109,7 @@ def test_the_refusal_discloses_no_row_ids(client) -> None:
     The status assertion is load-bearing, not decoration. Without it a
     mutation that stops the guard firing altogether leaves a 201 whose
     body contains no ids either, and this test passes while checking
-    nothing -- caught by running exactly that mutation (#192's class).
+    nothing -- caught by running exactly that mutation.
     """
     resp = client.post(_URL, json=_payload_with_ch3_torsion_citing_ch4s_scan())
     assert resp.status_code == 422, resp.text[:800]

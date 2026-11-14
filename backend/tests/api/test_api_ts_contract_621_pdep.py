@@ -1,4 +1,4 @@
-"""The new evidence kinds on the pressure-dependent network bundle (#621).
+"""The new evidence kinds on the pressure-dependent network bundle.
 
 The fragment ``TransitionStateValidationEvidenceIn`` and the persistence seam
 are shared by three deposit paths. The computed-reaction bundle and the
@@ -56,7 +56,7 @@ def _mode(**overrides) -> dict:
 
 
 #: The energies ``_ordering`` states, as the calculations it cites store them
-#: (issue #638): an ordering is held against the stored values.
+#:: an ordering is held against the stored values.
 _STORED_SP_HARTREE = {
     "ts_elim_sp": -229.0,
     "etoo_sp": -229.3,

@@ -1,4 +1,4 @@
-"""Transition-state contract additions (#621), through the real upload endpoints.
+"""Transition-state contract additions, through the real upload endpoints.
 
 Four additions, each deposited over HTTP and read back over HTTP, because the
 property under test is the round trip: what a producer writes is what a reader
@@ -129,7 +129,7 @@ def _irc_evidence(**overrides) -> dict:
 
 
 #: The energies ``_energy_ordering`` states, as the cited calculations store them
-#: (issue #638): an ordering is held against the stored values, so the fixture's
+#:: an ordering is held against the stored values, so the fixture's
 #: calculations must store what its record says. Each E0 is that participant's
 #: electronic energy plus the ZPE below, which every freq and sp of one
 #: participant share a geometry key for.

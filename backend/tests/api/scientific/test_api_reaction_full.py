@@ -40,7 +40,7 @@ def test_returns_200_for_valid_reaction_entry_id(client, db_session):
     resp = client.get(f"/api/v1/scientific/reaction-entries/{entry.id}/full")
     assert resp.status_code == 200
     body = resp.json()
-    # Phase D: reaction_entry.id is hidden; identity surfaces via the ref.
+    # reaction_entry.id is hidden; identity surfaces via the ref.
     assert body["reaction_entry"]["reaction_entry_ref"] == entry.public_ref
     # Default: species + kinetics + transition_states present.
     assert body["species"] is not None
@@ -59,7 +59,7 @@ def test_include_all_populates_every_top_level_section(client, db_session):
         f"/api/v1/scientific/reaction-entries/{entry.id}/full?include=all"
     )
     body = resp.json()
-    # Empty arrays for empty included sections (per Phase 2.1 policy).
+    # Empty arrays for empty included sections.
     for key in (
         "species",
         "kinetics",
@@ -93,7 +93,7 @@ def test_default_omits_non_default_sections(client, db_session):
         "species",
         "transition_states",
     ]
-    # networks is now in the default set, so it is present-and-empty for a
+    # networks is in the default set, so it is present-and-empty for a
     # TS-only entry (requested, nothing there), not absent.
     assert body["networks"] == []
 
@@ -112,7 +112,7 @@ def test_non_ts_backed_kinetics_no_fabricated_ts_links(client, db_session):
     body = resp.json()
     assert len(body["kinetics"]) == 1
     p = body["kinetics"][0]["provenance"]
-    # Phase D: ref siblings are null for non-TS-backed records.
+    # ref siblings are null for non-TS-backed records.
     assert p["transition_state_entry_ref"] is None
     assert body["transition_states"] == []  # not fabricated
 
@@ -226,7 +226,7 @@ def test_include_review_full_adds_audit_array(client, db_session):
     )
     body = resp.json()
     assert body["review_records"] is not None
-    # Phase D: ReviewRecordEntry.record_id is an internal PK with no
+    # ReviewRecordEntry.record_id is an internal PK with no
     # ref sibling, so it's hidden in the default response. Verify the
     # audit array shows the reaction_entry record_type entry.
     assert any(
@@ -406,7 +406,7 @@ def test_full_ts_block_hides_internal_ids_by_default(client, db_session):
     # Refs always present.
     assert "transition_state_ref" in ts_block
     assert "transition_state_entry_ref" in ts_block
-    # Phase D default: integer ids stripped.
+    # Default: integer ids stripped.
     assert "transition_state_id" not in ts_block
     assert "transition_state_entry_id" not in ts_block
 
@@ -1373,8 +1373,8 @@ def test_full_conformers_section_no_forbidden_payload_keys(
 def test_full_conformers_section_omitted_by_default(client, db_session):
     """Without ``include=conformers``, the section key is absent.
 
-    It used to be ``null``, which on a reaction whose reactant *does* have
-    a conformer group read as "there are none" — the exact misreading the
+    It is never ``null``, which on a reaction whose reactant *does* have
+    a conformer group would read as "there are none" — the exact misreading the
     omission rule exists to prevent.
     """
     entry, _, _, _, _ = _entry_with_reactant_conformer(db_session)

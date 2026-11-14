@@ -1,5 +1,5 @@
 """A list that hides rejected and deprecated records by default says how many it hid (exploratory), and says nothing
-about records below the curated floor (curated, decision D6: hidden == unknown == absent).
+about records below the curated floor (curated: hidden == unknown == absent).
 
 Every scientific list endpoint that applies the default visibility is driven from the echo test's seeds
 (``CASES``), re-reviewed so that one row is rejected and one deprecated.

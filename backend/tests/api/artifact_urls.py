@@ -1,7 +1,7 @@
 """The artifact-upload URL for a calculation known by its row id.
 
 ``POST /api/v1/calculations/{calculation_ref}/artifacts`` takes the ``calc_``
-ref only (#578). Tests that create a calculation through a fixture hold its row
+ref only. Tests that create a calculation through a fixture hold its row
 id, so this resolves the ref through the same session the test's client uses.
 """
 

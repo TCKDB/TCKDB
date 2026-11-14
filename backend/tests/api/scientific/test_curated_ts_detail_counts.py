@@ -1,9 +1,9 @@
-"""B1 (review of #826): the transition-state detail counts the entries it lists.
+"""B1: the transition-state detail counts the entries it lists.
 
 Under ``curated`` a served transition state lists every entry that is not rejected or deprecated, badged. Its
-``entries_summary``, ``evidence_summary`` and ``available_sections`` used to count by the approved record floor, so a page
-listing one badged entry said ``total=0`` and ``has_entries=False``; an approved TS with an unreviewed entry listed 2 and
-counted 1; and that entry's own detail said ``has_entries=False`` while listing two siblings.
+``entries_summary``, ``evidence_summary`` and ``available_sections`` count the entries it lists, not only the approved record floor:
+a page listing one badged entry must not say ``total=0`` and ``has_entries=False``; an approved TS with an unreviewed entry lists 2 and
+counts 2; and that entry's own detail must not say ``has_entries=False`` while listing two siblings.
 """
 
 from __future__ import annotations

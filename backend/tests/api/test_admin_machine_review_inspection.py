@@ -432,10 +432,9 @@ def test_admin_submission_machine_review_inspection_does_not_change_public_trust
 # record_public_ref -- the identifier a maintainer can actually follow
 # --------------------------------------------------------------------------- #
 #
-# The two identifiers on this surface answer different questions, and until
-# 2026-09-14 only the wrong one was published -- under the name `record_ref`,
-# which everywhere else in this API means the *public* ref. The page rendered a
-# database row id beneath that heading.
+# The two identifiers on this surface answer different questions. `record_ref`
+# means the *public* ref everywhere else in this API, so the inspection page
+# must show it, not a database row id, beneath that heading.
 
 
 def test_inspection_resolves_the_public_ref_of_a_real_record(
@@ -478,8 +477,8 @@ def test_inspection_never_publishes_the_old_name(
 ):
     """`record_ref` is gone from this surface, and nothing stands in for it.
 
-    Leaving the old key in place alongside a new one would keep the page's
-    ambiguity alive. Renaming it would have been little better: on this surface
+    Leaving the row-id key in place alongside the public ref would keep the page's
+    ambiguity alive. Renaming it would be little better: on this surface
     the matching key is always ``str(record_id)`` -- ``audit_adapter`` keys
     every link that way and drops links with no id -- so a second field would
     restate ``record_id`` under another name, on a page whose whole purpose is

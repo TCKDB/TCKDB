@@ -56,7 +56,7 @@ def test_returns_200_for_valid_reaction_entry_id(client, db_session):
     )
     assert resp.status_code == 200
     body = resp.json()
-    # Phase D: default response identifies the reaction entry by ref.
+    # default response identifies the reaction entry by ref.
     assert body["reaction_entry_ref"] == entry.public_ref
     assert len(body["records"]) == 1
 
@@ -116,7 +116,7 @@ def test_non_ts_backed_provenance_returns_nulls(client, db_session):
     assert resp.status_code == 200
     record = resp.json()["records"][0]
     p = record["provenance"]
-    # Phase D: integer TS-chain ids are hidden in the default response.
+    # integer TS-chain ids are hidden in the default response.
     # The corresponding ref siblings remain visible and are null for
     # non-TS-backed kinetics.
     assert p["transition_state_entry_ref"] is None
@@ -319,7 +319,7 @@ def test_include_trust_source_calculations_score_higher(client, db_session):
 def test_include_trust_single_temperature_range_is_not_hard_failed(client, db_session):
     """A one-point validity range is a datum reported at a single temperature.
 
-    This previously asserted ``hard_failed``. ``tmin == tmax`` is the only
+    ``tmin == tmax`` is the only
     definitional violation reachable through the database (``ck_*_tmin_le_tmax``
     and ``ck_*_tmin_k_gt_0`` refuse inverted and non-positive ranges outright),
     and it is not a violation at all: a rate constant measured at 298 K has a

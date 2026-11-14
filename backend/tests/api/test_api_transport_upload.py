@@ -90,7 +90,7 @@ class TestTransportUpload:
 class TestTransportUploadValidation:
     def test_empty_transport_returns_422(self, client):
         """A transport row with no transport property at all is definitionally
-        empty and must be refused at upload (ADR 0008: definitions block)."""
+        empty and must be refused at upload."""
         payload = _transport_payload()
         for field in (
             "sigma_angstrom",

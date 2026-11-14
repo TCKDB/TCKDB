@@ -315,10 +315,9 @@ def test_default_sort_orders_records_by_review_rank_then_newest_and_not_by_evide
 
 
 def test_single_reactant_smiles_still_behaves_as_before(client, db_session):
-    """A single repeated-param value matches the same records as the old
-    scalar filter did (the echoed filter *shape* changed -- string to a
-    one-item list -- but the matched records and ``matched_direction``
-    did not)."""
+    """A single repeated-param value matches the same records as a scalar
+    filter would (the echoed filter *shape* is a one-item list, but the
+    matched records and ``matched_direction`` are the same)."""
     matching = _entry(db_session, reactant_smiles="[NH2]", product_smiles="N")
     _entry(db_session, reactant_smiles="O", product_smiles="F")
 
@@ -336,7 +335,7 @@ def test_empty_reactant_smiles_value_means_unfiltered(client, db_session):
     :class:`~app.schemas.reads.scientific_reactions.ReactionsBrowseRequest`,
     it would hit the unresolvable-SMILES guard (no species has an
     empty-string SMILES) and hard-empty the response -- a regression
-    from the old ``str | None`` filter, where an empty string was
+    from a ``str | None`` filter, where an empty string was
     itself falsy and therefore already meant "not supplied".
     """
     entry = _entry(db_session, reactant_smiles="EMPTYVAL_A", product_smiles="EMPTYVAL_B")
@@ -476,7 +475,7 @@ def test_default_direction_excludes_reverse_matches(client, db_session):
     ``reactant_smiles`` came back with a reaction where ``EIR_B`` is
     never a stored reactant at all. Under the NEW default
     (``direction=forward``), the same query must NOT return it: the
-    field means what it says now.
+    field means what it says.
     """
     entry = _entry(db_session, reactant_smiles="EIR_A", product_smiles="EIR_B")
     assert entry.reaction.reversible is True

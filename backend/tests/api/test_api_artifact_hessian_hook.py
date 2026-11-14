@@ -424,7 +424,7 @@ def _not_stored_codes(warnings: list[dict]) -> list[str]:
 
 
 class TestHessianNotStoredWarnings:
-    """A Hessian the hook found but did not store is reported (#691); the
+    """A Hessian the hook found but did not store is reported; the
     upload still succeeds and the artifact is still stored."""
 
     def _post(self, client, calc_id: int, artifact: dict):
@@ -497,7 +497,7 @@ class TestHessianNotStoredWarnings:
         assert warning["field"] == "calculations['freq0'].artifacts"
 
     def test_a_hess_file_sent_to_an_opt_calculation_warns(self, client, db_session, stub_store_artifact):
-        """The calculation-type gate returned before parsing, so this was silent (#744)."""
+        """The calculation-type gate returned before parsing, so this was silent."""
         calc_id = _create_calc(client, natoms=ORCA_NATOMS, calc_type="opt")
         body = self._post(client, calc_id, _artifact(ORCA_HESS, kind="hessian", filename="opt.hess"))
         assert _stored(db_session, calc_id) is None

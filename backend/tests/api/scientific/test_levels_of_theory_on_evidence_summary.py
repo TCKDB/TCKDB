@@ -6,8 +6,8 @@ workaround: go read the per-calculation level of theory under
 ``include=calculations``. This block removes that round trip, and these
 tests pin the three decisions that make it worth having.
 
-**Lists, not scalars.** Measured on the deployed database on 2026-08-24, 12
-of 34 transition-state entries carry two distinct levels of theory. They are
+**Lists, not scalars.** Many
+transition-state entries carry two distinct levels of theory. They are
 correct records — optimise and take frequencies cheaply, then one expensive
 single point at that geometry — so "the level of theory of this record" is
 not a value that exists on a third of the corpus. The justifying test below
@@ -107,8 +107,8 @@ def test_a_composite_workflow_reports_both_of_its_levels(client, db_session):
     """The case an ``evidence_summary.level_of_theory`` field could not express.
 
     ``opt`` and ``freq`` at wb97xd/def2tzvp, ``sp`` at
-    MRCI+Davidson/aug-cc-pV(T+d)Z — the exact shape of 12 of the 34 TS
-    entries on the deployed database. Both levels come back, each under the
+    MRCI+Davidson/aug-cc-pV(T+d)Z — a common shape of a TS
+    entry. Both levels come back, each under the
     calculation type it was actually run for, and no field anywhere claims
     the record has *a* level.
     """
@@ -301,7 +301,7 @@ def test_a_calculation_naming_no_level_gives_the_type_an_empty_list(
     "No calculation of this type" and "a calculation of this type exists and
     none of them names a level" are different facts. The first is an absent
     key; this is the second, and it gets the key with an empty list. There
-    are no such calculations on the deployed database today — the column is
+    may be none in a given database — the column is
     nullable, so there can be tomorrow.
     """
     _, (entry,) = _ts_entry(db_session)

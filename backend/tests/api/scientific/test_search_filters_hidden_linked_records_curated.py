@@ -1,6 +1,6 @@
 """A search filter on a linked record matches through linked evidence unless the evidence rule withholds it.
 
-ADR 0023, step 4 (matching). Under ``profile=curated`` the approved RECORD floor decides which records a search returns;
+Under ``profile=curated`` the approved RECORD floor decides which records a search returns;
 the records they LINK to (source calculations, conformer observations, dependency edges) are evidence. Evidence takes
 part in a match with its badge, whatever its review state, except ``rejected`` and ``deprecated`` evidence, which is
 withheld: it is not a candidate for the match, and no count or total moves because it exists. Under ``exploratory``

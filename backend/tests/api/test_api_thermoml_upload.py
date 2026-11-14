@@ -1,4 +1,4 @@
-"""Tests for ``POST /api/v1/uploads/thermoml`` (Phase C-E6).
+"""Tests for ``POST /api/v1/uploads/thermoml``.
 
 Lets anyone deposit a ThermoML XML document directly -- not only the NIST
 bulk archive (``backend/scripts/thermoml_cp_import.py --archive``). Exercises
@@ -96,7 +96,7 @@ def _payload_bytes(
     return body
 
 
-#: F4 fixture (Phase C-E6 review round 2): schema-valid, ``sTitle``
+#: Fixture: schema-valid, ``sTitle``
 #: present, ``sDOI`` **absent entirely** (both elements are
 #: ``minOccurs="0"`` in the XSD -- verified against
 #: ``backend/app/importers/thermoml/schema/ThermoML.xsd:121,149``).
@@ -242,8 +242,8 @@ class TestHappyPath:
     def test_every_inserted_row_is_linked_to_the_submission(
         self, client, db_session
     ) -> None:
-        """Surviving mutation from the first review round: skipping
-        ``link_record`` on the upload path went unnoticed because nothing
+        """Skipping
+        ``link_record`` on the upload path would go unnoticed because nothing
         checked ``submission_record_link`` directly (only the response
         shape and row counts were asserted).
 
@@ -297,7 +297,7 @@ class TestHappyPath:
     def test_species_entry_ref_populated_when_identity_resolves(
         self, client, db_session
     ) -> None:
-        """A surviving mutation from the first review round: with no
+        """With no
         species seeded, every disposition's ``species_entry_ref`` is
         ``None`` regardless of whether the resolver is even wired up
         correctly, so nothing in the suite proved it worked. Seeding a
@@ -360,16 +360,16 @@ class TestCodedRefusals:
     ) -> None:
         """A schema-valid, zero-payload upload must be refused *before*
         anything is written -- not just before the response claims
-        success. F1 (Phase C-E6 review round 2, BLOCKER): a probe against
-        the pre-fix code found ``external_source``/``external_source_
-        record``/``literature`` rows and a MinIO object committed for a
+        success. Otherwise
+        ``external_source``/``external_source_
+        record``/``literature`` rows and a MinIO object would be committed for a
         liquid-only upload despite the 422, with no submission wrapping
         them (and ``audit_sync_upload_failure`` then recording a *second*,
         failed submission on top).
 
         Mutation: move the ``payload_count == 0`` check in
         ``_run_pipeline`` back to after ``_get_or_create_custody`` (i.e.
-        restore the old post-hoc check) -- the ``head_artifact_object``
+        restore the post-hoc check) -- the ``head_artifact_object``
         assertion goes red because the object-store write happens again.
         The row-count assertions stay green under that mutation, since the
         refusal path rolls the flushed rows back; they pin the committed
@@ -446,12 +446,10 @@ class TestCodedRefusals:
     def test_decoded_length_check_fires_independently_of_the_encoded_one(
         self, client, monkeypatch
     ) -> None:
-        """Surviving mutation from the first review round: an encoded
-        body under ``MAX_ENCODED_ARTIFACT_LEN`` but decoding to more than
-        ``MAX_THERMOML_UPLOAD_BYTES`` bytes used to slip through, because
-        no test exercised the decoded-length check on its own -- every
-        existing oversize test tripped the *encoded* pre-check first,
-        never reaching the decoded one. ``MAX_ENCODED_ARTIFACT_LEN`` is
+        """An encoded body under ``MAX_ENCODED_ARTIFACT_LEN`` but decoding to more than
+        ``MAX_THERMOML_UPLOAD_BYTES`` bytes must be refused by the decoded-length
+        check on its own: an oversize test that trips the *encoded* pre-check
+        first never reaches the decoded one. ``MAX_ENCODED_ARTIFACT_LEN`` is
         deliberately generous relative to the decoded cap (base64
         expansion plus padding slack), so the decoded check is not
         redundant -- this proves it does real, distinct work.
@@ -481,10 +479,10 @@ class TestCodedRefusals:
     def test_doi_conflicting_with_the_files_own_sdoi_is_refused(
         self, client
     ) -> None:
-        """F3 (Phase C-E6 review round 2, HIGH): the catalogue entry for
+        """The catalogue entry for
         ``thermoml_doi_conflict`` promises ``context`` carrying
         ``declared_doi``/``file_doi`` and ``Shape.relationship`` -- the
-        route used to raise with no context at all.
+        route must raise with that context.
 
         Mutation: drop the ``context={...}`` kwarg from the
         ``CodedValidationError("thermoml_doi_conflict", ...)`` raise site
@@ -513,9 +511,9 @@ class TestCodedRefusals:
     def test_non_ascii_base64_is_refused(self, client) -> None:
         """``base64.b64decode(s, validate=True)`` raises a plain
         ``ValueError`` -- NOT ``binascii.Error`` -- for non-ASCII input
-        (Phase C-E6 review round 2, F2: measured, ``"YWJjé"`` ->
+        (``"YWJjé"`` ->
         ``ValueError('string argument should contain only ASCII
-        characters')``). Without the ``isascii()`` pre-check this fell
+        characters')``). Without the ``isascii()`` pre-check this falls
         through to the generic ``ValueError`` handler as
         ``validation_error`` instead of ``thermoml_invalid_base64``.
 
@@ -534,7 +532,7 @@ class TestCodedRefusals:
     def test_object_store_unavailable_is_refused_not_silently_degraded(
         self, client, monkeypatch
     ) -> None:
-        """F5 (Phase C-E6 review round 2, MEDIUM): when the object store is
+        """When the object store is
         down, the upload path must refuse the request -- not fall back to
         writing a custody row whose ``raw_uri`` is ``upload:<filename>``,
         a label that points at nothing (unlike the archive path's member
@@ -591,9 +589,9 @@ class TestCodedRefusals:
 
     def test_missing_idempotency_key_is_refused(self, client) -> None:
         """Unlike every sibling ``/uploads/*`` route, this one requires
-        ``Idempotency-Key``, by the C-E6 decision (2026-09-20) -- not by
-        DR-0024, which leaves the header optional in general. The route
-        declares a second, required binding of the same header, so
+        ``Idempotency-Key``; the shared dependency leaves the header optional in
+        general. The route declares a second, required binding of the same
+        header, so
         FastAPI's ordinary missing-required-header 422 fires -- the
         existing validation mechanism, not a new bespoke refusal.
 
@@ -612,11 +610,11 @@ class TestCodedRefusals:
 
 
 # ---------------------------------------------------------------------------
-# Literature resolution (Phase C-E6 review round 2, F4, MEDIUM):
-# a titled file with no sDOI used to crash the literature step with a raw
-# pydantic ValidationError, because LiteratureUploadRequest requires either
-# an identifier or both kind+title, and this importer never sets kind.
-# Fixed rule: literature resolves by DOI only (file's own sDOI, else the
+# Literature resolution:
+# a titled file with no sDOI must not crash the literature step with a raw
+# pydantic ValidationError (LiteratureUploadRequest requires either
+# an identifier or both kind+title, and this importer never sets kind).
+# The rule: literature resolves by DOI only (file's own sDOI, else the
 # caller's doi); when neither exists, no literature row is created, and no
 # manual kind+title record is fabricated on the depositor's behalf.
 # ---------------------------------------------------------------------------
@@ -675,7 +673,7 @@ class TestLiteratureResolution:
 
 # ---------------------------------------------------------------------------
 # Idempotency -- required on this route by the C-E6 decision, unlike its
-# siblings (DR-0024 itself leaves the header optional in general).
+# siblings.
 # ---------------------------------------------------------------------------
 
 

@@ -173,7 +173,7 @@ def _calc_ids(body):
 
 
 def test_lowest_energy_across_levels_of_theory_is_refused_and_names_the_levels(client, db_session):
-    """Kills: warning and returning a winner (the old behaviour)."""
+    """Kills: warning and returning a winner."""
     _species, entry = _entry(db_session)
     lot_a = make_lot(db_session, method="b3lyp", basis="6-31g")
     lot_b = make_lot(db_session, method="wb97xd", basis="def2tzvp")

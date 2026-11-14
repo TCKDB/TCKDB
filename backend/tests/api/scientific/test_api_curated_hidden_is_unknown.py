@@ -1,9 +1,9 @@
 """The shared curated 404 on a detail read: a withheld record answers exactly as a ref that names nothing.
 
 ``_enforce_handle_gate`` (``scientific_read/handles.py``) is the one function every detail-by-ref read passes through.
-Since step 7 of ADR 0023 it answers 404 for a ``rejected`` or ``deprecated`` record only; one that is merely unreviewed is served.
-It used to drop the ref from its 404 while an unknown ref's 404 echoed it, so the detail text told the two apart and
-"withheld" was an existence oracle. This pins the echo on a route that is not statmech's, by comparing whole bodies.
+Under the evidence rule it answers 404 for a ``rejected`` or ``deprecated`` record only; one that is merely unreviewed is served.
+A hidden record's 404 must not drop the ref while an unknown ref's 404 echoes it: the detail text would tell the two apart and
+"withheld" would be an existence oracle. This pins the echo on a route that is not statmech's, by comparing whole bodies.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def test_a_withheld_calculation_answers_exactly_as_an_unknown_one_ref_included(c
 
 
 def test_a_never_reviewed_calculation_is_served_under_curated(client, db_session):
-    """Step 7: below the approved floor is not withheld. The same record, with no review row, answers 200."""
+    """Below the approved floor is not withheld. The same record, with no review row, answers 200."""
     entry = make_species_entry(db_session, species=make_species(db_session, smiles="CCO"))
     unreviewed = make_calculation(db_session, type=CalculationType.opt, species_entry_id=entry.id)  # never reviewed
     got = client.get(f"{API}/calculations/{unreviewed.public_ref}", params={"profile": "curated"})

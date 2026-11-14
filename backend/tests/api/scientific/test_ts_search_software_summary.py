@@ -3,7 +3,7 @@
 Two defects this pins. The grouped query is ``SELECT DISTINCT`` without ``ORDER BY``, so the calculation-type keys of the
 map were emitted in the order rows happened to arrive, and two identical requests could differ byte for byte. And the
 query had no visibility predicate, so under the curated profile a calculation below the floor still put its type and its
-software into the map (owner decision D5).
+software into the map.
 """
 
 from __future__ import annotations
@@ -86,7 +86,7 @@ def _software(client, entry, profile):
 def test_a_calculation_below_the_curated_floor_contributes_no_software(client, db_session, login_as):
     """Kills: dropping the evidence predicate, so a WITHHELD calculation names its type and software under curated.
 
-    The calculation is rejected (ADR 0023, step 3): an unreviewed one contributes its software, as the next test pins.
+    The calculation is rejected: an unreviewed one contributes its software, as the next test pins.
     """
     entry, shown, hidden = _world(db_session)
     set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=entry.sp_calculation.id, status=RecordReviewStatus.rejected)

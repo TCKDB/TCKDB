@@ -1,16 +1,16 @@
-"""A calculation cannot name a workflow tool as its software (issue #305, item 1).
+"""A calculation cannot name a workflow tool as its software.
 
 Arkane computes thermochemistry and rate coefficients from the output of an
 electronic-structure program; it runs no calculation. ARC orchestrates such
-programs and RMG generates mechanisms; neither runs one either (owner
-decision, 2026-09-29). A calculation whose ``software_release.name`` is any
+programs and RMG generates mechanisms; neither runs one either.
+A calculation whose ``software_release.name`` is any
 of them is refused with a coded 422, and -- the
 half that matters to the vocabulary -- no ``software`` row is created for it.
 
 The analysis-software slot on a product row (thermo/statmech/kinetics,
 filled from ``analysis_software_release``) is deliberately *not* checked;
 ``test_api_bundle_thermo_and_scf_provenance.py`` still pins Arkane there,
-and moving it is an owner decision recorded in the #305 PR.
+and moving it is a separate decision.
 """
 
 from __future__ import annotations
@@ -46,15 +46,15 @@ def _software_names(db_session) -> list[str]:
         ("Arkane", "Arkane"),
         ("arkane", "Arkane"),
         ("  ARKANE ", "Arkane"),
-        # Owner decision on #305 (2026-09-29): ARC and RMG are workflow
-        # tools too. Before it, ``ARC 1.1.0`` was pinned as an accepted
-        # calculation software (test_api_software_release_version_guard).
+        # ARC and RMG are workflow tools too:
+        # ``ARC 1.1.0`` is refused as a calculation software
+        # (see test_api_software_release_version_guard).
         ("ARC", "ARC"),
         ("arc", "ARC"),
         ("RMG", "RMG"),
         (" rmg ", "RMG"),
         ("RMG-Py", "RMG"),
-        # Review finding 4: separators, case and a trailing version token.
+        # Separators, case and a trailing version token.
         ("ARC 1.1.0", "ARC"),
         ("ARC-1.1.0", "ARC"),
         ("rmgpy", "RMG"),

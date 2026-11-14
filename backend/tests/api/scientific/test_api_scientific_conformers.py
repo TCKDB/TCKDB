@@ -40,8 +40,8 @@ from tests.services.scientific_read._factories import (
 
 
 def _make_species_entry(db_session):
-    # No fixed smiles: species identity is (smiles, charge, multiplicity)
-    # (DR-0031), and these helpers are called repeatedly to build distinct
+    # No fixed smiles: species identity is (smiles, charge, multiplicity),
+    # and these helpers are called repeatedly to build distinct
     # species. make_species defaults to a unique smiles per call.
     species = make_species(db_session, inchi_key=next_inchi_key("CONF"))
     return species, make_species_entry(db_session, species)
@@ -314,7 +314,7 @@ def test_cg_detail_observations_summary_counts(client, db_session):
 def test_cg_detail_evidence_summary_with_calcs(client, db_session):
     """Rewritten from ``has_opt``/``has_freq``/``has_sp`` booleans.
 
-    Same scenario as before; the group surface now reports observation
+    Same scenario as before; the group surface reports observation
     coverage instead. ``coverage > 0`` is the exact replacement for the
     retired ``has_x is True``.
     """
@@ -374,7 +374,7 @@ def test_cg_detail_evidence_coverage_reports_partial_observation_cover(
     assert ev["calculation_count"] == 2
     assert ev["evidence_coverage"]["freq"] == 1
     assert ev["evidence_coverage"]["opt"] == 1
-    # Both kinds would have read ``true`` under the old shape; only the
+    # A boolean would read ``true`` for both kinds; only the
     # denominator distinguishes "half covered" from "fully covered".
     assert ev["evidence_coverage"]["freq"] < ev["observation_count"]
 
@@ -401,7 +401,7 @@ def test_cg_detail_evidence_coverage_complete_across_observations(
 def test_cg_detail_evidence_coverage_zero_when_no_observation_has_it(
     client, db_session
 ):
-    """Zero of five — as strong as the old ``has_x is False``."""
+    """Zero of five — as strong as a ``has_x is False`` check."""
     entry, cg, obs = _make_group_with_obs(db_session, n_observations=5)
     for o in obs:
         _attach_calc(
@@ -526,9 +526,9 @@ def test_cg_chain_count_collapses_a_three_stage_optimization(
 
     Nothing in the predicate assumes two stages: it asks each row "do you
     feed a refinement on this observation?", which is true of coarse and
-    of medium and false only of fine. The deployed database happens to
-    have no chain longer than two nodes (measured 2026-08-24); this test
-    is what stops that accident from becoming a dependency.
+    of medium and false only of fine. A chain longer than two nodes must
+    work; this test
+    stops a two-node assumption from becoming a dependency.
     """
     entry, cg, obs = _make_group_with_obs(db_session)
     coarse, medium, fine = (
@@ -561,8 +561,8 @@ def test_cg_chain_count_does_not_collapse_a_freq_on_pair(client, db_session):
     """``freq_on`` is a chain too, and must never collapse.
 
     A frequency job run on an optimised geometry is genuinely different
-    evidence from the optimisation that produced it. The deployed database
-    carries 63 both-anchored ``freq_on`` pairs; deduplicating them would be
+    evidence from the optimisation that produced it. Deduplicating
+    both-anchored ``freq_on`` pairs would be
     a scientific error, not a tidier number. Same for ``single_point_on``
     and ``scan_parent``.
 
@@ -599,7 +599,7 @@ def test_cg_chain_count_does_not_collapse_a_freq_on_pair(client, db_session):
 def test_cg_chain_count_keeps_a_half_anchored_chain(client, db_session):
     """A chain with only its refinement anchored still counts once.
 
-    43 of the deployed database's ``optimized_from`` chains are in exactly
+    Many ``optimized_from`` chains are in exactly
     this shape: the coarse stage carries no ``conformer_observation_id``
     at all. The refinement is anchored and is the terminal node, so it
     counts, and the number is ``1`` -- the same ``1`` it will be after the
@@ -639,8 +639,8 @@ def test_cg_chain_count_is_neutral_when_a_coarse_stage_is_anchored(
 ):
     """The invariant the anchoring backfill depends on.
 
-    A follow-up will anchor 43 coarse pre-optimisations that currently
-    carry no ``conformer_observation_id``. That backfill must not change
+    Anchoring a coarse pre-optimisation that currently
+    carries no ``conformer_observation_id`` must not change
     how much evidence any basin appears to have. This asserts it directly:
     read the summary, anchor the coarse stage to the same observation its
     refinement sits on, read again.
@@ -648,7 +648,7 @@ def test_cg_chain_count_is_neutral_when_a_coarse_stage_is_anchored(
     ``optimization_chain_count`` and every ``evidence_coverage`` value are
     unchanged. ``calculation_count`` and ``geometry_count`` do move, and
     that is correct -- a row and a geometry genuinely entered the basin's
-    inventory, and both are now reachable under ``include=calculations``
+    inventory, and both are reachable under ``include=calculations``
     and ``include=geometries``.
     """
     entry, cg, obs = _make_group_with_obs(db_session)
@@ -707,9 +707,9 @@ def test_cg_chain_count_does_not_collapse_across_two_observations(
 
     Collapsing here would credit one provenance row's optimisation to
     another and erase the distinction the observation table exists to
-    make. No such pair exists on the deployed database -- all 20
-    both-anchored ``optimized_from`` chains sit inside a single
-    observation (measured 2026-08-24) -- so this is a guard against a
+    make. Such a pair is rare -- both-anchored
+    ``optimized_from`` chains usually sit inside a single
+    observation -- so this is a guard against a
     future one being silently swallowed.
     """
     entry, cg, obs = _make_group_with_obs(db_session, n_observations=2)
@@ -833,9 +833,9 @@ def test_cg_detail_include_observations(client, db_session):
 
 
 # ---------------------------------------------------------------------------
-# Issue #537: the group surface's ``observations`` no longer cascades every
+# The group surface's ``observations`` does not cascade every
 # other requested token onto every embedded observation. Default shape is a
-# lean summary; ``observation_details`` opts into the full, pre-#537 shape.
+# lean summary; ``observation_details`` opts into the full shape.
 # ---------------------------------------------------------------------------
 
 
@@ -897,7 +897,7 @@ def test_cg_detail_include_observations_default_is_a_lean_summary(client, db_ses
     assert len(block) == 2
     for entry in block:
         # Lean summary: exactly one key, the same terminating shape the
-        # observation-surface sibling summary uses (issue #269/PR #535).
+        # observation-surface sibling summary uses.
         assert sorted(entry.keys()) == ["conformer_observation"]
         core = entry["conformer_observation"]
         assert set(core.keys()) >= {
@@ -957,7 +957,7 @@ def test_cg_detail_observation_details_without_observations_is_a_noop(
 def test_cg_detail_include_all_never_expands_observation_details(client, db_session):
     """``include=all`` must never buy the expensive combination as a side
     effect of asking for "everything" -- ``observation_details`` requires
-    explicit opt-in (issue #537), the same rule ``points`` follows on the
+    explicit opt-in, the same rule ``points`` follows on the
     network-kinetics surface."""
     _, cg, _obs, _calcs, _geoms = _make_group_with_full_evidence(db_session)
     body = client.get(_cg_url(cg.public_ref, include="all")).json()
@@ -970,11 +970,11 @@ def test_cg_detail_include_all_never_expands_observation_details(client, db_sess
 def test_cg_detail_include_observations_default_measured_response_size(
     client, db_session
 ):
-    """Regression pin for issue #537's measured claim: with several
+    """Regression pin: with several
     observations each carrying their own evidence, requesting the full
     combination WITHOUT ``observation_details`` must not scale with basin
-    size the way it did before this fix. Six observations, matching PR
-    #535's own fixture size for the sibling case this borrows its shape
+    size. Six observations, matching the fixture size of
+    the sibling case this borrows its shape
     from."""
     _, cg, obs, _calcs, _geoms = _make_group_with_full_evidence(
         db_session, n_observations=6
@@ -1095,7 +1095,7 @@ def test_cg_detail_fingerprint_absent_by_default(client, db_session):
 def test_cg_detail_include_fingerprints_returns_typed_basin_shape(
     client, db_session
 ):
-    """The measured 3-group species' first group, verbatim. Asserts the
+    """A 3-group species' first group, verbatim. Asserts the
     basin definition (bin + bin width) and the representative's own angle
     are both present, each rotor keeps its own key, and
     ``fingerprint_hash`` never reaches the response."""
@@ -1141,11 +1141,11 @@ def test_cg_detail_include_fingerprints_zero_rotor_group_serves_object_not_null(
     ``bin_width_deg`` but an EMPTY ``canonical_rotor_keys`` -- exactly
     what ``TorsionFingerprint.to_dict()`` writes for any molecule
     ``resolve_atom_mapping`` mapped and found zero rotatable bonds in
-    (37 of 66 measured groups in the live archive) -- must serve
+    (a rigid group) -- must serve
     ``fingerprint`` as a real object (``rotor_count: 0``, ``torsions: []``),
-    never ``null``. Before the fix this endpoint answered ``null`` here,
+    never ``null``: ``null`` here would be
     indistinguishable on the wire from a group that never got a
-    fingerprint computed at all, which is what silently kept the
+    fingerprint computed at all, which would silently keep the
     frontend's positive "no rotatable bonds" statement from ever
     rendering against real data. The frontend's own test fixtures
     (``ConformerSelector.test.tsx``, ``conformerFingerprint.test.ts``)
@@ -1513,20 +1513,18 @@ def test_co_detail_include_fingerprints_populates_parent_group(
 def test_co_detail_include_observations_returns_the_basin(client, db_session):
     """``include=observations`` returns the sibling observations, this one included.
 
-    This test asserted the opposite — that the token was legal and produced
-    no field — on the reading that the record already *is* an observation
-    so there was nothing for the token to say. There was: which other
-    observations share the basin, which is the one question an
+    The token must produce a field: which other observations share the basin is
+    the one question an
     observation-grained record cannot answer from itself. A token that is
     accepted, echoed, and produces nothing is indistinguishable to a client
     from one that failed silently.
 
     Each sibling is a lean ref+review projection
-    (``ConformerObservationSiblingSummary``), not a full nested record —
-    see issue #269. That is what terminates the recursion (there is no
+    (``ConformerObservationSiblingSummary``), not a full nested record.
+    That is what terminates the recursion (there is no
     ``observations`` key on a sibling to recurse into at all) *and* what
     keeps this response from scaling with basin size the way the full
-    nested-record shape used to.
+    nested-record shape would.
     """
     _, _, obs = _make_group_with_obs(db_session, n_observations=3)
     expected = sorted(o.public_ref for o in obs)
@@ -1700,8 +1698,8 @@ def test_co_detail_evidence_summary_keeps_booleans(client, db_session):
 
 
 # ---------------------------------------------------------------------------
-# available_sections (issue #268 — has_observations / has_selections were
-# constant rather than measured on this surface)
+# available_sections (has_observations / has_selections are computed,
+# not constant, on this surface)
 # ---------------------------------------------------------------------------
 
 
@@ -1766,7 +1764,7 @@ def test_co_detail_available_sections_all_five_flags_measured(client, db_session
     """One fixture where every one of the five flags is independently true,
     cross-checked against the include block it corresponds to — the same
     audit the group surface's own tests run, extended to the two flags
-    that used to be constant here."""
+    that must not be constant here."""
     entry, cg, obs = _make_group_with_obs(db_session, n_observations=2)
     attach_conformer_selection(
         db_session,

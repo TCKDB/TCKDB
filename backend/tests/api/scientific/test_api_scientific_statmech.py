@@ -282,7 +282,7 @@ def test_detail_sp_from_a_dedicated_single_point_is_not_flagged(
     """``has_sp_calculation`` on its own stopped being a complete answer.
 
     The upload layer accepts an ``opt`` under the ``sp`` role, so a reader
-    seeing ``has_sp_calculation: true`` can no longer tell whether a
+    seeing ``has_sp_calculation: true`` cannot tell whether a
     dedicated single point was ever run. These two tests are the pair that
     makes the distinction visible without asking for
     ``include=source_calculations``.
@@ -387,7 +387,7 @@ def test_detail_include_torsions(client, db_session):
 
 def test_detail_include_electronic_levels(client, db_session):
     """``include=electronic_levels`` surfaces the ordered low-lying
-    electronic states (DR-0033 q_elec) that are otherwise written but
+    electronic states that are otherwise written but
     unreadable. OH-like: ground ²Π + spin-orbit-split excited state."""
     _, _, sm = _make_statmech(db_session)
     # Insert the excited state FIRST (out of level_index order) so the
@@ -431,9 +431,9 @@ def test_detail_include_all_surfaces_electronic_levels(client, db_session):
 def test_detail_electronic_levels_absent_when_not_included(client, db_session):
     """Without the token the block is absent even when levels exist.
 
-    This record has an electronic level. Under the old shape the default
-    response said ``electronic_levels: null``, which is what "this species
-    has no electronic levels" also said — the two facts shared one value
+    This record has an electronic level. A default
+    response saying ``electronic_levels: null`` would say what "this species
+    has no electronic levels" says — the two facts would share one value
     and the wrong one is the one a reader reaches for.
     """
     _, _, sm = _make_statmech(db_session)
@@ -1173,17 +1173,17 @@ def test_search_include_all_does_not_restore_internal_ids(client, db_session):
 def test_search_accepts_trust_and_keeps_it_out_of_all(client, db_session):
     """Statmech search accepts ``include=trust``; ``include=all`` does not.
 
-    This test asserted a 422 until the field it guarded was noticed to be
+    A 422 here would leave the field it guards
     unreachable. ``ScientificStatmechRecord`` declares ``trust`` and this
-    route has always stripped it — correctly, at the right scope — so the
-    key was **permanently absent** and nothing in the sixteen top-level
-    keys of a search record hinted that a verdict existed for it. One did:
-    ``include=assessments`` returned ``computed_statmech`` on the same
+    route strips it — correctly, at the right scope — so the
+    key would be **permanently absent** and nothing in the sixteen top-level
+    keys of a search record hints that a verdict exists for it. One does:
+    ``include=assessments`` returns ``computed_statmech`` on the same
     record, one token away.
 
-    That is why the fix here was the vocabulary and nothing else. The strip
-    call in ``routes/scientific/statmech.py`` is untouched; once the token
-    became legal, the unconditional strip became conditional by itself.
+    So the vocabulary is all that is needed. The strip
+    call in ``routes/scientific/statmech.py`` is conditional once the token
+    is legal.
 
     ``trust`` remains internal-tokenized, so ``include=all`` still never
     expands to it: the evaluator's 19-entry eager-load chain is a cost a

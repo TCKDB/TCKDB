@@ -2,9 +2,9 @@
 
 ``GET /scientific/calculations/{ref}`` answers 404 for a calculation below ``approved`` under the curated
 profile. The statmech source-calculations block (ref, role, type, review status) and the frequency pointer
-(``source_freq_calculation_refs`` / ``_ids``) used to list such calculations anyway.
+(``source_freq_calculation_refs`` / ``_ids``) must not list such calculations.
 
-ADR 0023: only a calculation the profile WITHHOLDS (rejected or deprecated) is left out of those blocks. One that is
+only a calculation the profile WITHHOLDS (rejected or deprecated) is left out of those blocks. One that is
 merely below the floor (not reviewed, under review) is linked evidence of the approved statmech and is listed with its
 review badge; each hiding test below runs over a rejected calculation and has an unreviewed twin.
 
@@ -67,7 +67,7 @@ def _src_refs(rec):
 
 
 def test_curated_names_an_unreviewed_calculation_with_its_badge(client, db_session):
-    """ADR 0023: the unreviewed freq calculation is linked evidence of the approved statmech. Listed, badged, and the
+    """The unreviewed freq calculation is linked evidence of the approved statmech. Listed, badged, and the
     frequency pointer names it. Kills: the earlier rule, which left it out of both blocks."""
     _, sm, shown, hidden = _world(db_session)
     rec = _record(client, sm, "curated")
@@ -189,7 +189,7 @@ def _torsion_scan(client, sm, profile):
 
 
 def test_curated_names_an_unreviewed_scan_calculation(client, db_session):
-    """ADR 0023: an unreviewed scan calculation is linked evidence of the torsion; it is named."""
+    """An unreviewed scan calculation is linked evidence of the torsion; it is named."""
     sm, scan = _torsion_world(db_session, scan_status=None)
     assert _torsion_scan(client, sm, "curated")["source_scan_calculation_ref"] == scan.public_ref
 
@@ -213,7 +213,7 @@ def test_curated_names_an_approved_scan_calculation(client, db_session):
 
 
 def test_no_calculation_statement_when_no_naming_block_is_requested(client, db_session):
-    """Kills: a SEPARATE review lookup for the source calculations on every record. Since step 3 (ADR 0023) the counts and
+    """Kills: a SEPARATE review lookup for the source calculations on every record. the counts and
     levels of every read follow the evidence rule, so the verdict is read inside the statement that loads the links
     (``statmech_source_calculation``, ``statmech_torsion`` for the scan); no statement of its own may be issued for it, or a page of records pays one each."""
     from sqlalchemy import event

@@ -1,16 +1,16 @@
 """Auth-gated ``submission_ref`` on ``GET /api/v1/scientific/calculations/{ref}``.
 
-``record.provenance.submission_ref`` used to be served unconditionally —
-the only thing hiding the linkage was the separate Phase D internal-id
-policy, which only ever covered ``submission_id`` (an integer, matched
+``record.provenance.submission_ref`` is hidden from anonymous callers by its own auth gate.
+The internal-id
+policy covers only ``submission_id`` (an integer, matched
 by the ``_id`` suffix rule), never ``submission_ref`` (a string, matched
-by nothing). This file pins the fix: the ref is now visible only to a
+by nothing). This file pins the gate: the ref is visible only to a
 caller who authenticates, via ``get_optional_current_user``
 (``app/api/deps.py``) and ``apply_scientific_read_visibility``
 (``app/services/scientific_read/auth_visibility.py``).
 
-The geometry-detail endpoint gained the identical gate at the same
-time; its dedicated coverage (including the identity block) lives in
+The geometry-detail endpoint has the identical gate;
+its dedicated coverage (including the identity block) lives in
 ``test_api_geometry_read.py``. This file exercises the same auth
 dependency from the calculation side so both call sites of
 ``get_optional_current_user`` are pinned independently.

@@ -39,7 +39,7 @@ def test_get_returns_200_with_envelope(client, db_session):
     body = resp.json()
     assert len(body["records"]) == 1
     rec = body["records"][0]
-    # Phase D: identify records by public ref in default responses.
+    # identify records by public ref in default responses.
     assert rec["reaction"]["reaction_ref"] == chem.public_ref
     assert rec["reaction"]["reaction_entry_ref"] == entry.public_ref
     assert rec["kinetics"]["kinetics_ref"] == k.public_ref
@@ -235,7 +235,7 @@ def test_non_ts_backed_provenance_nulls_in_response(client, db_session):
     )
     body = resp.json()
     p = body["records"][0]["kinetics"]["provenance"]
-    # Phase D: integer TS-chain ids are hidden in the default response.
+    # integer TS-chain ids are hidden in the default response.
     # The corresponding ref siblings remain visible and are null for
     # non-TS-backed kinetics.
     assert p["transition_state_entry_ref"] is None

@@ -648,7 +648,7 @@ def test_internal_ids_when_allowed(client, db_session, allow_internal_ids):
 
 
 def test_artifact_ref_is_populated_and_matches_prefix(client, db_session):
-    """Regression: the search projection used to hard-code artifact_ref=None."""
+    """Regression: the search projection populates artifact_ref, not a hard-coded None."""
     import re
 
     _, _, calc = _make_species_owned_calc(db_session)

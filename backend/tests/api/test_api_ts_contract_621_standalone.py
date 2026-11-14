@@ -1,16 +1,16 @@
-"""Standalone transition-state route gaps (#621): scans, corrections, atom map.
+"""Standalone transition-state route gaps: scans, corrections, atom map.
 
 The standalone ``POST /api/v1/uploads/transition-states`` route lagged the
 reaction bundle in three ways. Each is closed here and read back over HTTP:
 
 * rotor **scans** were not an allowed additional calculation;
 * **applied energy corrections** had no field;
-* an **atom map** (ADR 0011) had no field, and could not have one, because the
+* an **atom map** had no field, and could not have one, because the
   payload described its participants by identity alone and a map counts its
-  indices into a geometry. A participant may now carry a ``key`` and a
+  indices into a geometry. A participant may carry a ``key`` and a
   ``geometry``, and the request a ``geometry_key`` for the saddle point.
 
-The IRC-direction half of the issue is in
+The IRC-direction half is in
 ``test_api_ts_contract_621_irc.py``; the evidence kinds are in
 ``test_api_ts_contract_621.py``.
 """

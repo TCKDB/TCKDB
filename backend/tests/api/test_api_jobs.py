@@ -88,7 +88,7 @@ def test_concurrent_identical_enqueue_creates_one_job_and_submission(db_engine, 
         try:
             with TestClient(app) as local_client:
                 response = local_client.post("/api/v1/jobs/transport", json=payload, headers=headers)
-                # The loser can now learn it lost in either of two places, and
+                # The loser can learn it lost in either of two places, and
                 # both mean the same thing.
                 #
                 # 1. In the *response*. The idempotency receipt is written
@@ -99,14 +99,13 @@ def test_concurrent_identical_enqueue_creates_one_job_and_submission(db_engine, 
                 #    override does not, so the rollback is explicit here.
                 #    Without it the loser's job would commit and there would
                 #    be two.
-                # 2. At *commit*, as before. Kept because it is still reachable
+                # 2. At *commit*. Kept because it is still reachable
                 #    when the racers interleave such that the flush succeeds
                 #    and the conflict only materialises later.
                 #
-                # Detection moving earlier is the point of the savepoint
-                # change: previously the violation surfaced after the response
-                # had been sent, so the loser was told 202 and its job then
-                # vanished on rollback.
+                # Detecting the conflict early (at the savepoint) matters: a
+                # violation surfacing after the response has been sent would
+                # tell the loser 202 and its job would then vanish on rollback.
                 if response.status_code == 409:
                     session.rollback()
                     return 409, None
@@ -136,8 +135,8 @@ def test_concurrent_identical_enqueue_creates_one_job_and_submission(db_engine, 
         # The contract is not "one racer must lose", it is "one job and one
         # submission exist, and every success names the same job". Asserting a
         # single interleaving made this test fail under load without anything
-        # being wrong. Both arms are checked below, so this is stricter than
-        # the old assertion, not looser.
+        # being wrong. Both arms are checked below, so this is strict
+        # rather than loose.
         statuses = sorted(status for status, _job_id in outcomes)
         assert statuses in ([202, 409], [202, 202]), outcomes
         job_ids = [job_id for status, job_id in outcomes if status == 202]

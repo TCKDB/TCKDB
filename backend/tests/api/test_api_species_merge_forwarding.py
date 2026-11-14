@@ -1,4 +1,4 @@
-"""Merged-away species and entries are kept and forward (DR-0038), seen from the API.
+"""Merged-away species and entries are kept and forward, seen from the API.
 
 A row that was merged into another keeps its public ref and its history; a ref to it resolves one hop to the survivor
 and the response says so; listings and searches show the live row only; an upload resolves to the survivor; the database
@@ -407,7 +407,7 @@ def test_an_allene_dependent_deposit_is_accepted_and_the_warning_says_it_is_not_
 
 
 def test_the_centre_between_two_allenes_is_not_a_not_represented_case(client: TestClient) -> None:
-    """The plain class is read (part 3 of #832): with no data it is an unresolved ``?`` that data could settle."""
+    """The plain class is read: with no data it is an unresolved ``?`` that data could settle."""
 
     warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body("CC=C=CC(C)C=C=CC")))
     assert _NOT_REPRESENTED not in warnings
@@ -429,7 +429,7 @@ def test_a_six_ring_allene_deposit_asks_for_a_geometry_or_label_like_any_allene(
 def test_a_standard_isotope_hydrogen_in_an_allene_deposit_is_read(client: TestClient, db_session) -> None:
     """``[1H]`` is cleared from the identity molecule; the reader once crashed (500) on the mismatch.
 
-    The stored descriptor is asserted too: with the raw parse not clearing the label the text no longer matches the
+    The stored descriptor is asserted too: with the raw parse not clearing the label the text does not match the
     molecule and the axis would fall back to ``?``.
     """
 

@@ -24,8 +24,8 @@ Every refusal here is paired with a test that sends the same payload
 that matters most. Building an upload payload that is wrong in exactly
 one way is the whole difficulty: a bundle with two faults is refused for
 whichever validator runs first, and a test written against the wrong one
-passes forever while proving nothing about the code in its name. PR #181
-sharpened this — every geometry attached to a calculation must now be
+passes forever while proving nothing about the code in its name.
+Every geometry attached to a calculation must be
 made of the atoms of the subject it is filed under — so a payload
 assembled carelessly is refused for composition and never reaches the
 rule under test. The accept-half is what detects that, and each fixture
@@ -34,20 +34,17 @@ docstring states what makes the payload valid apart from the one fault.
 Two corrections to the triage, recorded where the test is
 ---------------------------------------------------------
 * Tier E's row says to provoke ``artifact_integrity_failed`` by
-  corrupting a stored object and **downloading** it. When this file was
-  written that was measurably false — the download route caught
-  ``ArtifactIntegrityError`` itself and re-raised a bare
-  ``HTTPException(502)``, so the app-level handler that mints the code
-  never ran and a client received ``http_502``. #212 repaired it: the
-  route still records the custody break ADR 0014 requires, then re-raises
-  the exception unchanged. The triage row is now right, and both paths
-  are asserted here — the upload one at
+  corrupting a stored object and **downloading** it. A route that caught
+  ``ArtifactIntegrityError`` itself and re-raised a bare ``HTTPException(502)``
+  would stop the app-level handler that mints the code from running, and a
+  client would receive ``http_502``. The route records the custody break the
+  custody-break rule requires, then re-raises the exception unchanged. Both
+  paths are asserted here -- the upload one at
   ``test_uploading_over_a_corrupt_content_addressed_object_is_refused``,
   the download one at
   ``test_the_download_route_publishes_the_same_code_for_the_same_break``.
-  The sweep that came with #212 found the sibling ``except
-  ArtifactStorageUnavailable`` in the same function doing the same thing
-  at 503, which no task had noticed; it is asserted here too.
+  The sibling ``except ArtifactStorageUnavailable`` in the same function must
+  not do the same thing at 503; it is asserted here too.
 * Tier D calls ``composed_search_candidate_limit_exceeded`` and
   ``composed_search_pagination_changed`` "upload payloads". They are
   composed *reads*; the tier heading is loose, the anchors are right.
@@ -115,7 +112,7 @@ def _assert_number_absent_from_body(
 ) -> None:
     """No integer anywhere in the published body equals *measured*.
 
-    The disclosure line on ``app.api.code_catalogue.Shape`` (2026-08-18):
+    The disclosure line on ``app.api.code_catalogue.Shape``:
     a cap refusal publishes the threshold and never the measured value
     that crossed it, where that value describes the corpus rather than
     the caller's own request. A count of matching records, or of rows a
@@ -125,8 +122,8 @@ def _assert_number_absent_from_body(
     leaks it once per query rather than once.
 
     Asserted over the **whole serialized body**, not just ``context``.
-    ``detail`` is published too and carried these counts until the caps
-    were reclassified; an omission from one and not the other would be
+    ``detail`` is published too and carries these counts
+    so an omission from one and not the other would be
     decorative.
 
     Integers are extracted as literals rather than substring-matched, so
@@ -158,7 +155,7 @@ def test_the_unmodified_bundle_and_its_correct_map_are_accepted(client) -> None:
 
     Without it, all three refusals would still pass if the shared fixture
     had drifted into being invalid for an unrelated reason — a wrong
-    charge, a geometry that no longer matches its SMILES under #181's
+    charge, a geometry that does not match its SMILES under the
     composition rule — and every computed-reaction upload were answering
     422 regardless of the map.
     """
@@ -170,7 +167,7 @@ def test_an_atom_map_on_a_reaction_with_no_transition_state_is_refused(
 ) -> None:
     """A map with nothing to point at.
 
-    Both legs of an atom map run toward the saddle point (ADR 0011), so a
+    Both legs of an atom map run toward the saddle point, so a
     barrierless channel cannot carry one. The bundle is otherwise the
     accepted one and the map is the *correct* map — only the transition
     state is removed — which is what makes this the map's refusal and not
@@ -183,7 +180,6 @@ def test_an_atom_map_on_a_reaction_with_no_transition_state_is_refused(
         "atom_map_without_transition_state",
     )
     # The structured half names the field, and carries no row id
-    # (DR-0028 Req. 2).
     assert body["context"] == {"field_path": "atom_map"}
 
 
@@ -279,7 +275,7 @@ def test_a_participant_geometry_the_map_cannot_count(client) -> None:
     that cannot be counted cannot have a map checked against it. The map
     itself is the correct one and every other geometry is untouched;
     only methyl's header digit changes, and the atoms it lists are still
-    methyl's, so #181's composition rule has nothing to object to.
+    methyl's, so the composition rule has nothing to object to.
     """
     broken_ch3 = "5\n" + _XYZ_CH3.split("\n", 1)[1]
     species = [
@@ -347,7 +343,7 @@ def test_a_rate_coefficient_for_a_four_body_reaction_has_no_a_units(client) -> N
     that guard this endpoint have nothing to say, and the A-factor and
     activation energy are ordinary numbers. The only thing wrong is that
     a fourth-order rate constant has no declared dimensionality. The direction is stated
-    forward: with none stated the 2-product side could carry the units (#695).
+    forward: with none stated the 2-product side could carry the units.
     """
     body = _assert_code(
         client.post(
@@ -468,7 +464,7 @@ def test_a_composed_search_refuses_a_candidate_set_it_cannot_traverse(
         "composed_search_candidate_limit_exceeded",
     )
 
-    # Since 2026-08-18 this is a Shape.relationship code, and it is one of
+    # This is a Shape.relationship code, and it is one of
     # the four that publish the threshold and withhold the measurement.
     #
     # ``max_traversable`` is ``public_max_offset + page_size`` -- TCKDB's
@@ -485,7 +481,7 @@ def test_a_composed_search_refuses_a_candidate_set_it_cannot_traverse(
     # ``docs/specs/public_identifier_policy.md`` rejects integer primary
     # keys for. Two pentanes are seeded, so 2 is the measured value; the
     # assertion is over the whole serialized body because ``detail`` is
-    # published too and carried the count until this change.
+    # published too and carries the count.
     _assert_number_absent_from_body(body, 2, "how many records matched")
 
 
@@ -594,7 +590,7 @@ def test_an_all_reactions_export_over_its_cap_is_refused(
     route, so the count the refusal measures is a count of real rows. The
     request is the same one the accept-half makes.
 
-    Since 2026-08-18 this is a ``Shape.relationship`` code that publishes
+    This is a ``Shape.relationship`` code that publishes
     its cap, and it is the sharpest of the four withheld measurements:
     ``all=true`` is by construction the one export request whose size the
     caller did not state, and the number it crosses is an unfiltered
@@ -814,10 +810,9 @@ def test_uploading_over_a_corrupt_content_addressed_object_is_refused(
     )
     # The public body says a subsystem failed and stops there: no digest,
     # no row id, nothing that would let a caller probe stored content
-    # (DR-0028 Req. 2).
     assert body["context"] == {}
 
-    # A log is not a record (ADR 0014). The break outlives the request
+    # A log is not a record. The break outlives the request
     # that discovered it, keyed by the digest rather than by any row.
     events = db_session.scalars(
         select(ArtifactIntegrityEvent).where(
@@ -910,16 +905,11 @@ def test_the_download_route_publishes_the_same_code_for_the_same_break(
 ) -> None:
     """One condition, one contract, whichever route noticed the break.
 
-    This is the rewrite the previous version of this test asked for. It
-    used to assert ``http_502`` — what the route really answered — and
-    said in its own docstring that the repair was to let the typed
-    exception reach the app-level handler, and that it should then be
-    rewritten to assert ``artifact_integrity_failed`` rather than
-    deleted. The route now records the custody break and re-raises the
-    exception unchanged, so the handler in ``app.api.errors`` mints the
-    code, exactly as it does on the upload path.
+    The route records the custody break and re-raises the exception unchanged,
+    so the handler in ``app.api.errors`` mints ``artifact_integrity_failed``,
+    exactly as it does on the upload path.
 
-    The property being kept is the one the old docstring named: a client
+    The property: a client
     must be able to tell an integrity break from a generic gateway
     failure. Losing it still costs a red test — this one — because
     ``http_502`` is what any bare ``HTTPException(502)`` here would
@@ -927,7 +917,7 @@ def test_the_download_route_publishes_the_same_code_for_the_same_break(
 
     The custody record is asserted below and not merely assumed. Letting
     the exception through is only correct if the row is still written
-    first; a repair that traded ADR 0014's durable record for a nicer
+    first; a repair that traded the custody-break rule's durable record for a nicer
     code would be a worse contract, not a better one.
     """
     artifact = _an_approved_artifact(db_session)
@@ -942,12 +932,12 @@ def test_the_download_route_publishes_the_same_code_for_the_same_break(
         "artifact_integrity_failed",
         status=502,
     )
-    # DR-0028 Req. 2 — a subsystem is named and nothing else. No digest,
+    # a subsystem is named and nothing else. No digest,
     # no artifact id, nothing a caller could use to probe stored content.
     assert body["context"] == {}, body
     assert not id_in_text(artifact.id, str(body.get("detail"))), body
 
-    # ADR 0014: the break outlives the request that discovered it. This is
+    # the break outlives the request that discovered it. This is
     # the half that must survive the code change.
     events = db_session.scalars(
         select(ArtifactIntegrityEvent).where(
@@ -997,16 +987,15 @@ def test_a_missing_object_names_the_storage_subsystem_too(
     ``http_503`` where the upload path answers
     ``artifact_storage_unavailable``.
 
-    Two typed exceptions, one function, one defect: fixing only the one
-    with a task number would have left the other exactly as it was.
+    Two typed exceptions, one function, one defect: fixing only one would leave
+    the other exactly as it was.
 
-    The code then moved once more. #226 found that naming the subsystem
-    was necessary and not sufficient: ``artifact_storage_unavailable``
-    was still carrying both "the store did not answer" and this — "the
-    store answered, and the object is not at its key" — which need
-    opposite retry advice. This case is now ``artifact_object_missing``
-    at 502. The provocation is unchanged and is the strong one: a real
-    empty store, reached through the wire, not a patched loader.
+    Naming the subsystem is necessary and not sufficient:
+    ``artifact_storage_unavailable`` would carry both "the store did not answer"
+    and this -- "the store answered, and the object is not at its key" -- which
+    need opposite retry advice. This case is ``artifact_object_missing`` at 502.
+    The provocation is the strong one: a real empty store, reached through the
+    wire, not a patched loader.
     """
     artifact = _an_approved_artifact(db_session)
 

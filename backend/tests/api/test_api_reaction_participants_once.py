@@ -1,8 +1,8 @@
 """A reaction's participant rows list each distinct species entry ONCE per side, carrying its coefficient.
 
-``H + H -> H2`` has two structure-participant rows for the one H entry. The served rows used to be one per
-occurrence while each also carried the species-level coefficient (2), so a consumer that rebuilt the equation from
-the rows read ``2 H + 2 H -> H2`` (4 H). Each distinct entry now appears once with its own count; the served
+``H + H -> H2`` has two structure-participant rows for the one H entry. The served rows must not be one per
+occurrence while each also carries the species-level coefficient (2), so a consumer that rebuilds the equation from
+the rows would read ``2 H + 2 H -> H2`` (4 H). Each distinct entry appears once with its own count; the served
 ``equation`` string keeps the written form (``[H] + [H] -> [H][H]``).
 """
 

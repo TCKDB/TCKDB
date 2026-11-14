@@ -1,9 +1,8 @@
 """CHEMKIN export must not silently publish transcribed rates as its own.
 
-ADR 0010 gave ``network_solve`` a ``kind`` token so a consumer can tell rates
+the reported-solve rule gave ``network_solve`` a ``kind`` token so a consumer can tell rates
 this database derived (``computed``) from rates read out of a publication
-(``reported``). Every JSON read surface carries it, and PR #92 closed the last
-one that did not.
+(``reported``). Every JSON read surface carries it.
 
 A mechanism file cannot carry it the same way. CHEMKIN has no field for
 provenance — only ``!`` comments — so the moment network kinetics are added to
@@ -29,7 +28,7 @@ import pytest
 
 _SERIALIZERS = (
     Path(__file__).parents[3] / "app" / "services" / "scientific_read" / "chemkin_serialize.py",
-    # The selected network export writes network kinetics into CHEMKIN, so it must disclose a reported solve (ADR 0010).
+    # The selected network export writes network kinetics into CHEMKIN, so it must disclose a reported solve.
     Path(__file__).parents[3] / "app" / "services" / "network_selection" / "export.py",
 )
 
@@ -48,7 +47,7 @@ _NETWORK_KINETICS_MARKERS = (
 # Deliberately NOT a bare ``kind``. The serializer already uses ``model_kind``
 # nine times and ``kind`` four times for classic kinetics, so a loose marker
 # matches trivially and the guard passes while the hole is wide open -- which
-# is exactly what the first version of this test did.
+# is exactly the failure a careless version of this test would show.
 _ORIGIN_MARKERS = (
     "NetworkSolveKind",
     "network_solve_kind",

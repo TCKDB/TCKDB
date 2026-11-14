@@ -85,9 +85,8 @@ class TestDirectUploadsCreateNotReviewedSubmissions:
     ``not_reviewed`` — the same reviewable semantics as the hosted bundle
     path, differing only by payload shape.
 
-    ``not_reviewed``, because nobody has looked. These assertions used to read
-    ``under_review``, which claimed a reviewer on a row whose ``reviewed_by``
-    the very next line asserts is ``None``.
+    ``not_reviewed``, because nobody has looked: ``under_review`` would claim a
+    reviewer on a row whose ``reviewed_by`` is ``None``.
     """
 
     def test_conformer_upload_creates_submission_and_not_reviewed_rows(
@@ -463,7 +462,7 @@ class TestRecordReviewApi:
 
         ``record_id`` alone cannot be pasted into a URL or looked up
         through any public route, so a reviewer holding only that has
-        nothing to act on. This is the same gap #479 closed on the
+        nothing to act on. This is the same gap as on the
         machine-review inspection surface.
         """
         thermo_id = self._seed_thermo(client)
@@ -525,7 +524,7 @@ class TestRecordReviewApi:
         """Unnameable is not a reason to hide the work.
 
         Two records cannot produce a ref: ``applied_energy_correction``
-        has no ``public_ref`` column at all (task #253), and a row may
+        has no ``public_ref`` column at all, and a row may
         point at a record that no longer exists. Either way the review is
         outstanding and a queue that quietly drops it understates the
         backlog -- the one thing a backlog must not do.
@@ -676,7 +675,7 @@ class TestRecordReviewApi:
 
 
 class TestReviewRowSaysWhereItsRecordCanBeSeen:
-    """#262: 385 of 1,299 queue rows could not be opened, and it was the wrong
+    """385 of 1,299 queue rows could not be opened, and it was the wrong
     385 -- the thermochemistry, kinetics and energy corrections the archive
     exists to publish.
 
@@ -718,7 +717,7 @@ class TestReviewRowSaysWhereItsRecordCanBeSeen:
         assert body["container_ref"] == entry.public_ref
 
     def test_the_container_is_a_ref_and_never_a_row_id(self, client, db_session):
-        """DR-0028 Req 2: no internal row id in what a reader is shown.
+        """No internal row id in what a reader is shown.
 
         The shortcut this rules out is real and tempting -- the parent's id is
         already in hand after the first query, and returning it would save the
@@ -771,7 +770,7 @@ class TestReviewRowSaysWhereItsRecordCanBeSeen:
 
         ``applied_energy_correction`` has no ``public_ref`` column, so the
         queue renders it as "applied_energy_correction cannot be named".
-        Giving that table a ref is task #253 and is NOT needed here: "a
+        Giving that table a ref is separate work and is NOT needed here: "a
         correction on species entry spc_..." is the more useful sentence
         anyway, because it says what the correction is attached to.
         """
@@ -796,7 +795,7 @@ class TestReviewRowSaysWhereItsRecordCanBeSeen:
 
         # Still unnameable -- this change does not invent a ref for it.
         assert body["record_public_ref"] is None
-        # But no longer unreachable.
+        # But reachable.
         assert body["container_type"] == "species_entry"
         assert body["container_ref"] == entry.public_ref
 
@@ -848,7 +847,7 @@ class TestReviewRowSaysWhereItsRecordCanBeSeen:
         assert rows[first]["container_ref"] != rows[second.id]["container_ref"]
 
     def test_a_longer_page_does_not_cost_more_queries(self, login_as, _api_curator_user, client, db_session):
-        """The bulk resolve, measured at the route rather than the service.
+        """The bulk resolve, at the route rather than the service.
 
         Counted as "the same number of statements for 2 rows as for 10",
         which is the property that matters and is insensitive to however many
@@ -861,7 +860,7 @@ class TestReviewRowSaysWhereItsRecordCanBeSeen:
             for i in range(n):
                 # A DIFFERENT species entry per row, which is how a real page
                 # looks and is what makes this count meaningful. Seeded under
-                # one shared parent -- as this test originally was -- the
+                # one shared parent, the
                 # whole page has a single distinct container, and a resolver
                 # that queried once per container would cost the same for 2
                 # rows as for 10 and pass unchanged.
@@ -999,7 +998,7 @@ class TestReviewRowSaysWhereItsRecordCanBeSeen:
 
 
 class TestReviewQueueSubjectsApi:
-    """``GET /api/v1/record-reviews/queue`` (task #269).
+    """``GET /api/v1/record-reviews/queue``.
 
     The flat ``GET /api/v1/record-reviews`` list is unchanged and still
     tested above; this is the new subject-grouped read the redesigned
@@ -1092,13 +1091,11 @@ class TestReviewQueueSubjectsApi:
             s for s in body["subjects"] if s["subject_ref"] == entry.public_ref
         )
         assert subject["chemistry"]["formula"] == "H2O"
-        # NOT `assert "cannot be named" not in json.dumps(body)` -- review
-        # of #492 caught that assertion as vacuous: that phrase was never
-        # emitted by any backend response (it is frontend copy, deleted
-        # from `ReviewQueuePage.tsx` in the same PR), so the assertion
-        # passed against main, unmodified, before this endpoint existed.
-        # An assertion that cannot fail asserts nothing; the formula check
-        # above is the real content of this test.
+        # NOT `assert "cannot be named" not in json.dumps(body)`: that phrase is
+        # never emitted by any backend response (it is frontend copy), so the
+        # assertion would pass against an unmodified main. An assertion that
+        # cannot fail asserts nothing; the formula check above is the real
+        # content of this test.
 
     def test_the_header_totals_are_honest_counts_not_estimates(
         self, client, db_session,
@@ -1108,11 +1105,11 @@ class TestReviewQueueSubjectsApi:
         """`subject_total`/`record_total` are the server's OWN count over the
         whole filtered backlog -- not derived from what is shown on this page.
 
-        Review of #492 caught the previous version of this test as unable to
-        fail: it only asserted ``total >= len(page)``, which
+        The totals must EQUAL the true counts, not merely satisfy
+        ``total >= len(page)``, which
         ``total = len(page)`` (a route that quietly forgot the whole-backlog
         count and fell back to counting what it happened to return) also
-        satisfies. This version seeds MORE subjects and records than the
+        satisfies. This test seeds MORE subjects and records than the
         page's `limit` returns and asserts the totals EQUAL the true seeded
         counts -- a route computing `len(subjects_on_this_page)` instead
         would report 1, not 3.
@@ -1207,14 +1204,14 @@ class TestReviewQueueSubjectsApi:
         login_as,
         _api_curator_user,
     ):
-        """Review of #492, mutation 2: a build that served ``refs={}``/
+        """A build that served ``refs={}``/
         ``containers={}`` for the page's own rows -- so every nested record's
-        own ``record_public_ref``/``container_ref`` silently went null --
-        passed all 15 previously-shipped tests, because none of them read
+        own ``record_public_ref``/``container_ref`` silently going null --
+        would pass tests that never read
         those two fields off a ``/queue`` record. A calculation nested under
-        a species_entry subject is exactly the case that build broke: it has
+        a species_entry subject is exactly the case that build breaks: it has
         its own page and its own ref (``calc_...``), and losing it falls
-        back to the "(unnamed)" wording #488 exists to prevent.
+        back to the "(unnamed)" wording the queue exists to prevent.
         """
         entry = make_species_entry(db_session, make_species(db_session))
         calc = make_calculation(db_session, species_entry_id=entry.id)
@@ -1244,9 +1241,9 @@ class TestReviewQueueSubjectsApi:
         assert record["container_ref"] == entry.public_ref
 
     def test_offset_actually_advances_the_page(self, login_as, _api_curator_user, client, db_session):
-        """Review of #492, mutation 1: ``page_keys = list(groups.keys())
-        [:limit]`` (offset silently ignored) passed all 15 previously-shipped
-        tests, because every one of them requested offset 0. Page 2 would
+        """``page_keys = list(groups.keys())
+        [:limit]`` (offset silently ignored) would pass every test that
+        requests only offset 0. Page 2 would
         have silently repeated page 1 while the header claimed "subjects
         51-100". Three subjects, limit=1: offset 0, 1 and 2 must each show a
         DIFFERENT subject, in the server's own newest-first order.

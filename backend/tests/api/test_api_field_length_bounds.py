@@ -1,4 +1,4 @@
-"""Tests for F9 — free-text field length bounds on scientific reads."""
+"""Tests for free-text field length bounds on scientific reads."""
 
 from __future__ import annotations
 

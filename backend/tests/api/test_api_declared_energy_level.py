@@ -1,7 +1,7 @@
-"""A declared ``energy_level_of_theory`` is stored and read back (#619).
+"""A declared ``energy_level_of_theory`` is stored and read back.
 
-It used to be resolved, checked by ``assert_role_consistency`` and thrown
-away. It is now persisted on ``thermo`` and ``statmech`` as
+It is resolved, checked by ``assert_role_consistency`` and
+persisted on ``thermo`` and ``statmech`` as
 ``energy_level_of_theory_id`` and reported as ``levels.declared_energy``.
 
 ``levels.energy`` is still re-derived from the linked calculations on every

@@ -1,6 +1,6 @@
 """Position says a token *means* to be a code; the catalogue says it is one.
 
-#159 narrowed code promotion to the code position -- the start of a
+Code promotion is narrowed to the code position -- the start of a
 message, optionally behind a framework wrapper -- because position is how a
 raiser declares a code. That killed the ``existing_calculation_id``
 fabrication, where a field path ended a sentence. It could not kill the
@@ -11,20 +11,20 @@ shape and both get written first:
     raise ValueError("keyset_predicate: at least one sort key is required.")
 
 Both are the house style ``f"{context}: <prose>"`` with the enclosing
-function as ``context``, and both were published as though a client could
+function as ``context``, and both would be published as though a client could
 branch on them.
 
-So promotion now also consults :mod:`app.api.code_catalogue`, which records
+So promotion also consults :mod:`app.api.code_catalogue`, which records
 per code *by which mechanism* it reaches the body. A leading token is
 promoted only where the catalogue lists that code as
-:data:`~app.api.code_catalogue.Surface.message_prefix`. The two above were
-catalogued as :data:`~app.api.code_catalogue.Surface.accidental_prefix` --
-the catalogue's own word for "not a code" -- so the honest record of the
-defect is what stopped it reaching a client.
+:data:`~app.api.code_catalogue.Surface.message_prefix`. A token catalogued as
+:data:`~app.api.code_catalogue.Surface.accidental_prefix` -- the catalogue's own
+word for "not a code" -- is not promoted, so the honest record of the defect is
+what stops it reaching a client.
 
-#178 then fixed the messages themselves. Both now say what went wrong
+The messages themselves say what went wrong
 instead of naming the function it went wrong in, so neither token occupies
-the code position any more and neither is catalogued at all: a message with
+the code position and neither is catalogued at all: a message with
 no leading token is not an accidental prefix, it is just a message. The two
 raises above are kept in this docstring as the shape to recognise, and the
 tests below are still provoked from the real functions -- because the gate
@@ -33,7 +33,7 @@ way.
 
 What this file exists to prevent
 --------------------------------
-#159 refused to gate promotion on a list, because forgetting to register a
+The gate does not rest on a list alone, because forgetting to register a
 new code would silently degrade it to ``validation_error``. Three things
 answer that, and only the third lives here:
 
@@ -52,12 +52,10 @@ Every assertion below runs over something non-empty and is stated in both
 directions, because a gate that can only say yes -- or only say no -- passes
 while proving nothing.
 
-#192 audited that claim rather than trusting it, and it was not true of
-four assertions here: three asserted an *absence* over a set nothing
-required to be populated, and ``_assert_no_token_in_the_code_position``
-ran a pattern nothing required to match. Each now states its floor where
-it makes its claim, rather than relying on a neighbour that happens to
-share a constant. The floors are measured, and the measurements are in
+Every assertion states its floor where it makes its claim, rather than relying
+on a neighbour that happens to share a constant: an *absence* over a set
+nothing requires to be populated, or a pattern nothing requires to match,
+proves nothing. The floors are measured, and the measurements are in
 the messages so the next reader can tell a real shrinkage from a broken
 scan.
 """
@@ -94,15 +92,15 @@ def _promoted(message: str) -> str:
 
 
 #: A message that must be read as opening with a token in the code
-#: position. It is the exact shape #178 reworded out of ``keyset.py`` --
+#: position. It is the shape ``keyset.py`` must not produce --
 #: see this module's docstring -- and it exists so that
 #: :func:`_opens_with_a_token` can be caught saying no to it.
 _A_REFUSAL_THAT_DOES_OPEN_WITH_A_TOKEN = (
     "keyset_predicate: at least one sort key is required."
 )
 
-#: The shortest a real refusal gets. Measured against the two this file
-#: provokes, which are 11 and 17 words; the floor is well under both and
+#: The shortest a real refusal gets. The two this file
+#: provokes are 11 and 17 words; the floor is well under both and
 #: exists only to reject the degenerate input, not to police wording.
 _MINIMUM_WORDS_IN_A_REFUSAL = 5
 
@@ -125,17 +123,13 @@ def _assert_no_token_in_the_code_position(message: str) -> None:
     gate alone: re-adding ``keyset_predicate: `` in front of the prose
     would still degrade to ``validation_error``, because the token is
     uncatalogued, and the test that was meant to hold the wording would
-    stay green. #177 is the same lesson one layer down -- a guard that
+    stay green. The same lesson holds one layer down -- a guard that
     passes for a second reason stops guarding the first.
 
-    #192: this helper used to be that same failure one layer down again.
-    It matched a pattern and asserted the match was empty, so a blinded
-    pattern made it report success having read nothing -- measured, both
-    callers green with the detector replaced by one that matches nothing.
-    The file did go red, but in ``TestOneMessageDeclaresOneCode``, whose
-    floor happens to share this module constant; that coupling is an
-    accident of spelling, not a guard, and it is how the defect surfaced
-    at all. So the detector is now run against a message it must accept
+    This helper must not fail the way a blinded detector fails: matching a
+    pattern and asserting the match was empty makes a blinded pattern
+    report success having read nothing, with both callers green. The
+    detector is therefore run against a message it must accept
     before it is trusted to reject one, and the message has to be a
     sentence -- ``""`` opens with no token either.
     """
@@ -243,7 +237,7 @@ class TestTheGateIsTheCatalogue:
     def test_it_is_exactly_the_catalogue_message_prefix_codes(self):
         """Both sides are read from ``CATALOGUE``, so both empty is equal.
 
-        #192: an equality between two derivations of one source is
+        an equality between two derivations of one source is
         satisfied when that source is empty, and this is the assertion
         that says the gate *is* the catalogue. The floor is repeated here
         rather than left to ``test_it_is_large_enough_to_be_the_read_api``
@@ -270,7 +264,7 @@ class TestTheGateIsTheCatalogue:
         Most read-API refusals declare their code the legacy way, as the
         leading ``"code: "`` of their own message, so this set has to stay
         the size of that surface. If it collapsed, every one of those codes
-        would arrive as ``validation_error`` -- the failure #159 named.
+        would arrive as ``validation_error`` -- the failure this gate exists to prevent.
         """
         assert len(MESSAGE_PREFIX_CODES) > 50, sorted(MESSAGE_PREFIX_CODES)
 
@@ -278,10 +272,8 @@ class TestTheGateIsTheCatalogue:
         """Promotion is for the message-prefix surface and no other.
 
         Written over *every* other surface rather than over
-        ``accidental_prefix`` alone, which is what it used to say. #178
-        reworded the two accidental prefixes out of existence, so that
-        set is now empty and the assertion it satisfied would have gone
-        on passing while checking nothing -- the failure shape this file
+        ``accidental_prefix`` alone: that set is empty, so an assertion over it
+        would pass while checking nothing -- the failure shape this file
         is otherwise careful about. The surfaces below hold 70-odd
         entries between them, and the count says so.
         """
@@ -294,9 +286,9 @@ class TestTheGateIsTheCatalogue:
         assert not (other & MESSAGE_PREFIX_CODES), sorted(other & MESSAGE_PREFIX_CODES)
 
     def test_a_function_name_is_in_no_surface_at_all(self):
-        """The two #178 reworded are not catalogued under any surface.
+        """The two refusals in the module docstring are not catalogued under any surface.
 
-        Not ``accidental_prefix`` either: a message that no longer leads
+        Not ``accidental_prefix`` either: a message that does not lead
         with the token has no token in the code position, so there is
         nothing to classify. An entry reappearing means a refusal has
         gone back to naming the function it was raised in.
@@ -322,7 +314,7 @@ class TestNoCataloguedCodeIsLost:
         Parametrising over ``MESSAGE_PREFIX_CODES`` reads better and names
         the lost code in the test id -- but pytest turns an empty parameter
         set into a *skip*, so the mutation that empties the derivation
-        (measured: ``frozenset()``) made the one test that checks nothing is
+        (``frozenset()``) would make the one test that checks nothing is
         lost report ``1 skipped`` instead of failing. A vacuous pass dressed
         as a skip is the exact shape this repository keeps finding, so the
         loop form is used and the count is asserted.
@@ -366,14 +358,14 @@ class TestAFunctionNameIsNotACode:
 
     def test_the_keyset_guard_no_longer_advertises_its_own_name(self):
         """``keyset_predicate`` guards an argument invariant, so it fires
-        only on a backend bug -- and used to answer with a ``code`` naming
+        only on a backend bug -- and must not answer with a ``code`` naming
         the function that had the bug.
 
         Provoked from the real function so that rewording its message
         cannot make this test pass for the wrong reason. Two things have
-        to be true for it now: the message no longer leads with the
-        function's name (#178), *and* a leading token would not be
-        promoted even if it did (#164). Either alone would leave the
+        to be true for it: the message does not lead with the
+        function's name, *and* a leading token would not be
+        promoted even if it did. Either alone would leave the
         other free to regress.
         """
         with pytest.raises(ValueError) as raised:
@@ -396,7 +388,7 @@ class TestAFunctionNameIsNotACode:
         assert _promoted(f"{token}: something went wrong.") == "validation_error"
 
     def test_a_field_path_is_still_not_promoted(self):
-        """#159's case, still refused -- by position, before the catalogue."""
+        """A field path is still refused -- by position, before the catalogue."""
         assert (
             _promoted(
                 "source_calculations[0].existing_calculation_id: refers to a "
@@ -416,7 +408,7 @@ class TestTheShapeTheRaiseSiteScanCannotRead:
     catalogue's static scan reads literals at ``raise`` sites and this shape
     has no literal there.
 
-    Gating promotion closes that net: the token now degrades to
+    Gating promotion closes that net: the token degrades to
     ``validation_error``, the body carries no unknown code, and the observer
     has nothing to see. Measured, not reasoned about -- renaming
     ``conflict_code="level_of_theory_handle_conflict"`` to ``..._clash``
@@ -440,7 +432,7 @@ class TestTheShapeTheRaiseSiteScanCannotRead:
     def test_every_code_minted_from_a_parameter_is_catalogued(self):
         """Otherwise the gate would silently degrade a real code.
 
-        This is the failure #159 refused to risk. It is checked rather than
+        This is the failure the gate must not risk. It is checked rather than
         argued about, and the check names what it saw.
         """
         helpers = _helpers_that_raise_a_parameter_as_the_code(_sources())
@@ -576,17 +568,15 @@ class TestOneMessageDeclaresOneCode:
     def test_the_scan_sees_the_messages_it_is_written_over(self):
         """An empty scan would make the next assertion prove nothing.
 
-        The floor named ``limit_too_large`` and ``offset_too_large``
-        until 2026-08-18, when the cap family became
-        ``Shape.relationship`` and both moved to
-        ``Surface.coded_exception`` so they could carry their cap in
-        ``context``. They are no longer in ``MESSAGE_PREFIX_CODES``, so
-        this scan -- which reads only that surface -- correctly stops
-        seeing them, and naming them here would pin a spelling the tree
-        no longer has.
+        The floor does not name ``limit_too_large`` or ``offset_too_large``: the
+        cap family is ``Shape.relationship`` on ``Surface.coded_exception`` so it
+        can carry its cap in ``context``. They are not in
+        ``MESSAGE_PREFIX_CODES``, so this scan -- which reads only that surface --
+        does not see them, and naming them here would pin a spelling the tree
+        does not have.
 
-        Re-pointed rather than dropped: the floor still names three
-        concrete codes that must be visible, and two of them are still
+        The floor names three
+        concrete codes that must be visible, and two of them are
         raised from ``validate_pagination``'s own module, so a scan that
         stops reading ``scientific_read/common.py`` still fails here.
         """
@@ -606,7 +596,7 @@ class TestOneMessageDeclaresOneCode:
     def test_no_coded_message_names_a_second_code(self):
         """The floor is repeated here, not borrowed from the test above.
 
-        #192: this is an absence asserted over a scan, and the scan's own
+        this is an absence asserted over a scan, and the scan's own
         floor lives in a different test. Carrying it here too costs a line
         and means the assertion cannot be made vacuous by an edit that
         leaves its neighbour untouched.
@@ -636,13 +626,13 @@ class TestOneMessageDeclaresOneCode:
         degrade when the envelope reads it. Without this the gate could be
         broken -- a pattern that matches nothing -- and stay green.
 
-        The historical shape is still asserted, because it is still the
-        shape the gate exists for. What moved is the *repaired* half: as
-        of 2026-08-18 ``limit_too_large`` is a ``coded_exception``
-        carrying its cap in ``context``, so it is no longer promotable
-        out of a sentence at all and ``_promoted`` of it is now
+        The historical shape is asserted because it is the
+        shape the gate exists for. The *repaired* half:
+        ``limit_too_large`` is a ``coded_exception``
+        carrying its cap in ``context``, so it is not promotable
+        out of a sentence at all and ``_promoted`` of it is
         ``validation_error`` by design rather than by defect. Asserting
-        the old value would be asserting the gate's opposite. A code that
+        the promoted value would be asserting the gate's opposite. A code that
         *is* still ``message_prefix`` is used for the positive half, so
         the detector is still shown saying yes as well as no -- and the
         historical pair keeps its own assertion, one line below, so this
@@ -681,7 +671,7 @@ class TestTheLegacyDetailPathIsGatedToo:
     refactor away from an error body, and the gate below is what stops
     them arriving as codes. A fifth, ``geometry_validation``, was reworded
     rather than gated -- it was the only one shaped like a code to the
-    *narrowed* pattern as well, and is now held by
+    *narrowed* pattern as well, and is held by
     :class:`TestNoLoggerFormatStringSitsInTheCodePosition`.
     """
 
@@ -794,9 +784,9 @@ class TestNoLoggerFormatStringSitsInTheCodePosition:
     """A log line is not a response, and must not read like a declaration.
 
     ``geometry_validation: chemistry layer raised for calculation_id=%s``
-    reached no response body, so nothing was ever advertised wrongly. It
-    was still worth rewording, and the reason is the one #161, #173 and
-    #178 each cost a PR to learn: in this codebase a snake_case token in
+    reaches no response body, so nothing is advertised wrongly. It
+    is still worth avoiding, for the reason that
+    in this codebase a snake_case token in
     front of a colon *is* how a code is declared. A string that carries
     that shape without being a code is read as one -- by a person, and by
     the next scan somebody widens.
@@ -816,13 +806,13 @@ class TestNoLoggerFormatStringSitsInTheCodePosition:
     test_an_uncatalogued_prefix_falls_back_to_the_status`. This gate is
     about the shape a reader sees, and it is the durable answer to "a
     string in the code position that is not a code", which is the shape
-    that has now produced four tasks.
+    that has produced four tasks.
     """
 
     def test_the_scan_reads_the_logger_calls_in_the_tree(self):
         """Assert the population, so an empty sweep cannot pass as clean.
 
-        Measured 2026-08-16: 96 logger calls with a literal first argument,
+        There are 96 logger calls with a literal first argument,
         16 of which open with a bare ``token: ``. The floor is well under
         96 and exists to catch a scan that has stopped walking the tree,
         not to police the count -- the same reasoning as

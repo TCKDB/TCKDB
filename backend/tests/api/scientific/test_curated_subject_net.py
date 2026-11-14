@@ -1,4 +1,4 @@
-"""The subject net, pinned on REAL response models (ADR 0023, step 2).
+"""The subject net, pinned on REAL response models.
 
 Under ``curated`` the approved floor decides which records a list returns. A service that forgets it hands the guard an
 UNLISTED record as the answer, and the guard must fail loud rather than serve it badged. These tests make a real service

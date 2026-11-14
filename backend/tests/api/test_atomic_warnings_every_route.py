@@ -1,7 +1,7 @@
-"""The atomic electronic-state warnings fire on every route that accepts an atom (#836).
+"""The atomic electronic-state warnings fire on every route that accepts an atom.
 
 ``missing_atomic_electronic_levels``, ``missing_atomic_spin_orbit_correction`` and
-``atomic_electronic_degeneracy_contradicts_term`` used to come only from
+``atomic_electronic_degeneracy_contradicts_term`` must come from every route, not only from
 ``/uploads/statmech``, ``/uploads/computed-species`` and ``/uploads/computed-reaction``.
 A single atom could be deposited through four other routes and hear nothing:
 
@@ -335,7 +335,7 @@ def test_pdep_levels_warning_lands_on_the_species_statmech(client, db_session):
 
 
 # ---------------------------------------------------------------------------
-# Review round 1
+# Further cases
 # ---------------------------------------------------------------------------
 
 

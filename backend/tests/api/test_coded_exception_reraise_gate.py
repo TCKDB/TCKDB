@@ -9,7 +9,7 @@ in :mod:`app.api.errors` never runs, so the ``code`` a client branches on
 is replaced by ``http_<status>``. The condition did not change; only the
 route that noticed it did.
 
-Two instances were filed (#209, #212) and, measured, they were not the
+Two instances were filed and, measured, they were not the
 only two. The sweep behind them found four:
 
 * ``GET /admin/machine-review/curator-tasks/{id}`` answered ``http_404``
@@ -51,7 +51,7 @@ wire question, and the wire tests that ask it are named beside each entry.
 Staleness, in both directions
 -----------------------------
 ``docs/reviews/error_code_coverage_triage.md`` reasoned over call sites it
-could not see, and #165 established the sharper form of the lesson: a set
+could not see, and the sharper form of the lesson is: a set
 of individually-correct behaviours can still have an unheld completeness
 claim. A list that nothing re-checks becomes that. Both directions are
 asserted:
@@ -68,8 +68,8 @@ How an entry names its site
 ---------------------------
 Both exemption lists here -- :data:`JUDGED_SITES` and
 :data:`JUDGED_ABSORBING_HANDLERS` -- key on
-``"<path>::<enclosing qualname>"``. Neither keys on a line number, and one
-of them used to: the drift that retired the form is written up on
+``"<path>::<enclosing qualname>"``. Neither keys on a line number; the drift that makes a line-number key
+unsafe is written up on
 :data:`JUDGED_SITES`, along with the two tests that hold the qualname form
 honest, since an anchor is only worth having if the day it stops resolving
 is a red build rather than a quiet skip.
@@ -77,7 +77,7 @@ is a red build rather than a quiet skip.
 The second rule: a handler that can *absorb* a coded refusal
 ------------------------------------------------------------
 The rule above asks what a handler **raises**. It cannot see the other
-half, and the other half is where #212's last site actually lived:
+half, and the other half is where the last site actually lived:
 
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -103,7 +103,7 @@ worth keeping straight:
 The site that prompted this rule sat
 on ``GET /scientific/artifacts/integrity`` wrapping
 :func:`~app.services.scientific_read.artifact_integrity.search_artifact_integrity`,
-and the #176 census verdict on it -- "cannot receive a coded error" -- was
+and the census verdict on it -- "cannot receive a coded error" -- was
 **true**, established statically and empirically. It was true by accident:
 the wrapped function sits beside functions that do raise coded refusals
 (:func:`app.api.error_contract.reject_unsupported_filters` is one), so one
@@ -119,7 +119,7 @@ or a bare ``except`` -- must do one of three things:
    ``ValueError`` handler in :mod:`app.api.errors` still mints the code;
 2. **intercept the coded case first**, with an earlier
    ``except CodedValidationError`` / ``except CodedValueError`` clause on
-   the same ``try`` that re-raises it as itself -- this is the shape #165
+   the same ``try`` that re-raises it as itself -- this is the shape
    used on the kinetics wrapper, and it is the escape hatch for a handler
    that genuinely needs to translate the *uncoded* case; or
 3. **be listed in** :data:`JUDGED_ABSORBING_HANDLERS` **with a reason**.
@@ -137,7 +137,7 @@ claim; the staleness test makes it fail once it stops describing anything.
 
 Deliberately **not** covered: the same shape anywhere below the API layer.
 This is a scoping decision with a measured price. Running the identical
-scan over all of ``backend/app`` (measured 2026-08-16) finds **104**
+scan over all of ``backend/app`` finds **104**
 handlers that absorb without re-raising, against **8** in ``app/api`` --
 so widening the rule would demand 96 further judgements, nearly all of
 them chemistry parsers and service helpers restating one uncoded
@@ -172,7 +172,7 @@ API_ROOT = REPO_ROOT / "backend" / "app" / "api"
 #: Anchored on the enclosing function rather than the ``except`` line
 #: number, matching :data:`JUDGED_ABSORBING_HANDLERS`. The line-number form
 #: was measured failing: "Say which field registration refused, not that
-#: one was" (#197) added a helper above this handler, which moved the
+#: one was" added a helper above this handler, which moved the
 #: ``except`` from line 181 to line 256 and turned two tests below red --
 #: :meth:`~TestTheSweepIsComplete.test_every_site_that_replaces_the_message
 #: _is_accounted_for` saw an unlisted site at 256 and
@@ -243,7 +243,7 @@ JUDGED_SITES: dict[str, str] = {
 #: only add a way for the assertion to fail without the idiom changing.
 _A_SITE_THAT_PASSES_THE_MESSAGE_THROUGH = "backend/app/api/routes/releases_admin.py"
 
-#: Measured 2026-08-17: 13 handlers in ``backend/app/api`` raise an
+#: 13 handlers in ``backend/app/api`` raise an
 #: ``HTTPException``, of which 12 pass the caught message through and one is
 #: judged above. The floor is well under 13 and exists only to catch a scan
 #: that has stopped seeing the tree, not to police the count. Counted per
@@ -489,7 +489,7 @@ class TestTheSweepIsComplete:
     def test_every_anchor_names_an_enclosing_function(self):
         """A module-level handler has no name to anchor an entry on.
 
-        There are none today (measured 2026-08-17: all 13 sites sit inside
+        There are none today (all 13 sites sit inside
         a named function), which is why the qualname form is a clean sweep
         rather than a hybrid. Should one appear at module scope, its anchor
         would degrade to ``"<path>::<module>"`` -- file-level precision
@@ -536,7 +536,7 @@ class TestTheSweepIsComplete:
 
         Anchored on file rather than line so a reformat does not fail it,
         and paired with the wire tests that assert the code each handler
-        now publishes -- this is a shape test and cannot see a response
+        publishes -- this is a shape test and cannot see a response
         body:
 
         * ``tests/api/test_api_untested_refusals_tier_de.py``
@@ -545,8 +545,8 @@ class TestTheSweepIsComplete:
         * ``tests/api/scientific/test_api_scientific_artifact_integrity.py``
           ``::test_client_sort_is_rejected_like_every_other_scientific_read``.
 
-        ``routes/admin.py`` is deliberately **not** listed. #209 was not
-        a catch-and-replace at all -- it was a private
+        ``routes/admin.py`` is deliberately **not** listed. Its case is not
+        a catch-and-replace at all -- it is a private
         ``_get_curator_task_or_404`` duplicating a coded service helper,
         which this scan cannot see and should not pretend to. Asserting
         it here would be a guard covering a shape its target never had.
@@ -583,9 +583,9 @@ CODED_CATCHES = frozenset({"CodedValidationError", "CodedValueError"})
 #: ``"<path>::<enclosing qualname>"``. Anchored on the function rather than
 #: a line number so that reformatting the module above them does not fail
 #: this gate -- the lesson ``test_the_artifact_routes_did_not_regrow_their_
-#: handlers`` records. :data:`JUDGED_SITES` uses the same form; it was
-#: line-numbered until the drift documented there was measured, and this
-#: file now has one anchor convention rather than two.
+#: handlers`` records. :data:`JUDGED_SITES` uses the same form,
+#: so this
+#: file has one anchor convention rather than two.
 #:
 #: Every value must say what a client loses and why that is right. Adding
 #: an entry is the expensive path on purpose: re-raising (``raise``) or an
@@ -674,7 +674,7 @@ JUDGED_ABSORBING_HANDLERS: dict[str, str] = {
     ),
 }
 
-#: Measured 2026-08-16: nine handlers in ``backend/app/api`` can absorb a
+#: Nine handlers in ``backend/app/api`` can absorb a
 #: coded refusal. One (``get_write_db``) needs no entry because it
 #: re-raises; the other eight are judged above. The floor is well under
 #: nine and exists only to catch a scan that has stopped walking the tree,
@@ -887,7 +887,7 @@ class TestTheAbsorbingScanSeesWhatItIsWrittenOver:
         assert _reraises_the_original(handler)
 
     def test_it_recognises_the_coded_first_escape_hatch(self):
-        """#165's shape must pass, or the sanctioned repair fails the gate."""
+        """The coded-first shape must pass, or the sanctioned repair fails the gate."""
         tree = ast.parse(
             "try:\n"
             "    check()\n"
@@ -1008,9 +1008,9 @@ class TestTheAbsorbingSweepIsComplete:
     def test_the_integrity_route_has_not_regrown_its_value_error_handler(self):
         """Named, because this is the site the whole second rule is for.
 
-        ``GET /scientific/artifacts/integrity`` carried
-        ``except ValueError -> HTTPException(422, str(exc))`` until #212
-        removed it. The wire test that asserts what it publishes instead is
+        ``GET /scientific/artifacts/integrity`` must not carry
+        ``except ValueError -> HTTPException(422, str(exc))``
+        The wire test that asserts what it publishes instead is
         ``tests/api/scientific/test_api_scientific_artifact_integrity.py``
         ``::test_client_sort_is_rejected_like_every_other_scientific_read``;
         this is the shape half, which cannot see a response body.

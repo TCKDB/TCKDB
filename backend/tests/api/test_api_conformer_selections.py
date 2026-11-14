@@ -23,7 +23,7 @@ from app.db.models.species import ConformerSelection
 def _default_auth_as_curator(client, db_session) -> AppUser:
     """Default the TestClient's auth user to ``curator`` for this module.
 
-    Selection creation is now curator/admin-only, so the session-scoped
+    Selection creation is curator/admin-only, so the session-scoped
     role=``user`` test user would 403 on every POST. This autouse fixture
     keeps the legacy selection-create tests working without per-test churn.
     Tests that specifically verify the 403 path request :func:`as_regular_user`

@@ -1,4 +1,4 @@
-"""``method=`` / ``basis=`` filters compare identity keys, not spellings (#585).
+"""``method=`` / ``basis=`` filters compare identity keys, not spellings.
 
 ``level_of_theory.lot_hash`` is taken over the method's and basis's identity
 keys, so ``wb97xd`` / ``def2tzvp`` and ``WB97XD`` / ``def2-TZVP`` are one
@@ -177,7 +177,7 @@ def test_the_seeded_fixture_is_not_empty(db_session):
 
 
 # ---------------------------------------------------------------------------
-# dispersion= / solvent= compare identity keys too (#602)
+# dispersion= / solvent= compare identity keys too
 # ---------------------------------------------------------------------------
 
 #: (field, stored, requested): the same component under two spellings.
@@ -233,7 +233,7 @@ def _search_refs(client, query: str) -> list[str]:
 def test_folded_dispersion_and_column_dispersion_are_one_level_in_every_filter(
     client, db_session
 ):
-    """#630: ``b3lyp-d3bj`` is ``b3lyp`` + ``d3bj``, so each filter finds it by
+    """``b3lyp-d3bj`` is ``b3lyp`` + ``d3bj``, so each filter finds it by
     either spelling, and the other levels stay out."""
     folded = make_lot(db_session, method="b3lyp-d3bj", basis="def2tzvp")
     bare = make_lot(db_session, method="b3lyp", basis="def2tzvp")

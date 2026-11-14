@@ -592,7 +592,7 @@ def test_record_envelope_matches_search_shape(client, db_session):
     }
     assert record["reaction"]["reaction_entry_ref"] == rxe.public_ref
     assert record["transition_state"]["transition_state_ref"] == ts.public_ref
-    # Internal ids stripped by default (Phase D policy), same boundary
+    # Internal ids stripped by default (internal-id policy), same boundary
     # helper as /search.
     assert "transition_state_entry_id" not in record["transition_state_entry"]
     assert "transition_state_id" not in record["transition_state"]
@@ -639,7 +639,7 @@ def test_evidence_summary_reports_software_per_calculation_type(client, db_sessi
     calculation type, a list even at length one. This is the wire field
     that lets a reader tell apart two rows with an identical level of
     theory but different originating code (e.g. CCSD(T)-F12 on Molpro vs
-    ORCA) -- see the PR description for the live-archive case this closes.
+    ORCA).
     """
     _, _, _, entries = _make_reaction_with_ts(db_session)
     _, sr = _make_software_release(db_session, name="orca", version="5.0.4")
@@ -866,7 +866,7 @@ def test_filter_by_participant_smiles_invalid_smiles_422s(client, db_session):
     assert "invalid_structure_query" in resp.text
     # The 422 must name the query parameter the caller actually supplied
     # (`participant_smiles`), not `query_smiles` -- the two share the same
-    # RDKit parsing helper (`inchi_key_from_query`), which used to hardcode
+    # RDKit parsing helper (`inchi_key_from_query`), which must not hardcode
     # the species-browse structure filter's own field name into every
     # message regardless of caller.
     assert "participant_smiles" in resp.text

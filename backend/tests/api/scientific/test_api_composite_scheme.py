@@ -1,6 +1,6 @@
-"""``GET /scientific/composite-schemes/{ref}`` and ``LevelOfTheorySummary.composite_scheme`` (ADR 0021, P2).
+"""``GET /scientific/composite-schemes/{ref}`` and ``LevelOfTheorySummary.composite_scheme``.
 
-Pins, per the contract in the plan:
+Pins:
 
 * the record's content: identity, the recipe's internal levels, terms and their
   inputs in order, and the levels bound to the scheme;

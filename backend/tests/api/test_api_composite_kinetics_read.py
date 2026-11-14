@@ -1,11 +1,11 @@
 """The kinetics read reports the transition state's own energy calculation.
 
-``provenance.ts_sp_calculation_ref`` used to be the first single point found under
-*any* source role, so a reactant's single point (role ``reactant_energy``) was
-reported as the transition state's whenever it was listed first -- on the
-unmodified ARC ``rotor_scan_1`` bundle too, not only for a composite. It is now
-the calculation cited under ``ts_energy``, a single point or a composite (ADR
-0021), and ``levels.energy_source`` names which.
+``provenance.ts_sp_calculation_ref`` is the calculation cited under ``ts_energy``, a
+single point or a composite, and ``levels.energy_source`` names which. It must not
+be the first single point found under *any* source role: a reactant's single point
+(role ``reactant_energy``) would be reported as the transition state's whenever it
+was listed first -- on the unmodified ARC ``rotor_scan_1`` bundle too, not only for
+a composite.
 """
 
 from __future__ import annotations

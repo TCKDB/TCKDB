@@ -7,7 +7,7 @@ attach a code without moving its message, and a request that failed more
 than once reports no single code — whether the failures carry two
 different codes or the same one twice. ``context`` follows that decision
 rather than making its own, because for a while it made its own and the
-two disagreed (#236).
+two disagreed.
 """
 
 from __future__ import annotations
@@ -82,7 +82,7 @@ class TestPromotionIsTypedNotTextual:
 
         The message here contains no code at all, in any spelling. If the
         promotion were textual this would fall back to the generic code,
-        which is exactly what every chemistry refusal used to do.
+        which is exactly what a chemistry refusal would do.
         """
         details = _errors(-1)
         assert "negative_value" not in str(details[0]["msg"])
@@ -112,7 +112,7 @@ class TestPromotionIsTypedNotTextual:
 
 
 class TestOnlyTheCodePositionDeclaresACode:
-    """#161: a field path that ends in a field name is not a code.
+    """A field path that ends in a field name is not a code.
 
     The house style for a workflow refusal is
     ``raise ValueError(f"{context}: <prose>")`` with ``context`` a field
@@ -203,13 +203,9 @@ class TestOnlyTheCodePositionDeclaresACode:
         therefore judged on the unfiltered set: the rule can only remove a
         code, never add one.
 
-        The message below is now a synthetic example rather than a
-        quotation: ``validate_pagination`` was the one place that wrote
-        two tokens, and it no longer does — the second token was the
-        honest name for what went wrong, so it became the code and
-        ``invalid_pagination`` kept only the malformed cases. The *rule*
-        is unchanged and is what this pins. That no real message carries
-        two tokens is a separate, statically checked claim; see
+        The message below is a synthetic example rather than a quotation. The
+        *rule* is what this pins. That no real message carries two tokens is a
+        separate, statically checked claim; see
         ``test_error_contract_catalogue_gate.py::TestOneMessageDeclaresOneCode``.
         """
         message = "invalid_pagination: limit_too_large: limit must be <= 200 (got 500)"
@@ -260,21 +256,21 @@ class TestTwoCodesReportNeither:
 
 
 class TestTwoFailuresWithOneCodeReportNeither:
-    """#236: the two functions used to ask *different* questions.
+    """The two functions must ask the *same* question.
 
     ``validation_detail_code`` falls back on more than one **failure**;
-    ``validation_detail_context`` used to fall back only on more than one
-    distinct **code**. Two failures carrying the same code slipped
-    between them: the envelope reported the generic
+    ``validation_detail_context`` must not fall back only on more than one
+    distinct **code**. Two failures carrying the same code would slip
+    between them: the envelope would report the generic
     ``request_validation_error`` beside a populated ``context``
     describing one of the failures it had just declined to name — and
-    ``merged.update()`` meant that for any key both errors set, the last
+    ``merged.update()`` would mean that for any key both errors set, the last
     one silently won and the first fact was gone with nothing said.
 
-    ``TestTwoCodesReportNeither`` above never caught it because its two
-    failures carry *different* codes, which trips the old condition too.
-    The distinguishing case is the same code twice, and it is only rare
-    until #219 moves ~24 refusals into ``model_validator(mode="after")``,
+    ``TestTwoCodesReportNeither`` above cannot catch it because its two
+    failures carry *different* codes, which trips a code-only condition too.
+    The distinguishing case is the same code twice, which becomes common as
+    refusals move into ``model_validator(mode="after")``,
     which accumulates failures rather than stopping at the first.
     """
 
@@ -312,7 +308,7 @@ class TestTwoFailuresWithOneCodeReportNeither:
         assert validation_detail_context(failures) == {"field": "alpha"}
 
     def test_the_later_failures_facts_are_not_smuggled_through(self):
-        """Named separately, because the old behaviour was *specifically*
+        """Named separately, because the failure is *specifically*
         this: ``merged.update()`` left the second failure's ``field`` in
         place of the first's. A reinstated merge fails here reporting the
         value it kept, rather than only failing an ``== {}`` whose
@@ -368,7 +364,7 @@ class TestOneCodeCarriedByTwoDeclaredErrors:
     past the fallback.
 
     It is tested rather than deleted because the branch is what stops a
-    silent winner from reappearing. #219 changes how failures accumulate,
+    silent winner from reappearing. Failure accumulation can change,
     and a defensive branch nothing exercises is a branch that quietly
     stops working — which is the same defect one layer down as the one
     this file is about.

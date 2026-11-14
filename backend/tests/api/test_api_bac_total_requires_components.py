@@ -1,4 +1,4 @@
-"""``bac_total`` with no components, measured on the wire (task #264).
+"""``bac_total`` with no components, on the wire.
 
 What was wrong
 ---------------
@@ -16,13 +16,11 @@ same reactions carry real BACs of -3 to -16 kcal/mol -- so a corrected
 barrier height built from the stored numbers is biased by the reactants'
 correction alone.
 
-``create_applied_energy_correction`` stored exactly what a depositor
-sent (and still does -- see its own docstring); nothing on the upload
-wire path refused the shape. Before
-``assert_bac_total_has_required_components`` existed, every refusal
-test in this file was measured to return 201 for its payload (see the
-PR description for the mutation-check log); each now pins the 422 the
-fix produces, paired with an acceptance test so the guard cannot be
+``create_applied_energy_correction`` stores exactly what a depositor sent (see
+its own docstring), so the refusal has to come from
+``assert_bac_total_has_required_components`` on the upload wire path: without
+it every refusal test in this file would return 201 for its payload. Each test
+pins the 422, paired with an acceptance test so the guard cannot be
 satisfied by refusing everything.
 
 Why these tests are on the wire, not at the model

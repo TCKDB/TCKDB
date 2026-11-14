@@ -1,4 +1,4 @@
-"""The output-log software-banner hook at ingest (issue #305, owner decision (c)).
+"""The output-log software-banner hook at ingest.
 
 When an uploaded output log's banner names the *same* program as the
 calculation's declared release, and supplies a version that release left
@@ -11,7 +11,7 @@ describes. Everything else is recorded, never re-pointed:
   manifest's release (the manifest is immutable and names it).
 
 Driven through the real upload routes with real ORCA, Gaussian and Molpro
-output logs (the fixtures #560 pinned the banner parsers on).
+output logs.
 """
 
 from __future__ import annotations
@@ -286,7 +286,7 @@ def test_a_manifest_bound_calculation_records_the_banner_and_keeps_its_release(
     assert W_FILLED not in _codes(resp)
 
 
-# Review findings on #565 ----------------------------------------------------
+# Further cases ----------------------------------------------------
 
 # Molpro 2015.1.37 TS frequency run. ARC reads the ``NAME : 2015.1.37`` header;
 # the banner line TCKDB parses says ``Version 2015.1``.
@@ -298,7 +298,7 @@ ORCA_610_LOG = (FIXTURES / "orca" / "opt_orca.out").read_bytes()
 def test_a_banner_that_is_a_coarser_reading_of_the_declared_version_is_a_match(
     client, db_session, stub_store_artifact
 ):
-    """Finding 1. ``2015.1`` is ``2015.1.37`` read to fewer components: the
+    """``2015.1`` is ``2015.1.37`` read to fewer components: the
     same release, not a contradiction. ``mismatch`` would fail the
     reproducibility rubric's ``calculation_metadata`` check for a deposit
     that is internally consistent."""
@@ -319,7 +319,7 @@ def test_a_banner_that_is_a_coarser_reading_of_the_declared_version_is_a_match(
 def test_a_declared_build_the_banner_contradicts_is_a_mismatch_not_a_fill(
     client, db_session, stub_store_artifact
 ):
-    """Finding 2. A declared G09 build with no version, and a G16 C.02 log:
+    """A declared G09 build with no version, and a G16 C.02 log:
     filling the version would mint ``("16", "C.02", "EM64L-G09RevD.01")``,
     a release that never existed."""
     calc_id = _create_calc(
@@ -340,7 +340,7 @@ def test_a_declared_build_the_banner_contradicts_is_a_mismatch_not_a_fill(
 def test_two_disagreeing_logs_in_one_batch_fill_nothing_in_either_order(
     client, db_session, stub_store_artifact, order
 ):
-    """Finding 3. Each banner is compared with the *declared* release. Two
+    """Each banner is compared with the *declared* release. Two
     logs naming different versions of the same program contradict each
     other, so neither fills the version, whichever arrives first."""
     calc_id = _create_calc(

@@ -1,7 +1,7 @@
-"""The no-optimisation duplicate rule recognises a shifted copy of one atom (#623).
+"""The no-optimisation duplicate rule recognises a shifted copy of one atom.
 
 With no ``opt`` linked, two same-level ``sp`` links on one geometry are
-refused (#610). That rule grouped the links by ``geometry_id``, so a second
+refused. That rule grouped the links by ``geometry_id``, so a second
 single point on a *shifted* copy of the same atom (a different geometry row)
 walked past it, on thermo and statmech alike. For one atom every position is
 the same structure, so the links are grouped by element instead.
@@ -10,7 +10,7 @@ A polyatomic subject is untouched: a genuinely different geometry is still a
 different structure. The polyatomic tests here were run against the rule as it
 stood before the change and pass on both sides of it; they pin that.
 
-A rigidly moved copy of a polyatomic geometry is the subject of #667 and is tested in
+A rigidly moved copy of a polyatomic geometry is tested in
 ``test_api_rigid_motion_duplicate_sp.py``; the polyatomic tests here use geometries that differ in shape.
 """
 
@@ -82,7 +82,7 @@ def test_a_single_sp_on_an_atom_is_accepted(client, product):
 
 @PRODUCTS
 def test_two_same_level_sps_on_one_atom_geometry_are_refused(client, product):
-    """The case #610 already refused; it must keep refusing it."""
+    """A duplicate on one atom geometry stays refused."""
     url, payload = _atom_payload(product, {"s1": _sp(_ATOM), "s2": _sp(_ATOM)}, [("s1", "sp"), ("s2", "sp")])
     body = _assert_duplicate(_post(client, url, payload), product, "sp_calculation_refs")
     assert "the same atom" in body["detail"], body
@@ -90,7 +90,7 @@ def test_two_same_level_sps_on_one_atom_geometry_are_refused(client, product):
 
 @PRODUCTS
 def test_two_same_level_sps_on_a_shifted_copy_of_an_atom_are_refused(client, product):
-    """#623: the same atom moved to another coordinate is a different geometry row, not a second structure."""
+    """The same atom moved to another coordinate is a different geometry row, not a second structure."""
     url, payload = _atom_payload(
         product, {"s1": _sp(_ATOM), "s2": _sp(_ATOM_SHIFTED)}, [("s1", "sp"), ("s2", "sp")]
     )
@@ -115,7 +115,7 @@ def test_three_sps_on_three_positions_of_an_atom_are_one_duplicate_group(client,
 
 @PRODUCTS
 def test_two_sps_at_different_levels_on_a_shifted_atom_are_still_refused_as_a_duplicate(client, product):
-    """Two energies for one atom were never allowed at two levels; the code now matches the same-geometry case.
+    """Two energies for one atom were never allowed at two levels; the code matches the same-geometry case.
 
     Before the change a shifted copy at a second level was refused as
     ``*_energy_level_ambiguous`` (the level-uniformity rule, R2') because the
@@ -141,11 +141,11 @@ def test_two_sps_at_different_levels_on_a_shifted_atom_are_still_refused_as_a_du
 def test_a_shifted_copy_of_the_atom_spelled_d_or_t_is_still_the_same_atom(client, product, symbol, smiles):
     """A ``D``/``T`` atom is the same atom wherever it sits.
 
-    Since #672 the spelling declares a nuclide (stored ``H`` + mass number 2/3),
+    The spelling declares a nuclide (stored ``H`` + mass number 2/3),
     so the structure key is ``(H, 2)`` / ``(H, 3)``: two sps on a shifted copy
     of one D atom are one structure and refused as a duplicate, exactly like
     two on a shifted protium atom. The species is labelled ``[2H]``/``[3H]``
-    because the calculation-geometry isotope rule (#666) refuses a ``D``
+    because the calculation-geometry isotope rule refuses a ``D``
     geometry under a protium species before the duplicate rule is reached.
     """
     spelled = f"1\n{symbol} atom\n{symbol} 1.0 0.0 0.0"
@@ -214,7 +214,7 @@ def test_a_single_composite_on_an_atom_is_accepted(client, product):
 
 
 # ---------------------------------------------------------------------------
-# Polyatomic: unchanged. These pass identically on the rule before #623.
+# Polyatomic: these pass identically under the shifted-atom rule.
 # ---------------------------------------------------------------------------
 
 
@@ -356,8 +356,8 @@ def _direct_call(
                     atom_index=atom_index,
                     element=element,
                     # Geometry ``index`` (1 or 2) puts atom ``k`` at x = index * k: the two polyatomic
-                    # geometries differ in bond length, so they are different shapes. They used to sit
-                    # on one point, which is one structure under the rigid-motion rule (#667).
+                    # geometries differ in bond length, so they are different shapes. Sitting
+                    # on one point would be one structure under the rigid-motion rule.
                     x=float(index) * atom_index,
                     y=0.0,
                     z=0.0,

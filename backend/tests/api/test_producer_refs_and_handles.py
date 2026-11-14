@@ -1,11 +1,11 @@
 """Producer responses name their records by public ref; the two path routes take it only.
 
-#578: ``POST /submissions/{submission_ref}/rights-attestations`` and
-``POST /calculations/{calculation_ref}/artifacts`` used to take a row id. Every
-upload response now returns the ``sub_`` / ``calc_`` ref, and the routes take
+``POST /submissions/{submission_ref}/rights-attestations`` and
+``POST /calculations/{calculation_ref}/artifacts`` take the public ref, not a row id. Every
+upload response returns the ``sub_`` / ``calc_`` ref, and the routes take
 that ref only: a row id is refused with 422 ``invalid_handle``.
 
-Two halves, both of which must fail when the fix is reverted:
+Two halves, both of which must fail when the rule is broken:
 
 * every producer response that carries a ``submission_id`` or a calculation id
   carries the ref beside it, and the ref is the row's real ``public_ref``;
@@ -204,7 +204,7 @@ def test_every_producer_response_model_pairs_its_ids_with_refs() -> None:
 
     Walks the response models of every producer route and requires a
     ``*_ref`` sibling for each ``submission_id`` and each calculation-id
-    field, so the next upload route cannot reintroduce the gap #578 closed.
+    field, so a new upload route cannot reintroduce the gap.
     """
     path = Path(__file__).resolve().parents[2] / "scripts" / "generate_producer_contract.py"
     spec = importlib.util.spec_from_file_location("generate_producer_contract", path)
@@ -389,12 +389,12 @@ def test_artifact_upload_refuses_a_row_id(client, db_session, spelling) -> None:
 def test_a_same_key_retry_on_the_old_integer_path_still_replays(
     client, db_session, monkeypatch
 ) -> None:
-    """An upload committed through the integer path before #578 can still be replayed.
+    """An upload committed through the integer path can still be replayed.
 
     ``idem.maybe_replay()`` runs before the ref lookup, so a same-key retry on
     the same integer path returns the stored response (201,
     ``Idempotency-Replayed: true``) until the receipt expires. A *new* key on
-    that path is refused (422 ``invalid_handle``). The old server is simulated
+    that path is refused (422 ``invalid_handle``). A server that took row ids is simulated
     by letting the ref resolver accept a digit string for the first request.
     """
     from app.api.routes import calculations as routes
@@ -419,7 +419,7 @@ def test_a_same_key_retry_on_the_old_integer_path_still_replays(
     fresh = client.post(integer_url, json=ARTIFACT, headers={"Idempotency-Key": "old-int-path-key-0002"})
     assert fresh.status_code == 422, fresh.text
     assert fresh.json()["code"] == "invalid_handle"
-    # The ref path with the old key is a different path scope: a new request.
+    # The ref path with that key is a different path scope: a new request.
     assert client.get(f"/api/v1/calculations/{calc_id}/artifacts").json().__len__() == 1
 
 

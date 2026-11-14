@@ -1,20 +1,18 @@
 """The /status endpoint, and the component signals behind it.
 
-Stage 5's exit criterion includes "worker crash self-heals". Before this,
-nothing anywhere reported whether the worker was running: ``readyz`` covered
-the database and the schema revision only, so a dead worker left the API
-answering 200 while ``/jobs/*`` accepted uploads that would never be
+The /status endpoint must report whether the worker is running: ``readyz`` covers
+the database and the schema revision only, so a dead worker would leave the API
+answering 200 while ``/jobs/*`` accepts uploads that would never be
 processed. That is the failure these tests are about.
 
-The artifact-storage tests below are about the same class of failure, found
-the expensive way. On 2026-08-05 a containerised deployment inherited
-``S3_ENDPOINT_URL=http://127.0.0.1:9000`` from a host deployment, where
-inside a container that address is the container's own loopback. Every
-artifact-bearing upload returned 503 while ``/status`` reported fully
-healthy, the dead man's switch stayed silent, and the deploy script's
-post-deploy check -- which waited for ``status:ok`` -- passed throughout.
-An endpoint that omits a hard dependency does not merely fail to report an
-outage; it actively vouches for one.
+The artifact-storage tests below are about the same class of failure. A
+containerised deployment can inherit ``S3_ENDPOINT_URL=http://127.0.0.1:9000``
+from a host deployment, where inside a container that address is the
+container's own loopback. Every artifact-bearing upload then returns 503 while
+``/status`` reports fully healthy, the dead man's switch stays silent, and the
+deploy script's post-deploy check -- which waits for ``status:ok`` -- passes
+throughout. An endpoint that omits a hard dependency does not merely fail to
+report an outage; it actively vouches for one.
 """
 
 from __future__ import annotations
@@ -60,8 +58,8 @@ def _bind_status_probes_to_test_database(db_engine, monkeypatch):
     step -- failed five tests every night for a reason that was nowhere in
     this file.
 
-    **``tests/conftest.py`` now rebinds the ambient factory to the pytest
-    database for the whole session**, so this fixture is no longer load
+    **``tests/conftest.py`` rebinds the ambient factory to the pytest
+    database for the whole session**, so this fixture is not load
     bearing: these tests pass without it, including with ``DB_NAME`` naming a
     database that has never been created. It stays because the tests below
     that want a *specific* probe outcome monkeypatch ``health.SessionLocal``
@@ -135,7 +133,7 @@ def test_status_reports_the_database_server_encoding(
     A SQL_ASCII cluster stores bytes and validates nothing, and the
     damage is delayed arbitrarily -- everything works until the first
     non-ASCII character arrives. One em dash in a warning message rolled
-    back an entire upload on 2026-08-04, months after the volume was
+    back an entire upload, months after the volume was
     created, and nothing anywhere said "your database is SQL_ASCII".
 
     It is reported and not judged. ``healthy`` stays ``revision is not
@@ -161,9 +159,8 @@ def test_status_reports_the_cluster_template_encoding(
     ``server_encoding`` describes the database that exists. ``template1``
     describes the one the next database created on this cluster inherits
     from, and the two can disagree: converting an application database in
-    place fixes it and leaves the cluster's templates alone. The live
-    deployment held a ``UTF8`` ``tckdb`` beside a ``SQL_ASCII`` ``template1``
-    when checked on 2026-08-12, eight days after the conversion.
+    place fixes it and leaves the cluster's templates alone. A
+    deployment can hold a ``UTF8`` ``tckdb`` beside a ``SQL_ASCII`` ``template1``.
 
     That matters because every restore runbook drops and recreates the
     database before loading the dump, so the template's encoding becomes the
@@ -331,7 +328,7 @@ def test_healthy_storage_is_reported_healthy(client, storage_probe) -> None:
 def test_status_reports_which_endpoint_and_bucket_it_probed(
     client, storage_probe
 ) -> None:
-    """The one fact that would have made the 2026-08-05 incident obvious.
+    """The one fact that makes a misconfigured storage endpoint obvious.
 
     Every value in that deployment's config was individually valid; the
     only way to see the problem was to see *which address* the API was
@@ -365,7 +362,7 @@ def test_unreachable_endpoint_degrades_without_a_5xx(client, storage_probe) -> N
     assert "cannot reach" in block["reason"]
     assert block["endpoint"] == PROBE_ENDPOINT
     # The database is untouched by a storage outage, which is exactly why
-    # the old endpoint reported the deployment as healthy.
+    # an endpoint that checked only the database would report the deployment as healthy.
     assert body["components"]["database"]["healthy"] is True
 
 
@@ -446,8 +443,7 @@ def test_status_answers_promptly_when_storage_hangs(client, storage_probe) -> No
 def capacity_db(db_engine, monkeypatch):
     """One connection that the capacity log and ``/status`` both read.
 
-    The observation used to be a module global a fixture could reset. It
-    is a table now, so isolation is a transaction: a dedicated connection
+    The observation is a table, so isolation is a transaction: a dedicated connection
     whose outer transaction is rolled back at teardown, with both the
     ambient factory and ``/status``'s bound to it.
 
@@ -524,7 +520,7 @@ def _observe_a_full_store(factory, attempted_bytes: int = 4_194_304) -> None:
 def test_the_read_only_probe_cannot_see_a_full_store(client, storage_probe) -> None:
     """The negative finding, pinned so nobody re-derives it the hard way.
 
-    Measured against MinIO ``RELEASE.2025-09-07T16-13-09Z`` on a volume
+    With MinIO ``RELEASE.2025-09-07T16-13-09Z`` on a volume
     filled to its free-space threshold: ``head_bucket`` returns 200, every
     read succeeds, and even a 1-byte write succeeds on the same store that
     refuses a 4 MiB one. So the probe ``/status`` performs is *incapable*
@@ -706,9 +702,9 @@ def test_a_full_store_is_still_reported_after_a_restart(
 ) -> None:
     """The defect this change exists to fix, end to end.
 
-    The observation used to be a module global. A restart forgot it, and
-    the API came back up reporting ``artifact_storage`` healthy while every
-    upload still failed with 507 — the same confident all-clear over a live
+    The observation is stored, not held in memory: a restart that forgot it
+    would let the API come back up reporting ``artifact_storage`` healthy while
+    every upload still failed with 507 -- the same confident all-clear over a live
     outage that the endpoint exists to prevent.
 
     "Restart" here is a **freshly constructed application object**. On its
@@ -793,18 +789,12 @@ def test_a_healthy_poll_asks_once_and_records_nothing(
 ) -> None:
     """A healthy poll writes no row, and asks the store at most one question.
 
-    THIS TEST CHANGED MEANING, deliberately, and the old meaning is worth
-    stating because it was right at the time. It used to assert that a
-    healthy store is *never* asked for its capacity: the free-space probe
-    existed only to answer an outstanding refusal, so on a healthy store it
-    was pure cost. Adding the "approaching full" warning makes the same
-    round trip the only way to see a store filling up **before** a
-    depositor is refused, so it now runs on every poll -- one call, not two,
-    and the cheap half of the report (the ledger sum) is a local database
-    aggregate.
+    The free-space probe runs on every poll: with the "approaching full"
+    warning it is the only way to see a store filling up **before** a
+    depositor is refused -- one call, not two, and the cheap half of the
+    report (the ledger sum) is a local database aggregate.
 
-    What was load-bearing about the old test survives intact and is now
-    asserted rather than implied:
+    What is load-bearing here is asserted rather than implied:
 
     * **No row is written.** "A row per poll would turn the log into a
       metric series" -- the capacity log records incidents, and a warning
@@ -1130,7 +1120,7 @@ def test_an_unreachable_store_is_not_also_told_it_is_getting_full(
 
 
 # ---------------------------------------------------------------------------
-# SeaweedFS headroom (#545): the numbers measured on 4.47 while filling it
+# SeaweedFS headroom: the numbers 4.47 reports while filling it
 # ---------------------------------------------------------------------------
 
 _SEAWEED_MASTER = "http://seaweedfs.test:9333"

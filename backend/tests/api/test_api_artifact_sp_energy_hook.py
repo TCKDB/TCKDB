@@ -31,11 +31,10 @@ CH4_LOG = (FIXTURES / "molpro" / "ch4_closed_shell" / "input.out").read_bytes()
 CH4_ENERGY = -40.457885930635
 
 # Methane, CH4: C at the origin (index 1) and four H at the tetrahedral
-# vertices (indices 2-5). The species entry has always declared ``C``, which is
-# methane, and the log is a closed-shell CH4 single point, but the geometry
-# said "1\nC atom\nC 0.0 0.0 0.0" -- a lone carbon, four hydrogens missing.
-# Nothing compared a deposited structure against its own SMILES until
-# ``assert_geometry_composition_matches_identity``.
+# vertices (indices 2-5). The species entry declares ``C``, which is methane,
+# and the log is a closed-shell CH4 single point, so the geometry must be made
+# of methane's atoms: ``assert_geometry_composition_matches_identity`` compares a
+# deposited structure against its own SMILES, and refuses a lone carbon.
 XYZ_CH4 = (
     "5\nmethane\n"
     "C  0.000  0.000  0.000\n"

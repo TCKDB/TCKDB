@@ -21,7 +21,7 @@ def test_get_returns_200_with_envelope(client, db_session):
     body = resp.json()
     assert "request" in body and "review_summary" in body and "records" in body
     assert "pagination" in body
-    # Phase D: default responses identify records by public ref.
+    # default responses identify records by public ref.
     matching = [
         r for r in body["records"] if r["species_ref"] == species.public_ref
     ]
@@ -30,7 +30,7 @@ def test_get_returns_200_with_envelope(client, db_session):
 
 def test_get_parses_offset_limit(client, db_session):
     # Two spin variants (same smiles, different multiplicity) — distinct
-    # species under DR-0031 that both match a by-smiles search, giving two
+    # species (charge and multiplicity are identity columns) that both match a by-smiles search, giving two
     # pre-collapse candidates.
     a = make_species(
         db_session, smiles="X", inchi_key=next_inchi_key("CO1"), multiplicity=1
@@ -128,7 +128,7 @@ def test_get_limit_above_the_framework_bound_is_rejected_by_the_framework(
 ):
     """``Query(le=200)`` is the outer bound, and it is not the service.
 
-    Kept, and now asserted precisely: this request never reaches
+    Kept, and asserted precisely: this request never reaches
     ``validate_pagination``, so it says nothing about the pagination
     codes. The two tests below are the ones that do.
     """
@@ -140,13 +140,12 @@ def test_get_limit_above_the_framework_bound_is_rejected_by_the_framework(
 def test_get_limit_above_the_service_cap_is_rejected_by_the_service(
     client, db_session, monkeypatch
 ):
-    """A limit inside ``Query``'s bound but above the hosted cap.
+    """A limit inside ``Query``'s bound but above the deployment cap.
 
     The two caps are independent: ``MAX_LIMIT`` is the schema's, and
     ``settings.public_max_limit`` is the deployment's. They are equal in
     the shipped configuration, which is why no request could reach this
-    branch through a GET route until the hosted cap is lowered -- and why
-    the branch went untested for as long as it did.
+    branch through a GET route unless the cap is lowered.
     """
     monkeypatch.setattr(settings, "public_max_limit", 10)
     resp = client.get("/api/v1/scientific/species/search?smiles=X&limit=50")

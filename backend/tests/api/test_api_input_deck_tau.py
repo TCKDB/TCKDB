@@ -1,4 +1,4 @@
-"""An inline input deck is read before a deposit is judged (owner decision 2026-10-31).
+"""An inline input deck is read before a deposit is judged.
 
 ARC ships input decks as ``input`` artifacts and no ``parameters``. The
 backend parsed ``freq.hessian_method`` out of them only after validation, so a

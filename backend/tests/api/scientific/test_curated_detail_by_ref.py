@@ -1,4 +1,4 @@
-"""ADR 0023, step 7: under ``curated``, detail-by-ref answers for the withheld set, not for the approved floor.
+"""Under ``curated``, detail-by-ref answers for the withheld set, not for the approved floor.
 
 A detail read (any route that resolves ONE record by ref or id) serves the record unless its own status is ``rejected`` or
 ``deprecated``, and says its review status. Lists, searches and selects keep the approved floor. What a served detail embeds
@@ -112,7 +112,7 @@ def test_a_legacy_detail_serves_an_unlisted_record_and_says_its_status(client, d
 
 
 def test_a_legacy_species_entry_detail_is_served(client, world):
-    """A scoping parent never gated; the control that it answers 200 under curated both before and after step 7."""
+    """A scoping parent never gated; the control that it answers 200 under curated."""
     entry = world.extra["species_entry"]
     assert client.get(f"{LEGACY}/species-entries/{entry.id}", params={"profile": "curated"}).status_code == 200
 
@@ -291,7 +291,7 @@ def _gated_refs_in(text: str) -> dict[str, set[str]]:
 
 @pytest.mark.parametrize("withheld", [False, True], ids=["unlisted", "withheld"])
 def test_every_ref_a_curated_response_names_resolves_under_curated(client, db_session, login_as, monkeypatch, withheld):
-    """The ref guard's job, restated for step 7: a curated response never names a record whose detail route answers 404.
+    """The ref guard's job: a curated response never names a record whose detail route answers 404.
 
     The 404 set is exactly the withheld set, so after the guard has removed the withheld refs, every ref left must resolve.
     Crawls the whole sweep world under curated and opens every gated ref that any response names.
@@ -327,7 +327,7 @@ def test_every_ref_a_curated_response_names_resolves_under_curated(client, db_se
 
 
 def test_a_curated_network_detail_lists_an_unreviewed_solve_with_its_badge(client, db_session, world):
-    """ADR 0023 step 7 (D-b), second pin: the solve is an embedded record of a served network, so it is listed, badged."""
+    """The solve is an embedded record of a served network, so it is listed, badged."""
     from app.db.models.network import Network
 
     solve = world.hidden["nsolve_h"]

@@ -1,6 +1,6 @@
 """A caller with no valid credential may not make the API read a large body.
 
-FastAPI reads and parses a body before authentication runs, so an unauthenticated junk POST used to be read in full
+FastAPI reads and parses a body before authentication runs, so an unauthenticated junk POST would be read in full
 before its 401. ``AnonymousBodyLimitMiddleware`` refuses a body over ``settings.anonymous_max_body_bytes`` (413
 ``anonymous_body_too_large``) before reading it, unless the request carries a valid API key or session cookie.
 

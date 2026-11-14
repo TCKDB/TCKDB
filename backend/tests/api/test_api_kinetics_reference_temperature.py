@@ -1,4 +1,4 @@
-"""``t0_k`` is stored and served by both kinetics routes (#620).
+"""``t0_k`` is stored and served by both kinetics routes.
 
 A deposit that names a reference temperature must come back naming it: stored
 on the ``kinetics`` row, and on the read model a consumer evaluates k(T) from

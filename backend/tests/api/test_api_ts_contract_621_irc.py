@@ -1,4 +1,4 @@
-"""An IRC result may leave its direction and branch flags unstated (#621).
+"""An IRC result may leave its direction and branch flags unstated.
 
 ``IRCResultPayload`` required ``direction``, ``has_forward`` and ``has_reverse``
 and offered no way to say "the log does not record which way this ran". A
@@ -7,7 +7,7 @@ producer in that position had two choices, both bad: drop the whole IRC result
 The first loses data; the second turns "not stated" into the claim "there is no
 such branch".
 
-All three are now optional and stored as NULL. What these tests hold:
+All three are optional and stored as NULL. What these tests hold:
 
 * an unstated value reads back as **null** and never as ``false``, on every
   surface that serves it;

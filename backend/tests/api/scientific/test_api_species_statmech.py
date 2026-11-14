@@ -88,7 +88,7 @@ def test_empty_when_entry_has_no_statmech(client, db_session):
 
 
 def test_rejects_a_limit_above_the_service_cap(client, db_session, monkeypatch):
-    """Two bounds, and only one of them used to be tested.
+    """Two bounds exist, and both are tested.
 
     This test sent ``?limit=999`` and asserted ``422``. ``Query(le=200)``
     on the route refuses that at the framework boundary, so the service

@@ -1,4 +1,4 @@
-"""Three reaction-bundle ownership refusals, measured on the wire.
+"""Three reaction-bundle ownership refusals, on the wire.
 
 What was wrong
 --------------
@@ -13,12 +13,11 @@ species correction" from "your enthalpy is the wrong type".
 All three resolve ``calculation_key`` through ``calculation_key_to_id``,
 the bundle-global namespace spanning every species *and* the transition
 state, and then attach the result to one specific entry. That is the
-second clause of the reachability rule (#173): a key resolved in a
+second clause of the reachability rule: a key resolved in a
 namespace wider than the target's owner makes the guard reachable even
 though no payload here carries an ``existing_*_id``. Two of the three
 produce ``applied_energy_correction_source_calculation_owner_mismatch``,
-which was catalogued ``Reach.guard`` on exactly that misreading until
-these tests measured it.
+which would be catalogued ``Reach.guard`` on exactly that misreading.
 
 Why these tests are on the wire
 -------------------------------
@@ -135,13 +134,12 @@ def test_a_statmech_citing_a_sibling_species_job_is_coded(client) -> None:
 
 
 def test_a_statmech_citing_the_ts_job_reports_the_same_code(client) -> None:
-    """The TS-owned variant, which used to get its own sentence.
+    """The TS-owned variant reports the same code as the others.
 
-    Before #195 this site chose between "owned by a transition state" and
-    "owned by a different species entry" in the message. Neither was a
-    code, and the shared guard states the one thing that matters -- the
-    calculation is not this species entry's -- so both now report the same
-    contract and ``field`` is what tells them apart.
+    The shared guard states the one thing that matters -- the calculation is
+    not this species entry's -- so "owned by a transition state" and "owned by
+    a different species entry" report the same contract, and ``field`` is what
+    tells them apart.
     """
     payload = _minimal_payload()
     payload["species"][0]["statmech"] = {

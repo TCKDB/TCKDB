@@ -1,4 +1,4 @@
-"""ADR 0023, step 5: the trust checklists read a returned record's calculations by the evidence rule.
+"""The trust checklists read a returned record's calculations by the evidence rule.
 
 The checklist of a kinetics record ("is a source calculation linked?") and of a transition-state entry ("is there a
 frequency result that designates the reaction coordinate?") is a presence check over the calculations the record rests on.

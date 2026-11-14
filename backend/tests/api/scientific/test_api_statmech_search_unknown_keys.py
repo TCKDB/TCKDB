@@ -1,8 +1,7 @@
-"""Chunk 6.4: statmech search refuses a key it does not declare, on both verbs.
+"""Statmech search refuses a key it does not declare, on both verbs.
 
-Design: ``statmech_chunk6_design_2026-10-12.md`` (PR 6.4 review follow-up). Before this a misspelled filter returned 200 and
-was ignored, so it quietly broadened the result, the same defect class as the ignored TS filter fixed in 6.2.
-Each test names the mutation it kills.
+A misspelled filter must not return 200 and be ignored: that would quietly broaden the result, the
+same defect class as an ignored TS filter. Each test names the mutation it kills.
 """
 
 from __future__ import annotations

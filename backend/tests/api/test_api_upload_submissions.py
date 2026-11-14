@@ -10,7 +10,7 @@ idempotent-replay de-duplication.
 ``not_reviewed`` and not ``under_review``: an upload landing means the record
 is queued, not that a human has it open. ``under_review`` is entered later, by
 a curator, and is asserted here to be *absent* at deposit precisely because it
-used to be the value every deposit got.
+must not be the value every deposit gets.
 
 Direct thermo / computed-species coverage lives in
 ``test_api_record_reviews.py``; this module covers the rest plus the

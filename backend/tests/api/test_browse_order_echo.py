@@ -186,7 +186,7 @@ def finder(key: str) -> Callable[[dict], str]:
 
 
 def skew(db_session, rows, specs, *, set_created: Callable[[Any, datetime], None] | None = None) -> None:
-    """Give each row its deposition time (rows in one transaction would otherwise share ``now()``)."""
+    """Give each row its deposition time (rows in one transaction would otherwise share ``()``)."""
     for row, (_status, age_days) in zip(rows, specs, strict=True):
         stamp = _T0 - timedelta(days=age_days)
         if set_created is not None:

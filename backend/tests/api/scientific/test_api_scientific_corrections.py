@@ -324,8 +324,7 @@ def test_fsf_search_by_method(client, db_session):
 
 
 def test_fsf_search_by_software(client, db_session):
-    """The ``software`` filter is backed by ``software_release_id``
-    (correction-scheme-provenance plan v2 §6 -- was ``software_id``),
+    """The ``software`` filter is backed by ``software_release_id``,
     joined through ``software_release``, mirroring ECS's
     ``test_ecs_search_by_software`` below."""
     release = make_software_release(db_session, name="qchem", version=None)
@@ -339,7 +338,7 @@ def test_fsf_search_by_software(client, db_session):
 
 
 def test_fsf_search_by_software_version(client, db_session):
-    """FSF now stores ``software_release_id``, so ``software_version`` is
+    """FSF stores ``software_release_id``, so ``software_version`` is
     implemented against the joined ``software_release`` -- it must match
     versioned releases and must not return version-less ones (mirrors
     ``test_ecs_search_by_software_version`` below)."""
@@ -366,7 +365,7 @@ def test_fsf_search_by_software_version(client, db_session):
 
 
 def test_fsf_detail_serves_software_release(client, db_session, allow_internal_ids):
-    """Plan §10 PR 6's read-layer criterion, mirroring
+    """The read-layer criterion, mirroring
     ``test_ecs_detail_serves_software_and_workflow_tool_release``: the
     detail response's ``software_release`` is a real, resolvable
     release, never the fabricated ``id=0, ref=""`` object.
@@ -803,7 +802,7 @@ def test_ecs_search_by_software(client, db_session):
 
 
 def test_ecs_search_by_software_version(client, db_session):
-    """ECS now stores ``software_release_id``, so ``software_version`` is
+    """ECS stores ``software_release_id``, so ``software_version`` is
     implemented against the joined ``software_release`` -- it must match
     versioned releases and must not return version-less ones."""
     versioned = make_software_release(db_session, name="orca", version="16")
@@ -855,7 +854,7 @@ def test_ecs_detail_serves_software_and_workflow_tool_release(
 def test_ecs_detail_versionless_release_reports_program_and_null_version(
     client, db_session, allow_internal_ids
 ):
-    """Plan §10 PR 2's third red-first criterion, and §3.2's load-bearing
+    """The load-bearing
     shape: a depositor who knows the program but not the build resolves
     to the version-less release row, and that is a *complete* deposit,
     not a degraded one.
@@ -868,7 +867,7 @@ def test_ecs_detail_versionless_release_reports_program_and_null_version(
     *Mutation*: ``version=row.version or "unknown"`` in
     ``_build_software_release_summary`` -- the ``version is None``
     assertion must then fail. Without this test that mutation survives
-    the whole suite (found in review of the read-layer branch).
+    the whole suite.
     """
     release = make_software_release(db_session, name="molpro", version=None)
     ecs = make_energy_correction_scheme(db_session, software_release=release)

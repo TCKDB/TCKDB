@@ -61,8 +61,8 @@ def test_get_ignores_identifier_query_params_it_does_not_declare(client, db_sess
 def test_species_ref_and_entry_ref_on_the_wire_are_bound_to_their_own_row(
     client, db_session
 ):
-    """Regression for #275: hard-coding every ``species_entry_ref`` (or
-    ``species_ref``) in the record builder to one constant used to pass
+    """Regression: hard-coding every ``species_entry_ref`` (or
+    ``species_ref``) in the record builder to one constant must not pass
     this endpoint's whole suite. Two distinguishable species on the wire,
     each checked against its own public ref, is what catches that.
 
@@ -272,14 +272,14 @@ def test_get_too_many_element_symbols_is_422(client, db_session):
 
 
 def test_profile_curated_drops_species_with_no_approved_entries(client, db_session):
-    """The #277 follow-up (must-fix from review): ``profile=curated``
+    """``profile=curated``
     narrows visibility to ``approved`` with **no request field set at
-    all** -- the field-keyed classification the original #277 fix used
-    could not see this, and reproduced the bug verbatim:
+    all** -- a field-keyed classification
+    could not see this, and would reproduce the bug verbatim:
     ``?profile=curated`` reported the full unfiltered species count as
     ``pagination.total`` while every record on the page carried
     ``entries: []``. Three species, every entry ``not_reviewed`` --
-    mirrors the exact shape measured on the deployed archive (59
+    mirrors a realistic archive shape (59
     species, zero approved).
     """
     refs = set()
@@ -333,7 +333,7 @@ def test_record_envelope_matches_search_shape(client, db_session):
     reuse one parser across both surfaces.
 
     ``species_id`` / ``species_entry_id`` are absent, not merely
-    unasserted: the Phase D internal-ID policy
+    unasserted: the internal-ID policy
     (``app/services/scientific_read/internal_ids.py``) strips every
     ``*_id`` key from a public response by default, and this route runs
     through the exact same boundary helper

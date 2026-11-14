@@ -2,7 +2,7 @@
 
 Five surfaces published a ``trust`` field that no request could fill,
 because ``?include=trust`` answered ``422 unknown_include_token`` on all
-five. **They failed in two shapes, and the fix for one is a no-op on the
+five. **They fail in two shapes, and a fix for one is a no-op on the
 other** — which is the whole reason this file tests them as two families
 rather than as one repair repeated five times.
 
@@ -26,7 +26,7 @@ conditional by itself.
 
 So the assertions below are deliberately phrased over the **populated
 path**, never over the absence of an error. "``trust`` is not at the record
-root" passes on ``/thermo/search`` today, passed before anything was fixed,
+root" passes on ``/thermo/search`` whether or not the field works,
 and proves nothing.
 
 Three further properties are pinned here because each is a way this change
@@ -35,8 +35,8 @@ could ship looking correct:
 - ``include=all`` must not produce ``trust`` on any of the five. The
   evaluator's eager-load chain runs from 9 entries on transport to 23 on
   transition-states; ``all`` is the token a client sends when it does not
-  want to think, and buying that chain on it would re-enter the cost the old
-  vocabulary existed to avoid.
+  want to think, and buying that chain on it would re-enter the cost the
+  vocabulary exists to avoid.
 - ``trust`` occurs **exactly once per record**. That is what licenses the
   payload-wide scope: a walker that pops every ``trust`` at any depth is
   safe only while no other field in the payload is called ``trust`` and
@@ -155,9 +155,9 @@ def _seed_statmech(db_session) -> tuple[str, dict[str, Any]]:
 def _seed_transport(db_session) -> tuple[str, dict[str, Any]]:
     """A transport row, which is the only reason this surface is observable.
 
-    ``/transport/search`` returns zero rows on the hosted instance, so no
+    ``/transport/search`` can return zero rows, so no
     response from it has ever been seen anywhere. Every claim about its
-    shape before this fixture was inference from source.
+    shape without this fixture is inference from source.
     """
     species = make_species(db_session, inchi_key=next_inchi_key("TRTR"))
     entry = make_species_entry(db_session, species)
@@ -504,8 +504,8 @@ def test_the_two_stripped_surfaces_needed_no_change_to_their_strip(
 
     Their defect was the vocabulary alone: a strip that ran unconditionally
     because the token that would have made it conditional did not exist. The
-    observable consequence of the fix is that the same unconditional call is
-    now conditional — absent by default, present when asked — with the call
+    observable consequence is that the same unconditional call is
+    conditional — absent by default, present when asked — with the call
     itself unchanged.
     """
     statmech_query, _ = _seed_statmech(db_session)

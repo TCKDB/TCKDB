@@ -18,8 +18,8 @@ that it does so only because the response has no ``statmech_ids``.
 Two kinds of test live here:
 
 * **Per-field** — post a real bundle through the real route and assert
-  the response names the rows the database actually holds. These would
-  have gone red on ``main``.
+  the response names the rows the database actually holds. A response
+  that omits a stored row fails them.
 * **Structural** — ``extra="forbid"`` turns the *next* such omission from
   a silent drop into a loud failure at construction time, and
   :func:`test_an_unknown_workflow_key_cannot_be_silently_dropped` proves

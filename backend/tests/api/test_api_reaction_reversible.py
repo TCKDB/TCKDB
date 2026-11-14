@@ -1,4 +1,4 @@
-"""#598: ``reaction.reversible`` is inherited or refused, never guessed, and a twin is reported on every route.
+"""``reaction.reversible`` is inherited or refused, never guessed, and a twin is reported on every route.
 
 ``reversible`` is part of a graph reaction's identity, so one set of participants stored as reversible and
 as irreversible is two ``chem_reaction`` rows. That identity is unchanged here. What a deposit that does not
@@ -277,7 +277,7 @@ def test_the_pdep_route_names_a_twin_for_its_micro_reactions(client, db_session)
     assert _reactions(db_session) == [False, True]
 
 
-# -- the job route reports exactly what the direct route does (#647) --------------------------------
+# -- the job route reports exactly what the direct route does --------------------------------
 
 
 def _same_through_a_job(client, db_session, direct_url, job_url, payload):

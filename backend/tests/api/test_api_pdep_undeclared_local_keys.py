@@ -23,14 +23,14 @@ micro-reaction and transition-state keys are only ever checked inside the
 ``kind == 'computed'`` branch of
 ``NetworkPDepUploadRequest.validate_mechanistic_channel_evidence``, where
 the coverage rules compare supplied keys against the network topology and
-reject an undefined one as a side effect. ADR 0010's ``reported`` solve —
+reject an undefined one as a side effect. The ``reported`` solve —
 k(T,P) transcribed out of a published table, holding none of the
 master-equation inputs — is exempt from those coverage rules, and was
 therefore exempt from the side effect too. The comment above that branch
 says a reported solve "still has to point it at a real path"; for three of
 these four fields, it did not.
 
-**The fifth is the #218 asymmetry, on a field where it was already
+**The fifth is a species/TS asymmetry, on a field where it was already
 half-known.** ``NetworkSpeciesIn.validate_calc_geometry_belongs_to_
 conformer`` narrows a species calculation's ``geometry_key`` to that
 species's own conformer geometries. ``TransitionStateIn`` has no
@@ -94,7 +94,7 @@ def _assert_refused(response, *, code: str) -> dict:
 
 
 def _assert_no_row_ids(body: dict) -> None:
-    """DR-0028 Requirement 2 -- the maps' *values* are row ids."""
+    """The maps' *values* are row ids."""
     assert set(body["context"]) == {"field", "key", "declared_keys"}, body
     assert all(isinstance(k, str) for k in body["context"]["declared_keys"]), body
 
@@ -205,7 +205,7 @@ def test_the_four_solve_keys_do_not_share_one_code(client) -> None:
 
 
 def test_ts_calculation_naming_a_later_ts_geometry_is_a_coded_422(client) -> None:
-    """The #218 asymmetry, found again on ``geometry_key``.
+    """The species/TS asymmetry, on ``geometry_key``.
 
     ``_parallel_path_payload`` declares three saddle points in the order
     ``ts_elim, ts_elim_anti, ts_isomer``. The first one's ``sp``
@@ -268,12 +268,11 @@ def test_a_ts_calculation_naming_its_own_geometry_is_still_accepted(client) -> N
 
 
 def test_a_ts_calculation_may_not_name_a_species_geometry(client) -> None:
-    """A TS calculation naming a species conformer's geometry is refused (#635).
+    """A TS calculation naming a species conformer's geometry is refused.
 
-    This used to be accepted when the composition agreed (``etoo_geom`` is
-    ethylperoxy and ``ts_elim`` the C2H5O2 saddle point), as the control that
-    isolated resolution order from the composition rule. The owner's rule is
-    stricter: a saddle-point job cannot have run on a species minimum, whatever
+    This is refused even when the composition agrees (``etoo_geom`` is
+    ethylperoxy and ``ts_elim`` the C2H5O2 saddle point): a saddle-point job
+    cannot have run on a species minimum, whatever
     the composition. ``transition_state_calculation_species_geometry`` refuses
     it at the request schema, before resolution or composition is reached.
     """
@@ -292,9 +291,9 @@ def test_a_species_calculation_may_not_borrow_a_sibling_species_geometry(
 ) -> None:
     """``NetworkSpeciesIn`` narrows a species calc to its own conformers.
 
-    Added for ADR 0017, and specifically because a runtime sweep of the
+    Exists because a runtime sweep of the
     whole suite -- recording every site that raises one of the local-key
-    refusals -- found this validator reached by nothing at all. A
+    refusals -- finds this validator reached by nothing else. A
     converted branch that no test enters is a branch a mutation cannot
     turn red, which is the vacuous pass this repository keeps finding.
 

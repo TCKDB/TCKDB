@@ -1,4 +1,4 @@
-"""Tests for ``GET /calculations/{calculation_id}/hessian`` (C-Q2).
+"""Tests for ``GET /calculations/{calculation_id}/hessian``.
 
 Before this route existed there was no public read for a stored Hessian
 at all -- ``grep -rn "CalculationHessian" backend/app/api/`` returned

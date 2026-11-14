@@ -2,9 +2,9 @@
 sp-equivalent when no same-level-of-theory ``sp`` exists on the *same*
 ``transition_state_entry``.
 
-This is the transition-state side of the derivation shipped for species
-in #313 (see ``test_api_opt_energy_as_single_point.py``). The guard used
-to key on ``conformer_observation_id`` — a species-only concept, since a
+This is the transition-state side of the derivation used for species
+(see ``test_api_opt_energy_as_single_point.py``). The guard must not
+key on ``conformer_observation_id`` — a species-only concept, since a
 transition state is a saddle point with no conformer basin and so never
 carries one. The fix generalizes the guard to match on whichever owner a
 calculation actually has: ``conformer_observation_id`` for a

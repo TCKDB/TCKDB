@@ -1,7 +1,7 @@
 """A superseded scientific product read must announce its own replacement.
 
 TCKDB never rewrites an accepted record. A correction appends a new record
-plus one immutable ``scientific_record_supersession`` edge, and the old row is
+plus one immutable ``scientific_record_supersession`` edge, and the superseded row is
 left byte-identical so an existing citation keeps resolving. Resolving is only
 half a contract: a citation that 404s announces its own problem, but a
 citation that resolves cleanly to a *superseded* number looks healthy, so
@@ -49,7 +49,6 @@ from tests.services.scientific_read._factories import (
 
 #: The public-ref shape every pointer in a notice must have: a registered
 #: prefix plus a 26-char base32 body. A bare integer must never appear
-#: (DR-0028 Req 2).
 _PUBLIC_REF = re.compile(r"^[a-z]+_[a-z2-7]{26}$")
 
 
@@ -79,7 +78,7 @@ def _approve(db_session, *, record_type: SubmissionRecordType, record_id: int, a
 def _snapshot(db_session, model, row_id: int) -> dict:
     """Every stored column of one row, as raw values.
 
-    Mirrors the helper ADR 0007's selection test uses
+    Mirrors the helper the selection rule's selection test uses
     (``tests/services/release/test_release_selection.py``) so "the superseded
     record was not touched" is a whole-row claim, not a spot check on the two
     columns the author happened to think of.
@@ -258,7 +257,7 @@ def test_reading_a_superseded_record_leaves_it_byte_identical(client, db_session
     """Nothing about the notice writes to the record it is attached to.
 
     Whole-row snapshots before and after both the supersession *and* the read,
-    the way ADR 0007's selection test asserts it — the notice is computed at
+    the way the selection rule's selection test asserts it — the notice is computed at
     read time precisely so no earlier row has to be updated when a correction
     lands.
     """
@@ -300,9 +299,9 @@ def test_reading_a_superseded_record_leaves_it_byte_identical(client, db_session
 def test_the_head_is_computed_not_stored(db_session):
     """No column anywhere on ``thermo`` caches "is this the current one".
 
-    ADR 0007 rejected exactly this as a stored flag: a second source of truth
+    the selection rule rejected exactly this as a stored flag: a second source of truth
     able to disagree with the ledger it summarises. If someone later adds one,
-    this fails and they have to argue with the ADR rather than with a diff.
+    this fails and the change has to be justified.
     """
     columns = set(Thermo.__table__.c.keys())
     forbidden = {
@@ -319,7 +318,7 @@ def test_the_head_is_computed_not_stored(db_session):
 
 
 # ---------------------------------------------------------------------------
-# No database primary keys in a user-facing body (DR-0028 Req 2)
+# No database primary keys in a user-facing body
 # ---------------------------------------------------------------------------
 
 
@@ -551,7 +550,7 @@ def test_transport_detail_read_names_both_pointers(client, db_session):
 
 
 def test_kinetics_read_names_both_pointers(client, db_session):
-    """The same three-link assertion on the other product the brief named.
+    """The same three-link assertion on the other product it names.
 
     A rate constant is the value most likely to be cited in a mechanism file
     and never looked at again, so the notice mattering here is the whole

@@ -204,7 +204,7 @@ def test_unknown_profile_value_is_rejected(client):
 
 
 def test_release_pin_is_rejected_rather_than_accepted_and_ignored(client):
-    """``?release=`` used to be accepted, resolved, echoed — and never applied.
+    """``?release=`` is rejected, not accepted, resolved, echoed and never applied.
 
     It looked like scoping and did nothing: the resolved release id was set and
     read by no code path at all. Refusing it with a pointer to the endpoints
@@ -305,11 +305,11 @@ def test_curated_does_not_widen_a_stricter_caller_filter(
 def test_curated_never_claims_release_backing_on_the_general_read_surface(
     client, approved_and_draft_thermo
 ):
-    """The false endorsement that failed review.
+    """A curated response must not falsely claim release backing.
 
     ``tckdb_curated_release`` means "an attributed selection names *these*
-    records". No per-record annotation exists, and the release used to be
-    resolved per database, so any curated response claimed backing once any
+    records". No per-record annotation exists, so a release resolved
+    per database would let any curated response claim backing once any
     release was published — including for records a curator had explicitly
     passed over. The honest token here is ``approved_floor_only``.
     """
@@ -326,11 +326,11 @@ def test_curated_detail_by_ref_serves_unreviewed_and_withholds_rejected(
 ):
     """Roughly half the read services never call ``visible_statuses``.
 
-    A rejected statmech used to come back under ``profile=curated`` with a
+    A rejected statmech must not come back under ``profile=curated`` with a
     curated echo. The withheld set (``rejected``, ``deprecated``) is applied at
     handle resolution, which every detail-by-ref read passes through, so it
     cannot be forgotten. A statmech that is merely never reviewed is served,
-    badged (ADR 0023 step 7).
+    badged.
     """
     from app.db.models.app_user import AppUser
     from tests.services.scientific_read._factories import make_statmech
@@ -438,7 +438,7 @@ def test_network_kinetics_inherits_the_curated_withholding_from_its_solve(
 
     ``network_kinetics`` has no ``record_review`` row in principle: a set of k(T,P) coefficients is reviewed as part of the
     ``network_solve`` that produced it. Being absent from the gate map entirely, it returned 200 while its own parent
-    correctly 404'd. It is served or withheld exactly as its solve is (ADR 0023 step 7: unreviewed is served, rejected is
+    correctly 404'd. It is served or withheld exactly as its solve is (unreviewed is served, rejected is
     withheld).
     """
     from app.db.models.app_user import AppUser
@@ -491,7 +491,7 @@ def test_network_kinetics_inherits_the_curated_withholding_from_its_solve(
     response = client.get(f"{detail}?profile=curated")
     assert response.status_code == 200, response.text
     # The token says the approved floor was applied to the records a list returns and nothing further. A not-reviewed
-    # solve's fit is served here, badged, on a detail read (ADR 0023 step 7), and the token still holds.
+    # solve's fit is served here, badged, on a detail read, and the token still holds.
     assert response.json()["request"]["profile_recommendation"] == "approved_floor_only"
 
     # Rejecting the parent withholds the child exactly like its parent.
@@ -539,7 +539,7 @@ def test_every_handle_resolver_is_classified_for_the_curated_gate():
         "FrequencyScaleFactor",
         "EnergyCorrectionScheme",
         "LevelOfTheory",
-        # A recipe is identity data (ADR 0021), like a level of theory.
+        # A recipe is identity data, like a level of theory.
         "CompositeScheme",
         # Scoping parents: they say which records to look under, not what is
         # returned. The floor is applied to the products by visible_statuses.

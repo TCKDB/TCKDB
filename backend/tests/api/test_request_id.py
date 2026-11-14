@@ -1,6 +1,6 @@
 """Tests for the request-ID middleware.
 
-Covers the three behaviors the deployment readiness audit (P1-4)
+Covers the three behaviors the deployment readiness audit
 required:
 
 - Generate an ``X-Request-ID`` when the caller does not send one.

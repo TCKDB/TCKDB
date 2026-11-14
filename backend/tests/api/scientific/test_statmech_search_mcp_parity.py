@@ -1,6 +1,6 @@
-"""The statmech MCP tools and the statmech search/detail API accept the same filters and includes (chunk 6.4).
+"""The statmech MCP tools and the statmech search/detail API accept the same filters and includes.
 
-Design: ``statmech_chunk6_design_2026-10-12.md`` (PR 6.4). The MCP holds no filter semantics of its own; it forwards
+The MCP holds no filter semantics of its own; it forwards
 and the backend decides. Each test names the mutation it kills.
 """
 

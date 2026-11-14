@@ -1133,7 +1133,7 @@ class TestConformerGroupDetail:
         assert "observations" in body
 
     def test_includes_group_selections(self, client, db_session):
-        # Selection creation is now curator/admin-only; the default
+        # Selection creation is curator/admin-only; the default
         # test user is role=``user``, so elevate for this one POST.
         from app.db.models.app_user import AppUser
         from app.db.models.common import AppUserRole
@@ -1346,7 +1346,7 @@ class TestStatmechReads:
     def test_get_returns_electronic_levels_ordered(self, client, db_session):
         """The primitive entity read surface (``GET /statmech/{id}``) must
         expose electronic levels, ordered by ``level_index``. Insert the
-        excited state first so the ordering is load-bearing (DR-0033)."""
+        excited state first so the ordering is load-bearing."""
         from tests.services.scientific_read._factories import (
             attach_statmech_electronic_level,
             make_species,

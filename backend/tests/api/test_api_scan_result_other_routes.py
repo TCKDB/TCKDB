@@ -1,4 +1,4 @@
-"""``scan_result`` is a field of the shared calculation payload (#621).
+"""``scan_result`` is a field of the shared calculation payload.
 
 It was added so a transition-state scan can carry its points, and it lives on
 ``CalculationWithResultsPayload``, which every standalone route uses for its
@@ -7,7 +7,7 @@ to the other routes instead of leaving it to be discovered:
 
 * where a route already accepted a ``scan`` calculation (the conformer route
   does not restrict its *primary* calculation's type), the scan's points are
-  now stored, where before the same payload could not carry them;
+  stored, where before the same payload could not carry them;
 * where a route does not allow a ``scan`` (conformer additional calculations),
   nothing changes;
 * ``scan_result`` on any other calculation type is refused by the payload.

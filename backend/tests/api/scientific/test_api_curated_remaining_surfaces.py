@@ -1,10 +1,10 @@
 """Under ``profile=curated`` three more reads must not name records the curated profile hides.
 
-Same rule as the statmech source blocks (#765), as ADR 0023 now states it: under a review floor a ref to a record the
+Same rule as the statmech source blocks, as the evidence rule states it: under a review floor a ref to a record the
 profile WITHHOLDS (rejected or deprecated) is never named; a ref to one that is merely below the floor (not reviewed,
 under review) is linked evidence and is named. Each hiding test below runs over a rejected record and has an unreviewed
 twin. Exploratory output is unchanged. Record-level facts (levels, evidence counts, availability flags) follow the same
-rule since step 3: a withheld calculation is not counted and supplies no level; an unreviewed one is (see also
+rule: a withheld calculation is not counted and supplies no level; an unreviewed one is (see also
 test_curated_evidence_counts_and_levels.py).
 
   (a) transition-state-entry ``include=statmech`` -> ``statmech[].source_calculations``
@@ -55,8 +55,8 @@ T = CalculationType
 APPROVED = RecordReviewStatus.approved
 BASE = "/api/v1/scientific"
 
-EXPECTED_THERMO_LIST_STATEMENTS = 22  # origin/main: 20, plus the two warning lookups a thermo read now makes (record_warnings, deposit_warnings)
-EXPECTED_STATMECH_SEARCH_CONFORMERS_STATEMENTS = 60  # measured identical on origin/main, n=8
+EXPECTED_THERMO_LIST_STATEMENTS = 22  # 20, plus the two warning lookups a thermo read makes (record_warnings, deposit_warnings)
+EXPECTED_STATMECH_SEARCH_CONFORMERS_STATEMENTS = 60  # n=8
 EXPECTED_CURATED_EXTRA_STATEMENTS = 0
 #: The central ref guard resolves every ref of a response in one batched statement (independent of the page size), on
 #: the route families it is enabled for.
@@ -108,7 +108,7 @@ def _ts_sources(client, ts, profile):
 
 
 def test_ts_entry_statmech_curated_names_an_unreviewed_calculation(client, db_session):
-    """ADR 0023: the unreviewed source calculation is linked evidence of the approved statmech, so it is listed."""
+    """The unreviewed source calculation is linked evidence of the approved statmech, so it is listed."""
     ts, sm, shown, hidden = _ts_world(db_session)
     summary = _ts_sources(client, ts, "curated")
     assert {c["calculation_ref"] for c in summary["source_calculations"]} == {shown.public_ref, hidden.public_ref}
@@ -149,7 +149,7 @@ def _ts_world_with_hidden_statmech(db_session, hidden_status=None):
 
 
 def test_ts_entry_include_statmech_names_an_unreviewed_statmech(client, db_session):
-    """ADR 0023: a second statmech on the entry that is only not reviewed is listed beside the approved one."""
+    """A second statmech on the entry that is only not reviewed is listed beside the approved one."""
     ts, sm, hidden_sm = _ts_world_with_hidden_statmech(db_session)
     r = client.get(f"{BASE}/transition-state-entries/{ts.public_ref}", params={"include": "statmech", "profile": "curated"})
     assert r.status_code == 200, r.text
@@ -169,7 +169,7 @@ def test_ts_entry_include_statmech_omits_hidden_statmech_records(client, db_sess
 
 
 def test_ts_concept_include_statmech_names_an_unreviewed_statmech(client, db_session):
-    """ADR 0023: on the concept route the entry's statmech models are nested under the transition state; an unreviewed one
+    """On the concept route the entry's statmech models are nested under the transition state; an unreviewed one
     is named."""
     ts, sm, hidden_sm = _ts_world_with_hidden_statmech(db_session)
     r = client.get(
@@ -223,7 +223,7 @@ def _provenance(client, entry, profile):
 
 
 def test_thermo_curated_names_an_unreviewed_statmech_freq_calculation(client, db_session):
-    """ADR 0023: an unreviewed frequency calculation is linked evidence, named in the provenance."""
+    """An unreviewed frequency calculation is linked evidence, named in the provenance."""
     entry, sm, sp, freq = _thermo_world(db_session, freq_status=None)
     prov, _ = _provenance(client, entry, "curated")
     assert prov["freq_calculation_ref"] == freq.public_ref
@@ -288,7 +288,7 @@ def _own_sources_world(db_session, hidden_status=None):
 
 
 def test_thermo_curated_names_its_own_unreviewed_source_calculation(client, db_session):
-    """ADR 0023: the thermo's own source calculation is linked evidence; unreviewed, it is named."""
+    """The thermo's own source calculation is linked evidence; unreviewed, it is named."""
     entry, hidden_sp, shown_freq = _own_sources_world(db_session)
     prov, rec = _provenance(client, entry, "curated")
     assert prov["sp_calculation_ref"] == hidden_sp.public_ref
@@ -298,7 +298,7 @@ def test_thermo_curated_names_its_own_unreviewed_source_calculation(client, db_s
 def test_thermo_curated_does_not_name_its_own_withheld_source_calculation(client, db_session):
     """Kills: filtering only the statmech fallback and not the thermo's own source rows. The calculation is rejected."""
     entry, hidden_sp, shown_freq = _own_sources_world(db_session, hidden_status=RecordReviewStatus.rejected)
-    # Its own detail route follows the withheld set too (step 7): served unless rejected or deprecated.
+    # Its own detail route follows the withheld set too: served unless rejected or deprecated.
     detail = client.get(f"{BASE}/calculations/{hidden_sp.public_ref}", params={"profile": "curated"})
     assert detail.status_code == 404  # rejected
     prov, rec = _provenance(client, entry, "curated")
@@ -360,7 +360,7 @@ def _gated_refs_world(db_session, *, group_status=None, observation_status=None,
 
 
 def test_thermo_curated_names_an_unreviewed_target_group_statmech_and_traced_conformer(client, db_session):
-    """ADR 0023: none of the three is reviewed, and each is linked evidence of the approved thermo, so each is named."""
+    """None of the three is reviewed, and each is linked evidence of the approved thermo, so each is named."""
     entry, sm, group, obs = _gated_refs_world(db_session)
     prov, rec = _provenance(client, entry, "curated")
     assert rec["thermodynamic_target"] == {"kind": "single_conformer", "conformer_group_ref": group.public_ref, "declared_by": "depositor"}
@@ -436,7 +436,7 @@ def _conformer_refs(client, sm, profile):
 
 
 def test_statmech_conformers_curated_lists_an_unreviewed_group(client, db_session):
-    """ADR 0023: an unreviewed conformer group is linked evidence of the statmech; it is listed."""
+    """An unreviewed conformer group is linked evidence of the statmech; it is listed."""
     sm, shown, hidden = _conformer_world(db_session)
     refs, _ = _conformer_refs(client, sm, "curated")
     assert sorted(refs) == sorted([shown.public_ref, hidden.public_ref])
@@ -464,7 +464,7 @@ def test_statmech_conformers_exploratory_lists_every_group(client, db_session):
 # --- review statuses: every status below the floor is named as evidence and served by detail unless withheld ----
 
 BELOW_FLOOR = [RecordReviewStatus.under_review, RecordReviewStatus.rejected, RecordReviewStatus.deprecated]
-#: Of the statuses below the floor, the ones the evidence rule withholds (ADR 0023): a nested ref to a record at one of
+#: Of the statuses below the floor, the ones the evidence rule withholds: a nested ref to a record at one of
 #: the others is named.
 WITHHELD = {RecordReviewStatus.rejected, RecordReviewStatus.deprecated}
 
@@ -473,7 +473,7 @@ WITHHELD = {RecordReviewStatus.rejected, RecordReviewStatus.deprecated}
 def test_thermo_own_source_follows_the_evidence_rule_for_every_status_below_the_floor(client, db_session, status):
     """Kills: hiding only one status, or hiding all of them (the evidence rule withholds rejected and deprecated)."""
     entry, hidden_sp, shown_freq = _own_sources_world(db_session, hidden_status=status)
-    # Its own detail route follows the withheld set too (step 7): served unless rejected or deprecated.
+    # Its own detail route follows the withheld set too: served unless rejected or deprecated.
     detail = client.get(f"{BASE}/calculations/{hidden_sp.public_ref}", params={"profile": "curated"})
     assert detail.status_code == (404 if status in WITHHELD else 200)
     prov, rec = _provenance(client, entry, "curated")
@@ -522,13 +522,13 @@ def _substitution_world(db_session):
 
 def test_thermo_curated_does_not_substitute_another_calculation_for_a_hidden_pick(client, db_session):
     """Kills: filtering the links BEFORE the picker (it falls through to the next, shown, candidate). The primary is
-    rejected: withheld, left unnamed, and nothing else promoted into its place; its level goes with it (step 3)."""
+    rejected: withheld, left unnamed, and nothing else promoted into its place; its level goes with it."""
     entry, own_sp, own_freq, sm_sp = _substitution_world(db_session)
     _review(db_session, SubmissionRecordType.calculation, own_sp, RecordReviewStatus.rejected)
     prov_x, rec_x = _provenance(client, entry, "exploratory")
     assert prov_x["primary_calculation"]["calculation_ref"] == own_sp.public_ref  # the true primary
     prov_c, rec_c = _provenance(client, entry, "curated")
-    # The primary's level of theory is a fact about the withheld primary (ADR 0023): null with it, never another calculation's.
+    # The primary's level of theory is a fact about the withheld primary: null with it, never another calculation's.
     assert prov_x["level_of_theory"]["method"] == "ccsd(t)"
     assert prov_c["level_of_theory"] is None
     # The withheld primary and sp are left unnamed, and nothing else is promoted into their place.

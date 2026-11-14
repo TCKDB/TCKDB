@@ -1,13 +1,13 @@
 """Scheme frequency level and the ``composite_delta`` warning, on the wire.
 
-Composite-levels plan P6 (owner decisions 9 and 10):
+Composite levels:
 
 * ``EnergyCorrectionSchemeRef.frequency_level_of_theory`` is accepted on the
   upload, becomes part of scheme identity, and is read back on the scientific
   scheme read (detail and search) as ``frequency_level_of_theory``.
 * A new applied correction with ``application_role = composite_delta`` is stored
   as sent and answered with ``composite_delta_prefer_scheme_terms``. Warning,
-  not refusal (ADR 0008): the check states a preference, not a definition.
+  not refusal: the check states a preference, not a definition.
 """
 
 from __future__ import annotations

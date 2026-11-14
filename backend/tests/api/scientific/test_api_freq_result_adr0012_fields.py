@@ -1,23 +1,22 @@
 """``n_imag`` never travels alone on an ordinary frequency read.
 
-ADR 0012 §"What a record must carry" says ``n_imag`` must be accompanied
-by the count above tau, the tau used, and how tau was chosen. Until this
-file, the ordinary ``include=results`` projection of ``calc_freq_result``
-carried ``n_imag`` and ``imag_freq_cm1`` and none of the rest; the tau,
-its basis and the structural flag were reachable only through the
-``include=imaginary_mode_projections`` heavy include, and only down its
-*not determinable* branch.
+The imaginary-mode protocol says ``n_imag`` must be accompanied by the count above
+tau, the tau used, and how tau was chosen. The ordinary ``include=results``
+projection of ``calc_freq_result`` must carry all of them, not only ``n_imag``
+and ``imag_freq_cm1``: otherwise the tau, its basis and the structural flag are
+reachable only through the ``include=imaginary_mode_projections`` heavy include,
+and only down its *not determinable* branch.
 
 The sharp end is the structural flag. It is the signal that excludes a
 record from default transition-state consumption, so a consumer filtering
-on ``n_imag == 1`` was being handed records ADR 0012 considers excluded
+on ``n_imag == 1`` was being handed records the imaginary-mode protocol considers excluded
 with nothing in the payload saying so. That is the specific defect these
 tests pin, and it is the reason the fields go on the *cheap* projection
 rather than a second opt-in block: a flag a consumer has to ask for is a
 flag that does not protect the consumer who did not know to ask.
 
 Nothing here is recomputed. Every field is read straight off
-``calc_freq_result`` as the upload wrote it, which is ADR 0012's own
+``calc_freq_result`` as the upload wrote it, which is the imaginary-mode protocol's own
 requirement -- recomputing tau at read time would let a parser
 improvement silently re-decide a historical record.
 """
@@ -36,7 +35,7 @@ from tests.services.scientific_read._factories import (
     next_inchi_key,
 )
 
-#: Every field ADR 0012 requires to travel with ``n_imag``, plus the two
+#: Every field the imaginary-mode protocol requires to travel with ``n_imag``, plus the two
 #: that already did. Asserted as an exact key set rather than field by
 #: field: the failure mode this file exists to prevent is a field that is
 #: silently *absent*, and only an exact comparison catches a rename.
@@ -78,7 +77,7 @@ def _read_freq_block(client, calc):
 def test_default_results_read_carries_the_whole_adr_0012_judgement(
     client, db_session
 ):
-    """ADR 0012's motivating record, read the ordinary way.
+    """The imaginary-mode protocol's motivating record, read the ordinary way.
 
     -1300 / -42 / -13 cm-1: a correct saddle point whose reaction
     coordinate is mode 1, judged at tau = 15 cm-1 on the analytic-tight
@@ -124,7 +123,7 @@ def test_a_flagged_first_order_saddle_says_so_without_an_opt_in(
 
     A consumer filtering on ``n_imag == 1`` is selecting records it
     believes are clean first-order saddles. A record can report
-    ``n_imag == 1`` *and* carry the structural flag -- ADR 0012's whole
+    ``n_imag == 1`` *and* carry the structural flag -- the imaginary-mode protocol's whole
     argument is that the count is a property of the protocol, not of the
     structure -- and before this change the ordinary read gave that
     consumer no way to tell the two apart.
@@ -153,12 +152,12 @@ def test_a_flagged_first_order_saddle_says_so_without_an_opt_in(
 
 
 def test_never_judged_reports_nulls_rather_than_a_clean_bill(client, db_session):
-    """A record deposited before ADR 0012 was never judged under it.
+    """A record deposited before the imaginary-mode protocol was never judged under it.
 
     All four persisted fields are NULL on such a record, and the
     projection reports NULL rather than ``false``/``0``: "not judged" and
     "judged and not flagged" are different facts and collapsing them
-    would be exactly the claim the migration refused to backfill.
+    would be exactly the claim a backfill would have to refuse.
 
     ``n_imag_at_or_above_tau`` is null for the same reason -- there is no
     tau to count against -- even though ``n_imag`` and the mode rows are

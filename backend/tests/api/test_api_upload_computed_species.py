@@ -230,14 +230,14 @@ class TestValidationRejections:
         assert resp.status_code == 422
 
     def test_existing_calculation_id_in_parameters_json_rejected(self, client):
-        """The second site #161 was really about.
+        """A key at the end of a dotted path is not promoted to the ``code``.
 
         The refusal names the offending key at the end of a dotted path, so
-        the envelope's message scraper used to promote *that key* as the
-        response's ``code``: this route advertised
+        a message scraper would promote *that key* as the
+        response's ``code``: this route would advertise
         ``code="existing_calculation_id"``, a string in no register and in
         no generated client constant. The refusal is legitimate; the code
-        was invented. It is now the honest generic one.
+        would be invented. It is the honest generic one.
 
         The substring assertion below is deliberately not the load-bearing
         one -- Pydantic echoes rejected input into its own message, so
@@ -365,7 +365,7 @@ class TestIdempotency:
         self, client, db_session, stub_store_artifact
     ):
         """Replay returns the cached body; the second request must NOT
-        produce any duplicate DB rows or S3 writes (DR-0024 contract).
+        produce any duplicate DB rows or S3 writes.
 
         Includes one artifact so the S3-write-count assertion is
         meaningful — without artifacts a successful replay would write

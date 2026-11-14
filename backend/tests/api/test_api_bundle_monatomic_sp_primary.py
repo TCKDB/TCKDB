@@ -1,4 +1,4 @@
-"""A monatomic species may be deposited with an ``sp`` primary (#610).
+"""A monatomic species may be deposited with an ``sp`` primary.
 
 Both bundle routes required an ``opt`` primary. ARC runs only a single point
 for an atom, so its adapter relabelled the atom's single point as an
@@ -395,7 +395,7 @@ def _read_conformer_group(client, db_session) -> dict:
 
 @pytest.mark.parametrize("route", ["species", "reaction"])
 def test_sp_only_atom_reads_back_with_its_geometry_and_levels(client, db_session, route):
-    """The read surface sees what a relabelled ``opt`` used to supply by accident.
+    """The read surface sees the geometry and levels from the ``sp`` primary itself, not from a relabelled ``opt``.
 
     ``geometry_count`` and ``geometries`` come from output-geometry links, so
     an sp primary that carried none would read back as a conformer with no
@@ -449,7 +449,7 @@ def _conformer_upload(smiles: str, multiplicity: int, xyz: str) -> dict:
 
 
 def test_conformers_route_gives_an_atoms_sp_its_geometry_but_not_a_molecules(client, db_session):
-    """The primitive route matches the bundle routes for an atom (#610), and only for an atom."""
+    """The primitive route matches the bundle routes for an atom, and only for an atom."""
     atom = client.post(
         "/api/v1/uploads/conformers", json=_conformer_upload("[H]", 2, "1\nH atom\nH 0.0 0.0 0.0")
     )

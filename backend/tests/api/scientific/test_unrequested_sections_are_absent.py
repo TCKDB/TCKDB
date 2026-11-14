@@ -772,10 +772,9 @@ def test_the_parametrisation_asserts_its_own_size():
     # 88 after ``networks`` joined REACTION_FULL_SECTIONS.
     # 91 after ``level-of-theories`` added LEVEL_OF_THEORY_RECORD_SECTIONS
     # (correction_schemes, frequency_scale_factors, used_by).
-    # 92 after ``include=software`` (methods-surface plan §5.3) added a
+    # 92 after ``include=software`` added a
     # fourth field to that same table.
     # 93 after ``include=statmech`` joined TRANSITION_STATE_RECORD_SECTIONS
-    # (#621).
     # 94 after ``effective_settings`` joined the ``parameters`` token of CALCULATION_RECORD_SECTIONS.
     # 96 after ``calculation_settings`` joined STATMECH_RECORD_SECTIONS and THERMO_RECORD_SECTIONS was declared.
     assert len(sections_under_test) == 96

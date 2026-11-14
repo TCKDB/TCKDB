@@ -120,7 +120,7 @@ def _computed_species_payload_with_thermo_and_statmech() -> dict:
 
 
 def _assert_submissions_attributed_to(db_session, expected_user_id: int) -> None:
-    """A direct ``/uploads/*`` call now creates a submission wrapper; assert
+    """A direct ``/uploads/*`` call creates a submission wrapper; assert
     every such submission (and its links) is attributed to the uploading
     user, consistent with the created_by attribution this module checks."""
     subs = db_session.scalars(select(Submission)).all()

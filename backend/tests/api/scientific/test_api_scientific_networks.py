@@ -1295,7 +1295,7 @@ def test_solve_detail_distinguishes_network_wide_energy_transfer(
 
     The two differ only in what is *absent* — no state, no collider — so
     without ``scope`` on the wire a client would have to guess whether the
-    producer declared it network-wide or simply dropped the fields (ADR 0009).
+    producer declared it network-wide or simply dropped the fields.
     """
     from app.db.models.common import NetworkEnergyTransferScope
     from app.db.models.network_pdep import NetworkSolveEnergyTransfer
@@ -1383,7 +1383,7 @@ def test_solve_detail_reads_scoped_energy_transfer_and_state_energies(
         "correction_convention": "electronic_plus_zpe",
         "convention_note": None,
         "source_calculation_ref": None,
-        # A row with no source and no recorded outcome (a factory row, as a pre-#678 one):
+        # A row with no source and no recorded outcome:
         # nothing is listed, nothing is partial, and the comparison reads as never made.
         "sources": [],
         "partial_sources": False,
@@ -3899,7 +3899,7 @@ def test_nkin_search_default_does_not_inline_payloads(client, db_session):
 
 
 # ===========================================================================
-# Network-solve origin kind (ADR 0010)
+# Network-solve origin kind
 # ===========================================================================
 
 
@@ -4036,7 +4036,7 @@ def test_read_schemas_require_origin_kind_rather_than_defaulting_it():
     always knowable and a default could only ever fire when a *builder
     forgot to project it*. Defaulting to ``computed`` in that case reads
     the stronger scientific claim out of an absence, which is the read-side
-    twin of the write-side gap ADR 0010 closed: a reported record would
+    twin of the write-side gap the reported-solve rule closed: a reported record would
     read back as computed, and a consumer would propagate as re-derivable
     rates that nobody can re-derive.
 

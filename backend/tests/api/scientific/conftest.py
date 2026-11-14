@@ -1,6 +1,6 @@
 """Shared fixtures for scientific API tests.
 
-Phase D: scientific read responses hide internal integer IDs by default.
+scientific read responses hide internal integer IDs by default.
 Tests that need the legacy id-bearing shape can opt in via the
 ``allow_internal_ids`` fixture, which both flips the
 ``ALLOW_PUBLIC_INTERNAL_IDS`` setting **and** signals callers to add
@@ -23,7 +23,7 @@ def allow_internal_ids(monkeypatch):
     is restored at end-of-test by pytest's monkeypatch.
 
     Use this fixture in tests that specifically verify ``*_id``
-    fields, the Phase B/C id+ref coexistence contract, or any
+    fields, the id+ref coexistence contract, or any
     compatibility shape that relied on integer ids being present in
     the default response.
     """

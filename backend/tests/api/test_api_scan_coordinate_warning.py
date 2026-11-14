@@ -1,8 +1,8 @@
-"""A scan whose stored coordinate values disagree with its own geometries earns a warning (#835, ADR 0020).
+"""A scan whose stored coordinate values disagree with its own geometries earns a warning.
 
 ``scan_point_coordinate_disagrees_with_geometry`` is the deposit-time form of the conformance check in
 ``app.services.scan_coordinate_conformance``. The pair of fixture tests is the proof that it speaks when it should and
-is silent when it should be: the real payloads under ``tests/fixtures/arc_runs`` still hold ADR 0019's superseded
+is silent when it should be: the real payloads under ``tests/fixtures/arc_runs`` still hold the superseded
 relative-sweep convention (they are kept in it on purpose), and the QCSchema torsion-drive fixtures hold the coordinate
 itself. The route tests prove the check runs on every route that persists a scan; the rounding tests prove a value
 that is merely rounded is not called a disagreement, and a small constant offset is not called a relative sweep.

@@ -8,8 +8,8 @@ silently dropped them: ``?method=TOTAL_NONSENSE`` returned every species
 in the corpus with HTTP 200, indistinguishable from "everything matches".
 Every test below therefore pairs a *matching* value (must return a
 strict subset) with a *non-matching* value (must return zero) — the
-non-matching case is the one that used to silently return everything,
-so it is the one that actually exercises the fix. Two species at two
+non-matching case is the one that would silently return everything if the filter were ignored,
+so it is the one that actually exercises the filter. Two species at two
 different levels of theory are seeded in every test so a filter that
 was accidentally deleted (i.e. one that matches unconditionally) fails
 by returning both instead of one.
@@ -135,7 +135,7 @@ def test_browse_by_method_returns_strict_subset(client, db_session):
 
 
 def test_browse_by_method_matching_nothing_returns_zero(client, db_session):
-    """The exact TOTAL_NONSENSE case the bug report measured against /search."""
+    """The TOTAL_NONSENSE case against /search."""
     species_a, entry_a = _make_species_with_entry(db_session, prefix="SPMETHZ")
     lot_a = make_lot(db_session, method="wb97xd", basis="def2tzvp")
     _attach_calc(db_session, entry=entry_a, lot=lot_a)

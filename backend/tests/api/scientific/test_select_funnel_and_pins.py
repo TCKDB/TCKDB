@@ -126,7 +126,7 @@ def test_thermo_filters_that_remove_everything_say_so(client, db_session, methan
     ids=["not_reviewed", "under_review", "rejected", "deprecated"],
 )
 def test_thermo_filter_match_follows_the_evidence_rule_under_curated(client, db_session, methane, calc_status, matches):
-    """ADR 0023 step 4: an approved record whose only orca source is rejected or deprecated matches nothing under
+    """An approved record whose only orca source is rejected or deprecated matches nothing under
     curated; a not-reviewed or under-review one is evidence like any other and matches. Exploratory withholds nothing.
 
     Kills: matching through withheld evidence (the funnel would count it), or refusing not-reviewed evidence.

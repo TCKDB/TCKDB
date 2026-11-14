@@ -1,8 +1,8 @@
-"""A network solve's energy sources belong to the subject they state an energy for (#668).
+"""A network solve's energy sources belong to the subject they state an energy for.
 
-#642 / #665 made ``state_energies[].source_calculation_key``,
+``state_energies[].source_calculation_key``,
 ``channel_barriers[].source_calculation_key`` and the ``well_energy`` /
-``barrier_energy`` roles check the *type* of the cited calculation. None of them checked
+``barrier_energy`` roles check the *type* of the cited calculation. The type check alone does not say
 whose calculation it was, so a saddle point's barrier could be cited to a species single
 point and a well's energy to another well's. The rule and its reasoning are in
 ``app.services.network_energy_sources``.
@@ -190,7 +190,7 @@ def test_each_barrier_cites_its_own_saddle_point(client, db_session) -> None:
 
 
 def test_a_barrier_cannot_cite_a_species_single_point(client) -> None:
-    """The case #665's own matrix stored with a 201."""
+    """A barrier cannot be cited to a species single point."""
     payload = _payload()
     payload["solve"]["channel_barriers"][0]["source_calculation_key"] = "ethyl_sp"
     body = _refused(

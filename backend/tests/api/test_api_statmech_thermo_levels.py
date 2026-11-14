@@ -1,6 +1,6 @@
 """R1-R6: geometry/frequency/energy levels of theory, upload validation and reads.
 
-Owner decision, 2026-09 ("statmech-level-roles"): a depositor may run the
+A depositor may run the
 optimisation and the single point at two different levels of theory, and
 TCKDB must both *display* that split honestly and *catch* the deposit that
 forgets half of it -- on every upload shape, including the multi-conformer
@@ -1153,7 +1153,7 @@ def test_computed_species_statmech_sp_on_other_geometry_is_refused(client):
     """One conformer; its sp explicitly declares a different input
     geometry than the opt it is supposed to support -- R3'.
 
-    Since #635 the upload itself refuses this first: a calculation inside a
+    The upload itself refuses this first: a calculation inside a
     conformer states the conformer's geometry as the one it ran on, so an sp
     whose explicit ``input_geometries`` omit it contradicts itself
     (``calculation_input_geometry_mismatch``). The statmech rule

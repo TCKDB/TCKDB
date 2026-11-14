@@ -1,13 +1,13 @@
-"""A database error that is neither a conflict nor an outage is a coded 500 (#628).
+"""A database error that is neither a conflict nor an outage is a coded 500.
 
 ``IntegrityError`` is a 409 and ``OperationalError`` a 503. Every other driver
 error -- a deferred trigger raising ``P0001``, a ``DataError`` such as
-``22P02`` at commit -- used to have no handler, so it reached the client as a
+``22P02`` at commit -- needs a handler, or it reaches the client as a
 ``text/plain`` "Internal Server Error" with a traceback in the ASGI log.
 
 The failures here are real ones, raised by PostgreSQL through psycopg and
 wrapped by SQLAlchemy, and they happen at *commit*, in ``get_write_db``'s
-teardown, which is where #628 saw them.
+teardown, which is where they surface.
 """
 
 from __future__ import annotations

@@ -23,7 +23,7 @@ from tests.services.scientific_read._factories import (
     next_inchi_key,
 )
 
-#: The figure measured before the batching refactor (15e5a1bd): five statements over a read without the include.
+#: The marginal cost of the include when each row is queried separately: five statements over a read without the include.
 _PREVIOUS_MARGINAL_COST = 5
 
 

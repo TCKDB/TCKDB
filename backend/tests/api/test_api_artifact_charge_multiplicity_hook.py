@@ -28,13 +28,12 @@ MOLPRO_CH4_LOG = (
 W_CHARGE = "charge_mismatch"
 W_MULT = "multiplicity_mismatch"
 
-# Every payload below used to carry the same one-atom geometry,
-# ``1\nC atom\nC 0.0 0.0 0.0``, whatever species it declared -- a lone carbon
-# under methyl, methylene, methylene cation and methane alike. The geometry is
+# Every payload below carries a geometry made of the atoms its species declares:
+# ``assert_geometry_composition_matches_identity`` refuses a structure that is not
+# made of the atoms its own identifier declares (for example a lone carbon under
+# methyl, methylene, methylene cation and methane alike). The geometry is
 # incidental to what these tests assert (charge and multiplicity read out of a
-# log header), which is exactly why nobody looked, and
-# ``assert_geometry_composition_matches_identity`` now refuses it: a structure
-# has to be made of the atoms its own identifier declares.
+# log header).
 #
 # Coordinates are schematic but the atoms are the molecules', per species:
 _GEOMETRY_BY_SMILES = {
@@ -270,7 +269,7 @@ class TestChargeMultiplicityArtifactHook:
         assert resp.status_code == 201, resp.text
         assert _relevant(resp) == [W_MULT]
 
-        # Charge/multiplicity are identity columns on ``species`` (DR-0031),
+        # Charge/multiplicity are identity columns on ``species``,
         # reached through the entry. A mismatch must never rewrite them:
         # doing so would silently repoint the upload at a different species.
         calc = db_session.get(Calculation, calc_id)

@@ -1,15 +1,15 @@
-"""ADR 0023, step 2: under ``curated`` a nested ref to a record that is merely below the floor is shown with its badge.
+"""Under ``curated`` a nested ref to a record that is merely below the floor is shown with its badge.
 
 The family modules (``test_curated_ref_guard_*_family.py``) pin the other half: a nested ref to a REJECTED or DEPRECATED
 record is withheld. They build the sweep world with its hidden records withheld (``build_sweep_world(withheld=True)``).
 This module builds the same world with the hidden records left as they are built, ``not_reviewed`` (no review row) or
-``under_review``, and pins that the same pointers now name them, with a review badge where the model has one:
+``under_review``, and pins that the same pointers name them, with a review badge where the model has one:
 
 * an observation of an unlisted conformer group names the group (``ConformerGroupCoreBlock.review``);
 * an entry of an unlisted transition state names its parent, which is context (``TransitionStateCoreBlock.review``);
 * a solve or a fit of an unlisted network names the network.
 
-Each is the twin of a withheld test in the family modules, on the same route. Since step 7 the record itself (``record``) is
+Each is the twin of a withheld test in the family modules, on the same route. the record itself (``record``) is
 served too: an unlisted record answers its own detail route, badged (``test_curated_detail_by_ref.py``).
 """
 

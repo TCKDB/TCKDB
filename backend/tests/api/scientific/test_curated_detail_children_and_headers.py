@@ -1,4 +1,4 @@
-"""Review follow-ups for #826: children of a served detail, and the legacy review-status header.
+"""Children of a served detail, and the legacy review-status header.
 
 * D-b: the scientific network detail with ``include=solves`` shows its unreviewed solves badged and withholds rejected and
   deprecated ones (the legacy network detail already did).

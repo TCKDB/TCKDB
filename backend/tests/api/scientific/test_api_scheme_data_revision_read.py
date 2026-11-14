@@ -1,4 +1,4 @@
-"""The scientific scheme read reports ``data_revision`` and the atom-param sign (#619).
+"""The scientific scheme read reports ``data_revision`` and the atom-param sign.
 
 Both come from a real deposit through the resolver, not from a factory that
 writes the columns directly, so a write path that dropped either would show

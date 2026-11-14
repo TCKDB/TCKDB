@@ -1,7 +1,7 @@
 """A deck uploaded after the deposit that disagrees with the stored tolerance basis warns.
 
 The stored tau is append-only and is not relabelled; the warning is stored on the
-calculation (the #837 machinery) and shown under ``record_warnings`` on its read.
+calculation and shown under ``record_warnings`` on its read.
 """
 
 from __future__ import annotations

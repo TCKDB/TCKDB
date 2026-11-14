@@ -31,7 +31,7 @@ from tests.services.scientific_read._factories import (
 
 
 def _entry(db_session):
-    # No fixed smiles: identity is (smiles, charge, multiplicity) (DR-0031)
+    # No fixed smiles: identity is (smiles, charge, multiplicity)
     # and this helper is called repeatedly to build distinct species.
     species = make_species(db_session, inchi_key=next_inchi_key("THAPI"))
     return make_species_entry(db_session, species)
@@ -46,7 +46,7 @@ def test_returns_200_for_valid_species_entry_id(client, db_session):
     )
     assert resp.status_code == 200
     body = resp.json()
-    # Phase D: default response identifies the species entry by ref.
+    # default response identifies the species entry by ref.
     assert body["species_entry_ref"] == entry.public_ref
     assert len(body["records"]) == 1
     assert body["records"][0]["model_kind"] == "scalar"
@@ -75,9 +75,9 @@ def test_returns_404_for_missing_species_entry_id(client, db_session):
 
 
 def test_rejects_a_limit_above_the_service_cap(client, db_session, monkeypatch):
-    """Two bounds, and only one of them used to be tested.
+    """Two bounds exist, and both are tested.
 
-    ``?limit=999`` -- what this test used to send -- is refused by
+    ``?limit=999`` is refused by
     ``Query(le=200)`` before the service runs, so the pagination code the
     test was named after could never appear. Both bounds are asserted
     here; see ``test_api_species_statmech.py`` for the full account.
@@ -398,7 +398,7 @@ def test_include_trust_no_representation_hard_failed(client, db_session):
 def test_include_trust_single_temperature_range_is_not_hard_failed(client, db_session):
     """A one-point validity range is a datum reported at a single temperature.
 
-    This previously asserted ``hard_failed``. ``tmin == tmax`` is the only
+    ``tmin == tmax`` is the only
     definitional violation reachable through the database (``ck_*_tmin_le_tmax``
     and ``ck_*_tmin_k_gt_0`` refuse inverted and non-positive ranges outright),
     and it is not a violation at all: a rate constant measured at 298 K has a

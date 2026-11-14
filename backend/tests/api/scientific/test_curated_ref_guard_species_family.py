@@ -1,17 +1,17 @@
-"""PR-2a: the species-side route families withhold hidden refs under ``?profile=curated`` (and only there).
+"""The species-side route families withhold hidden refs under ``?profile=curated`` (and only there).
 
-What this pins, beyond the all-routes sweep (``test_curated_ref_sweep.py``, which is enforce-only since PR-5 and covers
+What this pins, beyond the all-routes sweep (``test_curated_ref_sweep.py``, which is enforce-only and covers
 every route):
 
 * **Leaks.** Every species-side route, crawled under ``curated`` with and without ``internal_ids``, names no hidden
-  record by ref or by integer id, and answers 200. On ``main`` before PR-2a this fails: the same crawl finds 29 refs
-  and 14 ids.
+  record by ref or by integer id, and answers 200. Without the guard this fails: the same crawl finds hidden refs
+  and ids.
 * **No substitution.** Curated is a withholding of exploratory on those routes: values equal or ``null``, lists only
   shorter.
-* **D1.** A visible conformer observation whose group is hidden stays visible with ``conformer_group`` null. Widening
+* **No cascading hide.** A visible conformer observation whose group is hidden stays visible with ``conformer_group`` null. Widening
   the field alone is not enough: the guard also needs the block registered as a pointer, or the request fails closed.
-* **D4.** A hidden ref the guard cannot place still fails closed.
-* **D5.** Availability flags, ``calculation_count`` and ``*_summary.ids`` on a species entry follow the curated
+* **Fail closed.** A hidden ref the guard cannot place still fails closed.
+* **Counts follow the floor.** Availability flags, ``calculation_count`` and ``*_summary.ids`` on a species entry follow the curated
   floor, and are unchanged under exploratory.
 """
 
@@ -69,7 +69,7 @@ def _is_selection_document(path: str) -> bool:
     """Hashed, replayable documents (`./select`, `./relative-energies`, `./relative-energies/compare`, each with `/manifest`).
 
     They never pass the boundary hook (they stamp the profile and return), carry population counts that follow the
-    floor by design, and get their own seam in PR-3."""
+    floor by design, and get their own seam."""
     return path.endswith(
         (
             "/select",
@@ -98,7 +98,7 @@ def _request_text(spec, world, label, *, ids):
 
 
 def test_species_side_routes_name_no_hidden_record_under_curated(client, db_session, login_as, monkeypatch):
-    """Reproduction + fix: the crawl that finds 29 ref leaks and 14 id leaks on ``main`` finds none.
+    """The crawl finds no ref or id leak on a world that holds every response shape.
 
     Also: no species-side route is left unplaceable (a 500 from ``RefGuardUnplaceable``), every request answers 200,
     and curated is only ever a withholding of exploratory (no sibling is substituted into a gap).
@@ -116,7 +116,7 @@ def test_species_side_routes_name_no_hidden_record_under_curated(client, db_sess
     hidden = world.hidden_refs()
 
     exploratory = run_pass(client, db_session, specs, world, spy, profile="exploratory")
-    world.withhold_hidden(db_session)  # the crawl above saw the records unlisted; from here they are withheld (ADR 0023)
+    world.withhold_hidden(db_session)  # the crawl above saw the records unlisted; from here they are withheld
     curated = run_pass(client, db_session, specs, world, spy, profile="curated")
     monkeypatch.setattr(settings, "allow_public_internal_ids", True)
     curated_ids = run_pass(client, db_session, specs, world, spy, profile="curated", with_ids=True)
@@ -151,7 +151,7 @@ def test_species_side_routes_name_no_hidden_record_under_curated(client, db_sess
 
 
 # ---------------------------------------------------------------------------
-# D1 and D4: the owner block of a conformer observation
+# No cascading hide, and fail closed: the owner block of a conformer observation
 # ---------------------------------------------------------------------------
 
 
@@ -165,7 +165,7 @@ def _get(client, path, profile):
 
 
 def test_a_visible_observation_of_a_hidden_group_stays_visible_with_the_group_blanked(client, db_session, login_as):
-    """D1: no cascading hide. The observation, its species and review are kept; only the group block goes.
+    """No cascading hide. The observation, its species and review are kept; only the group block goes.
 
     Kills: hiding the child (404 or dropped); leaving the group named; blanking the group when it is visible;
     touching exploratory.
@@ -193,7 +193,7 @@ def test_a_visible_observation_of_a_hidden_group_stays_visible_with_the_group_bl
 
 
 def test_widening_the_owner_field_alone_still_fails_closed(client, db_session, login_as, monkeypatch):
-    """D4 and the #770-review correction: without the group block registered as a pointer the guard has nowhere to put
+    """Without the group block registered as a pointer the guard has nowhere to put
     a hidden group ref, so the request fails instead of leaking.
 
     Kills: the guard emitting the ref when it cannot place it; treating the nullable field as enough.
@@ -209,7 +209,7 @@ def test_widening_the_owner_field_alone_still_fails_closed(client, db_session, l
 
 
 # ---------------------------------------------------------------------------
-# D5: availability flags, counts and summary ids follow the floor
+# Counts follow the floor: availability flags, counts and summary ids follow the floor
 # ---------------------------------------------------------------------------
 
 
@@ -240,10 +240,10 @@ def _under(profile, fn):
 
 
 def test_availability_counts_and_summary_ids_follow_the_curated_floor(client, db_session):
-    """D5: a species entry whose only records are hidden reports none under curated, and everything under exploratory.
+    """A species entry whose only records are hidden reports none under curated, and everything under exploratory.
 
     The exploratory expectation is computed here with plain queries, independent of the function under test, so it is
-    the behaviour before PR-2a and not a restatement of the new code.
+    the unguarded behaviour and not a restatement of the guarded code.
 
     Kills: counting hidden records under curated; filtering under exploratory (the default profile must stay
     byte-identical); a floor applied to only some of the five counts; summary ids that still list hidden records; a
@@ -433,7 +433,7 @@ def test_a_url_naming_a_hidden_record_is_withheld_like_the_ref(client, db_sessio
 
     Query, fragment, absolute, middle-segment, short, ``;params`` (with and without ``=``), single, double and triple
     percent-encoding, a trailing newline (raw and ``%0a``), whitespace in the query and a URL over 500 characters are
-    all read. None is emitted by an enabled family today; PR-2b's ``/full`` builds middle-segment URLs.
+    all read. None is emitted by an enabled family today; The ``/full`` route builds middle-segment URLs.
 
     Kills: reading only the last path segment; skipping the query or the fragment; keeping the 40-character shortcut
     for short paths; decoding once; not splitting ``;params``; ``$`` instead of ``\\Z`` and not splitting on
@@ -449,7 +449,7 @@ def test_a_url_naming_a_hidden_record_is_withheld_like_the_ref(client, db_sessio
 
 
 def test_a_url_valued_field_that_cannot_be_read_fails_closed(client, db_session):
-    """A URL-valued field the guard cannot parse is refused (D4), never kept; free text that merely looks like a URL
+    """A URL-valued field the guard cannot parse is refused, never kept; free text that merely looks like a URL
     is left alone.
 
     Kills: swallowing the parse error in a URL-valued field; raising on free text; a percent-encoding that never settles
@@ -614,7 +614,7 @@ def test_a_literature_url_is_free_text_not_a_url_valued_field(client, db_session
 
 def test_an_empty_identity_with_nowhere_to_go_fails_closed(client, db_session):
     """Collapsing an emptied ``GeometryIdentity`` needs a nullable field to null; with none (a required field, a list)
-    the guard refuses (D4) instead of emitting the empty shell. The nullable case is the control.
+    the guard refuses instead of emitting the empty shell. The nullable case is the control.
 
     Kills: ``continue`` instead of raising when the container is not a model or the field is not nullable.
     """
@@ -755,7 +755,7 @@ def test_the_review_shapes_each_build_a_hidden_link_and_none_fails_closed(client
     the hidden ref is not registered.
 
     Kills: removing any of the seven pointer registrations (the request fails closed); a world that stops building a
-    shape (the exploratory control no longer names the hidden record).
+    shape (the exploratory control does not name the hidden record).
     """
     world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
@@ -784,7 +784,7 @@ def test_the_review_shapes_each_build_a_hidden_link_and_none_fails_closed(client
 
 def test_a_required_field_that_is_exactly_a_hidden_ref_fails_closed(client, db_session):
     """A required free-text field whose whole value is a bare hidden ref is a ref in the wrong place, most likely a
-    pointer the registry missed: it raises (D4) so the registry gets fixed, instead of being quietly emptied. The same
+    pointer the registry missed: it raises so the registry gets fixed, instead of being quietly emptied. The same
     value in a nullable field is nulled.
 
     Kills: treating a whole-value ref as free text and blanking it to ``""``.

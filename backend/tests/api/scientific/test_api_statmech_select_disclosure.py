@@ -65,7 +65,7 @@ def declared_ref(db_session, entry_scene, *, status: RecordReviewStatus) -> str:
 
 
 def test_a_species_entry_below_the_floor_is_still_a_visible_target(client, db_session):
-    """A species entry is a scoping parent (owner decision 2026-10-24): its own review status never hides what is under it."""
+    """A species entry is a scoping parent: its own review status never hides what is under it."""
     scene = build(db_session)
     approve(db_session, scene)
     restatus(db_session, SubmissionRecordType.species_entry, scene.world.entry.id, RecordReviewStatus.not_reviewed)

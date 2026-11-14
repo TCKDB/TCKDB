@@ -57,8 +57,8 @@ def _transport_payload(smiles: str = "[H]", mult: int = 2,
 def _pdep_payload(name: str = "net-lookup") -> dict:
     # Composition matches the SMILES each geometry is deposited under: ethyl
     # (``C[CH2]``) is C2H5, seven atoms, and ethylperoxy (``CCO[O]``) is
-    # C2H5O2, nine. They used to be "C C H" and "C C O O", hydrogens simply
-    # absent, which nothing compared against the identity. Coordinates are
+    # C2H5O2, nine. They are not "C C H" and "C C O O", hydrogens simply
+    # absent, which nothing compares against the identity. Coordinates are
     # schematic; the atoms are not.
     xyz_ethyl = (
         "7\nC2H5\n"

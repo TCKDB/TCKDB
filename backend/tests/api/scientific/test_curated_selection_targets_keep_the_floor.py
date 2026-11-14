@@ -1,6 +1,6 @@
 """A select request, and the network batch evaluate, name records through ``resolve_selection_handle`` (floor=True).
 
-ADR 0023 step 7: only a DETAIL read follows the withheld set. A select chooses among records and a batch evaluate runs a
+Under the evidence rule only a DETAIL read follows the withheld set. A select chooses among records and a batch evaluate runs a
 population of fits, so the refs they name must clear the approved record floor, exactly as for a list. The records below are
 ``not_reviewed`` or ``under_review``: a detail serves them (``test_curated_detail_by_ref.py``), a select target answers the
 same 404 as an unknown ref. The network, kinetics and batch-evaluate tests fail when ``resolve_selection_handle`` is called

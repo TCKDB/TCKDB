@@ -1,11 +1,11 @@
-"""A calculation's ``conformer_key`` and ``geometry_key`` may not name different conformers (#635).
+"""A calculation's ``conformer_key`` and ``geometry_key`` may not name different conformers.
 
 A species-side calculation can state two local keys: ``conformer_key``, the
 conformer it is evidence for (its anchor), and ``geometry_key``, the geometry
-it ran on. Each used to be checked alone. ``conformer_key`` for conformer b
-beside ``geometry_key`` for conformer a's geometry was accepted, the anchor
-followed ``conformer_key``, and every rule that reads the anchor (the SCF
-stability same-conformer rule among them) trusted it. A geometry and a
+it ran on. Checking each alone is not enough: ``conformer_key`` for conformer b
+beside ``geometry_key`` for conformer a's geometry would be accepted, the anchor
+would follow ``conformer_key``, and every rule that reads the anchor (the SCF
+stability same-conformer rule among them) would trust it. A geometry and a
 conformer must never disagree, and neither key wins: the deposit is refused,
 with a coded 422 that names both keys.
 
@@ -123,7 +123,7 @@ def _assert_mismatch(resp, *, calc_key, conformer_key, geometry_key, geometry_co
     for key in (conformer_key, geometry_key, geometry_conformer_key):
         assert f"'{key}'" in sentence, body
     assert "different conformers" in sentence, body
-    # Local keys only (DR-0028): every context value is the depositor's own string.
+    # Local keys only: every context value is the depositor's own string.
     assert all(isinstance(v, str) for v in body["context"].values()), body
 
 
@@ -492,7 +492,7 @@ def test_transition_state_calculation_on_its_own_geometry_is_accepted(client, ur
 
 
 def test_duplicate_geometry_key_is_left_to_the_uniqueness_rule(client):
-    """Two conformers declaring one geometry key: the old uniqueness refusal, not a false mismatch.
+    """Two conformers declaring one geometry key: the uniqueness refusal, not a false mismatch.
 
     Mutation: build the geometry-owner map without skipping duplicated keys.
     """

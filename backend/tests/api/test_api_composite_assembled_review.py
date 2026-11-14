@@ -1,4 +1,4 @@
-"""Review fixes on assembled composites, through the real routes (ADR 0021, P5).
+"""Review fixes on assembled composites, through the real routes.
 
 Each section names the reviewer's defect and would fail on the code that had it:
 
@@ -8,7 +8,7 @@ Each section names the reviewer's defect and would fail on the code that had it:
 * an assembled composite is never a primary, on any route (it was a 500);
 * inputs are finalised by every persisting workflow, one test per workflow
   (a workflow could drop the call and nothing failed);
-* the service refuses what only the wire used to: a declared ``composite_input`` edge,
+* the service itself refuses (not only the wire): a declared ``composite_input`` edge,
   method-level fields beside a scheme, inputs on a program run, a key *and* a ref.
 """
 
@@ -109,7 +109,7 @@ def test_the_textbook_scheme_counts_triples_once_end_to_end(client, sps):
 
 
 def test_the_textbook_scheme_with_a_total_that_double_counts_triples_is_refused(client):
-    """The reviewer's probe: the same recipe written with plain ``correlation`` was 15 mEh out."""
+    """A total that double counts (T) is refused: it differs from the plain-``correlation`` recipe by more than a milli-Hartree."""
     double_counted = TEXTBOOK_TOTAL + T_Q  # an extra (T) in the total
     payload = f.bundle([*_orca_sps(), f.assembled(TEXTBOOK, TEXTBOOK_INPUTS, double_counted)])
     body = _refused(client, payload, "composite_total_mismatch")
@@ -138,7 +138,7 @@ def test_terms_listed_in_reverse_are_one_level_and_the_total_is_still_checked(cl
     first = _ok(client, f.bundle_b())
     reversed_scheme = copy.deepcopy(f.SCHEME_B)
     reversed_scheme["terms"].reverse()
-    # The breakdown names terms by the position the producer listed them at: 0 is now the correlation.
+    # The breakdown names terms by the position the producer listed them at: 0 is the correlation.
     block_terms = [
         {"term_position": 0, "value_hartree": f.CORR_CBS_X3},
         {"term_position": 1, "value_hartree": f.R_Q},

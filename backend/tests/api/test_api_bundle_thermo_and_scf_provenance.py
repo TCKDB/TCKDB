@@ -84,7 +84,7 @@ def _stability_rows(db_session, calc_key_to_id: dict[str, int]):
 
 
 def test_computed_species_bundle_records_scf_stability(client, db_session):
-    """The species bundle can now say the SCF was checked, and it is stored."""
+    """The species bundle can say the SCF was checked, and it is stored."""
     payload = _species_bundle()
     payload["conformers"][0]["primary_calculation"]["scf_stability"] = dict(
         _SCF_STABILITY
@@ -121,7 +121,7 @@ def test_an_inconsistent_scf_stability_block_is_refused_at_the_seam(client):
     """``stable`` and ``reoptimized_wavefunction`` contradict each other.
 
     The validator that says so has existed since the field was written; what
-    is new is that a bundle payload can now reach it. Reaching it as a 422
+    is new is that a bundle payload can reach it. Reaching it as a 422
     is the point — the same contradiction reaches the table as a check
     constraint, and an ``IntegrityError`` cannot name the field.
     """
@@ -269,7 +269,7 @@ def test_reaction_bundle_thermo_records_its_source_calculations(client, db_sessi
 def test_reaction_bundle_thermo_source_role_must_match_calculation_type(client):
     """A freq calculation is not the ``sp`` the thermo says it is.
 
-    Same rule the species route and the standalone thermo route apply — now
+    Same rule the species route and the standalone thermo route apply —
     owned once by ``app.workflows.thermo`` rather than copied per route,
     because three copies of one rule can disagree about one deposit.
     """
@@ -300,7 +300,7 @@ def test_reaction_bundle_thermo_source_must_belong_to_its_own_species(client):
     resp = client.post("/api/v1/uploads/computed-reaction", json=bundle)
     assert resp.status_code == 422, resp.text[:800]
     body = resp.json()
-    # #158: the same rule the standalone thermo route enforces, reported
+    # the same rule the standalone thermo route enforces, reported
     # under the same code -- the reaction bundle is not a second contract.
     assert body["code"] == "thermo_source_calculation_owner_mismatch", body
     assert "another species entry" in body["detail"]
@@ -406,7 +406,7 @@ def test_calculation_rows_are_shared_not_duplicated_by_thermo_links(
 ):
     """A source link points at the calculation the bundle already created.
 
-    Guards the shape of the fix: resolving a local key must reuse the row,
+    Guards the shape: resolving a local key must reuse the row,
     not mint a second calculation to hang the link off.
     """
     bundle = _reaction_bundle()
@@ -442,9 +442,9 @@ class TestSpeciesBundleLevelWorkflowTool:
     """``ComputedSpeciesUploadRequest.workflow_tool_release`` did nothing.
 
     The reaction root declared its ``workflow_tool_release`` and read it
-    in the same commit (2026-03-22); the species root declared the same
+    in the same commit; the species root declared the same
     field five weeks later and no commit ever wired it. That is drift,
-    not design — so it is now the bundle-level default the thermo and
+    not design — so it is the bundle-level default the thermo and
     statmech blocks inherit, the precedence the reaction root already
     applies to this field and its two siblings.
 
@@ -510,7 +510,7 @@ class TestSpeciesBundleLevelWorkflowTool:
     def test_the_bundle_no_longer_warns_about_what_it_was_given(
         self, client
     ):
-        """The 201 body used to report the filled-in field as missing."""
+        """The 201 body must not report the filled-in field as missing."""
         bundle = _species_bundle(
             workflow_tool_release=dict(_ARC),
             thermo={"enthalpy_reference_kind": "formation_298k", "scientific_origin": "computed", "h298_kj_mol": 218.0},
@@ -541,7 +541,7 @@ class TestSpeciesBundleLevelWorkflowTool:
         unwired deliberately: unlike ``workflow_tool_release`` it has no
         row to go to — the bundle owns no record of its own — so giving
         it one is a decision about what a bundle-level note *is*, not the
-        wiring omission this change fixes. The field now says so in its
+        wiring omission this change fixes. The field says so in its
         own description, and this test pins that the claim is true.
         """
         bundle = _species_bundle(

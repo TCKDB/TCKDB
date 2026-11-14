@@ -1,6 +1,6 @@
-"""A program-run named composite (CBS-QB3, G4, ...) as a calculation (ADR 0021, P3a).
+"""A program-run named composite (CBS-QB3, G4, ...) as a calculation.
 
-The worked payload of the plan's section 3(a): CBS-QB3 run by Gaussian as one
+The worked payload: CBS-QB3 run by Gaussian as one
 program run, with the separate B3LYP/CBSB7 frequency job ARC runs beside it.
 
 What is pinned here, and why each is not vacuous
@@ -8,7 +8,7 @@ What is pinned here, and why each is not vacuous
 * R1 -- geometry and frequency come from the recipe when no ``opt`` / ``freq``
   is linked (``composite_recipe``), the energy is the composite's
   (``energy_source == "composite"``), and a linked ``freq`` takes the
-  frequency over (``freq``). The mutations in the PR body each break one of
+  frequency over (``freq``). Each mutation breaks one of
   these.
 * Every refusal and warning P3a adds, by code, with the response's own
   ``code`` field -- never a substring of ``detail``.
@@ -308,7 +308,7 @@ def test_a_composite_does_not_warn_as_a_misshapen_deposit(client):
 
 
 def test_role_composite_on_a_non_composite_calculation_warns(client):
-    """The legacy shape: accepted, with a warning (decision 7)."""
+    """The legacy shape: accepted, with a warning."""
     conf = _deposit_conformer(client, primary=_opt(_B3LYP_CBSB7)).json()
     opt_id = conf["primary_calculation"]["calculation_id"]
     resp = client.post("/api/v1/uploads/thermo", json=_thermo_payload([(opt_id, "composite")]))

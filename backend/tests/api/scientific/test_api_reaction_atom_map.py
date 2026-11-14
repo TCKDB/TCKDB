@@ -1,4 +1,4 @@
-"""Reading a reaction's atom map back (ADR 0011).
+"""Reading a reaction's atom map back.
 
 Deposits ``CH3 + H -> CH4`` through the real upload endpoint and reads it back
 through ``/scientific/reaction-entries/{id}/full``, because the property under
@@ -8,7 +8,7 @@ either was written.
 
 The distinction is deliberately *not* behind an ``include`` token. A record
 that reads identically whether or not anyone knows which atom is which is the
-failure ADR 0011 exists to remove, and gating the answer behind a second
+failure the atom-map rule exists to remove, and gating the answer behind a second
 request would reintroduce it for every consumer that does not think to ask.
 """
 
@@ -404,7 +404,7 @@ def test_the_badge_counts_pairs_without_reading_them(client):
 def test_the_atom_map_badge_is_not_subject_to_the_pair_cap(client, monkeypatch):
     """The header badge carries no pairs, so it cannot be capped away.
 
-    Whether a reaction is mapped at all is the one thing ADR 0011 refuses to
+    Whether a reaction is mapped at all is the one thing the atom-map rule refuses to
     put behind a second request; a cap that hid it would reintroduce exactly
     the indistinguishability the decision removes.
     """

@@ -27,7 +27,7 @@ def test_get_returns_200_with_envelope(client, db_session):
     assert "request" in body and "review_summary" in body and "records" in body
     assert len(body["records"]) == 1
     rec = body["records"][0]
-    # Phase D: identify records by public ref in default responses.
+    # identify records by public ref in default responses.
     assert rec["species"]["species_ref"] == species.public_ref
     assert rec["species"]["species_entry_ref"] == entry.public_ref
     assert rec["thermo"]["thermo_ref"] == thermo.public_ref

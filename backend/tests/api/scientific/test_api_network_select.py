@@ -311,7 +311,7 @@ def test_min_review_status_raises_the_floor(client, db_session, world, two):
 
 
 def test_under_a_curated_profile_an_unreviewed_reference_solve_is_named_in_both_documents(client, db_session, world):
-    """ADR 0023: a reference solve is evidence the entry rests on, so an unreviewed one is named (twin of the next test)."""
+    """A reference solve is evidence the entry rests on, so an unreviewed one is named (twin of the next test)."""
     from tests.services.network_selection._world import validity
 
     _approve_network(db_session, world)

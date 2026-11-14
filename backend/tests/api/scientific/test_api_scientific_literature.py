@@ -426,7 +426,7 @@ def test_records_endpoint_distinguishes_reported_from_computed_solve(
     """A reported solve must not read back as a computed one here.
 
     ``reported`` is the only ``network_solve`` kind *required* to carry a
-    literature link (ADR 0010), so every reported solve in the database
+    literature link, so every reported solve in the database
     appears on this surface — and its ``me_method`` is NULL, which is the
     only free-text slot the type has. If the ``kind`` projection is ever
     dropped, the two rows below become byte-identical apart from their
@@ -587,9 +587,9 @@ def test_records_endpoint_include_review_adds_badges(client, db_session):
         status=RecordReviewStatus.approved,
     )
     body_no = client.get(_records_url(lit.public_ref)).json()
-    # This transport row *is* approved. Under the old shape the default
-    # response said ``review: null``, which is what an unreviewed record
-    # said too.
+    # This transport row *is* approved. A default
+    # response saying ``review: null`` would say what an unreviewed record
+    # says too.
     assert "review" not in body_no["records"][0]
 
     body_yes = client.get(

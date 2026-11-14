@@ -2,10 +2,9 @@
 
 Two ways in, and they are tested as two: *approved* (a curator published
 it, any authenticated caller may pull it) and *owned* (the caller
-deposited it). The second was added 2026-08-24; before it, an
-approval-only gate had never opened on the hosted instance — 563 of 563
-artifacts hung off ``not_reviewed`` calculations — so the depositor could
-not retrieve their own upload. What did *not* change is the auth gate:
+deposited it). Without the second, an approval-only gate stays shut for
+artifacts that hang off ``not_reviewed`` calculations, and the depositor
+cannot retrieve their own upload. The auth gate is separate:
 ownership is a reason to serve an authenticated caller, never a reason to
 serve an anonymous one.
 """
@@ -41,22 +40,16 @@ from app.services.deposit_ownership import user_owns_calculation_deposit
 from tests.id_leak import id_in_text
 from tests.services.test_artifact_integrity import _SessionProxy
 
-#: Where the explanatory log line for a download 502/503 is now emitted.
+#: The logger that emits the explanatory log line for a download 502/503.
 #:
-#: It used to be the route: the route caught the typed exception and
-#: re-raised a bare ``HTTPException``, which bypassed both the handler in
-#: ``app.api.errors`` *and* that handler's logging, so the route had to log
-#: for itself or the 2026-08-05 storage outage would have been a bare
-#: access-log 5xx again. #212 made the route re-raise the exception
-#: unchanged — which is what lets the handler mint
-#: ``artifact_integrity_failed`` / ``artifact_storage_unavailable`` instead
-#: of ``http_502`` / ``http_503`` — and the handler logs the same
-#: exception, with ``exc_info`` and with the request's method and path.
+#: The route re-raises the typed exception unchanged, so the handler in
+#: ``app.api.errors`` both logs it (with ``exc_info`` and the request's
+#: method and path) and mints ``artifact_integrity_failed`` /
+#: ``artifact_storage_unavailable`` instead of ``http_502`` / ``http_503``.
 #:
-#: So the *claim* the two tests below make is unchanged and still asserted:
-#: an operator can read the reason and a traceback out of the journal. Only
-#: the logger name moved. Keeping a duplicate log in the route would mean
-#: two records of one event.
+#: The two tests below assert that an operator can read the reason and a
+#: traceback out of the journal. A duplicate log in the route would mean two
+#: records of one event.
 _ERROR_HANDLER_LOGGER = "app.api.errors"
 from tests.api.scientific.test_api_scientific_artifacts import (
     _make_species_owned_calc,
@@ -129,7 +122,7 @@ def _link_submission(
 ) -> Submission:
     """Give ``owner_id`` a submission that deposited ``calculation_id``.
 
-    The second ownership path, and the one ADR 0018 names: a deposit is
+    The second ownership path: a deposit is
     owned by the ``created_by`` of the submission that made it, which is
     not necessarily whoever ran the process that wrote the rows.
     """
@@ -182,18 +175,16 @@ def test_approved_artifact_download_returns_verified_bytes(
 def test_an_unapproved_artifact_is_downloadable_by_any_authenticated_caller(
     client, db_session, monkeypatch, _api_other_user
 ) -> None:
-    """Rewritten 2026-09-14, when review status stopped gating access.
+    """Review status does not gate who may download a file.
 
-    This test previously asserted the opposite: that a caller who did not
-    deposit the file got a 404 for it. That rule made the hosted
-    instance's evidence unreadable by everyone but its uploader -- 563
-    artifacts, 0 approved, so the "approved" branch had never opened for
-    anybody -- and the archive's own admin could read none of it.
+    A caller who did not deposit the file still gets it: gating on approval
+    would leave a depositor's evidence unreadable by anyone but its uploader
+    while curation has barely begun.
 
-    ADR 0004's argument is about ANONYMOUS access to unredacted logs, and
+    The argument for the auth gate is about ANONYMOUS access to unredacted logs, and
     that gate is untouched (see the 401 test below). Review status answers
     "should you trust this science", which is a different question and is
-    already surfaced as trust badges. It no longer decides who may read
+    already surfaced as trust badges. It does not decide who may read
     the bytes.
 
     Deposited by somebody else, never reviewed, and the caller gets it.
@@ -235,9 +226,9 @@ def test_depositor_downloads_their_own_unapproved_artifact(
 ) -> None:
     """The justifying case: your own file, before any curator looked at it.
 
-    Refused before 2026-08-24, and it is the whole point of the change.
+    Ownership alone must serve the bytes.
     Approval is a curator action on a store where curation has barely
-    begun, so gating a depositor's own bytes behind it locked every
+    begun, so gating a depositor's own bytes behind it would lock every
     depositor out of every file they had ever uploaded.
     """
     artifact, content = _downloadable_artifact(
@@ -269,7 +260,7 @@ def test_submission_owner_downloads_a_deposit_they_did_not_write(
     "owner", and it is not hypothetical: a submission made on someone's
     behalf — an agent, a group account, a pipeline running under a service
     identity — writes ``calculation.created_by`` as itself while the
-    accountable principal is the one who owns the submission. ADR 0018
+    accountable principal is the one who owns the submission.
     puts ownership on ``submission.created_by`` for exactly this reason,
     and the upload route already authorizes attachment the same way.
     """
@@ -299,15 +290,12 @@ def test_submission_owner_downloads_a_deposit_they_did_not_write(
 def test_a_retired_submission_no_longer_changes_a_download(
     client, db_session, monkeypatch, _api_test_user, _api_other_user
 ) -> None:
-    """Rewritten 2026-09-14. The premise dissolved; the case did not.
+    """A retired (rejected) submission does not change a download.
 
-    This asserted that authority held only via a REJECTED submission did
-    not extend to downloads -- a sound rule while downloads were gated on
-    ownership at all. They no longer are, so the rejected submission
-    changes nothing here, and asserting that plainly is more useful than
-    deleting the case: it is the strongest available statement that the
-    ownership branch is really gone, since this caller's only possible
-    claim to the file is one the old rule explicitly refused.
+    Authority held only via a REJECTED submission does not extend to
+    downloads. The rejected submission changes nothing here: this caller's
+    only possible claim to the file is a retired one, so the download is
+    served exactly as for any other authenticated caller.
 
     The retired-submission judgement itself is unaffected on the path
     where it still bites: the UPLOAD route still refuses to let a
@@ -353,7 +341,7 @@ def test_owner_download_still_verifies_stored_bytes(
 
     The ownership path must not become a way to receive bytes that no
     longer match their digest — and the custody break it discovers is
-    recorded exactly as on the approved path (ADR 0014).
+    recorded exactly as on the approved path.
     """
     artifact, content = _downloadable_artifact(
         db_session,
@@ -416,13 +404,10 @@ def test_artifact_download_maps_integrity_failure_to_502(
 
     assert response.status_code == 502
     body = response.json()
-    # The code, not the prose. The prose used to be the route's own
-    # sentence, because the route raised its own ``HTTPException``; that
-    # is exactly what made this route answer ``http_502`` where the
-    # upload path answered ``artifact_integrity_failed`` for the same
-    # break (#212). Asserting the code is what would notice if the route
-    # started minting its own answer again — asserting a sentence would
-    # not.
+    # The code, not the prose. A route that raised its own ``HTTPException``
+    # would answer ``http_502`` where the upload path answers
+    # ``artifact_integrity_failed`` for the same break. Asserting the code
+    # notices that; asserting a sentence would not.
     assert body["code"] == "artifact_integrity_failed", body
     assert body["detail"] == (
         "A stored artifact failed integrity verification. This has "
@@ -437,17 +422,13 @@ def test_artifact_download_maps_storage_outage_to_503(
 
     Without an explanatory log line, a storage outage appears in the
     journal as a bare access-log 503 naming a subsystem with no record of
-    why — the exact thing that made the 2026-08-05 outage take so long to
-    diagnose. That claim is unchanged; where it is satisfied has moved.
+    why, which makes the outage slow to diagnose.
 
-    The route used to convert the exception to an ``HTTPException``,
-    which bypassed the ``ArtifactStorageUnavailable`` handler in
-    ``app.api.errors`` *and* its logging, so the route logged for itself.
-    It also meant the download answered ``http_503`` where the rest of
-    the API answers ``artifact_storage_unavailable``. The route now
-    re-raises the exception unchanged, so the handler both logs it and
-    names it — see ``_ERROR_HANDLER_LOGGER``. The assertions below are
-    the same assertions against that logger, plus the code.
+    The route re-raises the exception unchanged, so the
+    ``ArtifactStorageUnavailable`` handler in ``app.api.errors`` both logs
+    it and names it ``artifact_storage_unavailable`` (see
+    ``_ERROR_HANDLER_LOGGER``). The assertions below are against that
+    logger, plus the code.
     """
     artifact, _content = _downloadable_artifact(
         db_session, status=RecordReviewStatus.approved
@@ -484,12 +465,12 @@ def test_artifact_download_maps_storage_outage_to_503(
 def test_artifact_download_logs_why_integrity_verification_failed(
     client, db_session, monkeypatch, caplog
 ) -> None:
-    """A 502 here means stored bytes no longer match their digest.
+    """A 502 here means stored bytes do not match their digest.
 
     That is data corruption, and the public body says nothing about which
     object or why. If it is not in the log it is nowhere. Emitted by the
-    handler rather than the route since #212 — see
-    ``_ERROR_HANDLER_LOGGER`` — because the route now re-raises the typed
+    handler rather than the route — see
+    ``_ERROR_HANDLER_LOGGER`` — because the route re-raises the typed
     exception instead of replacing it.
     """
     artifact, _content = _downloadable_artifact(
@@ -528,7 +509,7 @@ def test_integrity_502_writes_a_durable_record_not_just_a_log(
 
     This reader gets a 502 either way. The row is what makes the break
     visible to the *next* reader and to the trust evaluator, without
-    anyone having to go looking in the journal. ADR 0014.
+    anyone having to go looking in the journal.
     """
     artifact, content = _downloadable_artifact(
         db_session, status=RecordReviewStatus.approved
@@ -574,8 +555,8 @@ def test_store_reporting_no_such_key_is_recorded_as_a_missing_object(
 ) -> None:
     """A row referencing an object the store says is gone is a custody break.
 
-    And it answers as one. Until #226 this case and the outage below both
-    came back ``(503, artifact_storage_unavailable)`` with "Retry later.",
+    And it answers as one. This case and the outage below must not both
+    come back ``(503, artifact_storage_unavailable)`` with "Retry later.",
     which is a false instruction here: the store has answered, it will
     keep answering the same way, and no amount of backing off puts the
     bytes back. The pair is asserted, not the status alone — a status on
@@ -609,7 +590,7 @@ def test_store_reporting_no_such_key_is_recorded_as_a_missing_object(
         "The stored bytes for this artifact are not in the object store. "
         "This has been recorded; retrying will not clear it."
     )
-    # No database primary key in a user-facing body (DR-0028 Req 2).
+    # No database primary key in a user-facing body.
     assert body["context"] == {}, body
     assert not id_in_text(artifact.id, body["detail"]), body
 
@@ -622,7 +603,7 @@ def test_unreachable_store_records_nothing(client, db_session, monkeypatch) -> N
     """An endpoint that never answered says nothing about the object.
 
     The opposite fact for custody: recording a break here would
-    manufacture a hard fail out of a network blip. And, since #226, the
+    manufacture a hard fail out of a network blip. And the
     opposite answer too — this is the branch that keeps
     ``artifact_storage_unavailable`` and its "retry later", because here
     retrying is exactly right.
@@ -657,7 +638,7 @@ def test_unreachable_store_records_nothing(client, db_session, monkeypatch) -> N
 def test_the_two_storage_failures_do_not_answer_the_same_way(
     client, db_session, monkeypatch
 ) -> None:
-    """The whole point of #226, asserted as a contrast in one test.
+    """The two storage failures answer differently, asserted as a contrast in one test.
 
     The two tests above can both pass while the route answers identically
     if either is edited to match the other; what has to hold is that the
@@ -781,7 +762,7 @@ def test_authenticated_user_can_download_approved_artifact(
     """A regular authenticated user (the default client actor) may pull
     approved bytes — the gate requires authentication, not a curator role.
 
-    Amended 2026-08-24 to pin the actor as a *non-owner*: the calculation
+    The actor is pinned as a *non-owner*: the calculation
     is deposited by someone else, and the ownership predicate is asserted
     to say so before the request is made. Without that, the new ownership
     path could silently be what serves these bytes, and a regression that
@@ -817,11 +798,11 @@ def test_anonymous_is_refused_even_bytes_it_would_own_if_it_authenticated(
     The property this asserts is the one the ownership change must leave
     untouched: no download path became anonymous. The artifact here is
     unapproved and deposited by the seeded API user — the exact row that
-    user now downloads successfully one test above — and the request
+    user downloads successfully one test above — and the request
     carries no credential, so it must be refused by the auth gate before
     any ownership question is even asked, and before any byte is loaded.
 
-    ADR 0004 is why: an unredacted log carries producer-side scratch
+    The auth gate exists because an unredacted log carries producer-side scratch
     paths, usernames and scheduler ids, and that is a property of the ESS
     output format rather than something scrubbable at rest. Public access
     is a separate design (scrub-on-download), not this.

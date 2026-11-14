@@ -392,7 +392,7 @@ def test_admin_fake_trigger_uses_shared_active_recipe(
 
     The response prompt/rubric versions are sourced from the shared
     ``machine_review.recipe`` module, so a recipe change flows through without a
-    second source of truth (readiness-audit risk R1).
+    second source of truth.
     """
     from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_PROMPT, active_rubric
 

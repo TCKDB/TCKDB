@@ -1,11 +1,11 @@
-"""Every route that runs the composition check runs the isotope check (#666).
+"""Every route that runs the composition check runs the isotope check.
 
 The service-level cases live in
 ``tests/services/test_calculation_geometry_isotopes.py``. This file proves the
 check is reached from each deposit route, with the ``(status, code)`` pair as
 the assertion -- never a substring of ``detail``.
 
-The shape is the issue's: a ``[H]`` (protium) record whose calculation carries
+The shape: a ``[H]`` (protium) record whose calculation carries
 an H geometry declaring ``isotopes {1: 2}``.
 """
 

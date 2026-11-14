@@ -8,7 +8,7 @@ module and reached a *different* answer about which of its refusals a
 depositor can actually receive: ``statmech_torsion_scan_calculation_owner_mismatch``
 was recorded as unreachable, then as reachable by exactly one route, then
 by two; ``applied_energy_correction_source_calculation_owner_mismatch``
-sat at ``Reach.guard`` on the same misreading until #195 measured it.
+was classified ``Reach.guard`` on the same misreading.
 Each correction came from a person re-reading the module, and nothing in
 the suite would have gone red had the wrong reading survived.
 
@@ -19,8 +19,8 @@ plus the standalone-route cases in ``test_api_uploads`` and
 ``test_api_upload_key_and_role_contracts``) each prove *one* refusal.
 None of them, and nothing else, asserts that the set is **complete** —
 that no code in the module is left with its behaviour asserted only at
-the function level, which is precisely the defect #115 found for
-``scf_stability`` and #146 for supersession. A new ``W_*`` constant, or a
+the function level, which is precisely the defect once found for
+``scf_stability`` and for supersession. A new ``W_*`` constant, or a
 route test rewritten to assert a different code, changes what a depositor
 can receive and leaves the suite green today.
 
@@ -181,10 +181,10 @@ def test_every_reachable_ownership_code_is_asserted_by_a_route_test() -> None:
     assert codes, "the ownership module defines no W_* codes -- the scan is broken"
 
     reachable = codes - _guard_only(codes)
-    # A floor, not a non-empty check (#186): the assertion below is an
+    # A floor, not a non-empty check: the assertion below is an
     # *absence* -- it passes perfectly against an empty ``reachable``, so
     # a catalogue edit marking every code ``Reach.guard`` would silence
-    # it rather than fail it. Measured 2026-08-16: 8 codes, 1 guard.
+    # it rather than fail it. (8 codes, 1 guard.)
     assert len(reachable) >= 9, (
         f"only {len(reachable)} ownership codes are reachable by a request; "
         "9 were when this floor was measured. If a code genuinely became "
@@ -282,13 +282,12 @@ def test_no_ownership_code_is_left_as_a_guard() -> None:
     a deliberate, reviewable act rather than a way to make the check
     above go quiet.
 
-    It held one code, ``transport_source_calculation_owner_mismatch``, until
-    #622 gave transport a bundle block whose keys resolve across the
-    computed-reaction bundle; that code and the new stability-source code are
-    now reachable, and ``tests/api/test_api_bundle_extras_622.py`` provokes
-    both on the wire.
+    ``transport_source_calculation_owner_mismatch`` is not exempt: transport has
+    a bundle block whose keys resolve across the computed-reaction bundle, so
+    that code and the stability-source code are reachable, and
+    ``tests/api/test_api_bundle_extras_622.py`` provokes both on the wire.
 
-    It holds one again, on purpose (#621):
+    It holds one, on purpose:
     ``ts_validation_source_calculation_owner_mismatch`` is the persistence
     seam's backstop for a transition-state validation record citing a
     calculation of something else. Every deposit path narrows the key to the

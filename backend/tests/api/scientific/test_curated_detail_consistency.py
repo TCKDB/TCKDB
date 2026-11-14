@@ -1,6 +1,6 @@
-"""A served curated detail must count what it lists (ADR 0023 step 7).
+"""A served curated detail must count what it lists.
 
-Since step 7 a detail page lists its embedded records by the evidence rule (everything but ``rejected`` and
+A detail page lists its embedded records by the evidence rule (everything but ``rejected`` and
 ``deprecated``), badged. Its counts, summaries and ``has_*`` flags must be computed over the same population, or the page
 contradicts itself: one badged entry listed, ``total=0``, ``has_entries=False``.
 

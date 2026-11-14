@@ -548,7 +548,7 @@ def test_under_curated_a_finding_on_a_withheld_source_is_not_applied_and_its_ref
     client, db_session, curator, hidden_status
 ):
     """A visible H298 record cites a hidden calculation as a source. The finding the curator recorded about that calculation
-    would block the record if it were read. ADR 0023: a source that is merely not reviewed is linked evidence, so the
+    would block the record if it were read. the evidence rule: a source that is merely not reviewed is linked evidence, so the
     finding about it applies under curated as it does under exploratory; a source that is rejected is withheld, so the
     finding neither blocks nor is named. The exploratory run in the same test is the positive control: there the same
     finding blocks and the manifest records its effect. The manifest names the effect, not the refs, so the effect is what

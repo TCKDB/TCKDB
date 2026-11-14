@@ -155,7 +155,7 @@ def test_a_group_of_another_species_entry_is_refused_and_nothing_is_stored(clien
     )
     assert _code(response) == "thermo_target_group_owner_mismatch"
     assert response.json()["context"]["field"] == "thermodynamic_target.conformer_group_ref"
-    # No ids in a refusal body (DR-0028).
+    # No ids in a refusal body.
     assert str(foreign.id) not in response.text.replace(foreign.public_ref, "")
     assert db_session.scalars(select(Thermo)).all() == []
 

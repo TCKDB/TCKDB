@@ -1,8 +1,8 @@
-"""``composite_energy_verification``, end to end through the upload and read APIs (ADR 0021, P7a).
+"""``composite_energy_verification``, end to end through the upload and read APIs.
 
-On ``main`` (fea447ec, after P5) no read said how far a composite energy had been checked:
-the field did not exist. Held here, over HTTP, with the stored rows changed *after* upload where
-the point is that the read recomputes:
+A read must say how far a composite energy has been checked. Held here, over HTTP,
+with the stored rows changed *after* upload where the point is that the read
+recomputes:
 
 * an assembled composite is ``recomputed`` from its stored inputs, **on read**: an input energy
   filled later is picked up (``unverifiable`` -> ``recomputed``), a stored input that changed
@@ -88,7 +88,7 @@ def test_a_non_composite_calculation_has_no_verification(client, db_session):
 
 
 def test_an_input_energy_filled_later_is_picked_up_on_the_next_read(client, db_session):
-    """Deposit with an input energy unstated; fill it afterwards; the same composite now recomputes."""
+    """Deposit with an input energy unstated; fill it afterwards; the same composite recomputes."""
     payload = f.bundle_c()
     for conf in payload["conformers"]:
         for calc in conf["additional_calculations"]:

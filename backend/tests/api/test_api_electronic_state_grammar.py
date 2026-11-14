@@ -1,6 +1,6 @@
 """An electronic-state label and a term symbol must match the strict grammar, on every upload route.
 
-Owner decision 2026-11-03: free text there let a typed ``R`` on a ground-state entry read as
+Free text there would let a typed ``R`` on a ground-state entry read as
 "R enantiomer" on the website, and let anything at all onto a public page. The grammar lives in
 ``tckdb_schemas.electronic_state``; this file proves the routes enforce it, with a coded 422 that
 names the field and never echoes what was sent, and that nothing is stored on a refusal.

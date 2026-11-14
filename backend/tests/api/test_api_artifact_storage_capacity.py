@@ -30,7 +30,7 @@ unreachable          503     ``artifact_storage_unavailable``
 object missing        502    ``artifact_object_missing``
 ===================  ======  ==============================
 
-The error codes the "full" cases use are **measured**, not taken from
+The error codes the "full" cases use are the stores' real answers, not taken from
 documentation: MinIO ``RELEASE.2025-09-07T16-13-09Z`` was filled on a
 size-capped scratch volume and answered ``XMinioStorageFull`` at HTTP 507,
 and refused a write with ``XMinioAdminBucketQuotaExceeded`` at HTTP 400
@@ -44,7 +44,7 @@ What these tests cannot do, and what was done instead
 -----------------------------------------------------
 Only the transport is faked here, so ``store_artifact`` and the handler run
 for real — but the *store* does not, and "the code set is right" is a
-different claim from "the fix fires on the real condition". So the whole
+different claim from "the guard fires on the real condition". So the whole
 chain was also run once against a scratch MinIO filled for real, through
 real botocore: the upload answered ``507 artifact_storage_full``, ``/status``
 went degraded naming ``XMinioStorageFull`` and the refused byte count, and
@@ -184,8 +184,7 @@ class _UnreachableStore:
 def capacity_db(db_engine, monkeypatch):
     """One connection that the capacity log and ``/status`` both see.
 
-    The observation used to be a module global that a fixture could reset
-    between tests. It is a table now, so isolation is a transaction: a
+    The observation is a table, so isolation is a transaction: a
     dedicated connection with an outer transaction rolled back at
     teardown, with both the ambient session factory and ``/status``'s
     bound to it so every party in a test reads the same rows.
@@ -222,8 +221,8 @@ def _no_seaweedfs_capacity_opinion_by_default(monkeypatch):
 
     CI sets ``S3_SEAWEEDFS_MASTER_URL`` for the live tests, so without this
     an ``InternalError`` scripted below would be classified by whatever the
-    CI store happens to say about its room. Unset is the pre-#545
-    behaviour, and the tests that exercise the SeaweedFS arm set it back.
+    CI store happens to say about its room. Unset disables the probe,
+    and the tests that exercise the SeaweedFS arm set it back.
     """
     monkeypatch.setattr(artifact_storage, "S3_SEAWEEDFS_MASTER_URL", "")
     # Likewise the quota read, which goes to the configured S3 endpoint: a
@@ -315,7 +314,7 @@ def test_a_full_store_is_507_and_says_an_operator_must_act(
     assert "retrying will not clear it" in detail, detail
     assert "operator" in detail, detail
 
-    # DR-0028 Req. 2 -- a subsystem is named and nothing else. No row ids,
+    # a subsystem is named and nothing else. No row ids,
     # no digest, no bucket, no endpoint, and no S3 error code: the store's
     # code is for the log and for /status, not for a public body.
     assert body["context"] == {}, body
@@ -397,7 +396,7 @@ def test_a_missing_object_is_still_502_artifact_object_missing(
     ("s3_code", "s3_status"),
     [
         ("AccessDenied", 403),
-        # Measured against SeaweedFS 4.47: this is its answer to a full
+        # SeaweedFS 4.47: this is its answer to a full
         # store -- volume slots exhausted, the disk itself out of space
         # (ENOSPC), and a bucket that ``s3.bucket.quota.enforce`` made
         # read-only -- all three alike. It is also its answer to *any*
@@ -466,7 +465,7 @@ def test_a_small_write_does_not_clear_a_larger_refusal(capacity_db) -> None:
     one, and without it the two are indistinguishable — to the suite and
     to a reviewer.
 
-    It is not a hypothetical. Measured against MinIO
+    It is not a hypothetical. With MinIO
     ``RELEASE.2025-09-07T16-13-09Z`` on a volume filled to its free-space
     threshold, **the same store refused an 8 MiB write and accepted a
     1-byte write in the same second**: MinIO sizes its threshold check
@@ -498,7 +497,7 @@ def test_a_small_write_does_not_clear_a_larger_refusal(capacity_db) -> None:
     assert outstanding is not None
     assert outstanding.attempted_bytes == len(big)
 
-    # The store now accepts a tiny write -- exactly as the real one did.
+    # The store accepts a tiny write -- exactly as the real one did.
     tiny = b"x"
     artifact_storage.store_artifact(
         tiny, hashlib.sha256(tiny).hexdigest(), client=_HealthyStore(), bucket="b"
@@ -575,7 +574,7 @@ def test_a_refusal_of_unknown_size_is_not_cleared_by_any_write(
 ) -> None:
     """The server-side-copy arm may not know the object's size.
 
-    It asks with a HEAD after the copy is refused (#545), and records no
+    It asks with a HEAD after the copy is refused, and records no
     size when that fails. A refusal with no size cannot be answered by a size comparison, so no
     write may clear it — the conservative direction, and the one an
     operator can undo. Clearing it on any write would be the naive rule
@@ -764,7 +763,7 @@ def test_a_non_admin_cannot_clear_it(client) -> None:
 def test_the_operator_view_exposes_no_row_ids(
     client, db_session, login_as, _api_admin_user
 ) -> None:
-    """DR-0028 Req. 2 applies to an operational report as much as an error."""
+    """The no-row-ids rule applies to an operational report as much as an error."""
     login_as(_api_admin_user)
     event = capacity.append_observation(
         db_session,
@@ -793,7 +792,7 @@ def test_the_operator_view_exposes_no_row_ids(
 def test_a_capacity_report_clears_a_disk_full_refusal(capacity_db) -> None:
     """Recovery without waiting for a depositor to happen along.
 
-    The number is the one MinIO's admin API reports. Measured on a 64 MiB
+    The number is the one MinIO's admin API reports. On a 64 MiB
     scratch volume: ``availspace`` was 4,030,464 at the instant a
     4,194,304-byte write was refused, so the comparison is meaningful
     rather than nominal.
@@ -821,7 +820,7 @@ def test_a_capacity_report_may_not_clear_a_bucket_quota_refusal(
 ) -> None:
     """Free disk says nothing about a quota, so it must not clear one.
 
-    Measured against MinIO with ``mc quota set --size 20MiB``: a 2 MiB
+    With MinIO and ``mc quota set --size 20MiB``: a 2 MiB
     write was refused with ``XMinioAdminBucketQuotaExceeded`` while the
     admin API reported **437,858,304 bytes (418 MiB) free** on the drive.
     Letting free space answer that refusal would clear the flag on a store
@@ -849,13 +848,13 @@ def test_a_capacity_report_may_not_clear_a_bucket_quota_refusal(
 
 
 # ---------------------------------------------------------------------------
-# SeaweedFS: a refusal that does not say "full", and a store that does (#545)
+# SeaweedFS: a refusal that does not say "full", and a store that does
 # ---------------------------------------------------------------------------
 #
 # SeaweedFS answers a full store with ``InternalError``/500, the same as any
 # fault, so the code never classifies it. With ``S3_SEAWEEDFS_MASTER_URL``
 # set, the write path asks the store for its room, and the answers below are
-# the ones measured against 4.47 at the instant of a real refusal (see
+# the ones SeaweedFS 4.47 gives at the instant of a real refusal (see
 # ``tests/services/test_artifact_storage_seaweedfs.py`` for the recordings).
 
 _MASTER = "http://seaweedfs.test:9333"
@@ -1012,10 +1011,10 @@ def test_access_denied_earns_no_capacity_opinion(
 
 
 # ---------------------------------------------------------------------------
-# SeaweedFS: an enforced bucket quota, read over signed S3 (#545)
+# SeaweedFS: an enforced bucket quota, read over signed S3
 # ---------------------------------------------------------------------------
 #
-# Measured on 4.47 with a 20 MiB quota and 30 MiB in the bucket: every write
+# On 4.47 with a 20 MiB quota and 30 MiB in the bucket: every write
 # refused with ``InternalError``/500 while free disk and free slots read
 # healthy, and a signed ``GET /{bucket}?seaweedfs-quota`` plus the SOSAPI
 # capacity object said no room was left. Same shape and status semantics as
@@ -1249,7 +1248,7 @@ def test_a_seaweedfs_quota_reaches_the_depositor_as_507(
 def status_sees_only_seaweedfs(monkeypatch):
     """``/status`` with a bucket that answers and no MinIO admin opinion.
 
-    A full SeaweedFS still answers ``HeadBucket`` (measured), and the MinIO
+    A full SeaweedFS still answers ``HeadBucket``, and the MinIO
     admin probes must not reach whatever store the machine running the test
     happens to have on 9000.
     """
@@ -1271,8 +1270,8 @@ def test_a_full_seaweedfs_reaches_the_depositor_as_507_and_status_as_degraded(
 ) -> None:
     """The whole chain through the route, then ``/status``.
 
-    Before #545 this upload answered 503 "retry later" and ``/status``
-    stayed healthy.
+    This upload must not answer 503 "retry later" while ``/status``
+    stays healthy.
     """
     seaweed_answers(_SLOTS_EXHAUSTED)
     use_store(_FullStore(code="InternalError", status=500))
@@ -1295,7 +1294,7 @@ def test_a_seaweedfs_report_of_room_clears_the_refusal_on_status(
     client, capacity_db, seaweed_answers, status_sees_only_seaweedfs
 ) -> None:
     """Recovery without waiting for a depositor: the operator frees space
-    (here, the store now reports room) and the next poll goes green."""
+    (here, the store reports room) and the next poll goes green."""
     seaweed_answers(_SLOTS_EXHAUSTED)
     _refused_internal_error(capacity_db)
 
@@ -1340,9 +1339,9 @@ class _InternalErrorOnCopy(_HealthyStore):
 def test_a_refused_copy_on_a_full_disk_is_sized_and_classified(
     capacity_db, seaweed_answers, operation, source_key
 ) -> None:
-    """The copy arm used to report no size, so on a full *disk* -- where the
-    store still has some bytes -- "room < size" could not be asked and a
-    full store read as a fault. The size is the object's, from a HEAD."""
+    """The copy arm reports a size, so on a full *disk* -- where the store still
+    has some bytes -- "room < size" can be asked and a full store does not read as
+    a fault. The size is the object's, from a HEAD."""
     seaweed_answers(_DISK_FULL)
     store = _InternalErrorOnCopy({source_key: b"z" * _HELD_BYTES})
     with pytest.raises(artifact_storage.ArtifactStorageUnavailable) as caught:

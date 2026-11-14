@@ -1,9 +1,9 @@
 """End-to-end: a failing idempotency receipt must not destroy the upload.
 
-This is the 2026-08-05 incident reproduced at the level it happened —
+This reproduces a failure at the level it happens —
 a real upload route, the real workflow, and a write session that really
-commits — with the receipt forced to fail. On the pre-fix code this exact
-shape returned ``201 Created`` with a complete body (``species_entry_id``,
+commits — with the receipt forced to fail. Without the isolation this exact
+shape returns ``201 Created`` with a complete body (``species_entry_id``,
 ``conformer_group_id``, ``calculation_id`` all populated) while storing
 **zero** rows, and raised nothing at the client.
 
@@ -149,11 +149,11 @@ class TestPayloadSurvivesReceiptFailure:
     ) -> None:
         """The science must be in the database after the commit.
 
-        The pre-fix code passed every "no exception propagated" check — it
-        returned 201 and raised nothing at the client. What it did not do
+        An unisolated receipt passes every "no exception propagated" check — it
+        returns 201 and raises nothing at the client. What it does not do
         was store anything. So this asserts against the database after the
-        write session has committed, which is the only assertion the old
-        behaviour could not satisfy.
+        write session has committed, which is the only assertion an unisolated
+        receipt could not satisfy.
         """
         session = committed_api_client._db_session
         _poison_receipt_body(monkeypatch)
@@ -211,7 +211,7 @@ class TestReceiptFailureIsVisible:
     ) -> None:
         """201 is truthful about the science; the header is truthful about retries.
 
-        Returning a bare 201 is the pre-fix behaviour and is what made the
+        Returning a bare 201 hides the failure and makes the
         incident invisible. Failing the request instead would be worse: the
         write really did succeed, and a 5xx invites a retry that — with no
         receipt on file — re-executes the upload and duplicates the science.
@@ -263,7 +263,7 @@ class TestTransientFailureSelfHeals:
         transaction and idempotency for the key is restored. The response
         header still reads ``failed``: it was copied into the response object
         before the commit that runs the retry, so it can only ever say "not
-        recorded in the request's own transaction" (#628).
+        recorded in the request's own transaction".
         """
         import app.services.idempotency as svc
 
