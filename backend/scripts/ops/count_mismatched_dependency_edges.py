@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Count calculation_dependency edges whose parent type does not fit the role (#581).
+"""Count calculation_dependency edges whose parent type does not fit the role.
 
 READ-ONLY. This script issues one ``SELECT`` and nothing else; it never
 writes, and it does not repair what it finds. Calculations may be approved

@@ -6,10 +6,10 @@
 # expect a multi-minute runtime. Forwards extra pytest args.
 #
 # Excludes: nothing. This selection is the union of the three required PR
-# gates -- test-api.sh, test-scientific.sh and test-rest.sh -- which since
-# those three cover tests/ between them means the nightly and the pull
-# request now run the same set of tests, differing only in the order they
-# run it in (the nightly draws a seed, the gates pin one).
+# gates -- test-api.sh, test-scientific.sh and test-rest.sh -- which between
+# them cover tests/, so the nightly and the pull request run the same set of
+# tests, differing only in the order they run it in (the nightly draws a seed,
+# the gates pin one).
 #
 # Runs with a pinned random-order seed and parallel workers; see
 # scripts/lib/pytest_run_args.sh for why, and how to override either.

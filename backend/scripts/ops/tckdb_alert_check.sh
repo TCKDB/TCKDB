@@ -55,7 +55,7 @@
 #   TCKDB_STATUS_URL   required -- no default on purpose; this script is
 #                      public, and a baked-in host would mean every copy of
 #                      it polls one operator's deployment until told
-#                      otherwise (see issue #521). e.g.
+#                      otherwise. e.g.
 #                      https://tckdb.example.com/api/v1/status
 #   TCKDB_NTFY_TOPIC   required -- no default on purpose; a guessable topic
 #                      leaks your operational state to anyone who subscribes
@@ -193,7 +193,7 @@ elif [[ "$http_code" != "200" ]]; then
 else
     # Prefer jq; fall back to grep/sed so a host without jq still alerts.
     #
-    # `degraded` is parsed on BOTH paths, because it is now part of the
+    # `degraded` is parsed on BOTH paths, because it is part of the
     # decision and not just of the message. A literal placeholder such as
     # "(install jq for detail)" would be a permanent false alarm.
     if command -v jq >/dev/null 2>&1; then
@@ -230,7 +230,7 @@ else
     #
     # They are derived from the same set of unhealthy components today, so a
     # divergence would be a bug rather than a state -- which is exactly the
-    # point. If that derivation ever changes, or a future component reports
+    # point. If that derivation ever changes, or another component reports
     # itself degraded without flipping the summary field, this checker must
     # alert rather than pass on a field that happened to stay "ok". The whole
     # class of incident here is monitoring that vouches against an outage;

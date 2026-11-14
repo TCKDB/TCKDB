@@ -34,7 +34,7 @@
 # database and cannot be satisfied by accident.
 set -euo pipefail
 
-# No default (issue #521): this script is public, and a path under one
+# No default: this script is public, and a path under one
 # operator's home directory would mean every copy of it defaults to that
 # operator's backup location.
 if [[ -z "${TCKDB_BACKUP_DEST:-}" ]]; then

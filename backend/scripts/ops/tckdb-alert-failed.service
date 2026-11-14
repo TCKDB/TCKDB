@@ -3,7 +3,7 @@ Description=Push an alert when the TCKDB health checker itself fails
 # Wired as OnFailure= on tckdb-alert.service. It exists because every way the
 # checker can break looks, from a phone, exactly like a healthy deployment:
 # nothing arrives. A failed ExecStart (the repo moved and the absolute path in
-# tckdb-alert.service no longer resolves), a missing EnvironmentFile, an unset
+# tckdb-alert.service does not resolve), a missing EnvironmentFile, an unset
 # TCKDB_NTFY_TOPIC -- all of them leave a red unit in `systemctl status` that
 # nobody is looking at.
 #

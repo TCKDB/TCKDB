@@ -6,7 +6,7 @@ part of CI. Their purpose is local parser-drift checking against the
 real CCCBDB site; they are intentionally tolerant and assert only
 broad invariants.
 
-Constraints (also documented in
+Constraints (the crawler constraints in
 ``backend/docs/specs/cccbdb_importer.md``):
 
 * explicit allowlist of 1-3 URLs

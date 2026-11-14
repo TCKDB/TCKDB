@@ -265,7 +265,7 @@ def _make_thermo(
 
     ``reference_pressure_bar`` is set to 1 bar (the IUPAC standard state)
     because the rows carry an entropy and a NASA fit, both of which depend
-    on the reference pressure. Nothing defaults it any more (#536), and the
+    on the reference pressure. Nothing defaults it, and the
     values are illustrative, so the choice is stated here rather than left
     unrecorded.
     """

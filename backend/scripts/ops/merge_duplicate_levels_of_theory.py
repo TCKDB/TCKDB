@@ -1,25 +1,25 @@
 #!/usr/bin/env python
 """Plan, and optionally merge, levels of theory split by spelling (#574, #585, #618, #602).
 
-The same script joins every split the identity keys close: basis spelling
-(#574), method case (#585), curated method aliases such as ``wb97x-d`` /
-``wb97xd``, and dispersion / solvent / solvent-model case (#618, #602).
-Groups are found with the application's own hash formula, so it follows
-whichever keys the running code has.
+The same script joins every split the identity keys close: basis spelling,
+method case, curated method aliases such as ``wb97x-d`` / ``wb97xd``, and
+dispersion / solvent / solvent-model case. Groups are found with the
+application's own hash formula, so it follows whichever keys the running code
+has.
 
-Before #574, ``level_of_theory.lot_hash`` hashed basis names byte for byte,
-so ``b3lyp/def2-tzvp`` (Psi4) and ``b3lyp/def2tzvp`` (Gaussian, ARC) were
-two rows. The existing rows were re-keyed: in
-each group of rows that are now one level of theory, one row (the *holder*)
-got the identity-keyed hash and every new upload resolves to it. The other
-rows (the *duplicates*) kept their old hash and their calculations. This
-script moves those calculations onto the holder and turns each duplicate
-into a *merged row*.
+Spellings such as ``b3lyp/def2-tzvp`` (Psi4) and ``b3lyp/def2tzvp`` (Gaussian,
+ARC) are one level of theory under the identity keys, but rows hashed under an
+older formula can still exist as separate rows. In each group of rows that are
+one level of theory, one row (the *holder*) has the identity-keyed hash and
+every upload resolves to it. The other rows (the *duplicates*) keep their own
+hash and their calculations. This script moves those calculations onto the
+holder and turns each duplicate into a *merged row*.
 
-Run it after the re-key, and again after any deploy that
-migrated while the old API was still serving (an upload in that window
-hashes the old way and can recreate a duplicate). Groups are found by
-recomputing each row's hash with the application's own formula
+Run it again after any deploy where an older API served uploads during the
+migration window: such an upload hashes under the older formula and can
+recreate a duplicate.
+
+Groups are found by recomputing each row's hash with the application's own formula
 (``calculation_resolution._level_of_theory_hash``), so this script and the
 upload path cannot disagree about what one level of theory is.
 
@@ -43,7 +43,7 @@ No declared level is skipped, and it is never merged with a plain level that
 happens to share its label.
 
 A scheme's definition hash is taken over the hash of each input level. When an
-input level is merged away (above), two further things follow (#658):
+input level is merged away (above), two further things follow:
 
 * the scheme's term inputs are repointed from the merged level to the holder, so
   no scheme input points at a merged row;
@@ -77,8 +77,7 @@ is reported as blocked otherwise:
   one. The walk also reaches reviewable record types the database does not
   freeze (``molecular_property_observation``): an observation approved on
   the strength of a calculation blocks its group too, even though nothing
-  but this script stops the calculation's level of theory changing under it
-  (#591);
+  but this script stops the calculation's level of theory changing under it;
 * **Nothing else references the duplicate.** ``frequency_scale_factor`` and
   ``energy_correction_scheme`` carry ``level_of_theory_id`` inside their own
   unique identity keys, so repointing them can collide with a row the
@@ -86,11 +85,11 @@ is reported as blocked otherwise:
   run time; only ``calculation.lot_id`` (repointed) and
   ``level_of_theory_merge`` (earlier merges, re-aimed at the holder) are
   handled. That includes ``thermo.energy_level_of_theory_id`` and
-  ``statmech.energy_level_of_theory_id`` (#619): a declared energy level on a
+  ``statmech.energy_level_of_theory_id``: a declared energy level on a
   duplicate blocks the group, because this script never rewrites accepted
   science. New uploads resolve to the holder, and reads follow a merge;
 * **A holder exists**: a row whose ``lot_hash`` already equals the group's
-  identity-keyed hash. If none does, the re-key has not run.
+  identity-keyed hash. If none does, the group is blocked.
 
 **What changes on commit.** For each unblocked group, in its own savepoint:
 ``calculation.lot_id`` moves from each duplicate to the holder, any row
@@ -149,7 +148,7 @@ _REPOINTED = {
     # (or dropped when the holder is bound already), so a merged level is never
     # bound. Absent on a database without the binding table.
     ("level_of_theory_composite", "level_of_theory_id"),
-    # #658: a scheme input follows a merge, so no scheme input points at a merged
+    # A scheme input follows a merge, so no scheme input points at a merged
     # row and the scheme's hash (taken over its canonical input levels) is re-derived.
     ("composite_scheme_term_input", "level_of_theory_id"),
 }
@@ -271,7 +270,7 @@ class Plan:
 class CommitResult:
     merged: list[tuple[Group, int]] = field(default_factory=list)
     kept: list[tuple[Group, str]] = field(default_factory=list)
-    #: Stale declared schemes reunited with the scheme their re-derived hash names (#658).
+    #: Stale declared schemes reunited with the scheme their re-derived hash names.
     reunited: int = 0
     #: ``(level public_ref, why)`` for a stale declared level that could not be merged into
     #: the level a reunite would create, so no scheme or level was created for it.
@@ -488,8 +487,8 @@ def accepted_science_on(
 def _identity_hash(mapping, declared_definition_hash: str | None = None) -> str:
     """The hash a level of theory should have, by the application's own formulas.
 
-    A level bound to a **declared** composite scheme (a user-built recipe, ADR
-    0021 P5) cannot be hashed from its columns: its ``method`` is only the label
+    A level bound to a **declared** composite scheme (a user-built recipe)
+    cannot be hashed from its columns: its ``method`` is only the label
     the server generated and every other field is ``NULL``, so the columns hash to
     a level that does not exist. Its identity is the scheme's definition, so such
     a level is hashed from ``declared_definition_hash`` -- the same function the
@@ -540,7 +539,7 @@ def _declared_definition_hashes(session: Session, schema: Schema) -> dict[int, s
     """``level id -> definition_hash`` for every level bound to a declared scheme.
 
     The hash is **re-derived** from the scheme's stored terms and input levels,
-    merges followed (#658), not read from ``composite_scheme.definition_hash``: a
+    merges followed, not read from ``composite_scheme.definition_hash``: a
     stored hash is exactly what goes stale when an input level is merged away, and
     reading it back would vouch for itself. Empty on a database without
     the binding table.
@@ -568,7 +567,7 @@ def _declared_definition_hashes(session: Session, schema: Schema) -> dict[int, s
 
 
 def reunite_declared_schemes(session: Session, schema: Schema) -> tuple[int, list[tuple[str, str]]]:
-    """Create the scheme and level a stale declared scheme should have had (#658).
+    """Create the scheme and level a stale declared scheme should have had.
 
     For every level still bound to a declared scheme whose re-derived hash differs
     from the stored one (an input level was merged away), get or create the scheme
@@ -683,7 +682,7 @@ def _describe_duplicate(
     if holder is not None and ("level_of_theory_composite", "level_of_theory_id") in schema.lot_references:
         # Two levels the merge would join are bound to different recipes: moving
         # or dropping one binding would pick a recipe silently. Two schemes that
-        # re-derive to one hash (#658) are one recipe, not a conflict.
+        # re-derive to one hash are one recipe, not a conflict.
         differs = session.scalar(
             text(
                 "SELECT count(*) FROM level_of_theory_composite d "
@@ -724,7 +723,7 @@ def commit_plan(session: Session, plan: Plan) -> CommitResult:
 
     Then, for a declared composite scheme whose input level was just merged away,
     create the scheme and level its re-derived hash names and merge the stale level
-    into it (#658). That second pass re-plans, so it sees the new level.
+    into it. That second pass re-plans, so it sees the new level.
     """
     result = _commit_groups(session, plan)
     reunited, blocked = reunite_declared_schemes(session, plan.schema)

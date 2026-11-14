@@ -3,18 +3,15 @@
 
 Context
 -------
-Until the fixture in ``backend/tests/conftest.py`` was fixed, the session
-``db_engine`` fixture created its database *before* entering the ``try`` that
-drops it.  Any run whose ``alembic upgrade`` failed — or that was killed
-between creation and the ``try`` — leaked a fully migrated database under a
-name (``tckdb_test_<pid>``) that is never reused.  On one dev machine this
-accumulated ~900 databases totalling 12 GB.
+The test fixture drops its database in a ``finally``. A run killed before
+that ``finally`` executes (SIGKILL, power loss) leaves a migrated database
+under a name (``tckdb_test_<pid>``) that is never reused, and these
+accumulate on a dev machine.
 
-The leak is closed at source, and a conservative startup sweep now reclaims
-future orphans automatically.  The sweep deliberately only touches databases
-carrying the harness's ownership marker, so the *pre-existing* orphans — which
-predate the marker — are invisible to it and must be removed deliberately, by
-a human, with this script.
+A conservative startup sweep reclaims orphans automatically.  The sweep
+deliberately only touches databases carrying the harness's ownership marker,
+so orphans without the marker are invisible to it and must be removed
+deliberately, by a human, with this script.
 
 Coverage, and how it is kept
 ----------------------------
@@ -23,8 +20,8 @@ Coverage, and how it is kept
 identical pattern.  A scratch database named outside it would leak
 permanently if a run were killed partway, because neither reclaimer could see it.
 
-The fix was to bring the *names* inside the pattern rather than to widen the
-pattern: tests now build scratch names with ``conftest.scratch_database_name``,
+The *names* are brought inside the pattern rather than the pattern widened:
+tests build scratch names with ``conftest.scratch_database_name``,
 so a new migration test that follows the convention is covered automatically,
 whereas a widened pattern would have to be remembered.
 ``backend/tests/test_scratch_database_names.py`` enforces both halves — that

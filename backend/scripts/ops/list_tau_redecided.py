@@ -232,7 +232,7 @@ def main() -> int:
     from app.api.deps import SessionLocal
 
     with SessionLocal() as session:
-        # Belt and braces: the transaction refuses any write, so a future edit
+        # Belt and braces: the transaction refuses any write, so an edit
         # to this script cannot relabel a stored row by accident.
         session.execute(text("SET LOCAL transaction_read_only = on"))
         listed, tally, examined = classify(session)

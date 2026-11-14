@@ -118,8 +118,8 @@ class TestPropertyPilotHappyPath:
 
     def test_no_payload_generation_for_property_tables(self, tmp_path):
         """Even with --write-payloads, property-table snapshots stop
-        at parsed JSON. molecular_property_observation is still a
-        schema gap (Phase 0 spec §7 Gap 1)."""
+        at parsed JSON. payloads for these come from the
+        property-table builder, not the snapshot."""
 
         fetcher = _PropertyFetcher.make()
         run_snapshot(

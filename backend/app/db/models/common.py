@@ -212,7 +212,7 @@ class PhaseKind(str, Enum):
 
 
 class MolecularPropertyKind(str, Enum):
-    """Molecular-property observation kinds (CCCBDB Schema Gap 1).
+    """Molecular-property observation kinds.
 
     Scalar/vector/tensor properties that don't belong on ``thermo``,
     ``statmech``, or ``transport``. Names are machine tokens, not

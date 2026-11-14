@@ -26,11 +26,9 @@ from app.importers.cccbdb.models import (
 class ExternalSourceMetadata(BaseModel):
     """CCCBDB provenance preserved alongside a built payload.
 
-    Mirrors the proposed ``external_source_record`` shape from
-    ``backend/docs/specs/cccbdb_importer.md`` §7. Until that schema
-    lands, the builder hands this dict to its caller; the upload
-    workflow can stash it on the relevant ``note`` fields or carry
-    it in an out-of-band log.
+    Mirrors the shape of the ``external_source_record`` table
+    (``app/db/models/external_source.py``). The builder hands this dict
+    to its caller; nothing in the importer persists it.
     """
 
     model_config = ConfigDict(extra="forbid")

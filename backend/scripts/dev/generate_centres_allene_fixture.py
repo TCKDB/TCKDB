@@ -1,4 +1,4 @@
-"""Regenerate ``tests/fixtures/centres_allene_pseudo.json``: an independent witness for allene pseudo-asymmetry (#832).
+"""Regenerate ``tests/fixtures/centres_allene_pseudo.json``: an independent witness for allene pseudo-asymmetry.
 
 Needs Java and the Centres jar (CIP labeller of Hanson et al. 2018, which implements IUPAC 2013 Rule 5 and so
 labels the centre between two allene axes). It is a developer tool, not part of the runtime package: CI has no

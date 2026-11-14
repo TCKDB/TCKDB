@@ -32,7 +32,7 @@
 # EXTRA NETWORKS
 #   TCKDB_EXTRA_NETWORKS (optional, space- or comma-separated) names Docker
 #   networks the API container joins besides TCKDB_DB_NETWORK. The compose
-#   file keeps the object store on its own `storage` network (#545), so an
+#   file keeps the object store on its own `storage` network, so an
 #   API that uses the bundled SeaweedFS needs e.g.
 #       TCKDB_EXTRA_NETWORKS=tckdbv2_storage
 #   Unset (the default) changes nothing. Set, each value is checked before
@@ -57,7 +57,7 @@ CONTAINER="${TCKDB_CONTAINER:-tckdb-api}"
 API_PORT="${TCKDB_API_PORT:-8010}"
 DB_CONTAINER="${TCKDB_DB_CONTAINER:-tckdbv2-db-1}"
 DB_NETWORK="${TCKDB_DB_NETWORK:-tckdbv2_default}"
-# No default for either path (issue #521): this script is public, and a
+# No default for either path: this script is public, and a
 # path under one operator's home directory would mean every copy of it
 # defaults to that operator's environment file and backup location.
 ENV_FILE="${TCKDB_ENV_FILE:-}"
@@ -123,8 +123,8 @@ fi
 
 # Before anything changes: every network the new container must join is one
 # it can join. Each value refused here would otherwise fail `docker network
-# connect` after the backup and the migration (Docker 29, measured on a
-# running container: a network it is already on, and `host` / `none`).
+# connect` after the backup and the migration (Docker refuses a network the
+# container is already on, and `host` / `none`).
 seen_networks=" $DB_NETWORK "
 for net in "$DB_NETWORK" "${EXTRA_NETWORKS[@]}"; do
     docker network inspect "$net" >/dev/null 2>&1 \

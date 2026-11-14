@@ -32240,7 +32240,7 @@
         "type": "object"
       },
       "MolecularPropertyKind": {
-        "description": "Molecular-property observation kinds (CCCBDB Schema Gap 1).\n\nScalar/vector/tensor properties that don't belong on ``thermo``,\n``statmech``, or ``transport``. Names are machine tokens, not\ndisplay labels (see feedback_enum_values memory).",
+        "description": "Molecular-property observation kinds.\n\nScalar/vector/tensor properties that don't belong on ``thermo``,\n``statmech``, or ``transport``. Names are machine tokens, not\ndisplay labels (see feedback_enum_values memory).",
         "enum": [
           "dipole_moment",
           "quadrupole_moment",

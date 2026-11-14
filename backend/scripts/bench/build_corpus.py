@@ -54,12 +54,11 @@ _BENCH_DB_NAME = re.compile(r"^tckdb_bench_[a-z0-9_]+$")
 
 
 # ---------------------------------------------------------------------------
-# Production inventory — measured, not invented
+# Production inventory
 # ---------------------------------------------------------------------------
 
-#: Row counts measured on the deployed Raspberry Pi database.
-#: Every ratio this script scales by is derived from these numbers; nothing
-#: here is a guess. Tables absent from this dict were **not** measured, and the
+#: Production row counts. Every ratio this script scales by is derived from
+#: these numbers. Tables absent from this dict have no baseline, and the
 #: assumption used in their place is recorded in :data:`DEVIATIONS`.
 PRODUCTION_INVENTORY: dict[str, int] = {
     "species": 55,
@@ -109,7 +108,7 @@ class Deviation:
         }
 
 
-#: Review-state mix. Stage 3's curated profile filters on ``approved``, so the
+#: Review-state mix. The curated profile filters on ``approved``, so the
 #: corpus must contain a realistic minority of approved records rather than
 #: making everything approved (which would make the curated profile free) or
 #: nothing approved (which would make it return empty).

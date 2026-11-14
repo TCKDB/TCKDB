@@ -28,9 +28,8 @@ NIST CCCBDB experimental data.
 - No RDKit-based structural canonicalization. SMILES / InChI strings
   are whitespace-stripped only; structural normalization is not done in the parser.
 - No mode-level experimental frequency persistence model. Mode-level
-  frequencies are produced by the parser but their final destination
-  depends on Schema Gap 2 in
-  `backend/docs/specs/cccbdb_importer.md`.
+  frequencies are produced by the parser and kept in the builder's
+  `external_source.unparsed` side-channel.
 - No computed method/basis page parsing.
 
 ## How to run the tests
@@ -125,7 +124,7 @@ upload schemas. The builder preserves each in
   TCKDB destination yet. They are **not** routed into
   `calc_freq_mode`: that table is calculation-scoped, and creating a
   placeholder `Calculation` row just to host experimental data would
-  violate the spec's "no fake calculations" rule.
+  invent a calculation that never ran.
 - `statmech.rotational_constants` — the A/B/C values map to the
   first-class `statmech.rotational_constant_{a,b,c}_cm1` columns
   (converted GHz→cm⁻¹); only the raw GHz values, units, and per-value
@@ -421,8 +420,7 @@ upload payloads.
 
 ## `molecular_property_observation` + property-table builder
 
-`molecular_property_observation` closes CCCBDB **Schema Gap 1**. The
-table is the first-class home for
+`molecular_property_observation` is the first-class home for
 scalar / vector / tensor molecular properties — dipoles, IE/EA/PA,
 HOMO/LUMO, atomization energies, enthalpies of formation,
 spectroscopic constants, etc. These do **not** belong on
@@ -1821,8 +1819,7 @@ statmech_payload_is_valid        # gates StatmechUploadRequest
 When `*_is_valid=False`, the sub-payload is preserved on disk for
 inspection but is not promised to satisfy the upload schema.
 
-### Target layout
+### What is persisted
 
-See `backend/docs/specs/cccbdb_importer.md` §9 for the full target
-layout, and Schema Gaps §7 for the tables that need to land before
-some builders can produce final payloads.
+See `backend/docs/specs/cccbdb_importer.md` for what the importer
+persists and what stays as payload JSON.

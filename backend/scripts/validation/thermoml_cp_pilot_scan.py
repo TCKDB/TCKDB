@@ -502,7 +502,7 @@ def _scan_document(
                 continue
 
             if not compound.inchikey:
-                # Silently dropped before finding 6: counted and logged now, not just discarded.
+                # Counted and logged, not just discarded.
                 if compound.has_standard_inchi:
                     result.compounds_without_inchikey.append(
                         {"doi": doi, "compound_name": compound.name, "org_num": compound.org_num}
