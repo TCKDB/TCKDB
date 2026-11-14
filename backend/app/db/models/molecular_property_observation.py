@@ -1,8 +1,8 @@
 """``molecular_property_observation`` model.
 
 Home for scalar/vector/tensor molecular properties that don't belong
-on :class:`Thermo`, :class:`Statmech`, or :class:`Transport`. Closes
-CCCBDB Schema Gap 1 (see ``backend/docs/specs/cccbdb_importer.md`` §7).
+on :class:`Thermo`, :class:`Statmech`, or :class:`Transport`. Written by
+the CCCBDB importer.
 
 Design notes
 ------------
@@ -219,8 +219,7 @@ class MolecularPropertyObservation(Base, TimestampMixin, CreatedByMixin, PublicR
     # ---- Source custody (new rows only) -------------------
     # Points at the exact fetched-document snapshot an importer derived
     # this row from. Existing CCCBDB rows keep their flattened
-    # ``external_source_*`` columns above and are NOT migrated to this FK
-    # (see backend/docs/specs/cccbdb_importer.md §7 Gap 4).
+    # ``external_source_*`` columns above and are NOT migrated to this FK.
     external_source_record_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey(

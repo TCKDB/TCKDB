@@ -1,7 +1,6 @@
 """Source-custody models: ``external_source`` and ``external_source_record``.
 
-Implements CCCBDB importer spec Gap 4 (``backend/docs/specs/cccbdb_importer.md``
-§7) for **new rows only** -- existing CCCBDB observations keep their
+Source custody for **new rows only** -- existing CCCBDB observations keep their
 flattened ``external_source_*`` columns on ``molecular_property_observation``
 untouched (see that model's module docstring). These two tables are the
 custody chain a new importer (ThermoML) attaches to instead:

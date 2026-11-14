@@ -15,6 +15,10 @@ every upload resolves to it. The other rows (the *duplicates*) keep their own
 hash and their calculations. This script moves those calculations onto the
 holder and turns each duplicate into a *merged row*.
 
+Run it again after any deploy where an older API served uploads during the
+migration window: such an upload hashes under the older formula and can
+recreate a duplicate.
+
 Groups are found by recomputing each row's hash with the application's own formula
 (``calculation_resolution._level_of_theory_hash``), so this script and the
 upload path cannot disagree about what one level of theory is.

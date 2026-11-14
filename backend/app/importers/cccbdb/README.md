@@ -124,7 +124,7 @@ upload schemas. The builder preserves each in
   TCKDB destination yet. They are **not** routed into
   `calc_freq_mode`: that table is calculation-scoped, and creating a
   placeholder `Calculation` row just to host experimental data would
-  violate the spec's "no fake calculations" rule.
+  invent a calculation that never ran.
 - `statmech.rotational_constants` — the A/B/C values map to the
   first-class `statmech.rotational_constant_{a,b,c}_cm1` columns
   (converted GHz→cm⁻¹); only the raw GHz values, units, and per-value
@@ -1819,7 +1819,7 @@ statmech_payload_is_valid        # gates StatmechUploadRequest
 When `*_is_valid=False`, the sub-payload is preserved on disk for
 inspection but is not promised to satisfy the upload schema.
 
-### Target layout
+### What is persisted
 
 See `backend/docs/specs/cccbdb_importer.md` for what the importer
 persists and what stays as payload JSON.

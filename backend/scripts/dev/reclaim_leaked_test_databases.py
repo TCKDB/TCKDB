@@ -3,9 +3,10 @@
 
 Context
 -------
-A test run whose ``alembic upgrade`` failed, or that was killed partway,
-leaves a fully migrated database under a name (``tckdb_test_<pid>``) that is
-never reused, and these accumulate on a dev machine.
+The test fixture drops its database in a ``finally``. A run killed before
+that ``finally`` executes (SIGKILL, power loss) leaves a migrated database
+under a name (``tckdb_test_<pid>``) that is never reused, and these
+accumulate on a dev machine.
 
 A conservative startup sweep reclaims orphans automatically.  The sweep
 deliberately only touches databases carrying the harness's ownership marker,

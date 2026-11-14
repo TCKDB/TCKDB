@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Give calculations on a version-less ``software_release`` the version their logs state.
 
-Curator tool. For every ``software_release`` of the
+Curator tool: for every ``software_release`` of the
 named program whose ``version`` is NULL, reads each citing calculation's
 stored ``output_log`` (then ``input``) artifact, parses the program's own
 startup banner, and -- with ``--commit`` -- re-points the calculation at the

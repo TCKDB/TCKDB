@@ -1,8 +1,7 @@
 """Pydantic v2 schemas for the ``molecular_property_observation`` model.
 
 See ``backend/app/db/models/molecular_property_observation.py`` for
-the ORM model and ``backend/docs/specs/cccbdb_importer.md`` §7 for
-the motivating CCCBDB Schema Gap.
+the ORM model.
 """
 
 from __future__ import annotations

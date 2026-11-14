@@ -225,9 +225,8 @@ def _open_bulk_import_submission(
     published terms verbatim, CCCBDB has no terms/citation text captured
     anywhere in this repo: ``app/importers/cccbdb/__init__.py`` defines
     ``SOURCE_NAME`` / ``SOURCE_RELEASE`` / ``SOURCE_DATABASE_DOI`` but no
-    ``TERMS_TEXT``, and ``backend/docs/specs/cccbdb_importer.md`` still
-    lists "Q1. Legal / terms of use: confirm CCCBDB's published use policy"
-    as an open question. Rather than fabricate terms text that was never
+    ``TERMS_TEXT``, and ``backend/docs/specs/cccbdb_importer.md`` notes
+    that the repository does not capture CCCBDB's terms of use. Rather than fabricate terms text that was never
     verified, this import stands on ``depositor_agreement`` — the same
     basis ``open_upload_submission`` always records automatically from the
     deposit's own ``rights`` fragment, and the same basis ThermoML's own

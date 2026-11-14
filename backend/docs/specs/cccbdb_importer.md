@@ -27,7 +27,7 @@ A `CrawlTarget` carries one of four page kinds (`PageKind` in
 
 | `page_kind` | Parser | Output |
 |---|---|---|
-| `experimental_species` | `experimental_species.py` | One typed record per species (identity, thermo, statmech, geometry). The builders in `builders/` turn it into species-entry, thermo, statmech and geometry payload dicts. |
+| `experimental_species` | `experimental_species.py` | One typed record per species (identity, thermo, statmech, geometry). The builders in `builders/` turn it into species-entry, thermo, statmech and geometry payload dicts, plus `molecular_property_observation_payloads` (the H(298.15 K) - H(0 K) increments). |
 | `experimental_property_table` | `experimental_property_table.py` | Rows of one cross-species flat table, driven by a per-property `PropertyTableConfig` in `PROPERTY_CONFIGS`. The property-table builder turns rows into `MolecularPropertyObservationCreate` payloads. |
 | `species_all_data` | `species_all_data.py` | Triage only (title, section headings, identifiers found in the text). The raw HTML is the archived artifact; no payloads are built. |
 | `molecule_catalog_inchi_index` | `molecule_catalog.py` | Catalog entries (formula, name, InChI, InChIKey, SMILES, CAS). Used to propose identity hints for property rows; no payloads are built. |
@@ -36,6 +36,18 @@ Other parsers: `experimental_index.py` (the experimental discovery page,
 used by the property-config audit), `form_result.py` (form-only result
 pages; `atomization_energy` is the only supported target kind) and
 `species_selection.py` (`choosex.asp` species-selection pages).
+
+## Crawler constraints
+
+`HttpFetcher` in `snapshot.py` is the live fetcher used by the snapshot CLI:
+
+- It sends an identifying `User-Agent` (project name, repository URL and a
+  contact address).
+- The per-request timeout is 20 s, with at most one retry after a 2 s pause.
+- The snapshot CLI sleeps between requests (`--sleep-seconds`, default 2.0).
+- Only allowlisted `CrawlTarget` URLs are fetched.
+- Responses are content-hashed (SHA-256) and cached in the archive; a cached
+  page is reused unless `--force-refresh` is passed.
 
 ## Pipeline
 
@@ -74,8 +86,9 @@ payload JSON                ->  database    (molecular-property import only)
 
 ## What is persisted
 
-- Nothing in the importer persists the thermo, statmech or geometry payloads
-  built from `experimental_species` pages. They exist as in-memory results
+- Nothing in the importer persists the thermo, statmech, geometry or
+  `molecular_property_observation_payloads` built from `experimental_species`
+  pages. They exist as in-memory results
   and archived JSON. Values without a destination on the upload schemas
   (Hf(0 K), experimental vibrational frequencies, experimental ZPE, raw
   rotational-constant units, per-value reference labels) are kept in
@@ -96,17 +109,21 @@ payload JSON                ->  database    (molecular-property import only)
 
 ## Identity
 
-- A payload's `species_entry_id` is left empty by the builders. Catalog
-  enrichment (`enrichment.py`) writes an `identity_hint` into
-  `raw_payload_json` only when the catalog match is unambiguous; ambiguous
-  (isomer) candidates are kept under `catalog_candidates` instead.
+- A payload's `species_entry_id` is left empty by the builders.
+  `enrichment.py` only scores catalog matches. The property-table builder
+  (`builders/molecular_property_payload.py`) writes an `identity_hint` into
+  `raw_payload_json` only when exactly one match is unambiguous, and writes
+  `catalog_candidates` whenever any match exists. Form-result payloads carry
+  only a formula and/or name hint, so they never resolve.
 - The DB import sets `species_entry_id` only when
   `identity_hint["inchikey"]` matches exactly one species and that species has
   exactly one entry with `kind=minimum` and a ground electronic state
   (`app/services/external_observation_identity.py`, shared with the ThermoML
-  importer). Formula, formula plus name, name, and CAS hints are reported as
-  warnings and never resolve an entry. A `species_entry_id` already present
-  on the payload is kept.
+  importer). Without an InChIKey the row stays unresolved, with a warning for a
+  CAS, formula plus name, or formula hint; a name-only hint is ignored. A
+  `species_entry_id` already present on the payload is kept, and
+  `--no-resolve-identity` skips resolution so every row is inserted with
+  `species_entry_id=NULL`.
 - Rows left without `species_entry_id` stay self-describing through their
   `external_source_*` columns and `identity_hint`.
 
@@ -117,4 +134,4 @@ Every observation carries flattened `external_source_*` columns on
 kind, content SHA-256, parser name and version). The importer does not write
 `external_source` or `external_source_record` rows.
 
-Archived pages are not committed: `data/external/cccbdb/` is git-ignored.
+The repository `.gitignore` ignores `data/external/cccbdb/` at the repository root. The README commands run from `backend/` and write `backend/data/external/cccbdb/`, which is not covered by that rule.

@@ -39,8 +39,7 @@
 #
 #   The state file is advanced ONLY after ntfy has accepted the push. A failed
 #   publish that recorded "you have been told" would mean the next run sees no
-#   edge and stays quiet -- an alert lost for a week. That exact bug was fixed
-#   in the Pi-side checker and is not being reintroduced here.
+#   edge and stays quiet -- an alert lost for a week.
 #
 # ENVIRONMENT
 #   TCKDB_NTFY_TOPIC             required. ntfy topics are public to anyone who
