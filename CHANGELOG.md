@@ -24,7 +24,7 @@ dataset must never require a code release.
 
 ## Source prose describes behaviour for any producer (Unreleased)
 
-- **Behaviour:** none. Comments, docstrings, OpenAPI field descriptions and the generated producer contract no longer explain TCKDB behaviour in terms of one workflow tool: a rule is stated for any producer, ARC is named only as one example among others or as a plain source citation, and code that parses real software tokens is unchanged. The `workflow_tool_name` filter description now reads "e.g. 'ARC' or 'Arkane'".
+- **Behaviour:** none. Comments, docstrings, OpenAPI field descriptions and the generated producer contract no longer explain TCKDB behaviour in terms of one workflow tool: a rule is stated for any producer, ARC is named only as one example among others or as a plain source citation, and code that parses real software tokens is unchanged. The species browse `workflow_tool` filter description now reads "e.g. 'ARC' or 'Arkane'".
 - **Schema and migration:** none. No new environment variable.
 - **Versions:** `tckdb-schemas` 0.175.2 and `tckdb-client` 0.208.2 (text only); `tckdb-qcschema` 0.9.5 (comments only).
 
