@@ -460,8 +460,8 @@ def evaluate_point_coordinate_conformance(
             point_index=point_index,
             status=PointStatus.not_applicable,
             reason=(
-                f"{kind.value} has no single recomputable convention "
-                "(ADR 0020): TCKDB stores no field distinguishing one "
+                f"{kind.value} has no single recomputable convention: "
+                "TCKDB stores no field distinguishing one "
                 "definition from another."
             ),
         )
@@ -471,7 +471,7 @@ def evaluate_point_coordinate_conformance(
             status=PointStatus.not_applicable,
             reason=(
                 f"declared unit {stored_unit.value!r} does not match "
-                f"{expected_unit.value!r}, the unit ADR 0020 implies for "
+                f"{expected_unit.value!r}, the unit expected for "
                 f"kind={kind.value!r}."
             ),
         )
@@ -824,12 +824,11 @@ def classify_series(
                             "step -- this check reports the step-sized "
                             "reading because it is the narrower, more "
                             "specific claim, not because it has ruled the "
-                            "other one out. It cannot: ADR 0020 forbids "
-                            "reading start_value to decide, which is exactly "
+                            "other one out. It cannot: start_value is grid metadata and is "
+                            "never read to decide, and it is exactly "
                             "the number that would resolve the ambiguity. A "
-                            "human (or the corrective migration, which may "
-                            "read start_value) should confirm before acting "
-                            "on point/geometry off-by-one specifically."
+                            "human reading start_value should confirm before "
+                            "acting on point/geometry off-by-one specifically."
                         ),
                     )
             ceiling = TOLERANCE_CEILING_DEGREES if is_periodic else TOLERANCE_CEILING_ANGSTROM
@@ -850,7 +849,7 @@ def classify_series(
                 detail=(
                     f"every checkable point's residual is the same constant "
                     f"({constant:.6g}, spread {spread:.3g}). To recover the "
-                    "ADR-0020 value: expected = stored - "
+                    "geometry-derived value: expected = stored - "
                     f"({constant:.6g})."
                 ),
             )

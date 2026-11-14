@@ -52,8 +52,8 @@ from app.schemas.reads.scientific_common import (
 class ObservationUncertainty(BaseModel):
     """Typed uncertainty on ``scalar_value``.
 
-    ``kind`` may be ``None`` even when ``value`` is present: legacy
-    CCCBDB-imported rows carry a bare ``scalar_uncertainty`` with no stated
+    ``kind`` may be ``None`` even when ``value`` is present: CCCBDB-imported
+    rows carry a bare ``scalar_uncertainty`` with no stated
     meaning (see the model's ``ck_mpo_uncertainty_kind_iff_value`` CHECK,
     which only requires the pairing for ``heat_capacity_cp`` rows). A present
     ``kind`` with no ``value`` never occurs.
@@ -71,9 +71,9 @@ class ObservationExternalSource(BaseModel):
 
     Two provenance shapes coexist on the underlying table (see
     ``app/db/models/molecular_property_observation.py`` and
-    ``app/db/models/external_source.py``): legacy CCCBDB rows carry
+    ``app/db/models/external_source.py``): CCCBDB rows carry
     flattened ``external_source_*`` columns with no schema identifier /
-    ``mapping_version``; newer rows cite an
+    ``mapping_version``; other rows cite an
     ``external_source_record`` custody row that carries those two plus a
     content digest. This fragment is the union of both — whichever fields
     the row's provenance shape actually has are populated, the rest are

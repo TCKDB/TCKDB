@@ -693,59 +693,21 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/conformer_selection_locator.py",
             shape=Shape.relationship,
             note=(
-                "Shape.relationship, and it was already meeting the "
-                "obligation before there was a field to name it: the code "
-                "says several rows matched and names none of them, while "
-                "Discrimination.as_context reports match_count, differs_by, "
-                "discriminator, discriminator_values and locator_can_express "
-                "-- the things that differ, never their ids. So this entry "
-                "needed a declaration, not a repair. It is also the first "
-                "code to arrive after RELATIONSHIP_WORDS existed, and it "
-                "arrived misclassified by omission: written before Shape "
-                "was, it took the Shape.thing default and the word guard "
-                "refused it on the merge. Nothing else would have -- the "
-                "merge was textually clean. "
-                "The 'several matched' half of a split; unknown_conformer_"
-                "selection is the 'none matched' half, at 404. Both used to "
-                "be one bare ValueError reading 'must resolve exactly one "
-                "selection', so 422 validation_error with an empty context "
-                "covered two opposite repairs -- deposit the missing row, "
-                "versus say more about which row you meant. 422 and not 409 "
-                "because every candidate exists: the world is consistent and "
-                "the request is under-determined. context reports what "
-                "actually differs across the candidates (discriminator, "
-                "discriminator_values) and whether the locator has a field "
-                "for it (locator_can_express), because 'be more specific' is "
-                "only advice if there is something to add. For a long time "
-                "there was not: the lookup filtered on all three locator "
-                "fields, so candidates agreed on all three and could only "
-                "differ by the conformer group, which the locator could "
-                "not name -- every observed refusal reported "
-                "locator_can_express=false, which was the evidence the "
-                "locator needed widening. It has since been widened. The "
-                "locator carries an optional conformer_group_ref, the "
-                "field is filtered on when supplied, and this refusal now "
-                "names it: discriminator=conformer_group_ref, "
-                "locator_can_express=true, and discriminator_values listing "
-                "the cg_ refs to choose between. The code, the status and "
-                "every context key are unchanged -- what changed is that "
-                "the advice can now be followed."
+                "Several rows matched the locator and none is named. 422 rather than 409 because every candidate "
+                "exists: the request is under-determined, not in conflict. unknown_conformer_selection is the 'none "
+                "matched' counterpart, at 404. context reports match_count, differs_by, discriminator, "
+                "discriminator_values and locator_can_express -- the things that differ across the candidates, never "
+                "their ids. The locator carries an optional conformer_group_ref and filters on it when supplied, so a "
+                "refusal that names it as the discriminator lists the cg_ refs to choose between."
             )),
     ApiCode("applied_energy_correction_source_calculation_owner_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_ownership.py",
             shape=Shape.relationship,
             note=(
-                "Reach.guard until #195, and the note it carried named the "
-                "repair that ended it: /uploads/computed-reaction resolves "
-                "source_calculation_key in a namespace spanning every "
-                "species and the transition state, then attaches the "
-                "correction to one of them. Both of its ownership "
-                "comparisons were inline and raised a bare ValueError, so "
-                "the mistake answered validation_error; both now call the "
-                "shared guard. The three older call sites still cannot "
-                "produce it -- they read from a key map built for the "
-                "target's own owner -- but reachability is a property of "
-                "the code, not of every site that raises it."
+                "/uploads/computed-reaction resolves source_calculation_key in a namespace spanning every species and "
+                "the transition state, then attaches the correction to one of them; both of its ownership comparisons "
+                "call the shared guard. The other call sites read from a key map built for the target's own owner and "
+                "cannot produce it."
             )),
     ApiCode("applied_energy_correction_source_key_undeclared", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/local_key_codes.py"),
@@ -794,17 +756,11 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/api/errors.py",
             replay=Replay.never_succeeds,
             note=(
-                "Replay.never_succeeds because the verification is a "
-                "comparison of stored bytes against a digest recorded when "
-                "they were accepted, and both sides are fixed: the digest "
-                "is immutable and the bytes are whatever they now are. The "
-                "same request meets the same mismatch forever. The handler's "
-                "own sentence already says so -- 'retrying will not clear "
-                "it' -- and until #234 no client could act on it, because "
-                "502 is in the client's default retry set and the code that "
-                "contradicts it was excluded from the exported enum by "
-                "is_client_facing's 4xx rule. Repair is an operator "
-                "restoring the object, not a caller waiting."
+                "Replay.never_succeeds because the verification compares stored bytes against a digest recorded when "
+                "they were accepted, and both sides are fixed: the same request meets the same mismatch forever. The "
+                "handler's own sentence says so -- 'retrying will not clear it'. 502 is in the client's default retry "
+                "set, so the code is declared never_succeeds to contradict it. Repair is an operator restoring the "
+                "object, not a caller waiting."
             )),
     ApiCode("artifact_invalid_base64", 422, Surface.coded_exception,
             "backend/app/services/artifact_persistence.py"),
@@ -829,95 +785,45 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/api/errors.py",
             replay=Replay.never_succeeds,
             note=(
-                "Replay.never_succeeds: the store answered, and what it "
-                "answered was that the key is not there. Nothing about "
-                "waiting changes that -- only an operator putting the "
-                "object back does, which is a different request by a "
-                "different principal. This is the pair that forced the "
-                "Replay field to exist: it and artifact_storage_unavailable "
-                "leave one handler, from one exception type, with opposite "
-                "retry advice and no field between them that a property "
-                "could read. "
-                "Split from artifact_storage_unavailable in #226, which "
-                "carried both 'the store did not answer' and 'the store "
-                "answered and the object is not there' — opposite retry "
-                "advice under one code. Told apart by "
-                "ArtifactStorageUnavailable.missing, set from the S3 error "
-                "code in load_artifact_bytes; the exception type is "
-                "deliberately not split, so every opportunistic "
-                "'except ArtifactStorageUnavailable' still catches both. "
-                "502 rather than 404 or 410 although the bytes are gone: "
-                "the request was well formed and the artifact record is "
-                "still published, so the failure is TCKDB's custody and "
-                "not the caller's mistake. 404 would also collide with "
-                "this route's deliberate unknown-or-unapproved-digest "
-                "answer, and 410 would invite a client to drop the "
-                "reference that makes reclaim_restore possible. Its "
-                "sibling artifact_integrity_failed sits at the same "
-                "status for the same reason; the two differ in which "
-                "artifact_integrity_event finding was recorded "
-                "(object_missing vs digest/size mismatch) and therefore "
-                "in what an operator does next."
+                "Replay.never_succeeds: the store answered, and what it answered was that the key is not there. "
+                "Waiting changes nothing; only an operator putting the object back does. It and "
+                "artifact_storage_unavailable leave one handler, from one exception type, with opposite retry advice. "
+                "Told apart by ArtifactStorageUnavailable.missing, set from the S3 error code in load_artifact_bytes; "
+                "the exception type is not split, so every opportunistic 'except ArtifactStorageUnavailable' still "
+                "catches both. 502 rather than 404 or 410 although the bytes are gone: the request was well formed "
+                "and the artifact record is still published, so the failure is TCKDB's custody and not the caller's "
+                "mistake. 404 would collide with this route's unknown-digest answer, and 410 would invite a client to "
+                "drop the reference that makes reclaim_restore possible. Its sibling artifact_integrity_failed sits "
+                "at the same status; the two differ in which artifact_integrity_event finding was recorded "
+                "(object_missing vs digest/size mismatch) and therefore in what an operator does next."
             )),
     ApiCode("artifact_storage_full", 507, Surface.response_literal,
             "backend/app/api/errors.py",
             note=(
-                "The third fact one handler can learn about the object "
-                "store, after 'it did not answer' (503) and 'it answered, "
-                "and the object is not there' (502): it answered, and it "
-                "has no room. Told apart by "
-                "ArtifactStorageUnavailable.full, set from the store's own "
-                "error code in artifact_storage._raise_write_refusal, or, "
-                "for SeaweedFS's generic InternalError, from the store's "
-                "own report of its free disk and volume slots when "
-                "S3_SEAWEEDFS_MASTER_URL is set (#545). "
-                "Measured, not inferred: MinIO answers XMinioStorageFull "
-                "at 507 when the drive free-space threshold is breached, "
-                "and XMinioAdminBucketQuotaExceeded at 400 when a hard "
-                "bucket quota is passed. TCKDB reports 507 for both, "
-                "because the upstream 400 classifies MinIO's own API call "
-                "and not the depositor's request -- the depositor did "
-                "nothing wrong either way. "
-                "507 rather than a second code at 503 because the status "
-                "must carry the advice on its own: 507 is registered with "
-                "exactly this meaning (RFC 4918) and is absent from "
-                "tckdb_client.retry.DEFAULT_RETRY_STATUS_CODES, so a "
-                "pinned client and a non-Python caller both stop retrying "
-                "without knowing this code exists. At 503 the status would "
-                "invite the retry and only NON_RETRYABLE_CODES could "
-                "contradict it, making correct behaviour depend on the "
-                "caller having upgraded. "
-                "Deliberately at the Replay.may_succeed default, and not a "
-                "new Replay member for 'retryable, but not by you, and not "
-                "soon'. Replay exists only to contradict a status that "
-                "invites a retry, so a declaration at 507 would be inert "
-                "by is_replay_futile's own rule; and never_succeeds would "
-                "be a false claim, because its note must say what makes "
-                "the condition deterministic and a full store is not -- an "
-                "operator frees space and the identical request then "
-                "succeeds. The vocabulary is adequate; the status carries "
-                "what the vocabulary cannot."
+                "The store answered, and it has no room. Told apart from 'it did not answer' (503) and 'the object is "
+                "not there' (502) by ArtifactStorageUnavailable.full, set from the store's own error code in "
+                "artifact_storage._raise_write_refusal, or, for SeaweedFS's generic InternalError, from the store's "
+                "own report of its free disk and volume slots when S3_SEAWEEDFS_MASTER_URL is set. MinIO answers "
+                "XMinioStorageFull at 507 when the drive free-space threshold is breached, and "
+                "XMinioAdminBucketQuotaExceeded at 400 when a hard bucket quota is passed; TCKDB reports 507 for "
+                "both, because the upstream 400 classifies MinIO's own API call and not the depositor's request. 507 "
+                "rather than a second code at 503 because the status must carry the advice on its own: 507 is "
+                "registered with exactly this meaning (RFC 4918) and is absent from "
+                "tckdb_client.retry.DEFAULT_RETRY_STATUS_CODES, so a pinned client and a non-Python caller both stop "
+                "retrying without knowing this code exists. Left at the Replay.may_succeed default: never_succeeds "
+                "would be a false claim, because a full store is not deterministic -- an operator frees space and the "
+                "identical request then succeeds."
             )),
     ApiCode("artifact_storage_unavailable", 503, Surface.response_literal,
             "backend/app/api/errors.py",
             note=(
-                "Now means only what its sentence says: the store did not "
-                "answer, and retrying is the right response. The case "
-                "where it answered 'no such key' left this code in #226 — "
-                "see artifact_object_missing. Deliberately left at the "
-                "Replay.may_succeed default: this is the half of the "
-                "original pair where the 503's retry advice was true all "
-                "along, and it is the entry that makes the new field's "
-                "guard non-vacuous. One exception, measured in #541: "
-                "SeaweedFS, the default store, answers a full store (disk, "
-                "volume slots, or an enforced bucket quota) with a generic "
-                "InternalError 500 that cannot be told apart from a "
-                "transient fault, so a full SeaweedFS store lands here "
-                "rather than at artifact_storage_full, and retrying does not "
-                "help until an operator frees space. The detail says so: "
-                "'If this persists, the store may be full.' Since #545 that "
-                "holds only where S3_SEAWEEDFS_MASTER_URL is unset or the "
-                "store does not answer; otherwise TCKDB asks the store for "
+                "The store did not answer, and retrying is the right response. Left at the Replay.may_succeed "
+                "default. A store that answered 'no such key' is artifact_object_missing. SeaweedFS, the default "
+                "store, answers a full store (disk, volume slots, or an enforced bucket quota) with a generic "
+                "InternalError 500 that cannot be told apart from a transient fault, so a full SeaweedFS store lands "
+                "here rather than at artifact_storage_full, and retrying does not help until an operator frees space. "
+                "The detail says so: 'If this persists, the store may be full.' That holds only where "
+                "S3_SEAWEEDFS_MASTER_URL is unset or the store does not answer; otherwise TCKDB asks the store for "
                 "its room and a full SeaweedFS reaches artifact_storage_full."
             )),
     ApiCode("atom_map_atoms_unaccounted_for", 422, Surface.coded_exception,
@@ -969,15 +875,11 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/energy_correction_resolution.py",
             shape=Shape.relationship,
             note=(
-                "Task #264. A bac_total correction with no component "
-                "breakdown, on a target where 'no bonds were summed' "
-                "cannot be established: a transition state entry always "
-                "(no bond assignment exists for a saddle point), or a "
-                "species entry whose SMILES carries at least one bond. "
-                "Scoped to bac_petersson -- a bac_melius total does not "
-                "decompose into a stable per-component breakdown even "
-                "for a bonded species, so a componentless Melius total "
-                "is left alone on either kind of target."
+                "A bac_total correction with no component breakdown, on a target where 'no bonds were summed' cannot "
+                "be established: a transition state entry always (no bond assignment exists for a saddle point), or a "
+                "species entry whose SMILES carries at least one bond. Scoped to bac_petersson -- a bac_melius total "
+                "does not decompose into a stable per-component breakdown even for a bonded species, so a "
+                "componentless Melius total is left alone on either kind of target."
             )),
     ApiCode("browse_parameter_removed", 422, Surface.coded_exception,
             "backend/app/schemas/reads/removed_parameters.py",
@@ -1037,25 +939,20 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/api/bundle_limits.py",
             shape=Shape.relationship,
             note=(
-                "POST /bundles/dry-run and /bundles/submit (#586). Cap "
-                "family. Written by BundleBodyLimitMiddleware, an ASGI "
-                "middleware, because the cap has to hold before the body is "
-                "parsed. context carries max_bytes "
-                "(settings.bundle_max_body_bytes) and, when the request "
-                "declared a Content-Length, given_bytes -- the caller's own "
-                "figure; a chunked body declares none and is refused as soon "
-                "as it passes the cap, so no count is known."
+                "POST /bundles/dry-run and /bundles/submit. Cap family. Written by BundleBodyLimitMiddleware, an ASGI "
+                "middleware, because the cap has to hold before the body is parsed. context carries max_bytes "
+                "(settings.bundle_max_body_bytes) and, when the request declared a Content-Length, given_bytes -- the "
+                "caller's own figure; a chunked body declares none and is refused as soon as it passes the cap, so no "
+                "count is known."
             )),
     ApiCode("bundle_too_many_records", 422, Surface.coded_exception,
             "backend/app/api/bundle_limits.py",
             shape=Shape.relationship,
             note=(
-                "POST /bundles/dry-run and /bundles/submit (#586). Cap "
-                "family. context carries max_records "
-                "(settings.bundle_max_records) and records, the bundle's own "
-                "thermo plus kinetics upload count. Enforced after parsing: "
-                "the count is a property of the parsed model, and "
-                "bundle_too_large is what bounds the cost of parsing."
+                "POST /bundles/dry-run and /bundles/submit. Cap family. context carries max_records "
+                "(settings.bundle_max_records) and records, the bundle's own thermo plus kinetics upload count. "
+                "Enforced after parsing: the count is a property of the parsed model, and bundle_too_large is what "
+                "bounds the cost of parsing."
             )),
     ApiCode("calculation_dependency_cycle", 409, Surface.response_literal,
             "backend/app/api/errors.py",
@@ -1144,24 +1041,18 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("calculation_software_is_workflow_tool", 422, Surface.coded_exception,
             "backend/app/services/calculation_resolution.py",
             note=(
-                "A calculation declared a workflow tool (Arkane, ARC or "
-                "RMG) as the program that ran it (issue #305). Refused, not "
-                "routed: the "
-                "electronic-structure program that produced the output is "
-                "absent, and moving the declared value into "
-                "workflow_tool_release would leave the calculation claiming "
-                "none. context names the declared_name and the workflow_tool "
-                "it matched. Scoped to calculations only -- a thermo, "
-                "statmech or kinetics record's analysis software_release "
-                "(fed by analysis_software_release) is not checked."
+                "A calculation declared a workflow tool (Arkane, ARC or RMG) as the program that ran it. Refused, not "
+                "routed: the electronic-structure program that produced the output is absent, and moving the declared "
+                "value into workflow_tool_release would leave the calculation claiming none. context names the "
+                "declared_name and the workflow_tool it matched. Scoped to calculations only -- a thermo, statmech or "
+                "kinetics record's analysis software_release (fed by analysis_software_release) is not checked."
             )),
     ApiCode("calculation_software_release_required", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
             note=(
-                "A calculation names no software_release. The release names "
-                "the program that produced the numbers, so every calculation "
-                "carries one except an assembled composite (arithmetic over "
-                "other deposited calculations, run by no program; ADR 0021)."
+                "A calculation names no software_release. The release names the program that produced the numbers, so "
+                "every calculation carries one except an assembled composite (arithmetic over other deposited "
+                "calculations, run by no program)."
             )),
     ApiCode("candidate_rights_basis_incompatible", 422, Surface.message_prefix,
             "backend/app/services/release/curation.py",
@@ -1224,13 +1115,9 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("composite_assembled_not_accepted", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
             note=(
-                "composite_result.assembly='assembled' at a level of theory "
-                "that is not a user-built scheme sent inline "
-                "(level_of_theory.composite_scheme): a named method such as "
-                "CBS-QB3 is a program_run composite, and an assembled one "
-                "needs a recipe to be checked against. Published with P3a, "
-                "when no assembled composite was accepted at all; since P5 "
-                "(ADR 0021) it names this one remaining case."
+                "composite_result.assembly='assembled' at a level of theory that is not a user-built scheme sent "
+                "inline (level_of_theory.composite_scheme): a named method such as CBS-QB3 is a program_run "
+                "composite, and an assembled one needs a recipe to be checked against."
             )),
     ApiCode("composite_e0_inconsistent", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
@@ -1285,9 +1172,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/calculation_ownership.py",
             shape=Shape.relationship,
             note=(
-                "An input of an assembled composite belongs to another species "
-                "or transition-state entry than the composite. One owner entry "
-                "per recipe (ADR 0021)."
+                "An input of an assembled composite belongs to another species or transition-state entry than the "
+                "composite. A composite and its inputs share one owner entry."
             )),
     ApiCode("composite_input_reference_invalid", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
@@ -1332,11 +1218,9 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "schemas/python/tckdb-schemas/tckdb_schemas/composite_scheme_rules.py",
             shape=Shape.relationship,
             note=(
-                "A user-built composite scheme's shape is wrong: a formula "
-                "without its exponent, a slot the operation does not take, a "
-                "duplicate term key, an empirical term, a kind that does not "
-                "match its terms, or method-level fields sent next to the "
-                "scheme. context.rule names which (ADR 0021)."
+                "A user-built composite scheme's shape is wrong: a formula without its exponent, a slot the operation "
+                "does not take, a duplicate term key, an empirical term, a kind that does not match its terms, or "
+                "method-level fields sent next to the scheme. context.rule names which."
             )),
     ApiCode("composite_scheme_named_method_not_sendable", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/composite_scheme_rules.py",
@@ -1386,10 +1270,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("composite_total_required", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
             note=(
-                "An assembled composite deposited no "
-                "electronic_energy_hartree. The total is deposited and only "
-                "checked by recomputation (ADR 0021, owner decision 5); TCKDB "
-                "stores no value it computed."
+                "An assembled composite deposited no electronic_energy_hartree. The total is deposited and only "
+                "checked by recomputation; TCKDB stores no value it computed."
             )),
     ApiCode("composite_type_requires_composite_result", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py"),
@@ -1397,14 +1279,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/release/curation.py",
             shape=Shape.relationship,
             note=(
-                "409, not the 422 a bare ReleaseCurationError would reach. "
-                "It was recorded wrong for a long time because the status "
-                "used to be a property of the *route*: the raise site said "
-                "ValueError and one except clause said 409. Since #211 the "
-                "raise site says ReleaseStateConflict and the route reads "
-                "the status off the class, so the two can no longer "
-                "disagree. The observer checking the (status, code) pair is "
-                "what caught the original mismatch."
+                "409, not the 422 a bare ReleaseCurationError would reach. The raise site says ReleaseStateConflict "
+                "and the route reads the status off the class."
             )),
     ApiCode("curator_task_not_found", 404, Surface.coded_exception,
             "backend/app/services/machine_review/curator_task_lifecycle.py"),
@@ -1419,15 +1295,10 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("database_error", 503, Surface.generic_fallback,
             "backend/app/api/errors.py",
             note=(
-                "The operational-error handler's fallback_code, and it is "
-                "dead: that handler always passes an explicit code "
-                "(database_unavailable, or query_timeout on SQLSTATE "
-                "57014), and error_envelope reads the fallback only when "
-                "code is falsy. Listed because the argument is written "
-                "and a future edit that stops setting code would emit it "
-                "-- an enumeration that omits a fallback nobody has "
-                "reached yet is one that goes stale silently. Found by "
-                "widening the closure scan to *_code keywords."
+                "The operational-error handler's fallback_code, and it is unreachable: that handler always passes an "
+                "explicit code (database_unavailable, or query_timeout on SQLSTATE 57014), and error_envelope reads "
+                "the fallback only when code is falsy. Listed because a future edit that stops setting code would "
+                "emit it, and an enumeration that omits a fallback goes stale silently."
             )),
     ApiCode("database_request_failed", 500, Surface.response_literal,
             "backend/app/api/errors.py",
@@ -1450,26 +1321,21 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/release/curation.py",
             shape=Shape.relationship,
             note=(
-                "409 since #211. Recording the DOI the release already cites "
-                "succeeds; only a *different* one refuses, and it refuses "
-                "because a citation is already pointing somewhere. There is "
-                "no corrected body -- the deposit would have to be redone."
+                "Recording the DOI the release already cites succeeds; only a *different* one refuses, because a "
+                "citation is already pointing somewhere. There is no corrected body -- the deposit would have to be "
+                "redone."
             )),
     ApiCode("domain_error", 400, Surface.generic_fallback,
             "backend/app/api/errors.py"),
     ApiCode("dry_run_contended", 503, Surface.response_literal,
             "backend/app/api/errors.py",
             note=(
-                "Only /bundles/dry-run, which rehearses submit inside a "
-                "rolled-back savepoint (#577). The rehearsal waits at most a "
-                "short lock_timeout for another transaction's lock and runs "
-                "with a shorter deadlock_timeout than a real submit, so when "
-                "the two collide the dry run is the one that gives way "
-                "rather than delaying or deadlocking the submit. It decided "
-                "nothing about the bundle; context.reason is lock_timeout or "
-                "deadlock, and the response carries Retry-After: 1. Left at "
-                "the Replay.may_succeed default: waiting for the other "
-                "writer to finish is exactly what clears it."
+                "Only /bundles/dry-run, which rehearses submit inside a rolled-back savepoint. The rehearsal waits at "
+                "most a short lock_timeout for another transaction's lock and runs with a shorter deadlock_timeout "
+                "than a real submit, so when the two collide the dry run is the one that gives way rather than "
+                "delaying or deadlocking the submit. It decided nothing about the bundle; context.reason is "
+                "lock_timeout or deadlock, and the response carries Retry-After: 1. Left at the Replay.may_succeed "
+                "default: waiting for the other writer to finish is exactly what clears it."
             )),
     ApiCode("electronic_state_label_invalid", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/electronic_state.py",
@@ -1477,18 +1343,11 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("email_taken", 409, Surface.message_prefix,
             "backend/app/api/routes/auth.py",
             note=(
-                "Registration only, and paired with username_taken. Both "
-                "arrive at 23505 -- a unique violation says nothing about "
-                "which rule fired -- so the two are told apart by the "
-                "constraint name psycopg reports in exc.orig.diag, not by "
-                "the SQLSTATE and not by parsing the driver's message. "
-                "Before #225 both answered http_409 with one sentence "
-                "covering two fields, which is why a sign-up form could "
-                "not highlight the input at fault; unique_conflict, the "
-                "only code the SQLSTATE alone supports, would have been "
-                "the same problem with a code attached. Discloses nothing "
-                "registration does not already disclose by refusing at "
-                "all -- and that argument covers this endpoint only."
+                "Registration only, and paired with username_taken. Both arrive at 23505 -- a unique violation says "
+                "nothing about which rule fired -- so the two are told apart by the constraint name psycopg reports "
+                "in exc.orig.diag, not by the SQLSTATE and not by parsing the driver's message. A sign-up form can "
+                "then highlight the input at fault. Discloses nothing registration does not already disclose by "
+                "refusing at all -- and that argument covers this endpoint only."
             )),
     ApiCode("enthalpy_declaration_absent", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/enthalpy_reference.py",
@@ -1506,10 +1365,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "schemas/python/tckdb-schemas/tckdb_schemas/energy_correction.py",
             shape=Shape.relationship,
             note=(
-                "frequency_level_of_theory sent on a scheme kind that does "
-                "not take one yet: a frequency level is accepted only on "
-                "bac_petersson and bac_melius for now. context.scheme_kind "
-                "names the kind."
+                "frequency_level_of_theory sent on a scheme kind that does not take one: a frequency level is "
+                "accepted only on bac_petersson and bac_melius. context.scheme_kind names the kind."
             )),
     ApiCode("energy_correction_scheme_frequency_level_without_energy_level", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/energy_correction.py",
@@ -1554,13 +1411,10 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/export.py",
             shape=Shape.relationship,
             note=(
-                "Shape.relationship since 2026-08-18, and one of the four "
-                "codes that publish the threshold and withhold the "
-                "measurement. context carries cap and record_type; the "
-                "count that crossed it is an unfiltered row count over "
-                "reaction_entry -- the corpus total -- so it is logged and "
-                "appears in neither context nor detail. See the disclosure "
-                "line on Shape."
+                "One of the four codes that publish the threshold and withhold the measurement. context carries cap "
+                "and record_type; the count that crossed it is an unfiltered row count over reaction_entry -- the "
+                "corpus total -- so it is logged and appears in neither context nor detail. See the disclosure line "
+                "on Shape."
             )),
     ApiCode("export_ref_unmatched", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/export.py",
@@ -1628,12 +1482,9 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/geometry.py",
             shape=Shape.relationship,
             note=(
-                "Shape.relationship since 2026-08-18. context carries "
-                "max_atoms (settings.max_geometry_atoms_public) and atoms "
-                "(the requested geometry's own atom count). The second is "
-                "not the withheld kind of measurement: it is a property of "
-                "one record the caller named, and strictly less than this "
-                "endpoint returns for any request under the cap."
+                "context carries max_atoms (settings.max_geometry_atoms_public) and atoms (the requested geometry's "
+                "own atom count). The second is not the withheld kind of measurement: it is a property of one record "
+                "the caller named, and strictly less than this endpoint returns for any request under the cap."
             )),
     ApiCode("git_status_failed", 422, Surface.message_prefix,
             "backend/app/services/deposit/build.py",
@@ -1648,25 +1499,10 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/handles.py",
             shape=Shape.relationship,
             note=(
-                "Surface.coded_exception since #210, and the detail did not "
-                "move a byte. It was message_prefix -- two "
-                "ValueError(f'handle_type_mismatch: ...') sites -- which is "
-                "the surface with nowhere to put context, and this code "
-                "names a relationship: two ref prefixes that are not the "
-                "same one, neither of them named. Both sites now raise "
-                "CodedValueError with message_prefix=True, so str(exc) is "
-                "unchanged and only the route into `code` differs: declared "
-                "on the exception rather than promoted out of the sentence. "
-                "It leaves MESSAGE_PREFIX_CODES as a consequence, which is "
-                "correct -- the envelope no longer needs to read English to "
-                "find this code. Its six *_handle_conflict neighbours in the "
-                "same module have the same defect and are *not* converted "
-                "here: their code is minted from reconcile_id_ref's "
-                "conflict_code parameter, and test_error_contract_catalogue_"
-                "gate.py's TestTheShapeTheRaiseSiteScanCannotRead is written "
-                "over exactly that spelling, so moving them means "
-                "re-pointing that gate at the new shape rather than "
-                "deleting it."
+                "Two ref prefixes that are not the same one, neither of them named. Raised as CodedValueError with "
+                "message_prefix=True, so the code is declared on the exception rather than promoted out of the "
+                "sentence. Its *_handle_conflict neighbours in the same module mint their code from "
+                "reconcile_id_ref's conflict_code parameter and are still read from the sentence."
             )),
     ApiCode("hessian_method_contradicts_input_deck", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/hessian_method_detection.py",
@@ -1740,14 +1576,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/common.py",
             shape=Shape.relationship,
             note=(
-                "Surface.coded_exception since #210, with the detail "
-                "byte-identical: the raise moved to CodedValueError with "
-                "message_prefix=True so it could carry the two bounds in "
-                "context. Its sibling invalid_range in "
-                "scientific_read/analytics.py was already coded_exception "
-                "and already carried them, which is what made this one's "
-                "empty context visible as an inconsistency rather than a "
-                "policy."
+                "Raised as CodedValueError with message_prefix=True so it carries the two bounds in context, as its "
+                "sibling invalid_range in scientific_read/analytics.py does."
             )),
     ApiCode("irc_result_not_found", 404, Surface.coded_exception,
             "backend/app/services/scientific_read/calculation_paths.py"),
@@ -1841,20 +1671,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("last_admin_demotion", 409, Surface.message_prefix,
             "backend/app/api/routes/admin.py",
             note=(
-                "PATCH /admin/users/{user_id}/role refuses to take admin "
-                "from the archive's only active admin. No route grants the "
-                "role back once nobody holds it, so the request would be "
-                "unrecoverable through the API: repair means running "
-                "scripts/bootstrap_admin.py against the database, which "
-                "needs shell access to the host. Shape is a thing, not a "
-                "relationship -- the code names the whole situation and the "
-                "repair (promote someone else first) follows from the name, "
-                "so there is nothing for context to carry. The broader rule "
-                "'an admin may never demote themselves' was rejected "
-                "because it would make this code unreachable: auth requires "
-                "is_active and the route requires admin, so the caller is "
-                "always an active admin and any demotion of someone else "
-                "leaves one standing by construction."
+                "PATCH /admin/users/{user_id}/role refuses to take admin from the archive's only active admin. No "
+                "route grants the role back once nobody holds it, so the request would be unrecoverable through the "
+                "API: repair means running scripts/bootstrap_admin.py against the database, which needs shell access "
+                "to the host. Shape is a thing, not a relationship -- the code names the whole situation and the "
+                "repair (promote someone else first) follows from the name, so there is nothing for context to carry. "
+                "The refusal is scoped to the last admin: auth requires is_active and the route requires admin, so "
+                "the caller is always an active admin and any demotion of someone else leaves one standing by "
+                "construction."
             )),
     ApiCode("level_of_theory_handle_conflict", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/handles.py",
@@ -1862,12 +1686,9 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("level_of_theory_method_is_compound", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/refs.py",
             note=(
-                "level_of_theory.method contains '//': an energy//geometry "
-                "pair (ARC's 'x//y' shorthand) written as one method name. "
-                "That is two ordinary levels of theory; the producer sends "
-                "the single-point and the optimization levels as separate "
-                "calculations. Context carries the field and the value "
-                "sent (ADR 0021)."
+                "level_of_theory.method contains '//': an energy//geometry pair (ARC's 'x//y' shorthand) written as "
+                "one method name. That is two ordinary levels of theory; the producer sends the single-point and the "
+                "optimization levels as separate calculations. Context carries the field and the value sent."
             )),
     ApiCode("level_of_theory_method_with_composite_scheme", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/composite_scheme_rules.py",
@@ -1887,19 +1708,12 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/common.py",
             shape=Shape.relationship,
             note=(
-                "Split out of invalid_pagination, which covered four "
-                "conditions with three different remedies. A limit above the "
-                "hosted cap is recoverable by resending the same query with "
-                "a smaller page size; a negative offset is a caller bug. "
-                "Unreachable through a GET route in the shipped "
-                "configuration, where MAX_LIMIT and public_max_limit are "
-                "both 200 and Query(le=200) refuses anything larger first -- "
-                "reachable through a POST search body, and through any GET "
-                "on a deployment that lowers public_max_limit. "
-                "Shape.relationship since Calvin's overrule of 2026-08-18; "
-                "context carries limit_max (a setting) and limit (the "
-                "caller's own value). Surface.coded_exception from the same "
-                "change, and detail did not move a byte."
+                "A limit above the hosted cap is recoverable by resending the same query with a smaller page size; a "
+                "negative offset is a caller bug. The two have different repairs, so they are separate codes. Unreachable through a GET route "
+                "in the shipped configuration, where MAX_LIMIT and public_max_limit are both 200 and Query(le=200) "
+                "refuses anything larger first -- reachable through a POST search body, and through any GET on a "
+                "deployment that lowers public_max_limit. Published with its limit: context carries limit_max (a "
+                "setting) and limit (the caller's own value)."
             )),
     ApiCode("lowest_energy_across_levels", 422, Surface.coded_exception,
             "backend/app/api/routes/lookup.py",
@@ -1920,14 +1734,9 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("manifest_already_frozen", 409, Surface.message_prefix,
             "backend/app/services/release/manifest.py",
             note=(
-                "409 since #211, for consistency with its module neighbour "
-                "release_not_published rather than because a caller reported "
-                "it: no route reaches it, because POST /publish calls "
-                "publish_release first and that raises release_not_draft. The "
-                "branch is live all the same -- a service-level test calls "
-                "freeze_manifest directly -- so it keeps an entry. Whether it "
-                "should be Reach.guard, and therefore unexported, is a "
-                "separate question this pass did not settle."
+                "No route reaches it, because POST /publish calls publish_release first and that raises "
+                "release_not_draft. The branch is live all the same -- a service-level test calls freeze_manifest "
+                "directly -- so it keeps an entry."
             )),
     ApiCode("manifest_not_frozen", 404, Surface.message_prefix,
             "backend/app/api/routes/scientific/releases.py"),
@@ -1942,14 +1751,10 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("missing_version_parent", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/meta.py",
             note=(
-                "Shared by /meta/software-versions, "
-                "/meta/workflow-tool-versions, and (since the species "
-                "provenance filters) /species/browse: a version filter "
-                "(software_version= / workflow_tool_version=) was supplied "
-                "without its named parent (software= / workflow_tool=). "
-                "Named which field like missing_identifier does, not a "
-                "relationship -- there is nothing on the other side to "
-                "compare it against."
+                "Shared by /meta/software-versions, /meta/workflow-tool-versions and /species/browse: a version "
+                "filter (software_version= / workflow_tool_version=) was supplied without its named parent (software= "
+                "/ workflow_tool=). Named which field like missing_identifier does, not a relationship -- there is "
+                "nothing on the other side to compare it against."
             )),
     ApiCode("ml_export_all_cap_exceeded", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/ml_dataset.py",
@@ -1972,19 +1777,13 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/structure_search.py",
             shape=Shape.relationship,
             note=(
-                "Surface.coded_exception since #210, detail unchanged. An "
-                "ambiguity code that named none of the fields it was "
-                "ambiguous between; context['supplied'] now does. Its "
-                "neighbour missing_structure_query stays message_prefix "
-                "and stays empty on purpose: it names a thing (no query "
-                "was supplied) and the code is the whole message. Also "
-                "raised by species.py's _select_browse_structure_query "
-                "for /species/browse's own (narrower, two-field) "
-                "query_smiles/query_smarts ambiguity -- same context "
-                "shape, same repair (supply one, not both). "
-                "missing_structure_query is NOT similarly shared: the "
-                "browse structure filter is optional, so supplying "
-                "neither field is not an error there."
+                "An ambiguity code; context['supplied'] names the fields it was ambiguous between. Its neighbour "
+                "missing_structure_query stays message_prefix and empty on purpose: it names a thing (no query was "
+                "supplied) and the code is the whole message. Also raised by species.py's "
+                "_select_browse_structure_query for /species/browse's own (narrower, two-field) "
+                "query_smiles/query_smarts ambiguity -- same context shape, same repair (supply one, not both). "
+                "missing_structure_query is NOT similarly shared: the browse structure filter is optional, so "
+                "supplying neither field is not an error there."
             )),
     ApiCode("n_imag_contradicts_minimum", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py",
@@ -2117,7 +1916,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/network_selection/export.py",
             shape=Shape.relationship,
             note=(
-                "context.differs names the sections (network, solves, assessments, decision, outcome, policy, request, read_profile, population, review_states) that no longer match what the server holds; run a fresh selection."
+                "context.differs names the sections (network, solves, assessments, decision, outcome, policy, request, read_profile, population, review_states) that differ from what the server holds; run a fresh selection."
             )),
     ApiCode("network_export_representation_choice_invalid", 422, Surface.coded_exception,
             "backend/app/services/network_selection/export.py",
@@ -2178,10 +1977,9 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/observation_identity_attach.py",
             shape=Shape.thing,
             note=(
-                "A curator tried to attach a species-entry identity to a "
-                "molecular_property_observation that already carries one. "
-                "Correction is supersession (ADR 0003): deposit a corrected "
-                "observation instead of repointing this row."
+                "A curator tried to attach a species-entry identity to a molecular_property_observation that already "
+                "carries one. Correction is supersession: deposit a corrected observation instead of repointing this "
+                "row."
             )),
     ApiCode("observation_identity_attach_requires_submission", 422, Surface.message_prefix,
             "backend/app/services/observation_identity_attach.py",
@@ -2197,31 +1995,20 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/observation_identity_attach.py",
             shape=Shape.relationship,
             note=(
-                "Phase C-E5 review round 3 (Probe C). The observation "
-                "carries its own identity_hint.inchikey and its "
-                "connectivity block (the InChIKey's first, hyphen-"
-                "delimited segment) disagrees with the attach target "
-                "species's own InChIKey. Only the connectivity block is "
-                "compared -- a hint with no stereo layer can still be "
-                "attached to a stereo-specific entry (the isomer case "
-                "this tool is for) -- but a different molecular skeleton "
-                "is refused rather than silently attached."
+                "The observation carries its own identity_hint.inchikey and its connectivity block (the InChIKey's "
+                "first, hyphen-delimited segment) disagrees with the attach target species's own InChIKey. Only the "
+                "connectivity block is compared -- a hint with no stereo layer can still be attached to a stereo-"
+                "specific entry (the isomer case this tool is for) -- but a different molecular skeleton is refused "
+                "rather than silently attached."
             )),
     ApiCode("observation_identity_target_not_ground_state_minimum", 422, Surface.coded_exception,
             "backend/app/services/observation_identity_attach.py",
             shape=Shape.relationship,
             note=(
-                "Review round 2 (Phase C-E5): renamed from "
-                "observation_identity_ambiguous_entry and the rule relaxed "
-                "-- the target no longer has to be the *unique* "
-                "ground-state minimum entry of its species (that refused "
-                "precisely the isomer-ambiguity case this tool exists for; "
-                "the curator's choice of which entry IS the "
-                "disambiguation), only a ground-state minimum entry at "
-                "all. An observation carries no stereo/excited-state "
-                "resolution of its own, so attaching it to a non-minimum "
-                "or non-ground-state target would silently claim "
-                "specificity the source data does not have."
+                "The target must be a ground-state minimum entry of its species; it need not be the unique one, "
+                "because the curator's choice of which entry it is resolves the isomer ambiguity this tool exists "
+                "for. An observation carries no stereo/excited-state resolution of its own, so attaching it to a non-"
+                "minimum or non-ground-state target would silently claim specificity the source data does not have."
             )),
     ApiCode("observation_rights_basis_incompatible", 422, Surface.message_prefix,
             "backend/app/services/deposit/build.py",
@@ -2259,14 +2046,11 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/common.py",
             shape=Shape.relationship,
             note=(
-                "The sibling of limit_too_large, and the reason they are two "
-                "codes rather than one: retrying with a smaller offset "
-                "returns different rows, so this one is not recoverable by "
-                "resending. Reachable on any paginated read against the "
-                "shipped configuration -- offset carries no upper bound at "
-                "the route, so settings.public_max_offset is the only one. "
-                "Shape.relationship since 2026-08-18; context carries "
-                "offset_max (a setting) and offset (the caller's own)."
+                "The sibling of limit_too_large, and the reason they are two codes rather than one: retrying with a "
+                "smaller offset returns different rows, so this one is not recoverable by resending. Reachable on any "
+                "paginated read against the shipped configuration -- offset carries no upper bound at the route, so "
+                "settings.public_max_offset is the only one. context carries offset_max (a setting) and offset (the "
+                "caller's own)."
             )),
     ApiCode("output_log_signature_unrecognized", 422, Surface.coded_exception,
             "backend/app/services/artifact_storage.py",
@@ -2284,9 +2068,9 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/schemas/reads/removed_parameters.py",
             shape=Shape.relationship,
             note=(
-                "temperature_min / temperature_max on the thermo and kinetics reads were renamed "
-                "coverage_temperature_min_k / coverage_temperature_max_k: they never filtered. context carries "
-                "the old and the new name."
+                "temperature_min / temperature_max on the thermo and kinetics reads are refused; the parameters "
+                "are coverage_temperature_min_k / coverage_temperature_max_k. They never filtered records; they "
+                "set the window temperature_coverage is computed against. context carries the old and the new name."
             )),
     ApiCode("parameter_value_requires_key", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/calculations_search.py"),
@@ -2303,14 +2087,10 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/provenance.py",
             shape=Shape.relationship,
             note=(
-                "Shape.relationship since 2026-08-18, published "
-                "threshold-only. context carries section (which sub-array "
-                "was the offender) and cap. len(block) -- how many "
-                "calculations, geometries, artifacts, conformer groups or "
-                "atom-map pairs TCKDB holds for the requested record -- is "
-                "a count of the corpus, not a property of the caller's "
-                "request, so it is logged. A caller who could read it off a "
-                "cheap refusal would have a row-counting oracle."
+                "Published threshold-only. context carries section (which sub-array was the offender) and cap. "
+                "len(block) -- how many calculations, geometries, artifacts, conformer groups or atom-map pairs TCKDB "
+                "holds for the requested record -- is a count of the corpus, not a property of the caller's request, "
+                "so it is logged. A caller who could read it off a cheap refusal would have a row-counting oracle."
             )),
     ApiCode("rate_limit_exceeded", 429, Surface.response_literal,
             "backend/app/api/rate_limit.py"),
@@ -2372,11 +2152,9 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("release_not_draft", 409, Surface.message_prefix,
             "backend/app/services/release/curation.py",
             note=(
-                "409 since #211. A published release is frozen and cited; no "
-                "corrected body makes a second publish or a late selection "
-                "succeed, so 422 was telling a client to resend something "
-                "that could never be accepted. It raises ReleaseStateConflict, "
-                "and the route reads the status off the class."
+                "A published release is frozen and cited; no corrected body makes a second publish or a late "
+                "selection succeed, so 409 rather than 422. It raises ReleaseStateConflict, and the route reads the "
+                "status off the class."
             )),
     ApiCode("release_not_found", 422, Surface.message_prefix,
             "backend/app/services/deposit/build.py",
@@ -2395,12 +2173,9 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("release_not_published", 409, Surface.message_prefix,
             "backend/app/services/release/curation.py",
             note=(
-                "409 since #211, from two modules: curation.py refuses to "
-                "withdraw or attach a DOI to a release that was never "
-                "published, and manifest.py refuses to freeze one. Both are "
-                "the same sentence about the same state, so they share a "
-                "code and now share a status; the curation.py literal is the "
-                "one the drift guard checks."
+                "Raised from two modules: curation.py refuses to withdraw or attach a DOI to a release that was never "
+                "published, and manifest.py refuses to freeze one. Both state the same condition, so they share a "
+                "code and a status; the curation.py literal is the one the drift guard checks."
             )),
     ApiCode("release_not_verified", 422, Surface.message_prefix,
             "backend/app/services/deposit/build.py",
@@ -2416,11 +2191,9 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("release_tag_taken", 409, Surface.message_prefix,
             "backend/app/services/release/curation.py",
             note=(
-                "409 for the same reason as "
-                "curation_policy_version_conflict, and by the same mechanism "
-                "since #211: it raises ReleaseStateConflict, which the route "
-                "maps to 409. A tag that is taken is taken; there is no "
-                "corrected body, only a different tag."
+                "409 for the same reason as curation_policy_version_conflict: it raises ReleaseStateConflict, which "
+                "the route maps to 409. A tag that is taken is taken; there is no corrected body, only a different "
+                "tag."
             )),
     ApiCode("release_withdrawn", 422, Surface.message_prefix,
             "backend/app/services/deposit/build.py",
@@ -2481,13 +2254,10 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py",
             shape=Shape.relationship,
             note=(
-                "scf_stability.source_calculation_key names a calculation "
-                "owned by another species entry or transition state than the "
-                "calculation carrying the verdict. Reachable on "
-                "/uploads/computed-reaction, whose key namespace spans every "
-                "species and the transition state; the request schema and "
-                "services/scf_stability_sources.py raise the same code and "
-                "context (ADR 0017)."
+                "scf_stability.source_calculation_key names a calculation owned by another species entry or "
+                "transition state than the calculation carrying the verdict. Reachable on /uploads/computed-reaction, "
+                "whose key namespace spans every species and the transition state; the request schema and "
+                "services/scf_stability_sources.py raise the same code and context."
             )),
     ApiCode("scf_stability_source_conformer_unanchored", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py",
@@ -2526,49 +2296,37 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/release/curation.py",
             shape=Shape.relationship,
             note=(
-                "409 since #211, and it moved with its sibling rather than "
-                "after it: this and selection_already_superseded are the same "
-                "refusal seen from the two ends of a chain -- a row already "
-                "exists that blocks the write -- and leaving one at 422 would "
-                "have kept the inconsistency the pass was opened to remove."
+                "This and selection_already_superseded are the same refusal seen from the two ends of a chain -- a "
+                "row already exists that blocks the write -- so both are 409."
             )),
     ApiCode("selection_already_superseded", 409, Surface.message_prefix,
             "backend/app/services/release/curation.py",
             shape=Shape.relationship,
             note=(
-                "409 since #211. Supersession chains stay linear, so the row "
-                "to replace is the one that currently stands -- a different "
-                "URL, not a different body."
+                "Supersession chains stay linear, so the row to replace is the one that currently stands -- a "
+                "different URL, not a different body."
             )),
     ApiCode("selection_no_longer_approved", 422, Surface.message_prefix,
             "backend/app/services/release/curation.py"),
     ApiCode("server_response_invalid", 500, Surface.response_literal,
             "backend/app/api/errors.py",
             note=(
-                "The server failed its own response model; the request was "
-                "not at fault. Two sources, one handler: FastAPI's "
-                "ResponseValidationError (what a route returned does not fit "
-                "its response_model) and ServerFaultRoute, the route class "
-                "that turns a pydantic ValidationError escaping an endpoint "
-                "into ServerFaultError when the failing model is a response or "
-                "read model (a read model built from a row that does not fit "
-                "it); any other model keeps its 422. Before this a ResponseValidationError was "
-                "a text/plain 500 and a route-built read model a 422 that "
-                "blamed the caller. Fixed text, empty context; the errors go "
-                "to the server log. data_integrity_error keeps its own "
-                "meaning: a stored row combination the serializer cannot "
-                "represent."
+                "The server failed its own response model; the request was not at fault. Two sources, one handler: "
+                "FastAPI's ResponseValidationError (what a route returned does not fit its response_model) and "
+                "ServerFaultRoute, the route class that turns a pydantic ValidationError escaping an endpoint into "
+                "ServerFaultError when the failing model is a response or read model (a read model built from a row "
+                "that does not fit it); any other model keeps its 422. Fixed text, empty context; the errors go to "
+                "the server log. data_integrity_error has its own meaning: a stored row combination the serializer "
+                "cannot represent."
             )),
     ApiCode("smiles_too_long", 422, Surface.coded_exception,
             "backend/app/schemas/reads/scientific_kinetics_search.py",
             shape=Shape.relationship,
             note=(
-                "Shape.relationship since 2026-08-18. Two sites -- this one "
-                "and the reaction-search twin -- raise the wire package's "
-                "CodedValidationError rather than the backend's subclass, "
-                "because app.schemas.reads sits on the wire side. context "
-                "carries max_length (a module constant) and length (the "
-                "caller's own string, measured). The string is not echoed."
+                "Two sites -- this one and the reaction-search twin -- raise the wire package's CodedValidationError "
+                "rather than the backend's subclass, because app.schemas.reads sits on the wire side. context carries "
+                "max_length (a module constant) and length (the caller's own string, measured). The string is not "
+                "echoed."
             )),
     ApiCode("source_pin_missing", 422, Surface.message_prefix,
             "backend/app/services/deposit/build.py",
@@ -2590,37 +2348,30 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("sp_energy_component_not_on_sp", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/sp_energy_components.py",
             note=(
-                "sp_energy_components sent on a calculation whose type is not "
-                "'sp'. The parts of an electronic energy belong to the single "
-                "point that produced them (ADR 0021)."
+                "sp_energy_components sent on a calculation whose type is not 'sp'. The parts of an electronic energy "
+                "belong to the single point that produced them."
             )),
     ApiCode("sp_energy_component_total_mismatch", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/sp_energy_components.py",
             shape=Shape.relationship,
             note=(
-                "A 'total' component differs from the single point's "
-                "electronic_energy_hartree by more than 1e-6 Eh. Context "
-                "carries both values and the tolerance (ADR 0021)."
+                "A 'total' component differs from the single point's electronic_energy_hartree by more than 1e-6 Eh. "
+                "Context carries both values and the tolerance."
             )),
     ApiCode("sp_energy_components_do_not_sum", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/sp_energy_components.py",
             shape=Shape.relationship,
             note=(
-                "reference + correlation differs from the single point's "
-                "electronic_energy_hartree by more than 1e-6 Eh. When a "
-                "triples component is also sent, reference + correlation + "
-                "triples may match instead (programs differ on whether the "
-                "printed correlation includes (T)). Context carries the "
-                "values, both sums and the tolerance. TCKDB compares; it "
-                "never stores a sum it formed (ADR 0021)."
+                "reference + correlation differs from the single point's electronic_energy_hartree by more than 1e-6 "
+                "Eh. When a triples component is also sent, reference + correlation + triples may match instead "
+                "(programs differ on whether the printed correlation includes (T)). Context carries the values, both "
+                "sums and the tolerance. TCKDB compares; it never stores a sum it formed."
             )),
     ApiCode("sp_energy_components_require_energy", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/sp_energy_components.py",
             note=(
-                "sp_energy_components sent without the single point's "
-                "electronic_energy_hartree. The parts come from the same output "
-                "as the energy; without it a log could fill the energy after the "
-                "checks had run (ADR 0021)."
+                "sp_energy_components sent without the single point's electronic_energy_hartree. The parts come from "
+                "the same output as the energy; without it a log could fill the energy after the checks had run."
             )),
     ApiCode("species_entry_handle_conflict", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/handles.py",
@@ -2686,8 +2437,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/calculation_levels.py",
             shape=Shape.relationship,
             note=(
-                "A statmech record links both an 'sp' and a 'composite' as its "
-                "energy (ADR 0021, decision 4). A record has one energy."
+                "A statmech record links both an 'sp' and a 'composite' as its energy. A record has one energy."
             )),
     ApiCode("statmech_role_duplicate", 422, Surface.coded_exception,
             "backend/app/services/calculation_levels.py",
@@ -3015,17 +2765,12 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/species.py",
             shape=Shape.relationship,
             note=(
-                "/species/browse's elements= composition filter. Same cap "
-                "family as limit_too_large / offset_too_large (Calvin's "
-                "2026-08-18 overrule: a cap refusal that does not state "
-                "the limit is un-actionable) -- context carries "
-                "max_elements (the configured cap, a module constant "
-                "here rather than a setting) and elements_count (the "
-                "caller's own comma-separated symbol count). Exists "
-                "because each additional symbol adds one more unindexed "
-                "per-row cartridge regex on a public, unauthenticated "
-                "endpoint; see MAX_ELEMENT_SYMBOLS in "
-                "app/schemas/reads/_field_bounds.py for the measurement."
+                "/species/browse's elements= composition filter. Same cap family as limit_too_large / "
+                "offset_too_large: a cap refusal that does not state the limit is un-actionable. context carries "
+                "max_elements (the configured cap, a module constant here rather than a setting) and elements_count "
+                "(the caller's own comma-separated symbol count). Each additional symbol adds one more unindexed per-"
+                "row cartridge regex on a public, unauthenticated endpoint; see MAX_ELEMENT_SYMBOLS in "
+                "app/schemas/reads/_field_bounds.py."
             )),
     ApiCode("thermo_upload_incompatible", 422, Surface.message_prefix,
             "backend/app/services/contribution_bundle_export.py",
@@ -3042,37 +2787,29 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/api/routes/uploads.py",
             shape=Shape.relationship,
             note=(
-                "POST /uploads/thermoml (Phase C-E6). context carries "
-                "declared_doi (the request's own doi field, if given) and "
-                "file_doi (the uploaded document's own Citation/sDOI) -- "
-                "the two things that disagreed. Raised via "
-                "ThermoMLDoiConflictError from app.services."
-                "thermoml_cp_import before anything is written."
+                "POST /uploads/thermoml. context carries declared_doi (the request's own doi field, if given) and "
+                "file_doi (the uploaded document's own Citation/sDOI) -- the two things that disagreed. Raised via "
+                "ThermoMLDoiConflictError from app.services.thermoml_cp_import before anything is written."
             )),
     ApiCode("thermoml_file_too_large", 422, Surface.coded_exception,
             "backend/app/api/routes/uploads.py",
             shape=Shape.relationship,
             note=(
-                "POST /uploads/thermoml (Phase C-E6). Cap family (the "
-                "2026-08-18 precedent set by geometry_too_large et al.). "
-                "context carries max_bytes (the configured cap, reused "
-                "from app.services.artifact_storage.MAX_ARTIFACT_BYTES -- "
-                "no second size policy for one more upload route) and, "
-                "once decoded, given_bytes -- a property of the one file "
-                "the caller uploaded, not a measurement of how much data "
-                "exists server-side."
+                "POST /uploads/thermoml. Cap family. context carries max_bytes (the configured cap, reused from "
+                "app.services.artifact_storage.MAX_ARTIFACT_BYTES -- no second size policy for one more upload route) "
+                "and, once decoded, given_bytes -- a property of the one file the caller uploaded, not a measurement "
+                "of how much data exists server-side."
             )),
     ApiCode("thermoml_invalid_base64", 422, Surface.coded_exception,
             "backend/app/api/routes/uploads.py",
             note=(
-                "POST /uploads/thermoml (Phase C-E6). content_base64 did "
-                "not decode; raised before any size check that assumes "
+                "POST /uploads/thermoml. content_base64 did not decode; raised before any size check that assumes "
                 "decoded bytes."
             )),
     ApiCode("thermoml_no_supported_content", 422, Surface.coded_exception,
             "backend/app/api/routes/uploads.py",
             note=(
-                "POST /uploads/thermoml (Phase C-E6). A schema-valid "
+                "POST /uploads/thermoml. A schema-valid "
                 "ThermoML document mapped zero Cp(T) payloads (e.g. "
                 "liquid-only or mixture-only content) -- refused before "
                 "any custody, literature or object-store write, rather "
@@ -3083,21 +2820,17 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("thermoml_schema_invalid", 422, Surface.coded_exception,
             "backend/app/api/routes/uploads.py",
             note=(
-                "POST /uploads/thermoml (Phase C-E6). The uploaded "
-                "document failed XSD validation "
-                "(app.importers.thermoml.validate.validate_bytes) and was "
-                "never parsed. detail carries the validator's own "
-                "messages."
+                "POST /uploads/thermoml. The uploaded document failed XSD validation "
+                "(app.importers.thermoml.validate.validate_bytes) and was never parsed. detail carries the "
+                "validator's own messages."
             )),
     ApiCode("transition_state_calculation_conformer_key", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py",
             shape=Shape.relationship,
             note=(
-                "A calculation of a transition state states a conformer_key. A "
-                "transition state has no conformers, so the key anchored nothing "
-                "and used to be dropped; it is refused instead. Raised by the "
-                "request schemas of /uploads/computed-reaction and "
-                "/uploads/networks/pdep."
+                "A calculation of a transition state states a conformer_key. A transition state has no conformers, so "
+                "the key would anchor nothing and is refused. Raised by the request schemas of /uploads/computed-"
+                "reaction and /uploads/networks/pdep."
             )),
     ApiCode("transition_state_calculation_species_geometry", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py",
@@ -3130,13 +2863,10 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py",
             shape=Shape.relationship,
             note=(
-                "A transport source_calculations link names a calculation of "
-                "another species entry. Reachable only on "
-                "/uploads/computed-reaction, whose key namespace spans every "
-                "species: the standalone route scopes its inline calculations "
-                "to the target, and the computed-species bundle has one "
-                "subject. The request schema and persist_bundle_transport "
-                "raise the same code and context (ADR 0017)."
+                "A transport source_calculations link names a calculation of another species entry. Reachable only on "
+                "/uploads/computed-reaction, whose key namespace spans every species: the standalone route scopes its "
+                "inline calculations to the target, and the computed-species bundle has one subject. The request "
+                "schema and persist_bundle_transport raise the same code and context."
             )),
     ApiCode("ts_energy_ordering_source_type_mismatch", 422, Surface.coded_exception,
             "backend/app/services/transition_state_validation.py",
@@ -3196,38 +2926,21 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("unknown_calculation_ref", 404, Surface.coded_exception,
             "backend/app/services/upload_reference.py",
             note=(
-                "Three roots since #230, and two spellings. "
-                "/uploads/kinetics names the job by public ref; "
-                "/uploads/thermo and /uploads/statmech name it by row id in "
-                "source_calculations[i].existing_calculation_id, which "
-                "answered the generic resource_not_found with an empty "
-                "context until #230. One code because the missing row and "
-                "its repair are identical and only the spelling differs -- "
-                "splitting on spelling is the defect #195 removed from the "
-                "status. context['field'] separates them; context['ref'] is "
-                "present for the public-ref spelling only, because a row id "
-                "is logged and never echoed (DR-0028 Requirement 2)."
+                "Three roots, two spellings. /uploads/kinetics names the job by public ref; /uploads/thermo and "
+                "/uploads/statmech name it by row id in source_calculations[i].existing_calculation_id. One code "
+                "because the missing row and its repair are identical and only the spelling differs. context['field'] "
+                "separates them; context['ref'] is present for the public-ref spelling only, because a row id is "
+                "logged and never echoed."
             )),
     ApiCode("unknown_conformer_group_ref", 404, Surface.coded_exception,
             "backend/app/services/upload_reference.py",
             note=(
-                "The third refusal a conformer_selection locator can "
-                "produce, and the newest: it arrived with the locator's "
-                "conformer_group_ref field, which was added because two "
-                "conformer groups under one species entry made the locator "
-                "unanswerable -- every ambiguous_conformer_selection_"
-                "locator refusal reported locator_can_express=false and no "
-                "corrected body existed. Not folded into "
-                "unknown_conformer_selection, by that code's own argument: "
-                "a ref naming nothing is repaired by fixing the string the "
-                "caller wrote, a real group holding no such selection by "
-                "depositing the selection. The third case -- a real group "
-                "belonging to a different species entry -- is neither a "
-                "404 nor a new code: the row exists and the locator "
-                "contradicts itself, so it is 422 kinetics_interpretation_"
-                "conformer_selection_owner_mismatch from the shared "
-                "ownership guard, separated from that code's other raise "
-                "site by context['field']."
+                "A conformer_selection locator's conformer_group_ref names no conformer group. Not folded into "
+                "unknown_conformer_selection: a ref naming nothing is repaired by fixing the string the caller wrote, "
+                "a real group holding no such selection by depositing the selection. A real group belonging to a "
+                "different species entry is neither a 404 nor a new code: the row exists and the locator contradicts "
+                "itself, so it is 422 kinetics_interpretation_conformer_selection_owner_mismatch from the shared "
+                "ownership guard, separated from that code's other raise site by context['field']."
             )),
     ApiCode("unknown_conformer_selection", 404, Surface.coded_exception,
             "backend/app/services/conformer_selection_locator.py",
@@ -3284,7 +2997,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/statmech_selection/loader.py",
             note=(
                 "One response for a candidate ref that names nothing, names another subject's record, a record the "
-                "read profile hides, or a legacy record that has been given a declared model."
+                "read profile hides, or a record stored without a declared model that has been given one."
             )),
     ApiCode("unknown_structure_member_ref", 404, Surface.coded_exception,
             "backend/app/services/structure_selection/loader.py",
@@ -3306,12 +3019,10 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("unknown_record", 404, Surface.message_prefix,
             "backend/app/services/release/curation.py",
             note=(
-                "404 since #211. It was the fourth unknown_* on this router "
-                "and the only one at 422: unknown_release, unknown_selection "
-                "and unknown_curation_policy all answered 404 for the same "
-                "condition. Distinct from record_ref_not_selectable, which "
-                "stays 422 -- there the prefix is not a selectable kind at "
-                "all, which is a malformed ref rather than a missing row."
+                "The fourth unknown_* on this router; unknown_release, unknown_selection and unknown_curation_policy "
+                "all answer 404 for the same condition. Distinct from record_ref_not_selectable, which is 422 -- "
+                "there the prefix is not a selectable kind at all, which is a malformed ref rather than a missing "
+                "row."
             )),
     ApiCode("unknown_record_type", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/literature_records.py"),
@@ -3324,19 +3035,9 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("unknown_statmech_ref", 404, Surface.coded_exception,
             "backend/app/services/upload_reference.py",
             note=(
-                "404 since #204. Every ref-names-nothing refusal on "
-                "/uploads/kinetics used to be a bare ValueError, so a client "
-                "received 422 validation_error with no context and had to "
-                "read English to find out which of four refs was wrong. The "
-                "status matched neither the condition nor the sibling roots: "
-                "/uploads/thermo and /uploads/statmech already answered 404 "
-                "when a caller-supplied existing_*_id named no row, so the "
-                "status depended on how the caller spelled the name. Those "
-                "sibling roots answered it with no code and no context, "
-                "which #230 fixed by pointing thermo's existing_statmech_id "
-                "at this same code -- same missing row, same repair, and a "
-                "code that differed by spelling would have rebuilt one "
-                "field down what #195 removed from the status."
+                "Every ref-names-nothing refusal on /uploads/kinetics answers 404 with this family of codes, and "
+                "/uploads/thermo's existing_statmech_id uses this same code: same missing row, same repair, whatever "
+                "the spelling of the name. context names which ref was wrong."
             )),
     ApiCode("unknown_structure_determination_ref", 404, Surface.coded_exception,
             "backend/app/services/statmech_declaration_resolution.py"),
@@ -3383,12 +3084,9 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("username_taken", 409, Surface.message_prefix,
             "backend/app/api/routes/auth.py",
             note=(
-                "The sibling of email_taken; see that entry for why the "
-                "pair exists and how they are told apart. 409 rather than "
-                "422 under Calvin's 2026-08-16 decision: the payload is "
-                "well formed and the name is simply spoken for, which is "
-                "a state conflict. There is no corrected body for the "
-                "same username, only a different one."
+                "The sibling of email_taken; see that entry for why the pair exists and how they are told apart. 409 "
+                "rather than 422: the payload is well formed and the name is simply spoken for, which is a state "
+                "conflict. There is no corrected body for the same username, only a different one."
             )),
     ApiCode("validation_error", 422, Surface.generic_fallback,
             "backend/app/api/errors.py"),

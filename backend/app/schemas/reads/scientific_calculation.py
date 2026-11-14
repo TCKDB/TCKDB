@@ -735,7 +735,7 @@ class CalculationArtifactSummary(BaseModel):
     The ``uri`` field carries the storage URI exactly as persisted
     (typically ``s3://bucket/key``); resolving it to a downloadable URL
     is an upload-side / artifact-service responsibility, not a public
-    read concern. Approved bytes are retrieved separately through the
+    read concern. Artifact bytes are retrieved separately through the
     content-addressed scientific artifact download route.
 
     ``artifact_ref`` is the row's own ``public_ref`` (``art_`` prefix),
@@ -1144,14 +1144,9 @@ class CalculationGeometryValidationSummary(BaseModel):
     written to catch are not caught by it.
 
     ``is_isomorphic`` is the same boolean under the name the stored column
-    carries. It is kept so that no consumer breaks, and it is the reason
-    ``formula_matches`` was added rather than the column being renamed: the
-    name is what a machine consumer sees, a JSON key carries no docstring with
-    it, and ``is_isomorphic`` claims a guarantee the code has never made.
-    Renaming the column is a migration against a deployed table and would
-    rename a published field; adding the true name costs a consumer nothing
-    and stops the false one being the only one available. Prefer
-    ``formula_matches`` in new code.
+    carries. The name claims a guarantee the code does not make, and a JSON
+    key carries no docstring with it; ``formula_matches`` states what is
+    checked. Prefer ``formula_matches``.
     """
 
     input_geometry_id: int | None = None

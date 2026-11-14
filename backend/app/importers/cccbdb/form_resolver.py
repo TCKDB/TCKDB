@@ -73,7 +73,7 @@ FORM_RESOLVER_NAME = "cccbdb_form_resolver"
 
 DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (compatible; TCKDB-cccbdb-importer/0.1; "
-    "+https://github.com/anthropics/tckdb)"
+    "+https://github.com/TCKDB/TCKDB)"
 )
 
 

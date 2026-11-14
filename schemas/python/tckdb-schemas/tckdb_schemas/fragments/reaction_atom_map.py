@@ -340,7 +340,7 @@ class ReactionAtomMapIn(SchemaBase):
                 W_ATOM_MAP_INFERRED_REQUIRES_NOTE,
                 "atom_map.source='inferred' requires atom_map.note naming the "
                 "algorithm that produced the map. An inferred map is recorded "
-                "only as a labelled, separable thing (ADR 0011).",
+                "only as a labelled, separable thing.",
                 message_prefix=False,
             )
         return self
@@ -460,8 +460,8 @@ def validate_reaction_atom_map(
         raise CodedValidationError(
             W_ATOM_MAP_WITHOUT_TRANSITION_STATE,
             f"{field_path} was supplied for a reaction with no transition "
-            "state. Both legs of an atom map run toward the saddle point "
-            "(ADR 0011), so a reaction without one cannot carry a map.",
+            "state. Both legs of an atom map run toward the saddle point, "
+            "so a reaction without one cannot carry a map.",
             context={"field_path": field_path},
             message_prefix=False,
         )

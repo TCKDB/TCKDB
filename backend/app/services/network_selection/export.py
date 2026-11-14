@@ -556,7 +556,7 @@ def _chemkin_files(
         origin_note = f" [reported; literature {cited}]"
         lines += [
             f"! TCKDB: solve {origin['solve_ref']} is kind=reported. Its rates were transcribed from the literature "
-            f"({cited}), not derived by TCKDB (ADR 0010).",
+            f"({cited}), not derived by TCKDB.",
             "! Requested explicitly with include_reported; every reaction below carries the same note.",
         ]
     lines += ["ELEMENTS", " ".join(elements) or " ", "END", "", "SPECIES"]

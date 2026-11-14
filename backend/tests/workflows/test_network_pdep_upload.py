@@ -2490,7 +2490,7 @@ def test_every_pdep_saddle_point_reports_its_missing_atom_map(
     assert not any(w.field.endswith(".atom_map") for w in absent)
     # And it does not send a depositor looking for a field this bundle has not
     # got: a warning that cannot be acted on is the kind nobody reads.
-    assert "cannot yet carry a map" in absent[0].message
+    assert "cannot carry a map" in absent[0].message
     assert "computed-reaction upload" in absent[0].message
     assert "atom_map" not in set(NetworkPDepUploadRequest.model_fields)
 

@@ -416,6 +416,7 @@ def resolve_species_data_page_from_search(
     """
 
     raise NotImplementedError(
-        "Phase 3b ships catalog-only. The search/form resolver is "
-        "intentionally deferred."
+        "Resolving a catalog entry to its species data page is not "
+        "supported; the form resolver (app.importers.cccbdb.form_resolver) "
+        "works from an explicit queue file, not from catalog entries."
     )

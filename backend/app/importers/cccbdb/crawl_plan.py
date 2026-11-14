@@ -200,7 +200,7 @@ EXPERIMENTAL_PROPERTIES_PILOT: tuple[CrawlTarget, ...] = (
         # PROPERTY_CONFIGS["polarizability_iso"] in
         # parsers/experimental_property_table.py — not this file.
         is_validated_url=True,
-        notes="Isotropic experimental polarizabilities; Bohr^3; live column shape inferred from diplistx sibling",
+        notes="Isotropic experimental polarizabilities; Bohr^3; columns Molecule|name|State|Conformation|alpha|squib|commment",
     ),
 )
 

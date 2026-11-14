@@ -197,8 +197,8 @@ def search_calculations(
         raise ValueError(
             "include_not_implemented_yet: include token(s) "
             f"{sorted(requested_unimplemented)!r} are reserved for "
-            "/scientific/calculations/search but the v0 search "
-            "endpoint has not implemented them yet. Drop the "
+            "/scientific/calculations/search but the search "
+            "endpoint does not support them. Drop the "
             "token(s) and re-issue. See "
             "backend/docs/specs/scientific_calculation_reads.md."
         )

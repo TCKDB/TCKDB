@@ -61,7 +61,7 @@ _DEFAULT_USER_AGENT = (
     "tckdb-cccbdb-importer/0.1 "
     "(+https://github.com/TCKDB/TCKDB; "
     "mailto:calvin.p@campus.technion.ac.il) "
-    "phase=2b mode=snapshot"
+    "mode=snapshot"
 )
 
 _logger = logging.getLogger(__name__)
@@ -544,8 +544,9 @@ def _snapshot_one(
         and target.page_kind == "experimental_property_table"
     ):
         result.builder_warnings.append(
-            "experimental_property_table payloads are deferred until "
-            "molecular_property_observation lands"
+            "experimental_property_table snapshots stop at parsed JSON; "
+            "molecular_property_observation payloads are built from the "
+            "archive with scripts/cccbdb_property_payload_dryrun.py"
         )
     elif (
         config.write_payloads
@@ -678,7 +679,8 @@ def _build_arg_parser():  # pragma: no cover - thin argparse wrapping
         help=(
             "Override the CCCBDB URL guardrail. Without this flag the CLI "
             "refuses to fetch any CrawlTarget whose is_validated_url is "
-            "False. Current Phase 2b allowlist URLs are all unverified — "
+            "False (the placeholder exp1x.asp targets of the 'experimental' "
+            "pilot). Fetching them will likely trip Cloudflare error 1015; "
             "see crawl_plan.py for context."
         ),
     )
