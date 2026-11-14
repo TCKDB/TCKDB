@@ -1,7 +1,7 @@
 """An ``energy_ordering`` energy is held against what TCKDB stores for its calculation.
 
-Comparing the stated numbers with each other and with nothing TCKDB holds is not enough: so
-a record could cite a single point that stores -40.9 Eh, state -40.20 Eh from it,
+Comparing the stated numbers only with each other, and with nothing TCKDB holds, is not enough: a record
+could cite a single point that stores -40.9 Eh, state -40.20 Eh from it,
 and pass. These run at the persistence seam because the stored values must be
 shaped exactly (a NULL energy, a missing ZPE, two geometries) and because the
 service has to enforce the rule for a payload that never went through the wire

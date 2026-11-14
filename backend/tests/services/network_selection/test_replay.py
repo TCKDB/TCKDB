@@ -369,7 +369,7 @@ def test_a_curated_manifest_may_only_have_approved_effective_statuses(db_session
 
 
 def test_the_recorded_linked_evidence_rule_must_be_the_one_the_read_profile_applies(db_session, world):
-    """A manifest relabelled curated without the evidence rule curated applies (or the reverse) is refused, not
+    """A manifest relabelled ``curated`` that does not record the evidence rule ``curated`` applies (or the reverse) is refused, not
     read as the rule it does not record."""
     manifest = _with_unreviewed_solve(db_session, world)
     assert manifest["visibility"]["linked_evidence_withheld"] == []

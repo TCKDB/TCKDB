@@ -268,12 +268,12 @@ def test_an_api_surface_change_expects_the_client_gate_too():
     """A backend API change must not land without a ``_parity.py`` entry.
 
     ``clients/python/tests/test_openapi_parity.py`` requires every backend
-    operation to be triaged in ``tckdb_client._parity``, but the client
-    workflow must trigger on more than ``clients/python/**`` and
-    ``schemas/python/tckdb-schemas/**`` -- so a backend-only PR that added
-    a route never ran it. A route file under ``backend/app/api/**`` and a
-    regenerated OpenAPI golden snapshot must both wake the client gate now,
-    alongside the backend gate; neither wakes the frontend gate.
+    operation to be triaged in ``tckdb_client._parity``. A client workflow that
+    triggers only on ``clients/python/**`` and ``schemas/python/tckdb-schemas/**``
+    never runs for a backend-only PR that adds a route, so a route file under
+    ``backend/app/api/**`` and a regenerated OpenAPI golden snapshot must both
+    wake the client gate, alongside the backend gate; neither wakes the
+    frontend gate.
     """
     for changed in (
         ["backend/app/api/routes/scientific/species_browse.py"],

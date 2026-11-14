@@ -355,7 +355,7 @@ def test_an_ipv6_subnet_gets_an_ip6tables_rule(host: Host) -> None:
 
 def test_no_ipv6_subnet_is_said_and_clears_an_old_ipv6_rule(host: Host) -> None:
     host.add_network(NET, V4)
-    host.set_chain([_rule(V6)], family="ip6tables")  # the network has IPv6
+    host.set_chain([_rule(V6)], family="ip6tables")  # a stale rule left from an earlier IPv6 subnet
     result = host.run("--network", NET)
     assert result.returncode == 0, result.stderr
     assert "no IPv6 subnet; no ip6tables rule" in result.stdout

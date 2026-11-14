@@ -18,14 +18,14 @@ A minimum's blocking rule is a definition only above the noise floor
 (the imaginary-mode protocol): no correct calculation produces a covalently
 bound minimum with an imaginary mode at or above τ, but correct published
 calculations do carry modes below it. The transition-state blocking rules are *contracts about what the
-record says*, not about magnitude — the protocol replaces ``n_imag == 1``
+record says*, not about magnitude — the imaginary-mode protocol replaces ``n_imag == 1``
 because two scientifically correct calculations of the same saddle point
 can return ``n_imag == 1`` and ``n_imag == 3``, so the count was a gate a
 depositor could pass by changing an integration grid. The warning rules
 are expectations: a van der Waals complex's intermolecular modes sit low
 enough that Hessian grid noise can fake a small imaginary mode, a
 genuinely flat or variational barrier can have a soft reaction
-coordinate, and an extra imaginary mode below the protocol's noise floor
+coordinate, and an extra imaginary mode below the imaginary-mode protocol's noise floor
 has an undetermined sign. Refusing any of them would reject correct
 science.
 
@@ -405,7 +405,7 @@ class TestTransitionStateEvaluator:
 
     @pytest.mark.parametrize("n_imag", [2, 3, 9])
     def test_extra_modes_without_a_designation_block(self, n_imag: int) -> None:
-        """The protocol blocks on the *contract*, not the count: a record that
+        """The imaginary-mode protocol blocks on the *contract*, not the count: a record that
         will not say which mode is the barrier cannot be used as one."""
         findings = evaluate_transition_state_frequency(n_imag, location="ts")
         assert _tiers(findings) == {ValidationTier.block}
@@ -425,7 +425,7 @@ class TestTransitionStateEvaluator:
         assert not any(f.structural_flag for f in findings)
 
     def test_the_motivating_record_is_accepted_under_every_tau(self) -> None:
-        """The protocol claims this record survives every row of the protocol
+        """The imaginary-mode protocol claims this record survives every row of the protocol
         table, which is the claim that makes tau uncontroversial here."""
         for method in (None, *HessianMethod):
             tau = resolve_tau(
@@ -442,7 +442,7 @@ class TestTransitionStateEvaluator:
             assert _tiers(findings) == {ValidationTier.warn}, method
 
     def test_a_finding_records_the_tau_it_used_and_why(self) -> None:
-        """The protocol requires that a reader can re-decide the mode later,
+        """The imaginary-mode protocol requires that a reader can re-decide the mode later,
         which "tau was 50" alone does not support."""
         tau = resolve_tau()
         findings = evaluate_transition_state_frequency(
@@ -617,8 +617,8 @@ class TestTransitionStateEvaluator:
         assert _codes(just_below) == {W_TS_IMAG_FREQ_TOO_SMALL}
 
     def test_the_softness_rule_reads_the_designated_coordinate(self) -> None:
-        """This fires on the designated coordinate, and fires at what it
-        fires at: the reaction coordinate, not "the" imaginary mode."""
+        """The softness rule fires on the designated reaction coordinate, not on
+        "the" imaginary mode."""
         findings = evaluate_transition_state_frequency(
             2,
             None,

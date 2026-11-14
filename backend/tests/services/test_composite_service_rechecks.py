@@ -67,7 +67,7 @@ def test_a_composite_input_edge_cannot_be_written_by_anything_but_the_derived_pa
 
 
 def test_the_bundle_workflow_refuses_a_declared_composite_input_edge_the_wire_never_saw(db_session):
-    """The reviewer's probe: the edge was written onto an sp child because only the wire refused it."""
+    """An edge declared onto an sp child must be refused by the bundle workflow, not only by the wire schema."""
     bundle = f.bundle([f.sp("spt", f.TZ, -76.3)])
     request = ComputedSpeciesUploadRequest.model_validate(bundle)
     sp = request.conformers[0].additional_calculations[0]

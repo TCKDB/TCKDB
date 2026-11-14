@@ -5,7 +5,7 @@ balance out of ``consistency/kinetics.py`` into the neutral
 ``consistency/stoichiometry.py`` helper. D3 keeps its own reason tokens by
 mapping at its call site. This module pins, for every D3 fixture scenario
 the existing suites exercise plus the composition-ordering cases they do
-not, two things captured at ``main`` ``0bc86f03`` *before* the extraction:
+not, two things captured from the code before the extraction:
 
 * the context hash (``AdvisoryResult.digest.context_hash``), which is what a
   stored review's currency is judged against -- a changed hash would restale
@@ -224,8 +224,8 @@ def _run(name):
     return fingerprint(compare_kinetics(forward, reverse, mapping, temperature_grid=grid))
 
 
-# Captured at main 0bc86f03, before the stoichiometry extraction; the two
-# isotope_key_* entries were added with the D3 isotope fix and pin its result.
+# Captured before the stoichiometry extraction; the two
+# isotope_key_* entries pin the D3 isotope result.
 EXPECTED = {
     "baseline_p1.01325_cm3_mol_s": (
         "1a9fb79fb0d18e75aa449ef21ef2c67a32bf78732e53d3f43e66e72c70c55350",

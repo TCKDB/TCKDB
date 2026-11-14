@@ -330,7 +330,7 @@ def test_owner_guard_refuses_a_vacuous_call_whatever_the_noun() -> None:
 
 
 def test_every_product_routes_its_owner_check_through_one_implementation() -> None:
-    """the rule was written five times and pinned once.
+    """The rule was written five times and pinned once.
 
     Two of those copies had already drifted -- thermo's logged nothing
     where statmech's and transport's logged the row ids an operator needs
@@ -426,7 +426,7 @@ def test_the_uncoded_comparison_detector_can_say_no() -> None:
 
 
 def test_no_module_refuses_an_owner_mismatch_without_a_code() -> None:
-    """seven guards compared an owner column and bare-raised.
+    """Seven guards compared an owner column and bare-raised.
 
     Each reached a client as ``validation_error``, so a depositor could
     not tell "you cited another species' partition function" from a

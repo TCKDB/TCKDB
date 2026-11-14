@@ -371,8 +371,8 @@ def test_plog_in_range_considers_temperature_not_only_pressure() -> None:
     """Live-reachable regression: a PLOG record whose table is only
     ever fit to [300, 2000] K must not report in_range=True for a
     temperature outside that range merely because the *pressure*
-    happens to fall inside the table's pressure span. ``evaluate_plog`` takes
-    the ``tmin_k``/``tmax_k`` bounds, so ``in_range`` is not computed from
+    happens to fall inside the table's pressure span. ``evaluate_plog`` takes optional
+    ``tmin_k``/``tmax_k`` bounds; when both are given, ``in_range`` is not computed from
     pressure alone -- otherwise a stored 300-2000K record would return
     ``in_range: true`` for 5000 K, 3000 K, 250 K and 100 K at 1 bar,
     while the Chebyshev fit of the SAME physical channel correctly

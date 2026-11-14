@@ -45,7 +45,7 @@ CHEMISTRY_TOKENS = (
     "cc-pV5Z", "aug-cc-pV5Z", "cc-pV6Z", "jun-cc-pV5Z", "jul-cc-pV5Z", "aug-cc-pV6Z", "MP2/cc-pV5Z",
     "CCSD(T)/aug-cc-pV5Z", "cc-pwCV5Z", "aug-cc-pwCV5Z", "cc-pV5Z-DK", "cc-pV5Z-PP", "cc-pv5z", "ccpv5z",
     "aug-ccpv5z", "ANO-RCC-V5Z", "cc-pV(5+d)Z", "x2c-TZVPPall",
-    # The reviewer's clean list.
+    # The clean list.
     "B3LYP-D3", "6-31G(d,p)", "def2-TZVP", "aug-cc-pVTZ", "G4", "M06-2X", "ωB97X-V", "CCSD(T)",
     # Other families with a V or a digit run next to a letter.
     "cc-pVQZ", "cc-pVDZ-F12", "cc-pVTZ-F12", "def2-QZVPP", "def2-SVP", "def2-TZVPD", "ma-def2-TZVP",

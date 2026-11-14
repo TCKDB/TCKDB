@@ -5,7 +5,7 @@ check asks for a species entry and would read ``hard_failed`` / ``species_entry_
 complete it was. It is graded by ``computed_ts_statmech``: the species rubric with exactly
 one check swapped ("attached to a transition-state entry" for "attached to a species entry").
 
-What these tests protect, in the order the owner stated the conditions:
+What these tests protect:
 
 1. Generic completeness stays non-certifying (``is_certified`` is false on a well-supported record).
 2. An automated geometry-validation fail stays advisory (a ``warning``, never a hard fail).

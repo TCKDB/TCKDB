@@ -384,7 +384,7 @@ def test_an_imported_source_meets_its_role_only_when_its_literature_is_identifie
 def test_a_rotor_potential_must_be_a_torsional_surface_source_and_identified():
     """Role isolation: a source of another role never stands in for the potential, whatever its key."""
     rotor_potential = {"rotors": [rotor(representation="imported_potential", potential_source_key="geom")]}
-    # the reviewer's probes: a geometry-role literature source, and the local geometry optimisation
+    # probes: a geometry-role literature source, and the local geometry optimisation
     as_geometry_literature = with_torsion(rotor_potential, sources=(src("geom", "geometry", None, locator="literature", literature_ref="lit_a"), IMPORTED[1], IMPORTED[2]))
     result = assess(as_geometry_literature, calcs={})
     assert "required_source_unusable:torsional_surface" in codes(result)

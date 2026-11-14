@@ -273,7 +273,7 @@ def test_a_lower_case_method_hashes_as_it_always_did():
 
 
 def test_dispersion_and_solvent_case_is_no_longer_identity():
-    # Without keying these are two levels of theory.
+    # Dispersion case is not identity.
     assert _hash("b3lyp", dispersion="d3bj") == _hash("b3lyp", dispersion="D3BJ")
 
 

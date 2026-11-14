@@ -13,11 +13,9 @@ That has now happened twice, for two different reasons:
 * **Congenital.** ``BundleThermoIn`` (8 fields) and ``ThermoInBundle``
   (15) were written three days apart in April 2026 and never agreed.
   The two models now agree.
-* **Regression.** ``BundleStatmechIn`` was born narrow in ``17706cf7``,
-  but the three rotational constants were then added to
-  ``StatmechInBundle`` **only**, by ``264519f1`` — two days after
-  ``0ea9182f`` had correctly updated both models in a single commit. The
-  habit was right and then it lapsed.
+* **Regression.** ``BundleStatmechIn`` was narrow while the three rotational
+  constants were added to ``StatmechInBundle`` **only**. Updating both models in
+  a single commit is the right habit, and it can lapse.
 
 The second is the one this file exists for. Nothing in the tree could
 distinguish a one-sided addition from a deliberate asymmetry, so the
@@ -45,8 +43,8 @@ def _standalone_kinetics_model():
     """``KineticsUploadRequest``, the standalone route's kinetics shape.
 
     Imported inside a function because it lives backend-side, not in the
-    wire package: the standalone kinetics schema was never extracted when
-    the bundle roots were (``9fde2742``). That split is itself part of why
+    wire package: the standalone kinetics schema is not extracted with
+    the bundle roots. That split is itself part of why
     the two drifted — the models do not sit next to each other, and
     nothing imported both until this file did.
     """
@@ -433,7 +431,7 @@ _STANDALONE_ONLY_BY_DESIGN = frozenset(
         # ``_collect_bundle_provenance_warnings`` already passes it as
         # NOT_APPLICABLE.
         "energy_level_of_theory",
-        # Kinetics child tables. 2fb5c25b decided this explicitly:
+        # Kinetics child tables are excluded by design:
         # BundleKineticsIn "carries only scalar Arrhenius fields … and its
         # workflow writes no kinetics child tables", and its
         # ``validate_model_kind`` refuses the forms that would need them,

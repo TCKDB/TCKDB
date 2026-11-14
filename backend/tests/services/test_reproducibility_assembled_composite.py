@@ -1,9 +1,9 @@
 """An assembled composite is reproducible only if its inputs are.
 
-On ``main`` (fea447ec) the reproducibility rubric graded an assembled composite on the evidence of a
+The reproducibility rubric must not grade an assembled composite on the evidence of a
 program run it never had: no software, no output log, no preserved inputs, no parameters. It could
-never reach ``auditable``; with no literature either it was ``insufficient`` whatever its inputs were.
-Now its evidence *is* its inputs':
+never reach ``auditable``; with no literature either it would be ``insufficient`` whatever its inputs were.
+Its evidence *is* its inputs':
 
 * each input calculation is graded by this same rubric, and the composite reaches a level only when
   every input does (``composite_inputs_auditable`` / ``composite_inputs_rerunnable``);

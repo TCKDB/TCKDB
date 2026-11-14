@@ -11,8 +11,8 @@ That rule was already asserted — on **one** root. A walker over
 ``NetworkPDepUploadRequest`` lived in ``tests/workflows/`` and checked the
 pressure-dependent tree only, while ten other upload roots were checked
 by nobody. The consequence is on the record: ``literature_id`` was found
-by hand on the reaction bundle, by hand again on the PDep route
-, and by hand a third time on the conformer and transition-state
+by hand on the reaction bundle, by hand again on the PDep route,
+and by hand a third time on the conformer and transition-state
 routes — three separate discoveries of one field, over three
 weeks, because a guard pointed at one root out of eleven is not a guard.
 
@@ -28,9 +28,9 @@ is the rule the producer contract generator uses (``classify_route`` in
 route is covered the moment it is registered, wherever it is mounted.
 
 Two surfaces of each producer route are checked: the request body's whole
-model tree, and the route's own path and query parameters. The supersede
-route takes the *old* submission's public ref in its path, and a
-body-only walker cannot see that.
+model tree, and the route's own path and query parameters. A route's path can
+carry a row id just as its body can -- the supersede route names the *old*
+submission there -- and a body-only walker cannot see that.
 
 Escape hatches exist, and all of them cost prose:
 
@@ -326,7 +326,7 @@ def test_producer_routes_were_actually_discovered() -> None:
     assert unwalked == [], f"producer routes whose body was not walked: {unwalked}"
 
     for expected in (
-        # outside every prefix the old guard walked.
+        # outside every path-prefix list.
         "POST /api/v1/submissions/{submission_ref}/supersede",
         "POST /api/v1/submissions/{submission_ref}/rights-attestations",
         "POST /api/v1/calculations/{calculation_ref}/artifacts",

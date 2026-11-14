@@ -708,7 +708,7 @@ def test_undesignated_extra_modes_are_a_missing_designation_not_a_hard_fail(db_s
 def test_the_motivating_record_is_not_hard_failed_at_read_time(
     db_session: Session, status: TransitionStateEntryStatus
 ):
-    """The round trip the one-owner rule and the imaginary-mode protocol exist to close.
+    """The round trip the one-owner-per-fact rule and the imaginary-mode protocol exist to close.
 
     -1300 / -42 / -13 cm⁻¹ with the reaction coordinate designated is
     accepted with a warning at upload. A surviving
@@ -1118,7 +1118,7 @@ def test_a_contradicting_result_stays_visible_whether_it_is_older_newer_or_alone
 
 
 def test_a_null_count_is_unknown_it_neither_rescues_nor_condemns(db_session: Session):
-    """Reviewer case T4: an older zero-mode result plus a newer result with ``n_imag`` null. The unknown newer count must
+    """An older zero-mode result plus a newer result with ``n_imag`` null. The unknown newer count must
     not read as a contradiction (the null-skipping representative must not make the entry hard-fail) and must not
     hide the older recorded zero either."""
     ts_entry = _make_ts_entry(db_session, status=TransitionStateEntryStatus.validated)

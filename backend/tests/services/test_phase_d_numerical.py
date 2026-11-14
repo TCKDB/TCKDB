@@ -214,8 +214,8 @@ def test_thermo_with_only_a_fit_and_no_points_or_s298_is_unavailable():
     # A phase never recorded (documented on Thermo.phase as unspecified,
     # never as non-gas -- backend/app/db/models/thermo.py) is a different
     # situation from a phase explicitly recorded as one this check does
-    # not support, and must not collapse to the same reason (decided
-    # see engine.gas_state_reason and engine.SUPPORTED_PHASES).
+    # not support, and must not collapse to the same reason (see
+    # engine.gas_state_reason and engine.SUPPORTED_PHASES).
     ("phase", None, "phase_not_recorded"),
     ("phase", "liquid", "non_gas_phase_unsupported"),
 ])
@@ -261,9 +261,7 @@ def test_missing_reference_pressure_blocks_entropy_but_not_heat_capacity():
     """A missing ``reference_pressure_bar`` makes
     entropy unavailable (it fixes the standard-state pressure baked into
     the entropy coefficient) but must not block heat capacity, since
-    Cantera returns an identical Cp at any reference pressure. Was one
-    undifferentiated case in ``test_thermo_missing_state_remains_visible``
-    above until the D2/D1 pressure-applicability split.
+    Cantera returns an identical Cp at any reference pressure.
     """
     thermo = _thermo()
     thermo.reference_pressure_bar = None
@@ -514,7 +512,7 @@ def test_engine_load_failures_are_configuration_errors(monkeypatch, exception):
 
 
 def test_a_record_is_never_its_own_neighbour():
-    """self-comparison gave residuals of exactly 0 and every representation pair twice."""
+    """Self-comparison would give residuals of exactly 0 and every representation pair twice."""
     thermo = _thermo(1)
     thermo.points = [ThermoPoint(temperature_k=500.0, cp_j_mol_k=3.5 * R, s_j_mol_k=R * (3.5 * log(500.0) + 2.0))]
     with pytest.raises(ValueError, match="cannot be its own neighbour"):

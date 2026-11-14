@@ -20,7 +20,7 @@ for the shapes the corpus actually contains:
 ``freq_g09.log``
     Twelve atoms, an N-N-C-C-C chain with three rotatable bonds and an
     all-real spectrum whose lowest mode is a torsion. The torsion case,
-    and the only one that can support or refute the protocol's 70%.
+    and the only one that can support or refute the imaginary-mode protocol's 70%.
 """
 
 from __future__ import annotations
@@ -180,7 +180,7 @@ def _orca_printed_normal_modes() -> tuple[list[float], np.ndarray]:
 def test_orca_hessian_reproduces_orca_own_reaction_coordinate_eigenvector():
     """The recovered eigenvector *is* the program's, not merely plausible.
 
-    This is the claim a projection-free reading denies. ORCA prints both the matrix and the
+    This claim cannot be checked from the printed frequencies alone. ORCA prints both the matrix and the
     eigenvectors it got from diagonalising it, so recovering the second
     from the first is checkable end to end rather than self-consistent.
     The reaction coordinate agrees to seven figures in direction and to
@@ -233,7 +233,7 @@ def test_molpro_hessian_reproduces_its_stored_imaginary_frequency():
     [("orca", 6), ("molpro", 5), ("gaussian", 12)],
 )
 def test_rigid_body_directions_separate_from_vibrations_without_a_threshold(name, expected_natoms):
-    """The protocol's 90% names a point inside an empty interval.
+    """The imaginary-mode protocol's 90% names a point inside an empty interval.
 
     Diagonalising an *unprojected* Hessian returns the six rigid-body
     directions as ordinary-looking modes: across these three real
@@ -242,7 +242,7 @@ def test_rigid_body_directions_separate_from_vibrations_without_a_threshold(name
     Every one of them scores at least 0.998 rigid-body overlap and no
     genuine vibration scores above 0.01, so the *determination* separates
     them with three orders of magnitude to spare and no frequency
-    threshold involved at all. That is the whole of the protocol's argument
+    threshold involved at all. That is the whole of the imaginary-mode protocol's argument
     for preferring determinations to thresholds, measured.
     """
     if name == "orca":
@@ -305,7 +305,7 @@ def test_rigid_body_residue_spans_frequencies_a_threshold_cannot_separate():
 def test_gaussian_lowest_real_mode_is_determined_to_be_a_torsion():
     """A real 110 cm-1 mode is 98.6% a rotation about a real C-C bond.
 
-    This is the fixture that can refute the protocol's 70%, and does not. The
+    This is the fixture that can refute the imaginary-mode protocol's 70%, and does not. The
     molecule has three rotatable bonds; its lowest mode projects onto one
     of them at 0.986 and the next most torsional mode in the whole
     spectrum reaches only 0.47, so 0.70 sits between them with a factor of
@@ -551,7 +551,7 @@ CORPUS_LARGEST_RIGID_BODY_CURVATURE_CM1 = 12.24  # calculation 453
 def test_the_thresholds_sit_inside_the_gaps_that_were_measured():
     """Changing a threshold should have to argue with the evidence for it.
 
-    Neither constant is free. The protocol fixes both, and each is kept
+    Neither constant is free. The imaginary-mode protocol fixes both, and each is kept
     because a measurement put empty space on either side of it -- so a
     future edit that moves one into the occupied region is a change of
     scientific claim, not of taste, and should fail here rather than

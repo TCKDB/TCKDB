@@ -754,7 +754,7 @@ def test_a_recorded_disappearance_is_cited_as_missing_evidence(
     to use the same vocabulary: reporting ``integrity_failed`` here while
     the sweep that read the same object reports ``evidence_missing`` would
     make the verdict depend on which path ran, which is the class of
-    disagreement the blocking-tier rule exists to prevent.
+    disagreement the one-owner-per-fact rule exists to prevent.
     """
     objects: dict[str, bytes] = {}
     calculation = _calculation(
@@ -1168,6 +1168,6 @@ def test_missing_record_fails_closed(db_session) -> None:
         )
     # The refusal names the record *type*, which is what the caller needs,
     # and not the row id it asked about, which is an implementation detail
-    # of one database. Asserted rather than assumed: this message must not
-    # echo the id, and the id in it is what a regression would restore.
+    # of one database. The message must not echo the id; echoing it is the
+    # regression this assertion guards.
     assert "999999999" not in str(caught.value)

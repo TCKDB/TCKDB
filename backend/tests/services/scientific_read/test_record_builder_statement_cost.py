@@ -325,7 +325,7 @@ def test_the_integrity_load_costs_exactly_one_statement_per_artifact_load(
 #: ``include=results`` page. One: the projection loads the row it projects
 #: and nothing else.
 #:
-#: The protocol requires ``n_imag`` to travel with the tolerance it was judged
+#: The imaginary-mode protocol requires ``n_imag`` to travel with the tolerance it was judged
 #: at, how that tolerance was chosen, and the count above it. The first two
 #: are columns on the row that was already being loaded and are free. The
 #: count is not stored -- it is taken over ``calc_freq_mode`` -- and the
@@ -813,7 +813,7 @@ def test_the_levels_map_costs_a_conformer_search_page_one_statement(
 #: ``calc_freq_result`` is keyed by ``calculation_id`` and ``calc_freq_mode``
 #: hangs off the same key -- which is exactly why a builder called once per
 #: record is the obvious wrong implementation, and why this is pinned rather
-#: than assumed. The correlated ``count(*)`` subqueries the protocol needs ride
+#: than assumed. The correlated ``count(*)`` subqueries the imaginary-mode protocol needs ride
 #: *inside* the one result statement; they are not extra round trips, and a
 #: regression to a subquery per record would show here because this counts
 #: statements.

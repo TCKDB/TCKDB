@@ -2,16 +2,14 @@
 
 Why this file exists
 --------------------
-A statmech record belongs to a species entry or to a transition-state entry, never both. Today the
-reproducibility rubric asks of *every* statmech record whether it is attached to a species entry, so a
-TS-owned record is graded ``insufficient`` whatever its evidence (``scientific_context``). The fix scopes the
-rubric by owner and must leave species-owned records exactly as they are: same grade, same checks, same stored
-snapshot, so their stored assessments keep reading ``current``.
+A statmech record belongs to a species entry or to a transition-state entry, never both. The
+reproducibility rubric is scoped by owner: a TS-owned record is graded on its own evidence, and
+species-owned records keep the grade, checks and stored snapshot recorded below, so their stored
+assessments keep reading ``current``.
 
 What is frozen
 --------------
-For each species-owned shape below, ``FROZEN`` holds, as literals captured from the code as it stood before the
-fix:
+For each species-owned shape below, ``FROZEN`` holds, as literals captured from the species rubric:
 
 - the grade;
 - ``context_json["rubric"]``;
@@ -26,7 +24,7 @@ member's relative energy carries (a member with no energy keeps its digest, see
 ``snapshot_defaults``), and the mapped columns of a level of theory (removing a column removes
 its key from every digest; a *removed* column cannot be listed in ``snapshot_defaults``, which
 covers added ones). Grades and checks do not change with these. Otherwise these literals are
-expected to stay byte-identical when the owner-scoped rubric lands. If one of them changes,
+expected to stay byte-identical when the owner-scoped rubric changes. If one of them changes,
 species grading changed: that is the failure this file exists to catch, not a literal to refresh.
 """
 
@@ -613,7 +611,7 @@ def _observe(db_session, name: str, user: int) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# The literals. Captured from the unchanged rubric; the owner-scoped rubric must leave them byte-identical.
+# The literals. Captured from the unchanged rubric; the owner-scoped rubric leaves them byte-identical.
 # ---------------------------------------------------------------------------
 
 FROZEN: dict[str, dict] = {
@@ -1148,8 +1146,8 @@ def test_smoke_a_species_row_appended_now_is_current_and_carries_the_original_ru
     """Smoke test, and only that: it pins the rubric name and version written on a freshly appended row.
 
     A row appended by this code reads ``current`` through ``include=assessments`` and says it was graded by
-    ``tckdb_reproducibility`` ``v1``. It is not evidence about rows stored earlier: whether those still read
-    ``current`` after the owner-scoped rubric lands is for the owner-scoped rubric's currency tests to prove (they append under the old
+    ``tckdb_reproducibility`` ``v1``. It is not evidence about rows stored earlier: whether those read
+    ``current`` is for the owner-scoped rubric's currency tests to prove (they append under the old
     identity and read back).
     """
     statmech = _computed_no_sources(db_session, None)
@@ -1173,7 +1171,7 @@ def test_smoke_a_species_row_appended_now_is_current_and_carries_the_original_ru
 
 
 # ---------------------------------------------------------------------------
-# The defect: a TS-owned statmech is graded ``insufficient`` whatever its evidence
+# A TS-owned statmech is graded on its own evidence
 # ---------------------------------------------------------------------------
 
 

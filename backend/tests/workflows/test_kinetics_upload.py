@@ -277,9 +277,9 @@ def test_computed_kinetics_round_trips_explicit_subject_assignments_and_wigner(
         invalid_payload = request.model_dump(mode="json")
         invalid_payload["interpretation_assignments"][1]["statmech_ref"] = reactant_sm.public_ref
         before = session.scalar(select(func.count(Kinetics.id)))
-        # this was a bare ValueError matched on "must belong to its
-        # declared reaction participant", so it reached a client as
-        # validation_error. It names the field it refused and carries
+        # A bare ValueError matched on "must belong to its
+        # declared reaction participant" would reach a client as
+        # validation_error. This names the field it refused and carries
         # a code, which is what a client can branch on.
         with pytest.raises(CodedValueError) as mismatched:
             persist_kinetics_upload(session, KineticsUploadRequest.model_validate(invalid_payload), created_by=77)

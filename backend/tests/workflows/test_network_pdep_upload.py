@@ -3073,8 +3073,8 @@ def _reported_payload(*, with_bath_gas: bool = False) -> dict:
     Deliberately carries *none* of the master-equation inputs: no state
     energies, no channel barriers, no energy transfer, no bath gas, no source
     calculations. That is the whole point — a depositor reading a
-    supplementary table has none of them, and this payload would be
-    unrepresentable, so the data simply stayed out of the database.
+    supplementary table has none of them, and without the reported solve kind this payload would be
+    unrepresentable, so the data would stay out of the database.
 
     The network topology is still required and still checked: a reported rate
     has to attach to a channel that exists.
@@ -3107,7 +3107,7 @@ def _reported_payload(*, with_bath_gas: bool = False) -> dict:
 
 
 def test_reported_solve_is_accepted_without_master_equation_inputs() -> None:
-    """Published k(T,P) is depositable at all — the point of the reported-kinetics route.
+    """Published k(T,P) is depositable at all — the point of the reported-solve rule.
 
     Every coverage rule the old contract applied to a solve asked for
     something a paper's supplementary table does not contain. The result was
@@ -3166,7 +3166,7 @@ def test_computed_solve_still_requires_every_coverage_rule() -> None:
     Each of the three rules is dropped independently from an otherwise valid
     computed payload. All three must still refuse it — a reported escape hatch
     that quietly loosened the computed contract would make the two
-    indistinguishable, which is the failure the reported-kinetics route exists to avoid.
+    indistinguishable, which is the failure the reported-solve rule exists to avoid.
     """
     payload = _full_payload()
     payload["solve"]["state_energies"] = payload["solve"]["state_energies"][:1]

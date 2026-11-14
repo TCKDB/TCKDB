@@ -379,9 +379,8 @@ def test_database_refuses_relabelling_an_inferred_map_as_declared(
     ``inferred`` member, so ``SET source='declared', note=NULL`` satisfies the
     check as written and commits: the row then reads back as a depositor's own
     statement about a mechanism an algorithm produced. There is no API route
-    that does this — which is exactly why it is a trigger, per the reported-kinetics route's
-    argument about rules that hold only because today's code happens not to
-    exercise them.
+    that does this — which is exactly why it is a trigger: a rule that holds only
+    because today's code happens not to exercise it is not enforced.
     """
     from sqlalchemy import text
     from sqlalchemy.exc import DBAPIError
@@ -631,7 +630,7 @@ def test_saddle_point_atom_claimed_by_neither_leg_is_refused(db_conn) -> None:
 
 
 def test_unbalanced_reaction_is_not_refused_for_an_unaccounted_atom() -> None:
-    """The hedge: "where no species is missing".
+    """The atom-map rule's hedge on unaccounted atoms: "where no species is missing".
 
     Here a co-product genuinely is absent — the declared participants do not
     conserve hydrogen — so the same leftover saddle-point atom that blocks a
@@ -669,7 +668,7 @@ def test_unbalanced_reaction_is_not_refused_for_an_unaccounted_atom() -> None:
 def test_legs_covering_different_atoms_of_a_balanced_reaction_is_refused(
     db_conn,
 ) -> None:
-    """The named case, with nothing missing to explain it.
+    """The atom-map rule's named case (legs covering different atoms), with nothing missing to explain it.
 
     Both legs are complete over every declared participant and the reaction
     conserves every element, so a saddle-point atom claimed by one leg and not

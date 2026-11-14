@@ -465,7 +465,7 @@ def test_three_nasa9_intervals_every_boundary_and_the_interval_local_integral(db
 
 
 def test_each_finding_names_the_branch_a_boundary_value_came_from(db_session):
-    """Finding 3. At 1000 K the NASA-9 value is interval 2's (its jump is in K), NASA-7's is the low branch.
+    """At 1000 K the NASA-9 value is interval 2's (its jump is in K), NASA-7's is the low branch.
 
     Hand: r = NASA-9 gives K = R*659.075/1000; r = NASA-7 gives K = R*350.925/1000.
     """
@@ -489,7 +489,7 @@ def test_each_finding_names_the_branch_a_boundary_value_came_from(db_session):
 
 
 def test_a_record_is_never_its_own_neighbour(db_session):
-    """Finding 4: self-comparison gave anchors of exactly 0 and every jump twice."""
+    """Self-comparison would give anchors of exactly 0 and every jump twice."""
     thermo = upload(db_session, nasa=nasa7_block())
     with pytest.raises(ValueError, match="own neighbour"):
         compare_kirchhoff(thermo, comparison=thermo, temperature_grid=[600.0])
@@ -511,7 +511,7 @@ def test_the_neighbours_own_record_gates_apply_to_every_pair(db_session):
 
 
 def test_a_stored_non_finite_enthalpy_is_a_reason_not_a_residual(db_session):
-    """Finding 6: a stored NaN point h and an infinite h298 (PostgreSQL stores both)."""
+    """A stored NaN point h and an infinite h298 (PostgreSQL stores both)."""
     thermo = upload(db_session, nasa=nasa7_block(), h298_kj_mol=_h_nasa7_kj(LOW, T298),
                     points=[{"temperature_k": T298, "h_kj_mol": _h_nasa7_kj(LOW, T298)},
                             {"temperature_k": 600.0, "h_kj_mol": _h_nasa7_kj(LOW, 600.0)}])

@@ -21,8 +21,8 @@ of its own molecule's atoms — so it blocks.
 computed-species bundle, ``/uploads/conformers``, the computed-reaction bundle
 and the PDep bundle. It does **not** reach ``CalculationIn.input_geometries``
 or ``output_geometries``, which are attached to a ``calculation`` row and
-never resolved through ``resolve_species_entry``. Those were unchecked
-everywhere by this rule and are owned by
+never resolved through ``resolve_species_entry``, so this rule does not check them;
+they are owned by
 ``app.services.calculation_geometry_composition``, tested in
 ``tests/services/test_calculation_geometry_composition.py``. The two rules
 compare the same way on purpose; what differs is the subject each compares

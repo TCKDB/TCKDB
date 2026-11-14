@@ -21,7 +21,7 @@ Reproduces two adversarial findings:
   symbol; before the element-token validation fix, it was accepted as-is
   and minted into a ``Geometry``/``GeometryAtom`` row carrying that fake
   "element". ``TestBadElementTokenNeverMintsAWrongGeometry`` reproduces
-  the reviewer's own end-to-end case -- an "O X H" deck against a
+  an end-to-end case -- an "O X H" deck against a
   ``pseudo``-owned water calculation, where the composition check would
   not have caught it either -- and asserts nothing is minted or linked.
 """
@@ -120,7 +120,7 @@ class TestTruncatedLogNeverOrphansAGeometry:
 
 
 # A Gaussian input deck naming a dummy atom ("X") in the element column of
-# an otherwise well-formed 3-atom Cartesian block -- the reviewer's own
+# an otherwise well-formed 3-atom Cartesian block -- a
 # reproduction. The pseudo species owner is deliberate: the composition
 # check (assert_calculation_geometry_composition) silently declines to
 # judge a pseudo owner, so it cannot be what stops this -- only the

@@ -19,7 +19,7 @@ give the methyl one carbon and three hydrogens, so the element check added for
 the IRC side sees nothing wrong. They still cannot both be true, and which
 hydrogen is the transferring one is the entire content of the reaction.
 
-The false-positive tests are as load-bearing as the refusal ones. the blocking-tier rule lets
+The false-positive tests are as load-bearing as the refusal ones. The blocking-tier rule lets
 a check block only where no correct calculation could produce the record it
 refuses, and this is the rule most likely to get that wrong: a partial atom map,
 an absent IRC mapping, failed evidence, a barrierless channel and a reaction
@@ -1142,14 +1142,14 @@ def test_mapping_the_electron_lets_the_unaccounted_atom_rule_engage() -> None:
 
 
 def test_skipping_the_electron_still_gates_that_rule_off() -> None:
-    """The control, and the measure of what this closed.
+    """The control: skipping the electron still gates that rule off.
 
-    The identical saddle point with the identical spare atom, mapped the only
-    way the schema forbids. The map is incomplete over its participants,
-    so a missing species could explain the leftover atom, so the rule stays
-    silent and the payload is accepted. That is correct behaviour for an
-    incomplete map -- and it was, until the electron could be named, the *only*
-    behaviour available to this reaction.
+    The identical saddle point with the identical spare atom, mapped without the
+    electron participant. The map is incomplete over its participants, so a
+    missing species could explain the leftover atom, the rule stays silent and
+    the payload is accepted. That is correct behaviour for an incomplete map, and
+    the contrast with the test above is what shows that naming the electron
+    closes the gap.
     """
 
     payload = _electron_payload()

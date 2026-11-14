@@ -120,7 +120,7 @@ def test_unlinked_thermo_evidence_counts_only_its_own_links(db_session):
 
 
 def test_the_first_record_in_display_order_ignores_the_evidence_score(db_session):
-    """the unlinked record has a later ``created_at`` and the same review
+    """The unlinked record has a later ``created_at`` and the same review
     status, so it is first in display order even though the linked record scores
     higher. The checklist is displayed, not ranked."""
     entry, _lot, _stat, _freq, _sp, linked, unlinked = _linked_and_unlinked(db_session)

@@ -492,8 +492,8 @@ def test_case_2_deuterium_in_the_element_column_is_hydrogen_but_not_protium(db_c
     (comparing raw symbols would read it as containing an element the SMILES
     never mentions). A ``D`` token also declares
     deuterium, so the isotope rule refuses this CD4 geometry under a
-    protium CH4 with ``calculation_geometry_isotope_mismatch``. This test used
-    to assert acceptance; it now pins that the refusal is the isotope rule's
+    protium CH4 with ``calculation_geometry_isotope_mismatch``. This test pins that the refusal
+    is the isotope rule's
     (the composition code must not fire: one owner per fact).
     """
 

@@ -77,7 +77,7 @@ def test_default_returns_species_kinetics_transition_states_only(db_session):
     assert response.atom_map is None
     # ...but whether the reaction is atom-mapped is never gated behind a
     # token: an unmapped reaction that reads identically to a mapped one is
-    # the failure the explicit slot exists to remove.
+    # the failure the atom-map rule exists to remove.
     assert response.reaction_entry.atom_maps == []
 
 
@@ -403,12 +403,12 @@ def test_full_handles_multiple_ts_dependency_roles(db_session):
 
 
 # ---------------------------------------------------------------------------
-# TS calculation slot: energy + review (this task)
+# TS calculation slot: energy + review
 # ---------------------------------------------------------------------------
 #
 # TransitionStateCalculationSlot carries
-# calculation_id/calculation_ref/type/method. These tests pin the two new
-# fields: energy_hartree (the one energy quantity a calculation's own
+# calculation_id/calculation_ref/type/method, plus two more fields that these tests
+# pin: energy_hartree (the one energy quantity a calculation's own
 # result row canonically holds — sp/opt only, never a fabricated zero) and
 # review (the calculation's own review badge, never one borrowed from its
 # owning TS entry or reaction entry).
@@ -602,12 +602,12 @@ def test_ts_calc_slot_review_defaults_to_not_reviewed(db_session):
 def test_ts_calc_energy_and_review_do_not_scale_with_calc_count(db_session):
     """Loading energy + review for the TS calc graph is bulk, not per-calc.
 
-    Regression guard for the N+1 this task explicitly calls out. The whole
+    Regression guard for the N+1 of per-calculation loading. The whole
     ``/full?include=transition_states`` read issues *some* per-TS-entry
     statements unrelated to this check (evidence summary, atom-map
     lookups, ...), so counting every statement would make this fixture
-    sensitive to costs this task did not touch. Instead this counts only
-    the statements that hit the three tables this task's bulk loaders
+    sensitive to unrelated costs. Instead this counts only
+    the statements that hit the three tables the bulk loaders
     touch -- ``calc_sp_result``, ``calc_opt_result`` (energy) and
     ``record_review`` (review, shared with the pre-existing per-document
     TS-entry badge load) -- by SQL text. Those three must stay a FLAT
@@ -661,7 +661,7 @@ def test_ts_calc_energy_and_review_do_not_scale_with_calc_count(db_session):
             )
 
     #: Substrings identifying a statement as touching one of the three
-    #: tables this task's bulk loaders read.
+    #: tables the bulk loaders read.
     _WATCHED_TABLES = ("calc_sp_result", "calc_opt_result", "record_review")
 
     def _count_watched_statements() -> int:

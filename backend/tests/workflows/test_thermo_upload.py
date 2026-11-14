@@ -331,8 +331,8 @@ def test_persist_thermo_upload_resolves_all_provenance_refs(
 def test_persist_thermo_upload_surfaces_literature_title_mismatch_warning(
     db_conn, monkeypatch,
 ) -> None:
-    """a depositor-supplied title that disagrees with the DOI's
-    fetched title still resolves (DOI wins, as above) but is now reported
+    """A depositor-supplied title that disagrees with the DOI's
+    fetched title still resolves (DOI wins, as above) but is reported
     as an ``UploadWarning`` when the caller asks for one via
     ``warnings_out``."""
     monkeypatch.setattr(
@@ -1709,12 +1709,10 @@ def test_thermo_upload_statmech_wrong_species_entry_raises_422(db_conn) -> None:
     """A statmech owned by a different species entry is rejected (422),
     names its own code, and leaks no internal ids.
 
-    The code is asserted: a bare
-    ``ValueError`` matched on the substring "different species entry", so
-    a client received ``validation_error`` and could not tell it from any
-    other malformed thermo upload. The id assertions are kept unchanged --
-    they are a separate property and the one most likely to regress
-    silently.
+    The code is asserted, not a substring: a bare ``ValueError`` matched on
+    "different species entry" would reach a client as ``validation_error`` and
+    be indistinguishable from any other malformed thermo upload. The id
+    assertions are separate -- the property most likely to regress silently.
     """
     from app.api.error_contract import CodedValueError
 

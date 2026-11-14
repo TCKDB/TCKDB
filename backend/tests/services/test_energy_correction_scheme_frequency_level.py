@@ -332,7 +332,7 @@ def test_the_refusal_does_not_claim_every_other_kind_is_keyed_on_one_level() -> 
 
 
 def test_the_catalogue_note_does_not_claim_arkane_keys_only_the_bacs() -> None:
-    """the catalogue note feeds PRODUCER_CONTRACT.md and must carry the "for now" wording too."""
+    """The catalogue note feeds PRODUCER_CONTRACT.md and must carry the "for now" wording too."""
     from app.api.code_catalogue import CATALOGUE
 
     entry = next(c for c in CATALOGUE if c.code == "energy_correction_scheme_frequency_level_not_applicable")

@@ -25,7 +25,7 @@ def _token(smiles: str) -> str:
     return stereo.allene_mark_token(frame, element)
 
 
-#: Labels run by the reviewer with Centres 1.2.1 (``M`` is Ra, ``P`` is Sa); not part of the generated table.
+#: Labels run with Centres 1.2.1 (``M`` is Ra, ``P`` is Sa); not part of the generated table.
 REVIEWER_CENTRES = [
     ("[1H]C(F)=[C@]=CC", "Sa"),  # P
     ("[2H]C([1H])=[C@]=CC", "Ra"),  # M

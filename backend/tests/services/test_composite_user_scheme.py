@@ -223,10 +223,9 @@ def test_the_method_hash_function_refuses_a_ref_that_names_a_scheme():
 
 
 def test_normal_level_hashes_are_unchanged_by_this_phase():
-    """Pinned: a plain level keeps the hash it had before declared schemes existed.
+    """Pinned: a plain level keeps the hash it has without declared schemes.
 
-    Re-pinned by the keywords decision: the free-text ``keywords`` key left every payload, so every hash
-    changed by design; the instance is reseeded, not re-keyed.
+    The free-text ``keywords`` key is not in any payload.
     """
     assert _level_of_theory_hash(LevelOfTheoryRef(method="b3lyp", basis="def2-tzvp")) == (
         "7f386e705fd675c5f1069df4d2a1e823de14b1f479f357e4e2243c4758a1851c"
@@ -273,7 +272,7 @@ def test_exponential_sqrt_is_labelled_with_alpha_not_x():
 
 
 def test_alpha_of_an_exponential_sqrt_term_is_identity(db_session):
-    """alpha 4.42 and 5.46 are two schemes and two levels, the same alpha is one; the term's key is not identity."""
+    """Alpha 4.42 and 5.46 are two schemes and two levels, the same alpha is one; the term's key is not identity."""
 
     def scheme(alpha: float, key: str = "scf") -> dict:
         return {

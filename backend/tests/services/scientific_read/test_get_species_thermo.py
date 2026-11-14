@@ -112,13 +112,11 @@ def test_points_thermo_returns_points_array(db_session):
 
 
 def test_nasa_and_points_both_served_when_both_exist(db_session):
-    """The live-archive shape: every one of the 65 thermo records on the
-    deployed DB has BOTH a ThermoNASA row AND ThermoPoint rows, and
-    ``thermo.model_kind`` is explicitly stored as ``nasa7`` (post the
-    backfill) rather than left NULL for fallback classification.
-    Before the fix, ``points`` was gated on ``model_kind ==
-    ThermoModelKindQuery.points``, so the NASA classification made all
-    585 stored Cp points unreachable. Both must now come back together.
+    """A thermo record has BOTH a ThermoNASA row AND ThermoPoint rows, and
+    ``thermo.model_kind`` is explicitly stored as ``nasa7`` rather than left NULL
+    for fallback classification. ``points`` must not be gated on ``model_kind ==
+    ThermoModelKindQuery.points``: that would make every stored Cp point
+    unreachable behind the NASA classification. Both come back together.
     """
     entry = _entry_with_smiles(db_session)
     thermo = make_thermo_scalar(db_session, species_entry=entry)
@@ -635,12 +633,12 @@ def test_multiple_statmech_never_leak_into_an_unlinked_thermo(db_session):
 
 
 # ---------------------------------------------------------------------------
-# (read half): per-record statmech attribution.
+# Per-record statmech attribution (read half).
 #
 # The read path must attribute a computed thermo's statmech basis from the
-# record's OWN ``thermo.statmech_id`` FK (populated by the write fix), not a
-# per-entry ``min(statmech_ids)`` fallback. The min fallback is gone:
-# a record whose ``statmech_id`` is NULL shows no statmech at all.
+# record's OWN ``thermo.statmech_id`` FK, not a
+# per-entry ``min(statmech_ids)`` fallback: a record whose ``statmech_id`` is NULL
+# shows no statmech at all.
 # ---------------------------------------------------------------------------
 
 

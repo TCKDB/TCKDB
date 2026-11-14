@@ -3389,12 +3389,10 @@ def test_species_correction_referencing_ts_calc_returns_422(db_conn) -> None:
     """Species-side correction whose ``source_calculation_key`` names a
     TS-owned calc rejects with 422.
 
-    Asserted on the code: a site raising a bare
-    ``ValueError`` matched by the substring "not owned by this species
-    entry", so the refusal reached a client as ``validation_error``. It
-    now reports ``applied_energy_correction_source_calculation_owner_
-    mismatch``, which is also what made that catalogue entry stop being
-    ``Reach.guard``.
+    Asserted on the code, not a substring: a site raising a bare
+    ``ValueError`` would reach a client as ``validation_error``. The refusal
+    reports ``applied_energy_correction_source_calculation_owner_mismatch``,
+    which also keeps that catalogue entry from being ``Reach.guard``.
     """
     payload = _payload_with_aec_carriers()
     payload["species"][0]["applied_energy_corrections"] = [
@@ -3605,7 +3603,7 @@ def test_bundle_kinetics_rejects_unrepresentable_model_kinds(
 def test_computed_reaction_payload_accepts_degeneracy_regression() -> None:
     """Regression: the ARC payload validates.
 
-    ``BundleKineticsIn``'s ``extra="forbid"`` rejected
+    Without the field, ``BundleKineticsIn``'s ``extra="forbid"`` rejects
     ``degeneracy`` with ``[type=extra_forbidden]``. The full
     ``ComputedReactionUploadRequest`` must accept it end-to-end so ARC
     computed-reaction uploads carrying reaction-path degeneracy succeed.
@@ -3822,12 +3820,11 @@ def test_statmech_source_role_must_match_calculation_type(db_conn) -> None:
 # when a producer had not supplied one. That is exactly the case a coarse
 # pre-optimisation lands in: the wire schema excuses ``opt`` from supplying
 # ``geometry_key``, because a coarse stage's output geometry genuinely is not
-# a declared conformer geometry -- so the one type allowed to omit the key was
-# the one type whose anchor was then dropped, without a word to anybody. 43
-# rows on the deployed database were persisted that way.
+# a declared conformer geometry -- so the one type allowed to omit the key would be
+# the one type whose anchor was then dropped, without a word to anybody.
 #
 # ``conformer_key`` answers the anchoring question directly, and these tests
-# pin the three outcomes the seam can now produce -- anchored by conformer
+# pin the three outcomes the seam can produce -- anchored by conformer
 # key, decided by conformer key when both are present, and not anchored but
 # *reported* -- plus the refusal for a key that names nothing.
 

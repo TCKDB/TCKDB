@@ -110,8 +110,7 @@ def _check_error_bodies(item) -> None:
     """Fail the test whose error body carried an internal identifier.
 
     Two failures, in the order they matter. The first is the rule -- no
-    internal identifier in a user-facing body: not a primary key
-, and not a raw database
+    internal identifier in a user-facing body: not a primary key, and not a raw database
     constraint name either. Both go to the log. The
     second is the guard on the guard: a sweep that examines nothing
     passes trivially, so a test whose client *received* a JSON error
@@ -420,8 +419,8 @@ def _validate_test_db_name(db_name: str) -> str:
 # that reaches for that factory during a test is therefore talking to a
 # different database than every fixture and every assertion.
 #
-# That is not hypothetical.  It was root cause 2 of the seed-independence work
-#: five ``/status`` tests probed through ``health.SessionLocal``, passed
+# That is not hypothetical.  It was root cause 2 of the seed-independence work:
+# five ``/status`` tests probed through ``health.SessionLocal``, passed
 # in a dev shell and on the PR gate -- which runs ``alembic upgrade head``
 # against ``DB_NAME`` in an earlier step -- and failed only on the nightly,
 # which does not.  They were green for a reason unrelated to what they
@@ -982,9 +981,7 @@ _FILTERING_OPTIONS = ("-k", "-m", "--deselect", "--lf", "--last-failed", "--ff")
 #: ``(bodies swept, body fields examined)`` each selection must reach.
 #:
 #: Measured at seed 424242 with 8 workers, then rounded down by ~10% so that
-#: adding or removing a handful of refusal tests does not fail a run. The
-#: three gates were measured at ``38766219``; the whole-suite row at
-#: ``6d614cb1``, two commits earlier, which is why it is the smaller number:
+#: adding or removing a handful of refusal tests does not fail a run:
 #:
 #:     whole suite   935 bodies / 1236 fields   (8,038 tests)
 #:     rest gate       1 body   /    1 field    (4,673 tests)
@@ -1536,9 +1533,8 @@ def db_engine():
             text=True,
         )
         # Built the way the application builds its own engine, so the suite
-        # runs with the statement timeout really on: before, this
-        # engine had none at all, and a statement the API would cancel could
-        # run for as long as it liked here.
+        # runs with the statement timeout really on: an engine without one lets a
+        # statement the API would cancel run for as long as it likes here.
         engine = api_deps.create_app_engine(_database_url(db_name), future=True, pool_pre_ping=False)
         # Everything that cannot be handed a request-scoped session -- the
         # commit-time upload audit, the artifact-integrity event writer, the

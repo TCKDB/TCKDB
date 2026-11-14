@@ -23,9 +23,9 @@ way. The complement gate and the first version of this file closed that.
 The second time was everything this file could not see, because its walk
 stopped at ``backend/tests/``:
 
-  * ``clients/python/tests/test_openapi_parity.py`` sat red on main from
-    the moment a route is added that is not classified
-    noticed by hand. The "Python client tests" job exists -- it simply
+  * ``clients/python/tests/test_openapi_parity.py`` can sit red on main from
+    the moment a route is added without being classified,
+    until it is noticed by hand. The "Python client tests" job exists -- it simply
     was not consulted, because nothing made a red client suite block a
     merge, and a job that exists is not a job that is read.
   * ``clients/python/adapters/chemkin/tests/`` -- 54 tests -- ran in no

@@ -102,15 +102,11 @@ this one *is* rule 3 -- refuse the shape, no enumeration, no allowlist --
 and it is applied to string **values** anywhere in ``context`` and to
 plain-string ``detail``. See :data:`CONSTRAINT_NAME`.
 
-Exactly one body in the suite
-carries such a name -- the registered-constraint 409's
-``context["constraint"]`` -- and it is not emitted; with
-that gone, a full ``pytest backend/tests`` produces no match at all. So
-this rule lands green on a clean tree and every future match is a real
-finding rather than a backlog. Turning it off and putting the name back
-was run in both directions before it was believed: see the mutations
-recorded in the pull request, and the synthetic pair in
-``tests/api/test_error_body_id_gate.py``.
+The registered-constraint 409 does not put the name in
+``context["constraint"]``, so a full ``pytest backend/tests`` produces no match at
+all. So this rule lands green on a clean tree and every future match is a real
+finding rather than a backlog. The synthetic pair in
+``tests/api/test_error_body_id_gate.py`` exercises the rule in both directions.
 
 The id text rule, and why it is not the AST scan again
 --------------------------------------------------------

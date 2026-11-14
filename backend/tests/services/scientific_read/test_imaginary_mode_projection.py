@@ -141,7 +141,7 @@ def _orca_record(session, *, frequencies=None, dispositions=None, hessian=True):
 def test_a_transition_state_reaction_coordinate_is_determined_not_thresholded(
     db_session,
 ):
-    """The block answers the protocol's question about a real record.
+    """The block answers the imaginary-mode protocol's question about a real record.
 
     The reaction coordinate of this transition state is 0.0000 rigid-body
     and 0.0000 torsion, so it is internal motion that is not a rotation
@@ -176,7 +176,7 @@ def test_a_transition_state_reaction_coordinate_is_determined_not_thresholded(
 def test_an_unprojected_low_mode_is_determined_to_be_rigid_body_residue(
     db_session,
 ):
-    """The case the protocol says a threshold cannot decide, decided.
+    """The case the imaginary-mode protocol says a threshold cannot decide, decided.
 
     -7.15 cm-1 is a genuine eigenvalue of ``freq_g09.log``'s stored
     Hessian -- one of the six rigid-body directions, which Gaussian
@@ -438,7 +438,7 @@ def test_a_stored_frequency_the_matrix_does_not_reproduce_is_not_projected(
 # The statuses above are honest and they are also a shrug: a reader who
 # asks about the corpus records with an imaginary mode and no Hessian
 # learns only that nothing was checked. TCKDB is not silent about those
-# modes -- the protocol judges every one of them by magnitude at upload,
+# modes -- the imaginary-mode protocol judges every one of them by magnitude at upload,
 # against a tau resolved from the protocol that produced them, and
 # persisted the tau, its basis and the resulting structural flag. These
 # tests are about returning that judgement beside the refusal, and about
@@ -471,7 +471,7 @@ def _seed_parameter(session, *, calculation, canonical_key, canonical_value):
 def _judged_record_without_a_hessian(session, **freq_kwargs):
     """The motivating record, judged and deposited without a matrix.
 
-    -1300, -42 and -13 cm-1 is the protocol's opening case. No live
+    -1300, -42 and -13 cm-1 is the imaginary-mode protocol's opening case. No live
     record reaches this path: ``n_imag`` is only ever 0 or 1 across the
     whole corpus, so ``imaginary_disposition`` is null everywhere and a
     record with an extra imaginary mode has to be constructed.
@@ -553,7 +553,7 @@ def test_the_tau_block_ranks_by_magnitude_and_names_only_the_designation(db_sess
 
 
 def test_the_tau_block_reports_a_magnitude_and_refuses_to_assign_a_mode(db_session):
-    """The line the protocol draws, asserted as a property of the payload.
+    """The line the imaginary-mode protocol draws, asserted as a property of the payload.
 
     A torsion at -300 cm-1 and a genuine second reaction coordinate at
     -300 cm-1 are the same number in a frequency list, which is the
@@ -683,7 +683,7 @@ def test_a_record_judged_before_adr_0012_reports_no_tau_rather_than_a_default(db
 
 
 def test_an_assumed_basis_renders_verbatim_and_stays_distinguishable(db_session):
-    """The assumed-default rule, read back.
+    """The imaginary-mode protocol's assumed default, read back.
 
     An assumed basis is read straight off the stored row exactly like
     every other basis -- this block does no basis-specific branching --
@@ -756,7 +756,7 @@ def test_every_way_of_failing_to_determine_carries_the_tau_judgement(db_session)
 def test_a_determined_projection_carries_no_tau_block(db_session):
     """A determination beats a threshold, so the threshold stands down.
 
-    The protocol is explicit that the projections "should be implemented
+    The imaginary-mode protocol is explicit that the projections "should be implemented
     before tau is tuned, because a determination beats a threshold
     wherever one is available". Returning both would invite a reader to
     average a measurement with a tolerance. The response for a record

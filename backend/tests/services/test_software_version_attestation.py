@@ -315,8 +315,8 @@ class TestAppendOnly:
         ],
     )
     def test_a_forged_link_row_is_refused(self, db_session, playground, case):
-        """Finding 7. Each forged row breaks exactly one invariant, and every
-        invariant is a fact that never changes afterwards (finding 5)."""
+        """Each forged row breaks exactly one invariant, and every
+        invariant is a fact that never changes afterwards."""
         owner, other, orca_null, molpro_null, calcs = playground
         record = self._record(db_session, playground)
         orca_6 = db_session.get(Calculation, calcs["orca_1"].id).software_release_id
@@ -447,7 +447,7 @@ def test_script_attestation_flags_go_together(script, monkeypatch, db_session, p
 
 
 def test_archive_round_trip_survives_a_later_re_point(db_session, playground):
-    """Finding 5. Restore replays the link rows' INSERTs after the
+    """Restore replays the link rows' INSERTs after the
     calculations are back at their *final* release. A calculation re-pointed
     again after the attestation (here by the software name correction, the
     Gaussian log proving ORCA never ran it) must still restore."""
@@ -487,7 +487,7 @@ def test_archive_round_trip_survives_a_later_re_point(db_session, playground):
 
 
 def test_one_unreadable_artifact_makes_the_calculation_unreadable(db_session, playground):
-    """Finding 6. One readable artifact without a banner plus one unreadable
+    """One readable artifact without a banner plus one unreadable
     artifact is not evidence of absence: the unreadable one may hold the
     banner. An owner statement must not override it."""
     owner, _other, orca_null, *_ = playground
@@ -506,7 +506,7 @@ def test_one_unreadable_artifact_makes_the_calculation_unreadable(db_session, pl
 
 
 def test_a_release_carrying_a_revision_or_build_is_refused(db_session, playground):
-    """Finding 8. Attesting "09" on a version-less row whose build says
+    """Attesting "09" on a version-less row whose build says
     ``ES64L-G16RevC.02`` would mint ``("09", NULL, "ES64L-G16RevC.02")``."""
     owner, *_ = playground
     g_null_build = make_software_release(db_session, name="Gaussian", version=None, build="ES64L-G16RevC.02")
@@ -519,7 +519,7 @@ def test_a_release_carrying_a_revision_or_build_is_refused(db_session, playgroun
 def test_script_requires_release_when_a_program_has_several_version_less_releases(
     script, monkeypatch, db_session, playground, capsys  # noqa: F811
 ):
-    """Finding 8. One statement is never applied to every version-less
+    """One statement is never applied to every version-less
     release of a program silently."""
     owner, *_ = playground
     second = make_software_release(db_session, name="ORCA", version=None, revision="r1")
@@ -553,7 +553,7 @@ def test_two_stored_logs_naming_different_releases_are_banners_disagree(db_sessi
 
 
 def test_a_banner_naming_another_program_has_one_status_in_both_modes(db_session, playground):
-    """Finding 10. ``banner_available`` in one mode and ``other_program`` in
+    """``banner_available`` in one mode and ``other_program`` in
     the other left the operator with no route; both now say why."""
     owner, _other, orca_null, *_ = playground
     store = _Store()

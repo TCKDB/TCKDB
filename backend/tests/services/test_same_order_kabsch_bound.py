@@ -45,7 +45,7 @@ from tests.services.test_permuted_rigid_match import (
 
 
 def _reference_same_structure(a, b, budget=None, prepared=None) -> bool:
-    """``_same_polyatomic_structure`` without the radius-of-gyration filter: same-order Kabsch on every pair."""
+    """``_same_polyatomic_structure`` without the radius-of-gyration filter or the same-order allowance: same-order Kabsch on every pair."""
     tolerance = levels._rigid_motion_tolerance(a.decimals, b.decimals)
     if a.species == b.species and kabsch_rmsd(a.coordinates, b.coordinates) <= tolerance:
         return True
@@ -59,7 +59,7 @@ def _reference_same_structure(a, b, budget=None, prepared=None) -> bool:
 
 
 def _reference_merge(geometries) -> dict[int, int]:
-    """``_merge_rigidly_equal_geometries`` without the radius-of-gyration filter, over the reference rule."""
+    """``_merge_rigidly_equal_geometries`` without the radius-of-gyration filter or the same-order allowance, over the reference rule."""
     root = {g.id: g.id for g in geometries}
     budget = SearchBudget()
     prepared: dict[int, PreparedGeometry] = {}

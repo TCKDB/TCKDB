@@ -473,7 +473,7 @@ def test_fixture_builds_valid_request() -> None:
 
 def test_fixture_emits_statmech_and_closes_gap() -> None:
     payload, gap = build_network_pdep_payload(FIXTURE_DIR)
-    # optical_isomers/external_symmetry are now storable -> no gap.
+    # optical_isomers/external_symmetry are storable -> no gap.
     assert gap.unstorable_fields == []
     # Every reactive species carries a statmech block.
     assert set(gap.species_with_statmech) == {"N2H4", "H2NN", "H2"}

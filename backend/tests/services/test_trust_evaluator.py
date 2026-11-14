@@ -2245,8 +2245,8 @@ class TestCorrectionSchemeTrustChecks:
         check ever added to this rubric contributes to the completeness
         *ratio* even when it does not gate reaching well_supported via
         ``all_required_passed`` -- that is true of the 20 optional checks
-        that exist for every record, not something new introduced
-        here. What must never happen, and is asserted here, is this
+        besides these two, not something specific to
+        them. What must never happen, and is asserted here, is this
         record's label moving because the *new* checks do not apply to
         it: a thermo record that cites no correction scheme at all.
         """

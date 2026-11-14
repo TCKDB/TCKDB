@@ -716,7 +716,7 @@ def test_min_review_status_approved_filters_to_approved(db_session):
 
 
 # ---------------------------------------------------------------------------
-# a candidate species left with zero *visible* entries must be
+# A candidate species left with zero *visible* entries must be
 # dropped, not listed with ``entries: []`` and counted toward
 # ``pagination.total`` anyway.
 #
@@ -724,23 +724,23 @@ def test_min_review_status_approved_filters_to_approved(db_session):
 # approved. ``?min_review_status=approved`` reported ``pagination.total:
 # 59`` (the unfiltered species count) while every record on the page
 # carried ``entries: []`` -- a curator asking "which species are
-# approved?" was told "all 59" when the true answer was none. Neither
-# review caught this because every fixture had at least
-# one entry surviving whatever filter was applied; the fixtures below
+# approved?" was told "all 59" when the true answer was none. A fixture set in
+# which every fixture has at least one entry surviving whatever filter is applied
+# would miss this; the fixtures below
 # deliberately include a species where the filter matches *nothing* and
 # one where it matches *some but not all*, which is the only shape that
 # can tell "drops the empty ones" apart from "drops everything" or
 # "drops nothing".
 #
-# The first fix gated the drop on whether the caller had typed one of
-# five specific request fields (min_review_status / include_rejected /
-# include_deprecated / electronic_state_kind / species_entry_kind). That
-# missed the read-profile floor (``?profile=curated`` narrows visibility
-# to ``approved`` with no request field set at all -- see
+# The drop is not gated on whether the caller typed one of five specific request
+# fields (min_review_status / include_rejected / include_deprecated /
+# electronic_state_kind / species_entry_kind): that would miss the read-profile
+# floor (``?profile=curated`` narrows visibility to ``approved`` with no request
+# field set at all -- see
 # test_api_species_browse.py::test_profile_curated_drops_species_with_no_approved_entries)
-# and inverted itself for the two widening flags (see
+# and would invert itself for the two widening flags (see
 # test_widening_flag_does_not_shrink_the_result_set below). The rule is
-# now unconditional: species.py::_rank_and_slice_species always drops a
+# unconditional: species.py::_rank_and_slice_species always drops a
 # species that has *some* entries but none visible, on every browse call
 # -- and species.py::_has_any_entry_expr is the structural, filter-
 # independent check that keeps a species with *zero* entries at all

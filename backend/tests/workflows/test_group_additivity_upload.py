@@ -259,9 +259,10 @@ def test_the_missing_thermo_guard_does_not_answer_with_its_own_name(db_session):
     ``code="create_applied_group_additivity"``: a function name presented to
     a client as a branchable contract. It would be in no register, in no generated
     client constant, and it would move the day somebody renamed the function.
-    Not promoting it is not enough: the message has no leading
-    token, because a message with no leading token is not a code by any spelling.
-
+    Not promoting the token is not enough to hold this: the error gate degrades an
+    uncatalogued token to ``validation_error`` anyway, so the wording needs its own
+    assertion (the last one below). The message has no leading token, because a
+    message with no leading token is not a code by any spelling.
     The envelope is built here by the *real* handler rather than asserted
     about in the abstract, because what a depositor receives is the thing
     under test. ``validation_error`` is the right answer: honestly generic
