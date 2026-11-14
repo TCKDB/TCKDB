@@ -322,7 +322,7 @@ def test_search_methods_preserve_auth_header():
 
 
 # ===========================================================================
-# search_species_calculations (Phase 7)
+# search_species_calculations
 # ===========================================================================
 
 

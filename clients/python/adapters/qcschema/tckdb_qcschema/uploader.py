@@ -199,7 +199,7 @@ def upload_record(
 
     primary = conformer_data["primary_calculation"]
     calculation_id = primary["calculation_id"]
-    # The artifact route takes the calculation's public ref only (#578).
+    # The artifact route takes the calculation's public ref only.
     calculation_ref = primary.get("calculation_ref")
     if not isinstance(calculation_ref, str) or not calculation_ref.startswith("calc_"):
         raise QCSchemaAdapterError(

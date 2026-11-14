@@ -1,6 +1,6 @@
 # Builder summary / describe API — design
 
-Status: **design / spec at first revision; Phase 1 now shipped
+Status: **design / spec at first revision; implemented
 in `tckdb-client` 0.26.0.** No further implementation work in this
 document. Audience: builder maintainers and producers writing
 CLI / notebook preview tooling.
@@ -396,8 +396,7 @@ print(upload.summary().to_text())
 
 ## 9. Test plan for future implementation
 
-Tests to land **with** the Phase-1 implementation, not in this
-design PR:
+Tests that accompany the implementation:
 
 | Test                                                                                  | Why                                                                                          |
 |---------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------|
@@ -445,9 +444,9 @@ Reiterated for emphasis:
 
 ## 11. Suggested implementation phases
 
-A two-phase rollout, no more:
+A two-step rollout, no more:
 
-### Phase 1 — `UploadSummary` + `summary()` method
+### `UploadSummary` + `summary()` method
 
 - New module: `tckdb_client/builders/summary.py`. Defines
   `UploadSummary` (frozen dataclass) and the per-upload-kind
@@ -461,7 +460,7 @@ A two-phase rollout, no more:
 - Version bump: minor (additive). Diagnostic-code surface
   unchanged.
 
-### Phase 2 — Reassess after producer feedback
+### Reassess after producer feedback
 
 - If notebook producers ask for `_repr_html_` / `__rich__`, that
   is the entry condition for designing one — not a default.

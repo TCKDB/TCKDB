@@ -1,8 +1,8 @@
 """Top-level upload-object builders.
 
-Phase 1 ships :class:`ComputedSpeciesUpload` targeting
-``POST /api/v1/uploads/computed-species``. Phase 2 adds
-:class:`ComputedReactionUpload` targeting
+:class:`ComputedSpeciesUpload` targets
+``POST /api/v1/uploads/computed-species`` and
+:class:`ComputedReactionUpload` targets
 ``POST /api/v1/uploads/computed-reaction``. Both are payload-construction
 aids, not parallel APIs — the server remains authoritative.
 """
@@ -96,7 +96,7 @@ class ComputedSpeciesUpload:
 
     The bundle endpoint expects exactly one species identity plus one
     conformer with a primary ``opt`` calculation and zero or more
-    additional calculations. The Phase-1 builder maps to that shape
+    additional calculations. The builder maps to that shape
     by treating every calculation past ``primary_calculation`` as an
     "additional" calculation on a single synthesised conformer.
     """
@@ -143,11 +143,11 @@ class ComputedSpeciesUpload:
                 "calculations."
             )
         if self.primary_calculation.type != "opt":
-            # Only a one-atom geometry may anchor on an sp (#610); the
+            # Only a one-atom geometry may anchor on an sp; the
             # geometry is the one ``to_payload`` will send. With no geometry
             # declared there is nothing to count, so the useful answer is the
             # one about the type (a polyatomic species needs an opt), not the
-            # geometry message, which would hide that (#623).
+            # geometry message, which would hide that.
             if (
                 self.primary_calculation.output_geometry is None
                 and self.primary_calculation.input_geometry is None
@@ -533,7 +533,7 @@ class ComputedSpeciesUpload:
         if calc.input_geometry is not None:
             out["input_geometries"] = [calc.input_geometry.to_payload()]
         if calc.output_geometry is not None:
-            # Phase 1: a singular ``output_geometry`` is always emitted
+            # A singular ``output_geometry`` is always emitted
             # with role="final" — opt's converged structure, freq's
             # post-step structure, or sp's echo of the input.
             out["output_geometries"] = [
@@ -922,7 +922,7 @@ def _build_reaction_preview_response(
 
 
 # ---------------------------------------------------------------------------
-# Computed reaction (Phase 2)
+# Computed reaction
 # ---------------------------------------------------------------------------
 
 
@@ -1497,7 +1497,7 @@ class ComputedReactionUpload:
             if primary_opt.type == "opt":
                 raise
             # No opt and no geometry to count: say a polyatomic species needs
-            # an opt, which the geometry message would hide (#623).
+            # an opt, which the geometry message would hide.
             raise TCKDBBuilderValidationError(
                 f"species_calculations[{sp_label!r}] must contain at "
                 "least one opt calculation (a single atom may use its sp, "
@@ -1560,7 +1560,7 @@ class ComputedReactionUpload:
         """
         opts = [c for c in sp_calcs if c.type == "opt"]
         if not opts:
-            # A single atom has no opt and anchors on its sp (#610). The sp
+            # A single atom has no opt and anchors on its sp. The sp
             # is only a candidate here; the caller refuses it unless the
             # resolved conformer geometry is one atom.
             sps = [c for c in sp_calcs if c.type == "sp"]

@@ -1,6 +1,6 @@
 """Tests for the new public introspection helpers on builder uploads.
 
-These cover the four additions that lifted the Phase-7 demo out of
+These cover the four additions that lifted the demo out of
 private state:
 
 - ``upload.iter_calculations(*, with_artifacts_only=False)``
@@ -338,7 +338,7 @@ _DEMO_NB = (
 
 
 def test_demo_files_do_not_reach_into_species_calc_pairs():
-    """The whole point of Phase-8 was to remove this leak — guard it."""
+    """The point of the public helpers is to remove this leak — guard it."""
     for path in (_DEMO_PY, _DEMO_NB):
         text = path.read_text(encoding="utf-8")
         assert "_species_calc_pairs" not in text, (

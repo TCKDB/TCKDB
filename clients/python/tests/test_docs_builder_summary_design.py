@@ -63,18 +63,17 @@ def test_spec_doc_covers_section(heading):
     )
 
 
-def test_spec_doc_states_phase_1_shipped():
-    """Phase 1 (``UploadSummary`` + ``upload.summary()``) shipped in
+def test_spec_doc_states_it_is_implemented():
+    """``UploadSummary`` + ``upload.summary()`` shipped in
     ``tckdb-client`` 0.26.0. The doc keeps the original design framing
-    for context but the status line must reflect that Phase 1 is now
-    implemented; the test pins that so the doc and the released helper
+    for context but the status line must say it is implemented; the test pins that so the doc and the released helper
     don't drift apart silently."""
     text = _SPEC.read_text(encoding="utf-8").lower()
-    assert "phase 1 now shipped" in text, (
-        "Spec must state Phase 1 has shipped."
+    assert "implemented in `tckdb-client` 0.26.0" in " ".join(text.split()), (
+        "Spec must state the summary helper is implemented."
     )
     assert "0.26.0" in text, (
-        "Spec must name the release that shipped Phase 1."
+        "Spec must name the release that shipped it."
     )
 
 

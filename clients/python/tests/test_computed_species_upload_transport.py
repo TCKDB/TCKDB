@@ -1,6 +1,6 @@
 """``ComputedSpeciesUpload`` × ``transport`` integration tests.
 
-Phase-5 forward-compat contract: the builder accepts ``transport`` and
+Forward-compat contract: the builder accepts ``transport`` and
 validates locally, but the computed-species bundle schema does NOT
 yet carry a transport field, so nothing is emitted on the wire. These
 tests pin that exact contract — the kwarg behaves consistently and
@@ -147,7 +147,7 @@ def test_transport_is_not_emitted_on_the_wire(water_species, calc_trio):
 
 
 def test_transport_optional_keeps_payload_shape(water_species, calc_trio):
-    """No transport kwarg → payload identical to Phase-1 / 3C output."""
+    """No transport kwarg → payload identical to the base output."""
     opt, freq, _sp = calc_trio
     p_no_kwarg = ComputedSpeciesUpload(
         species=water_species, calculations=[opt, freq],

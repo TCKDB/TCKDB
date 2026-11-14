@@ -1,7 +1,6 @@
-"""``ComputedSpeciesUpload`` × ``thermo`` integration tests (Phase 3C).
+"""``ComputedSpeciesUpload`` × ``thermo`` integration tests.
 
-Phase 3B left the computed-species path thermo-less. This module
-exercises the newly-added ``thermo`` kwarg and the on-wire emission
+This module exercises the ``thermo`` kwarg and the on-wire emission
 of ``source_calculations`` with resolved bundle-local keys.
 """
 
@@ -192,7 +191,7 @@ def test_thermo_must_be_thermo_builder(water_species, calc_trio):
 def test_thermo_optional_keeps_existing_payload_shape(
     water_species, calc_trio
 ):
-    """Without thermo, the emitted payload remains exactly Phase-1 shape."""
+    """Without thermo, the emitted payload remains exactly the base shape."""
     opt, freq, _sp = calc_trio
     upload = ComputedSpeciesUpload(
         species=water_species,

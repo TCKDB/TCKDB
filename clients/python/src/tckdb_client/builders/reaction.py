@@ -7,7 +7,7 @@ with the :class:`tckdb_client.builders.uploads.ComputedReactionUpload`
 top-level builder, it produces the dict the backend's
 ``ComputedReactionUploadRequest`` accepts.
 
-Phase-2 scope: no canonicalisation, no RDKit, no chemistry-aware
+Scope: no canonicalisation, no RDKit, no chemistry-aware
 checks. The server is still the source of truth for identity and
 reaction-family validation.
 """

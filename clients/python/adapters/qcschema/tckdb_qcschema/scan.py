@@ -889,7 +889,7 @@ def _map_drive(
     qcschema_block["optimizer_releases"] = [
         f"{creator}/{version}" for creator, version in optimizer_provenance
     ]
-    # Every field of the document in exactly one bucket, or refuse (#573).
+    # Every field of the document in exactly one bucket, or refuse.
     complete_mapping_report(record, report)
     qcschema_block["mapping_report"] = report.to_dict()
     parameters_json = {

@@ -1,4 +1,4 @@
-"""``Kinetics.modified_arrhenius(T0=...)`` sends the fit's own reference temperature (#620)."""
+"""``Kinetics.modified_arrhenius(T0=...)`` sends the fit's own reference temperature."""
 
 from __future__ import annotations
 

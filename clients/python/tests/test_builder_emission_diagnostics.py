@@ -307,7 +307,7 @@ def test_to_payload_unchanged_after_diagnostics_method_added(
         primary_calculation=opt,
     )
     payload = upload.to_payload()
-    # Phase-1 shape — pre-diagnostics. The keys we lock here are the
+    # The base shape, before any diagnostics. The keys we lock here are the
     # ones the §14 snapshot test in test_computed_species_upload_builder
     # also asserts on.
     assert payload["species_entry"]["smiles"] == "O"

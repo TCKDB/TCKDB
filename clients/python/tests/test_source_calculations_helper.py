@@ -1,4 +1,4 @@
-"""Tests for the ``SourceCalculations`` helper (Phase 1).
+"""Tests for the ``SourceCalculations`` helper.
 
 Covers the contract spelled out in
 ``clients/python/docs/source_calculation_ergonomics.md`` §6–§8 plus

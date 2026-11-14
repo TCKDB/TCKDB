@@ -1,4 +1,4 @@
-"""Every field of an imported document lands in exactly one report bucket (#573).
+"""Every field of an imported document lands in exactly one report bucket.
 
 :mod:`tckdb_qcschema.mapping` classifies the fields its driver branches read.
 The branches alone do not check that this covers the whole document: a
@@ -37,7 +37,7 @@ field these rules do not name, so raising the pin forces the decision.
 
 Why a branch-owned field is a refusal and not ``unsupported``: those fields
 are the scientific result the branch exists to map. One left out is a
-defect in the adapter (issue #573 was exactly this), and falling back to
+defect in the adapter, and falling back to
 ``unsupported`` would hide it.
 
 Buckets:

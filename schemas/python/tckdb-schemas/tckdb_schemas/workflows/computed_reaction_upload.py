@@ -2240,7 +2240,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                     )
 
         # Per-species transport source_calculation keys. Same contract as
-        # thermo's above, plus the owner rule the workflow also enforces:
+        # thermo's above, plus the ownership rule the workflow also enforces:
         # this bundle carries many species, so a key that exists is not
         # yet a key that belongs to *this* species. The refusal is the
         # coded one the workflow raises.

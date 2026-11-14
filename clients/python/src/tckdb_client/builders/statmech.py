@@ -1,4 +1,4 @@
-"""Statmech builder for the Phase-4 upload path.
+"""Statmech builder for the upload path.
 
 Targets the shared fields between ``StatmechInBundle``
 (``app/schemas/workflows/computed_species_upload.py``) and

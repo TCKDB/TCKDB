@@ -121,7 +121,7 @@ def test_demo_no_longer_defines_payload_summary_helper():
 def test_demo_prints_emission_diagnostics(demo_run):
     out = demo_run.stdout
     assert "Emission diagnostics" in out
-    # The two pre-Phase-7 forward-compat warnings.
+    # The two forward-compat warnings.
     assert "transport_not_emitted_in_computed_reaction_bundle" in out
     assert (
         "thermo_source_calculations_not_emitted_in_computed_reaction_bundle"
@@ -130,7 +130,7 @@ def test_demo_prints_emission_diagnostics(demo_run):
 
 
 def test_demo_prints_artifact_diagnostic_code(demo_run):
-    """Phase-7 artifact diagnostic must surface for both attached calcs."""
+    """The artifact diagnostic must surface for both attached calcs."""
     out = demo_run.stdout
     assert DIAG_CODES.ARTIFACT_UPLOAD_REQUIRES_SECOND_PHASE in out
     # The demo attaches one artifact to a TS calc and one to a

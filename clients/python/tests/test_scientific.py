@@ -359,7 +359,7 @@ def test_get_reaction_kinetics_serializes_the_coverage_window():
 
 
 def test_get_reaction_kinetics_returns_non_ts_provenance_nulls():
-    """Representative response with non-TS-backed provenance (Phase 2.2 contract)."""
+    """Representative response with non-TS-backed provenance."""
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(

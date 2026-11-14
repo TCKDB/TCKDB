@@ -1,6 +1,6 @@
 """``SourceCalculations`` — opt-in helper for role-tagged provenance.
 
-The Phase-1 implementation of the design captured in
+The implementation of the design captured in
 ``clients/python/docs/source_calculation_ergonomics.md``. Reduces the
 repetitive ``source_calculations=[(role, calc), …]`` tuple lists that
 demos and producer code accumulate, **without** introducing any of the

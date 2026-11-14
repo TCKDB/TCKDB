@@ -1,4 +1,4 @@
-"""A Hessian export declares its Cartesian frame fixed (issue #573).
+"""A Hessian export declares its Cartesian frame fixed.
 
 The exported Hessian is expressed in the exported coordinates' axes. With
 ``fix_com``/``fix_orientation`` false (qcelemental's default), a consumer is

@@ -1,4 +1,4 @@
-"""The CLI's network commands report an unusable API as one line (#568).
+"""The CLI's network commands report an unusable API as one line.
 
 ``export`` and ``import --upload`` pointed at a site root rather than its
 ``/api/v1`` root would die with ``TypeError: string indices must be

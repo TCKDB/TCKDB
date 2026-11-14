@@ -247,7 +247,7 @@ def build_kinetics_payload(
     # A collapsed CHEMKIN ``DUPLICATE`` group -> one ``multi_arrhenius`` rate
     # whose N summed modified-Arrhenius terms live here (scalar a/n/Ea stay
     # unset, per the backend upload contract). Each term's ``a_units`` shares
-    # the reaction's main-line molecularity (validated backend-side, PR #43).
+    # the reaction's main-line molecularity (validated backend-side).
     if rxn.arrhenius_entries:
         payload["arrhenius_entries"] = [
             {

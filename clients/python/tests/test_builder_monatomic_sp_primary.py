@@ -1,4 +1,4 @@
-"""The builders anchor a single atom on its ``sp`` and nothing else (#610)."""
+"""The builders anchor a single atom on its ``sp`` and nothing else."""
 
 from __future__ import annotations
 

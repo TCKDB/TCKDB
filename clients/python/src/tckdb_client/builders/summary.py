@@ -1,6 +1,6 @@
 """Builder-side preview summary surface.
 
-Phase-1 implementation of the design captured in
+Implementation of the design captured in
 ``clients/python/docs/builder_summary_design.md``. Adds a small
 human- and machine-readable ``UploadSummary`` for both
 :class:`ComputedSpeciesUpload` and :class:`ComputedReactionUpload`,

@@ -1,4 +1,4 @@
-"""Local-validation tests for the Phase-3B :class:`Thermo` builder.
+"""Local-validation tests for the :class:`Thermo` builder.
 
 These tests stay inside the builder layer — they never hit the network
 and never assemble a ``ComputedReactionUpload``. Coverage for the

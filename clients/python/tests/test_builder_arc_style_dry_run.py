@@ -109,8 +109,8 @@ def test_output_has_summary_section(dry_run):
 def test_output_has_diagnostics_section(dry_run):
     out = dry_run.stdout
     assert "== Emission diagnostics ==" in out
-    # The script attaches two artifacts (one TS, one CH3) — Phase-7
-    # diagnostic must surface for both attached calcs.
+    # The script attaches two artifacts (one TS, one CH3) — the
+    # artifact diagnostic must surface for both attached calcs.
     assert DIAG_CODES.ARTIFACT_UPLOAD_REQUIRES_SECOND_PHASE in out
     # CH3 thermo carries source_calculations; the reaction-side
     # BundleThermoIn does not emit them — the script surfaces the
@@ -207,8 +207,8 @@ def test_dry_run_does_not_attempt_network_without_env_vars(dry_run):
 
 
 def test_script_does_not_access_private_upload_attributes():
-    """The dry-run must use only public iteration helpers (Phase-8
-    introduced ``iter_calculation_entries`` precisely so demos
+    """The dry-run must use only public iteration helpers
+    (``iter_calculation_entries`` exists so demos
     never reach into private upload state)."""
     text = _SCRIPT_PATH.read_text(encoding="utf-8")
     for forbidden in (

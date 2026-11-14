@@ -462,7 +462,7 @@ def main() -> None:
             return
 
         idem_prefix = f"arc-style-dryrun:{int(time.time())}"
-        print(f"== Artifact upload (phase 2, prefix={idem_prefix!r}) ==")
+        print(f"== Artifact upload (second phase, prefix={idem_prefix!r}) ==")
         if not plan:
             print("(no artifacts to upload)")
             return

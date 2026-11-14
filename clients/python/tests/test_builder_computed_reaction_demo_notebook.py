@@ -119,7 +119,7 @@ def test_notebook_references_artifact_diagnostic_code():
     assert "emission_diagnostics" in code_text
     assert "artifact_plan" in code_text
     # The mock IDs branch — exercises the offline preview path via the
-    # public ``artifact_plan_preview`` helper (Phase-8 cleanup).
+    # public ``artifact_plan_preview`` helper.
     assert "artifact_plan_preview" in code_text
 
 
@@ -139,7 +139,7 @@ def test_notebook_references_sibling_script():
 
 
 def _jupyter_available() -> bool:
-    """``jupyter nbconvert`` is part of the Phase-7 dev env but isn't
+    """``jupyter nbconvert`` is part of the dev env but isn't
     required to run the structural test above. Skip the executable
     test when it isn't installed so slim CI environments stay green.
     """

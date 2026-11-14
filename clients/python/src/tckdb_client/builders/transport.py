@@ -1,4 +1,4 @@
-"""Transport builder for the Phase-5 upload path.
+"""Transport builder for the upload path.
 
 Targets the inline transport upload shape
 (``TransportUploadPayload`` in
@@ -189,7 +189,7 @@ class Transport:
 
     ``source_calculations`` are emitted on the wire only when the
     caller opts in via ``allow_source_calculations=True`` and supplies
-    a ``calc_key_lookup``. The Phase-5 bundle assemblers do *not* opt
+    a ``calc_key_lookup``. The bundle assemblers do *not* opt
     in — see the module docstring for the schema-gap rationale.
     """
 
@@ -267,7 +267,7 @@ class Transport:
 
         Both upload-flag and lookup-callable follow the same pattern as
         :meth:`tckdb_client.builders.thermo.Thermo.to_payload`. The
-        Phase-5 bundle assemblers call this with the default
+        bundle assemblers call this with the default
         ``allow_source_calculations=False`` because neither bundle
         schema carries the ``source_calculations`` field today (and
         neither carries the top-level ``transport`` field at all —

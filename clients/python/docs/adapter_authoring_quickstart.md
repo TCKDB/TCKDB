@@ -135,7 +135,7 @@ upload  = ComputedSpeciesUpload(
 )
 
 # 3. Attach artifacts (logs, decks, scan tables — bytes stay local
-#    until phase 2).
+#    until the second upload phase).
 opt.add_artifact("ethanol_opt.log", kind="output_log")
 
 # 4. Inspect summary + diagnostics before posting.

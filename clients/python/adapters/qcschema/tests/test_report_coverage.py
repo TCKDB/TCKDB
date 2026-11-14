@@ -1,4 +1,4 @@
-"""The mapping report names every field of the document, once (issue #573).
+"""The mapping report names every field of the document, once.
 
 Before 0.5.0 a ``driver="hessian"`` import dropped ``properties.return_energy``,
 ``extras.qcvars`` and nine other ``properties.*`` fields, and named none of
@@ -268,7 +268,7 @@ def test_water_hessian_buckets_exactly(path: Path, expected: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# the energy of a Hessian document (the #573 decision)
+# the energy of a Hessian document
 # ---------------------------------------------------------------------------
 
 
@@ -373,7 +373,7 @@ def test_check_refuses_a_field_in_two_buckets() -> None:
 def test_import_refuses_when_a_branch_leaves_its_energy_unclassified(monkeypatch) -> None:
     """A branch-owned field is never filled in by a static rule: if the
     hessian branch stops naming the energy, the import refuses instead of
-    posting a report that omits it (the #573 defect, re-created)."""
+    posting a report that omits it (the defect re-created)."""
     import tckdb_qcschema.mapping as mapping
 
     real = mapping.complete_mapping_report

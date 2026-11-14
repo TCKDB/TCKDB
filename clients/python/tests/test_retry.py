@@ -440,7 +440,7 @@ class TestNonRetryableCodes:
         assert DEFAULT_NON_RETRYABLE_CODES, (
             "NON_RETRYABLE_CODES is empty, so the retry layer has no code "
             "it will refuse to replay and every test in this class is "
-            "asserting the pre-#234 behaviour"
+            "asserting the behaviour with no non-retryable codes"
         )
         assert "artifact_object_missing" in DEFAULT_NON_RETRYABLE_CODES
         assert "artifact_integrity_failed" in DEFAULT_NON_RETRYABLE_CODES
