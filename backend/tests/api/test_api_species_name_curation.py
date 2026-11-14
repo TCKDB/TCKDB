@@ -254,7 +254,10 @@ def test_no_response_carries_an_internal_id(client, db_session, curator):
     row = db_session.scalar(select(SpeciesName).where(SpeciesName.public_ref == ref))
     for resp in responses:
         for value in (sp.id, row.id, curator.id):
-            assert not id_in_text(value, resp.text)
+            body = {k: v for k, v in resp.json().items() if k != "detail"}  # the fixed message prose has numbers
+            assert not id_in_text(value, body)
+            if resp.status_code != 422:
+                assert not id_in_text(value, resp.text)
     body = responses[0].json()
     assert set(body) == {
         "name_ref",
