@@ -16,9 +16,9 @@ NIST/TRC's own terms verbatim.
 Two public entry points, one shared core
 -------------------------------------------------------
 
-:func:`import_thermoml_cp_article` (the original, C-E3) persists one
+:func:`import_thermoml_cp_article` (the original) persists one
 article selected from the pinned NIST bulk archive. :func:`import_
-thermoml_cp_upload` (C-E6) persists one ThermoML document *anyone*
+thermoml_cp_upload` persists one ThermoML document *anyone*
 uploaded directly -- a CLI ``--file`` or the ``POST /uploads/thermoml``
 route -- never fetched from NIST. Both validate -> parse -> map -> persist
 through the same private ``_run_pipeline`` core; they differ only in
@@ -368,9 +368,8 @@ class ThermoMLCpImportResult:
     warnings: list[str] = field(default_factory=list)
     dispositions: list[ObservationDisposition] = field(default_factory=list)
     #: {transformed, retained_only, unsupported, rejected, counts} from
-    #: ``app.importers.thermoml.mapping.MappingReport``, added for Phase
-    #: C-E6 so a caller (route or CLI) can report *why* zero rows mapped
-    #: without re-running the mapper. ``None`` only when the document was
+    #: ``app.importers.thermoml.mapping.MappingReport``, so a caller (route or CLI) can report
+    #: *why* zero rows mapped without re-running the mapper. ``None`` only when the document was
     #: schema-invalid (never reached the mapper at all).
     mapping_report: dict[str, Any] | None = None
 

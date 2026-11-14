@@ -21,7 +21,7 @@ def test_release_freezes_null_phase_and_reference_pressure_and_zero_kelvin_again
     set_record_review_status(db_session, record_type=SubmissionRecordType.thermo,
                              record_id=row.id, status=RecordReviewStatus.approved,
                              actor=curator, note="custody fixture")
-    # A release refuses a record nobody agreed to license (B1); the direct
+    # A release refuses a record nobody agreed to license; the direct
     # workflow call opens no submission, so license it the way an upload would.
     attest_thermo(db_session, depositor=curator, rows=[row])
     manifest = _publish_with_selection(db_session, draft_release, curator, row, row.species_entry)

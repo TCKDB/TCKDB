@@ -72,7 +72,7 @@ def test_uncertainty_precedence_prefers_combined_expanded():
         assert payload.uncertainty_coverage_factor == 2.0
         assert payload.uncertainty_level_of_confidence_pct == 95.0
         assert payload.scalar_uncertainty is not None
-        # CombinedUncertainty -> source_evaluator (finding 6: assessor mapping).
+        # CombinedUncertainty -> source_evaluator (assessor mapping).
         assert payload.uncertainty_assessor == ObservedUncertaintyAssessor.source_evaluator
 
 
@@ -89,7 +89,7 @@ def test_standard_uncertainty_carries_no_coverage_factor():
     assert payload.uncertainty_kind == ObservedUncertaintyKind.standard
     assert payload.uncertainty_coverage_factor is None
     assert payload.scalar_uncertainty == 0.15
-    # PropUncertainty -> source_author (finding 6: assessor mapping).
+    # PropUncertainty -> source_author (assessor mapping).
     assert payload.uncertainty_assessor == ObservedUncertaintyAssessor.source_author
 
 

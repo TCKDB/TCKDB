@@ -1,5 +1,4 @@
-"""Tests for the ThermoML Cp(T) persistence service + CLI (
-C-E6).
+"""Tests for the ThermoML Cp(T) persistence service + CLI.
 
 Uses the per-test transactional ``db_session`` fixture so every test rolls
 back at teardown. DOI metadata lookup is always monkeypatched -- this
@@ -664,7 +663,7 @@ class TestSubmissionAndRights:
         self, db_session, curator
     ):
         """The shared ``_run_pipeline``
-        core must not silently change C-E3's exact original audit-summary
+        core must not silently change the exact original audit-summary
         wording for the archive path.
 
         Mutation: hard-code ``document_noun="document"`` at the archive

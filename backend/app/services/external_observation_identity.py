@@ -1,8 +1,7 @@
 """Shared, conservative identity resolution for external molecular-property
 observation importers (CCCBDB, ThermoML, ...).
 
-Extracted from ``app.services.cccbdb_molecular_property_import`` (Phase
-C-E3) so the ThermoML persistence service can resolve identity the exact
+Extracted from ``app.services.cccbdb_molecular_property_import`` so the ThermoML persistence service can resolve identity the exact
 same way without importing CCCBDB-specific code. Behaviour is unchanged
 from the original CCCBDB-only implementation -- this module is a pure
 relocation, not a rewrite.

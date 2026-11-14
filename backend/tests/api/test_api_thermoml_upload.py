@@ -671,7 +671,7 @@ class TestLiteratureResolution:
 
 
 # ---------------------------------------------------------------------------
-# Idempotency -- required on this route by the C-E6 decision, unlike its
+# Idempotency -- required on this route, unlike its
 # siblings.
 # ---------------------------------------------------------------------------
 

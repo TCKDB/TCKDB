@@ -312,6 +312,7 @@
    "tests/invariants/test_hash_invariants.py": 4,
    "tests/invariants/test_level_summary_carries_composite_scheme.py": 1,
    "tests/invariants/test_levels_summary_notation_and_verification.py": 4,
+   "tests/invariants/test_no_decision_narrative.py": 1,
    "tests/invariants/test_persist_calls_pass_a_warning_sink.py": 1,
    "tests/invariants/test_registration_conventions.py": 2,
    "tests/invariants/test_structure_invariants.py": 1,

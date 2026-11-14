@@ -165,7 +165,7 @@ def released_thermo(db_session, curator):
         actor=curator,
         note="approved for the sweep fixture",
     )
-    # A release refuses a record nobody agreed to license (B1).
+    # A release refuses a record nobody agreed to license.
     attest_thermo(db_session, depositor=curator, rows=[thermo])
     policy = resolve_curation_policy(
         db_session,
