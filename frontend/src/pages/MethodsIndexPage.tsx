@@ -1,5 +1,6 @@
 import { GuideLink } from "../components/GuideLink"
 import { useEffect, useMemo, useState } from "react"
+import { Link } from "react-router-dom"
 import "../browse.css"
 import "../conformer-group.css"
 import "../methods.css"
@@ -17,6 +18,7 @@ import {
     isLotFilterActive,
     type LevelOfTheoryFilter,
 } from "../domain/levelOfTheoryFilter"
+import { levelOfTheoryPath } from "../domain/methodsLinks"
 import type { PageRequest } from "../domain/paging"
 import { words } from "../domain/provenanceFormat"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
@@ -44,17 +46,7 @@ function useLoad<T>(load: (signal: AbortSignal) => Promise<T>, key = ""): LoadSt
     return state
 }
 
-/**
- * `/methods` -- the archive's provenance-vocabulary index.
- * Replaces `RecordPlaceholderPage kind="Methods"`. Three sections, each
- * its own `.data-table`: levels of theory (grouped by
- * `level_of_theory_ref`, per ruling 1 in §0 of that plan -- NEVER by
- * method/basis display text, which two distinct levels can share while
- * differing only in dispersion, solvent, or spin treatment), software,
- * and workflow tools -- unchanged in shape from what a bare vocabulary
- * index would show; what changed is where a level-of-theory row links
- * (§4.2's real record page, not a thin anchor).
- */
+/** `/methods`: levels of theory (one row per level, never grouped by method and basis text), software and workflow tools. */
 export default function MethodsIndexPage() {
     useDocumentTitle("Methods")
     const [lotFilter, setLotFilter] = useState<LevelOfTheoryFilter>(EMPTY_LOT_FILTER)
@@ -73,7 +65,7 @@ export default function MethodsIndexPage() {
         <section className="conformer-page methods-page">
             <PageShell>
                 <h1 className="t-display-2">Methods</h1>
-                <p className="t-body methods-index-intro">
+                <p className="t-body section-intro">
                     Levels of theory, software and workflow tools behind deposited calculations.<GuideLink to="level-of-theory" />
                 </p>
 
@@ -115,44 +107,10 @@ export default function MethodsIndexPage() {
     )
 }
 
-/**
- * `dispersion`/`solvent` wording: an absent value is a record without that
- * method choice, not a missing field. The upload-facing
- * `LevelOfTheoryRef` fragment (`schemas/python/tckdb-schemas/tckdb_schemas/
- * fragments/refs.py`) declares `dispersion`/`solvent` as plain optional
- * strings with no separate "explicitly none" sentinel distinct from
- * "omitted" -- unlike `spin_treatment` on that SAME fragment, which has
- * a real `unknown` enum member specifically because every calculation
- * genuinely runs at SOME spin treatment even when the depositor does not
- * say which, so `NULL` there could not honestly mean "there is none".
- * Dispersion correction and an implicit solvent model are the opposite
- * case: both are OPTIONAL method choices a calculation can genuinely run
- * without, so "none" is the unambiguous reading here. `calculation_resolution.py`'s
- * `resolve_level_of_theory_ref` writes `ref.dispersion`/`ref.solvent`
- * straight into the row with no fallback/defaulting logic, matching that.
- * "None" states the dispersion fact plainly; "gas phase" is the more
- * informative, equally factual reading for an absent solvent (no implicit
- * solvent model means the calculation ran in vacuum), so a reader gets the
- * chemistry, not just the negation. `basis` keeps the plain absence word: a
- * method that has no basis set is a real, separate possibility
- * (semi-empirical methods).
- */
 const NO_DISPERSION_TEXT = "none"
 const NO_SOLVENT_TEXT = "gas phase"
 
-/**
- * Proportionate to what a short list needs: one text field narrowing on method and
- * basis together, plus the two evidence facets that are genuinely useful
- * for finding which levels carry parameters -- not a full faceted-search
- * panel `BrowseFilterForm.tsx` builds for the archive's much larger
- * species/reaction/TS catalogues. This is a small, page-local control
- * rather than a reuse of that component: its fields are module-private
- * (only `BrowseFilterForm` itself is exported), and this filter's shape
- * (one text input, two checkboxes, no vocab fetch, no debounce) does not
- * need that component's parent-scoped-version/inline-explain machinery.
- * Reuses `browse.css`'s `.browse-filter-*` classes for a consistent look
- * rather than inventing a second filter-panel style.
- */
+/** A small filter: method or basis text, two evidence facets and the core-treatment choice. */
 function LevelOfTheoryFilterFields({ filter, onChange }: {
     filter: LevelOfTheoryFilter
     onChange: (filter: LevelOfTheoryFilter) => void
@@ -203,10 +161,7 @@ function LevelOfTheoryFilterFields({ filter, onChange }: {
                 </div>
             </div>
             {filter.coreTreatment !== "" && (
-                <p className="note">
-                    Only levels that state their core treatment are listed. A level that does not say is not
-                    shown under either choice.
-                </p>
+                <p className="note">Only levels that state their core treatment are listed.</p>
             )}
         </div>
     )
@@ -242,20 +197,6 @@ function LevelOfTheoryTable({ state, filter }: { state: LoadState<{ records: Lev
                 <tbody>
                     {records.map((record) => (
                         <tr key={record.level_of_theory.level_of_theory_ref}>
-                            {/* Both method AND basis are inside the ONE link this row
-                                represents. `LevelOfTheoryLink` is the
-                                app-wide component every OTHER surface already uses to
-                                render a level of theory as one "method/basis" anchor into
-                                `/methods/:lotRef` (`SourceCalculationsTable.tsx`,
-                                `ProductLevels.tsx`, `CalculationDetailPage.tsx`, ...) --
-                                this index was the one place still hand-rolling a
-                                Method-only `<Link>` beside plain Basis text instead of
-                                reusing it. A single `<a>` per row (never two, never
-                                nested) keeps this a table-appropriate fix rather than
-                                porting `SpeciesBrowseRow`/`ReactionBrowseRow`'s full-card
-                                stretched-link mechanic, which those components need
-                                because a `<li class="card">` has many other clickable-
-                                looking children to disambiguate from; a `<td>` does not. */}
                             <td data-label="Level of theory" className="composite-label">
                                 <LevelOfTheoryLink levelOfTheory={record.level_of_theory} />
                                 {record.level_of_theory.composite_scheme && (
@@ -264,7 +205,7 @@ function LevelOfTheoryTable({ state, filter }: { state: LoadState<{ records: Lev
                             </td>
                             <td data-label="Core treatment">{record.level_of_theory.core_treatment ? words(record.level_of_theory.core_treatment) : "not recorded"}</td>
                             <td data-label="Spin treatment">{record.level_of_theory.spin_treatment ? words(record.level_of_theory.spin_treatment) : "not recorded"}</td>
-                            <td data-label="Calculations" className="num">{record.evidence_summary.calculation_usage_count}</td>
+                            <td data-label="Calculations" className="num"><Link to={`${levelOfTheoryPath(record.level_of_theory.level_of_theory_ref)}#lot-usage-heading`}>{record.evidence_summary.calculation_usage_count}</Link></td>
                             <td data-label="Dispersion">{record.level_of_theory.dispersion ?? NO_DISPERSION_TEXT}</td>
                             <td data-label="Solvent">{record.level_of_theory.solvent ?? NO_SOLVENT_TEXT}</td>
                         </tr>

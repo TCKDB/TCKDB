@@ -180,3 +180,16 @@ describe("CompositeSchemePage -- a TCKDB-written note", () => {
         expect(screen.getByText(/Defining paper: doi:10.1063\/1.478522/)).toBeVisible()
     })
 })
+
+describe("CompositeSchemePage -- kind row", () => {
+    it("shows the Kind row for a named method", async () => {
+        await load({ composite_scheme: core({ kind: "named_method", name: "CBS-QB3" }) })
+        expect(screen.getByText("Kind")).toBeVisible()
+    })
+
+    it("shows the recipe label and no Kind row for a user-built recipe", async () => {
+        await load({ composite_scheme: core(), terms: EXTRAPOLATION_TERMS, linear_in_energies: true })
+        expect(screen.queryByText("Kind")).not.toBeInTheDocument()
+        expect(screen.getByText("Recipe label")).toBeVisible()
+    })
+})

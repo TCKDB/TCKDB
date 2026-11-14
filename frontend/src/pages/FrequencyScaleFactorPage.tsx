@@ -1,26 +1,27 @@
-import { useParams } from "react-router-dom"
+import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
-import "../record-identity-header.css"
 import "../methods.css"
 import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
+import { Stored } from "../components/QuantityValue"
+import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
-import { CopyButton } from "../components/RefsDisclosure"
+import { ledeText } from "../domain/ledeText"
+import { scaleKindLabel } from "../domain/frequencyScaleFormat"
+import { recordRoute } from "../domain/recordRoute"
+import { usageIntro } from "../domain/usageIntro"
+import { deposited } from "../domain/quantityFormat"
 import { softwareLabel, toolReleaseLabel, words } from "../domain/provenanceFormat"
 import { useFrequencyScaleFactor } from "../hooks/useFrequencyScaleFactor"
 import type { FrequencyScaleFactorRecord, FrequencyScaleFactorUsage } from "../api/methodsApi"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
+const FREQUENCY_SCALE_FACTOR_LEDE = ledeText`A factor that scales computed vibrational frequencies.`
+
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
-/**
- * `/methods/frequency-scale-factors/:fsfRef` -- the thin standalone FSF
- * page, the link target for
- * `EntryStatmechSection.tsx`'s `FrequencyScaleFactorDetail`
- * and for every distinct provenance row a LOT page's own "Frequency scale
- * factor" disclosure lists.
- */
+/** `/methods/frequency-scale-factors/:fsfRef`: one deposited scale factor and the records that use it. */
 export default function FrequencyScaleFactorPage() {
     const { fsfRef = "" } = useParams<{ fsfRef: string }>()
     const state = useFrequencyScaleFactor(fsfRef)
@@ -39,33 +40,28 @@ export default function FrequencyScaleFactorPage() {
 }
 
 function FrequencyScaleFactorDetail({ record }: { record: FrequencyScaleFactorRecord }) {
-    useDocumentTitle("Frequency scale factor", String(record.frequency_scale_factor.value))
     const fsf = record.frequency_scale_factor
     const usage = record.used_by ?? []
+    const shown = deposited(fsf.value)
+    const valueText = shown?.value ?? String(fsf.value)
+    const kindText = scaleKindLabel(fsf.scale_kind)
+    const kind = `${kindText.charAt(0).toUpperCase()}${kindText.slice(1)} scale factor`
+    useDocumentTitle("Frequency scale factor", `${kind} ${valueText}`)
 
     return (
         <section className="conformer-page methods-page">
             <PageShell
-                crumbs={[{ label: "Methods", to: "/methods" }, { label: `Frequency scale factor ${fsf.value}` }]}
+                crumbs={[{ label: "Methods", to: "/methods" }, { label: kind }]}
                 contents="none"
                 identity={(
                     <header className="basin-header">
-                        <div className="record-identity-header">
-                            <div className="record-identity-kicker-row">
-                                <span className="t-kicker record-identity-kicker">Frequency scale factor · deposited evidence</span>
-                            </div>
-                            <h1 className="t-display-2 record-identity-title">
-                                {fsf.value} <span className="value-pill">{words(fsf.scale_kind)}</span>
-                            </h1>
-                            <div className="record-identity-known">
-                                <dl className="kv-list record-identity-facts">
-                                    <div>
-                                        <dt>Frequency scale factor ref</dt>
-                                        <dd className="record-identity-fact-copyable">
-                                            <code className="data">{fsf.frequency_scale_factor_ref}</code>
-                                            <CopyButton value={fsf.frequency_scale_factor_ref} label="Frequency scale factor ref" srLabel="value" />
-                                        </dd>
-                                    </div>
+                        <RecordIdentityHeader
+                            kicker="Frequency scale factor"
+                            lede={FREQUENCY_SCALE_FACTOR_LEDE}
+                            title={<>{kind} <span><Stored full={shown?.full}>{valueText}</Stored></span></>}
+                            ownRef={{ label: "Frequency scale factor ref", value: fsf.frequency_scale_factor_ref }}
+                            ownFacts={(
+                                <>
                                     <div>
                                         <dt>Level of theory</dt>
                                         <dd>
@@ -76,13 +72,11 @@ function FrequencyScaleFactorDetail({ record }: { record: FrequencyScaleFactorRe
                                     </div>
                                     <div><dt>Software</dt><dd>{softwareLabel(record.software_release) ?? "not recorded"}</dd></div>
                                     <div><dt>Workflow tool</dt><dd>{toolReleaseLabel(record.workflow_tool_release) ?? "not recorded"}</dd></div>
-                                    {/* No `fsf.note`: depositor free text (house rule). */}
-                                </dl>
-                            </div>
-                        </div>
+                                </>
+                            )}
+                        />
                         <dl className="kv-list basin-context">
                             <div><dt>Deposited</dt><dd>{isoDate(fsf.created_at)}</dd></div>
-                            <div><dt>Used by</dt><dd>{record.evidence_summary.statmech_usage_count} statmech records</dd></div>
                         </dl>
                     </header>
                 )}
@@ -98,7 +92,7 @@ function UsageSection({ rows, available, total }: { rows: FrequencyScaleFactorUs
         <section className="ledger-section" aria-labelledby="fsf-usage-heading">
             <SectionHeading
                 id="fsf-usage-heading"
-                intro={`${total} statmech record${total === 1 ? "" : "s"}.`}
+                intro={usageIntro(total, rows.length, "record", "records")}
             >
                 Used by
             </SectionHeading>
@@ -115,7 +109,11 @@ function UsageSection({ rows, available, total }: { rows: FrequencyScaleFactorUs
                             {rows.map((row) => (
                                 <tr key={row.record_ref}>
                                     <td data-label="Record type">{words(row.record_type)}</td>
-                                    <td data-label="Record"><span className="data">{row.record_ref}</span></td>
+                                    <td data-label="Record">
+                                        {recordRoute(row.record_type, row.record_ref)
+                                            ? <Link className="data" to={recordRoute(row.record_type, row.record_ref) ?? ""}>{row.record_ref}</Link>
+                                            : <span className="data">{row.record_ref}</span>}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>

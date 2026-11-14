@@ -102,7 +102,7 @@ describe("MethodsIndexPage core-treatment filter", () => {
         serve([])
         page()
         const table = await screen.findByRole("table", { name: "Levels of theory" })
-        const links = within(table).getAllByRole("link").map((a) => a.textContent)
+        const links = Array.from(table.querySelectorAll('td[data-label="Level of theory"] a')).map((a) => a.textContent)
         expect(links).toEqual([
             "CCSD(T)/cc-pCVTZ (core=frozen_core)",
             "CCSD(T)/cc-pCVTZ (core=all_electron)",

@@ -36,13 +36,6 @@
     color: var(--ink);
 }
 
-/* The shared pill is nowrap; a long pill inside the h1 (a level-of-theory name)
-   otherwise stretches the page past a 320px viewport. */
-.record-identity-title .record-identity-title-pill {
-    white-space: normal;
-    overflow-wrap: anywhere;
-}
-
 /* A fact whose value can run long (a multi-fragment unmapped SMILES) --
    spans the full facts grid instead of being squeezed into one
    `minmax(12rem, 1fr)` column alongside short facts like charge/multiplicity. */

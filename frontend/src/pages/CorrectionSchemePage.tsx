@@ -1,33 +1,34 @@
 import { GuideLink } from "../components/GuideLink"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
-import "../record-identity-header.css"
 import "../methods.css"
 import { CorrectionSchemeTable } from "../components/CorrectionSchemeTable"
 import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
+import { energyUnitLabel, ENERGY_DISPLAY_UNITS, type EnergyDisplayUnit } from "../domain/energyUnits"
+import { recordRoute } from "../domain/recordRoute"
+import { usageIntro } from "../domain/usageIntro"
+import { QuantityValue } from "../components/QuantityValue"
+import { deposited } from "../domain/quantityFormat"
+import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton } from "../components/RefsDisclosure"
+import { ledeText } from "../domain/ledeText"
 import { schemeKindLabel } from "../domain/correctionSchemeFormat"
+import { lotLabel } from "../api/scientificSchemas"
+import { levelOfTheoryPath } from "../domain/methodsLinks"
 import { softwareLabel, toolReleaseLabel, words } from "../domain/provenanceFormat"
 import { useCorrectionScheme } from "../hooks/useCorrectionScheme"
 import type { EnergyCorrectionSchemeRecord, EnergyCorrectionSchemeUsage } from "../api/methodsApi"
 import { LiteratureCitation } from "../components/LiteratureCitation"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
+const CORRECTION_SCHEME_LEDE = ledeText`Parameters that adjust computed energies, and the records they were applied to.`
+
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
-/**
- * `/methods/schemes/:ecsRef` -- the thin standalone scheme page
- * This is the link target from `CalculationDetailPage.tsx`'s
- * `EnergyCorrectionsSection` and from every LOT page's own "Correction
- * schemes" section, and the only
- * home a scheme with `level_of_theory_id IS NULL` (an `atom_hf`/
- * `atom_thermal`/`soc` scheme, none deposited yet) can ever have -- it is
- * not keyed to a level of theory at all, so it has no LOT-page section to
- * fold into.
- */
+/** `/methods/schemes/:ecsRef`: one deposited correction scheme, with its parameters and where it was applied. */
 export default function CorrectionSchemePage() {
     const { ecsRef = "" } = useParams<{ ecsRef: string }>()
     const state = useCorrectionScheme(ecsRef)
@@ -48,58 +49,31 @@ export default function CorrectionSchemePage() {
 function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeRecord }) {
     const scheme = record.energy_correction_scheme
     const usage = record.used_by ?? []
-    // Title from the archive's own controlled vocabulary (`scheme_kind`),
-    // never the depositor's free-text `scheme.name`, which would
-    // only repeat the kind back in the depositor's own
-    // spelling. `schemeKindLabel` is shared with
-    // `LevelOfTheoryPage.tsx`'s own per-LOT scheme heading
-    // (`domain/correctionSchemeFormat.ts`) so the two pages can never label
-    // the same scheme kind two different ways.
-    const title = schemeKindLabel(scheme.scheme_kind)
-    useDocumentTitle("Energy-correction scheme", title)
+    // Titled from the scheme kind and its software, never the depositor's own name for it.
+    const software = softwareLabel(record.software_release)
+    const title = software ? `${schemeKindLabel(scheme.scheme_kind)}, ${software}` : schemeKindLabel(scheme.scheme_kind)
+    const levelLabel = record.level_of_theory ? lotLabel(record.level_of_theory) : null
+    useDocumentTitle("Energy-correction scheme", levelLabel ? `${title} at ${levelLabel}` : title)
 
     return (
         <section className="conformer-page methods-page">
             <PageShell
-                crumbs={[{ label: "Methods", to: "/methods" }, { label: title }]}
+                crumbs={[
+                    { label: "Methods", to: "/methods" },
+                    ...(record.level_of_theory && levelLabel
+                        ? [{ label: levelLabel, to: levelOfTheoryPath(record.level_of_theory.level_of_theory_ref ?? "") }]
+                        : []),
+                    { label: title },
+                ]}
                 identity={(
                     <header className="basin-header">
-                        <div className="record-identity-header">
-                            <div className="record-identity-kicker-row">
-                                <span className="t-kicker record-identity-kicker">Energy-correction scheme · deposited evidence</span>
-                            </div>
-                            {/* Still no SOFTWARE in the TITLE here -- #439 (deployed)
-                                added `software_id`/`workflow_tool_release_id` to
-                                `energy_correction_scheme` and this page now renders
-                                both (facts list below), but this standalone page's
-                                own `<h1>` keeps titling from `scheme_kind` plus the
-                                level of theory it is tied to, unchanged. Software
-                                titles the PER-LOT box on `LevelOfTheoryPage.tsx`
-                                instead (never the depositor's `name`) -- a
-                                different surface with a different reason to need it:
-                                a LOT page can hold two schemes of different kinds
-                                at once, so software disambiguates two anonymous
-                                boxes the reader has not yet opened. This page is
-                                already keyed to one scheme; adding software to the
-                                heading here would repeat a fact the facts list
-                                already states, not disambiguate anything. */}
-                            <h1 className="t-display-2 record-identity-title">
-                                {title}
-                                {record.level_of_theory && (
-                                    <> <span className="value-pill record-identity-title-pill"><LevelOfTheoryLink levelOfTheory={record.level_of_theory} /></span></>
-                                )}
-                            </h1>
-                            <p><GuideLink to="correction-scheme" /></p>
-                            <div className="record-identity-known">
-                                <dl className="kv-list record-identity-facts">
-                                    <div>
-                                        <dt>Scheme ref</dt>
-                                        <dd className="record-identity-fact-copyable">
-                                            <code className="data">{scheme.energy_correction_scheme_ref}</code>
-                                            <CopyButton value={scheme.energy_correction_scheme_ref} label="Scheme ref" srLabel="value" />
-                                        </dd>
-                                    </div>
-                                    <div><dt>Scheme kind</dt><dd>{words(scheme.scheme_kind)}</dd></div>
+                        <RecordIdentityHeader
+                            kicker="Energy-correction scheme"
+                            lede={CORRECTION_SCHEME_LEDE}
+                            title={title}
+                            ownRef={{ label: "Scheme ref", value: scheme.energy_correction_scheme_ref }}
+                            ownFacts={(
+                                <>
                                     <div>
                                         <dt>Level of theory</dt>
                                         <dd>
@@ -108,42 +82,6 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                                 : <span className="record-identity-absent-inline">not tied to a specific level of theory</span>}
                                         </dd>
                                     </div>
-                                    {/* Software and workflow-tool release, Both are ALWAYS their own row, same
-                                        rule as the literature row below: an absence here
-                                        is a fact about this record that the reader needs
-                                        to see was checked, not a row that silently isn't
-                                        there. The two are null for genuinely different
-                                        reasons on the live archive today -- software
-                                        backfilled cleanly (both schemes: Gaussian);
-                                        workflow-tool release stayed null because only 10
-                                        of 416 calculations recorded one and no single
-                                        release could be derived unambiguously, so the
-                                        backfill deliberately left it absent rather than
-                                        guess -- but this page states each absence
-                                        plainly, without narrating a cause it cannot
-                                        verify from the API response alone.
-
-                                        NEVER a
-                                        link, even though `software_release_ref` resolves
-                                        to a real release. The route that
-                                        would resolve it, `GET /api/v1/software-releases/
-                                        {id}`, sits behind `require_auth_for_legacy_reads`
-                                        (`router.py`) -- measured against the live
-                                        deployment, it 401s anonymously while every
-                                        scientific read on this page returns 200, so a link
-                                        here would break for exactly the anonymous reader
-                                        this page serves. The ref still earns its own row
-                                        below, as copyable text -- visually distinct from
-                                        the real `Link`s elsewhere on this page (`Scheme
-                                        ref` above, `Level of theory` above that) -- the
-                                        same "copyable, not a link" shape
-                                        `CalculationDetailPage.tsx`'s own `RefsDisclosure`
-                                        refs use. `softwareLabel` still renders name/version
-                                        only, exactly like every other software_release
-                                        consumer in this app. `FrequencyScaleFactor` gained
-                                        the same release grain in its own sibling revision
-                                        and never links its ref either, for the same
-                                        auth-gated-route reason. */}
                                     <div>
                                         <dt>Frequency level</dt>
                                         <dd>
@@ -151,10 +89,6 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                                 ? <LevelOfTheoryLink levelOfTheory={record.frequency_level_of_theory} />
                                                 : "not recorded"}
                                         </dd>
-                                    </div>
-                                    <div>
-                                        <dt>Software</dt>
-                                        <dd>{softwareLabel(record.software_release) ?? "not recorded"}</dd>
                                     </div>
                                     {record.software_release?.software_release_ref && (
                                         <div>
@@ -165,41 +99,17 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                             </dd>
                                         </div>
                                     )}
-                                    <div>
-                                        <dt>Workflow-tool release</dt>
-                                        <dd>{toolReleaseLabel(record.workflow_tool_release) ?? "not recorded"}</dd>
-                                    </div>
-                                    {/* Fetched (`loadCorrectionScheme` always requests
-                                        `include=literature`) but never rendered before
-                                        this fix -- the archive was hiding a citation it
-                                        already had in hand. ALWAYS a row (unlike
-                                        `CalculationDetailPage.tsx`'s literature row,
-                                        which omits itself entirely when absent): the
-                                        live archive holds ZERO literature rows for
-                                        either deposited scheme today, so the reader
-                                        needs to see that this was checked and found
-                                        absent, not wonder whether the row was simply
-                                        left out. Absent for a DIFFERENT reason than the
-                                        two rows above (nobody has recorded one, not an
-                                        archive-side derivation the field couldn't
-                                        resolve) -- stated with the same plain "not
-                                        recorded" text, never "not applicable" (a claim
-                                        about the chemistry this archive cannot make). */}
+                                    <div><dt>Workflow-tool release</dt><dd>{toolReleaseLabel(record.workflow_tool_release) ?? "not recorded"}</dd></div>
                                     <div>
                                         <dt>Literature source</dt>
-                                        <dd>
-                                            {record.literature
-                                                ? <LiteratureCitation literature={record.literature} />
-                                                : "not recorded"}
-                                        </dd>
+                                        <dd>{record.literature ? <LiteratureCitation literature={record.literature} /> : "not recorded"}</dd>
                                     </div>
-                                    {/* No `scheme.note`: depositor free text (house rule). */}
-                                </dl>
-                            </div>
-                        </div>
+                                </>
+                            )}
+                        />
+                        <p><GuideLink to="correction-scheme" /></p>
                         <dl className="kv-list basin-context">
                             <div><dt>Deposited</dt><dd>{isoDate(scheme.created_at)}</dd></div>
-                            <div><dt>Applied to</dt><dd>{record.evidence_summary.applied_usage_count} entries</dd></div>
                         </dl>
                     </header>
                 )}
@@ -226,7 +136,7 @@ function UsageSection({ rows, available, total }: { rows: EnergyCorrectionScheme
         <section className="ledger-section" aria-labelledby="ecs-usage-heading">
             <SectionHeading
                 id="ecs-usage-heading"
-                intro={`${total} record${total === 1 ? "" : "s"}; first 50 listed.`}
+                intro={usageIntro(total, rows.length, "record", "records")}
             >
                 Applications
             </SectionHeading>
@@ -244,9 +154,9 @@ function UsageSection({ rows, available, total }: { rows: EnergyCorrectionScheme
                         <tbody>
                             {rows.map((row, index) => (
                                 <tr key={`${row.record_ref}-${index}`}>
-                                    <td data-label="Record"><span className="data">{row.record_ref}</span></td>
+                                    <td data-label="Record"><UsageRecord type={row.record_type} recordRef={row.record_ref} /></td>
                                     <td data-label="Role">{words(row.application_role)}</td>
-                                    <td data-label="Applied value" className="num">{row.applied_value} {row.applied_value_unit}</td>
+                                    <td data-label="Applied value" className="num"><QuantityValue value={deposited(row.applied_value, unitText(row.applied_value_unit))} /></td>
                                     <td data-label="Source calculation">
                                         {row.source_calculation_ref
                                             ? <Link className="data" to={`/calculations/${row.source_calculation_ref}`}>{row.source_calculation_ref}</Link>
@@ -262,4 +172,14 @@ function UsageSection({ rows, available, total }: { rows: EnergyCorrectionScheme
             )}
         </section>
     )
+}
+
+function unitText(unit: string | null | undefined): string | null {
+    if (!unit) return null
+    return (ENERGY_DISPLAY_UNITS as readonly string[]).includes(unit) ? energyUnitLabel(unit as EnergyDisplayUnit) : unit
+}
+
+function UsageRecord({ type, recordRef }: { type: string; recordRef: string }) {
+    const to = recordRoute(type, recordRef)
+    return to ? <Link className="data" to={to}>{recordRef}</Link> : <span className="data">{recordRef}</span>
 }
