@@ -166,7 +166,7 @@ def test_links_that_supply_no_structural_role_are_not_consulted(db_session, worl
     assert only(run(db_session, world.entry)).physically_eligible
 
 
-def test_k2_two_determinations_one_with_a_geometry_fail_now_compete_and_the_flagged_one_says_so(db_session, world):
+def test_k2_two_determinations_one_with_a_geometry_fail_compete_and_the_flagged_one_says_so(db_session, world):
     """Two determinations, one with a geometry fail, compete: the flagged determination is not excluded, so
     ``sole_eligible_candidate`` does not apply. Both are eligible and TCKDB ranks none above another:
     ``incomparable_alternatives``, nothing selected, with the geometry warning disclosed on

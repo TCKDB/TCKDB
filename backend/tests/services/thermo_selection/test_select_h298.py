@@ -331,7 +331,7 @@ def test_a_manifest_whose_eligibility_flag_contradicts_its_assessment_is_refused
         replay_decision(manifest)
 
 
-def test_a_manifest_whose_eligibility_and_assessment_were_both_edited_no_longer_replays(db_session, methane):
+def test_a_manifest_whose_eligibility_and_assessment_were_both_edited_does_not_replay(db_session, methane):
     tampered = json.loads(json.dumps(_scenario(db_session, methane).manifest))
     for c in tampered["candidates"]:
         if c["protocol"] and c["protocol"]["recipe"]["name"] == "g4":

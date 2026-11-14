@@ -595,7 +595,7 @@ function SelectField({ label, value, onChange, options }: {
  * strings verbatim -- never deduped, normalised, or run through `token()`
  * -- because two values that merely look alike (e.g. Gaussian's `"16"`
  * and `"Gaussian 16, Revision C.02"`) can match different record subsets;
- * collapsing them would hide a real data inconsistency (issue #305) behind
+ * collapsing them would hide a real data inconsistency behind
  * a tidy control.
  *
  * No option renders a count. The vocabulary endpoints do return one, but

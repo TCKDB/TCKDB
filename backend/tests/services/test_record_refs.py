@@ -137,7 +137,7 @@ def test_every_record_type_is_accounted_for():
     assert REF_BEARING_RECORD_TYPES & no_public_ref_column == set()
 
 
-def test_molecular_property_observation_now_resolves_a_real_ref(db_session):
+def test_molecular_property_observation_resolves_a_real_ref(db_session):
     """``molecular_property_observation`` has a ``public_ref``
  -- it is not an exception
     alongside ``applied_energy_correction`` (see the module docstring's

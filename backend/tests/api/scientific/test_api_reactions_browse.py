@@ -314,7 +314,7 @@ def test_default_sort_orders_records_by_review_rank_then_newest_and_not_by_evide
 # ---------------------------------------------------------------------------
 
 
-def test_single_reactant_smiles_still_behaves_as_before(client, db_session):
+def test_single_reactant_smiles_matches_by_containment(client, db_session):
     """A single repeated-param value matches the same records as a scalar
     filter would (the echoed filter *shape* is a one-item list, but the
     matched records and ``matched_direction`` are the same)."""

@@ -4062,7 +4062,7 @@ def test_read_schemas_require_origin_kind_rather_than_defaulting_it():
         field = model.model_fields[field_name]
         assert field.is_required(), (
             f"{model.__name__}.{field_name} has a default. A builder that "
-            "forgets to project the ADR 0010 origin kind would then publish "
+            "forgets to project the origin kind would then publish "
             "an unsupported provenance claim instead of failing."
         )
         # And the omission really does raise *for this field*. Asserting only

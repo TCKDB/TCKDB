@@ -240,7 +240,7 @@ describe("where a record can be seen", () => {
 
     it("locates a record that cannot be named at all", () => {
         // applied_energy_correction, 164 of the 385 and the only table in the
-        // archive with no public ref (task #253). "a correction on spe_1" is
+        // archive with no public ref. "a correction on spe_1" is
         // what a reviewer needs, and it does not wait on #253.
         expect(
             resolveRecordLocation(

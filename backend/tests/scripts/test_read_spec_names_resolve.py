@@ -163,7 +163,7 @@ _ALLOWED: dict[tuple[str, str], str] = {
         "CalculationScanCoordinateFullSummary",
     ): (
         "Deliberately names a shape that was never written. An earlier draft of "
-        "the scan-response block cited it; #167 corrected the block and added a "
+        "the scan-response block cited it; the block carries a "
         "'What actually shipped' note saying the split was collapsed into "
         "`ScanCoordinateSummary`. The note has to spell the old name, because a "
         "reader who grepped for it is exactly who the note is for."

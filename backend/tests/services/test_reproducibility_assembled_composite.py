@@ -137,7 +137,7 @@ def test_the_grade_follows_an_input_that_is_completed_later(db_session, deposit)
     assert _evaluate(db_session, calcs["cbs"], objects).grade is G.rerunnable
 
 
-def test_a_total_the_inputs_no_longer_give_blocks_auditable_even_when_every_input_is_rerunnable(db_session, deposit):
+def test_a_total_the_inputs_do_not_give_blocks_auditable_even_when_every_input_is_rerunnable(db_session, deposit):
     calcs, objects, user = deposit
     for key in ("spt", "spq"):
         _make_rerunnable(db_session, calcs[key], objects, user)

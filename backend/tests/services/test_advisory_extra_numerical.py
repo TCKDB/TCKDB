@@ -6,7 +6,7 @@ import pytest
 from app.db.models.kinetics import Kinetics
 from app.db.models.reaction import ReactionEntry, ReactionEntryStructureParticipant
 from app.services.consistency.kinetics import compare_kinetics
-from tests.services.test_phase_d_numerical import _reaction, _thermo
+from tests.services.test_advisory_numerical import _reaction, _thermo
 
 R = 8.31446261815324
 NA = 6.02214076e23

@@ -21,7 +21,7 @@ from tests.workflows.test_computed_reaction_upload import _ch4_scan_result_paylo
 _CONFORMERS = "/api/v1/uploads/conformers"
 
 
-def test_a_conformer_scan_primary_now_stores_its_points(client):
+def test_a_conformer_scan_primary_stores_its_points(client):
     payload = _hydrogen_conformer_payload()
     payload["calculation"]["type"] = "scan"
     payload["calculation"]["scan_result"] = _ch4_scan_result_payload(points=3)

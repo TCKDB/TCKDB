@@ -1047,7 +1047,7 @@ function GeometriesSection({
                         optimisation stage stores its input and output as
                         the same geometry row -- either because only ONE
                         geometry was ever deposited for that pass, or
-                        (#384, its backfill) because the starting geometry
+                        (its backfill) because the starting geometry
                         was extracted from a deposited ESS artifact and
                         happens to dedupe to the same stored row as the
                         output. Calling this "Input and output" implied a

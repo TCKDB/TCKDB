@@ -137,7 +137,7 @@ def test_arc_run_payload_uploads_cleanly(
         aec_index = _KNOWN_REFUSED_TS_BAC_TOTAL[case_id]
         assert resp.status_code == 422, (
             f"{case_id}: POST {url} returned {resp.status_code}, expected 422 "
-            f"(task #264: this payload's transition_state carries a "
+            f"(this payload's transition_state carries a "
             f"componentless, zero-valued bac_total, which is now refused).\n"
             f"response: {resp.text[:2000]}"
         )

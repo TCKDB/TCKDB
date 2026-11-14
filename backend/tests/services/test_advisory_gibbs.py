@@ -470,7 +470,7 @@ def test_d4_5_one_case_per_reason(db_session, case_id, fields, species, mutate, 
         assert (row["residual_kj_mol"] is None) is (row["reason"] is not None), source
 
 
-def test_undeclared_gibbs_can_no_longer_be_deposited(db_session):
+def test_undeclared_gibbs_cannot_be_deposited(db_session):
     """Why the unrecorded case above is a stored legacy row, not an upload."""
     with pytest.raises(CodedValueError) as caught:
         upload_thermo(db_session, points=[{"temperature_k": 500.0, "s_j_mol_k": 200.0, "g_kj_mol": -150.0}])

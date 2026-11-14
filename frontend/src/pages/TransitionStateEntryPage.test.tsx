@@ -523,7 +523,7 @@ describe("TransitionStateEntryPage", () => {
         )))
     }
 
-    // The structure assessment row (#723): the assessment's own answer to a fixed question, in plain words.
+    // The structure assessment row: the assessment's own answer to a fixed question, in plain words.
     it.each([
         [{ status: "assessed", outcome: "qualified_evidence", declared_targets: 1, contested_target_count: 0 },
             /a declared target has the evidence for a first-order saddle\. Scoped to this question\./],

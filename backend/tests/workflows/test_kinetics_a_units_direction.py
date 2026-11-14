@@ -86,7 +86,7 @@ def test_unstated_direction_refuses_units_matching_neither_side_and_says_how_to_
     assert error.context["reactant_molecularity"] == 1 and error.context["product_molecularity"] == 2
 
 
-def test_unstated_direction_with_equal_sides_is_checked_as_before() -> None:
+def test_unstated_direction_with_equal_sides_is_checked() -> None:
     same = {"reactants": (_H2,), "products": (_H2,)}
     KineticsUploadRequest.model_validate(_request(direction=None, a_units="per_s", **same))
     with pytest.raises(ValidationError, match="unimolecular"):

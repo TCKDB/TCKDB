@@ -427,7 +427,7 @@ def test_an_unreadable_in_scope_constant_is_refused_not_skipped(tmp_path, monkey
 # --- the real code paths ----------------------------------------------------------------
 
 
-def test_real_helper_code_the_guard_used_to_miss_is_now_followed() -> None:
+def test_real_helper_code_is_followed() -> None:
     """``is_break`` (an enum method), the TS context constants and the hidden-calculation helper are all reached."""
     ts_code, ts_constants = rubric_pins.reachable("computed_transition_state")
     assert any("trust_floor:_hidden_calculation_ids" in k for k in ts_code)

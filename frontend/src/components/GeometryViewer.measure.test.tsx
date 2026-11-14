@@ -482,7 +482,7 @@ describe("GeometryViewer — measurements section accessible name", () => {
     })
 })
 
-describe("GeometryViewer — isotope labels (#685)", () => {
+describe("GeometryViewer — isotope labels", () => {
     const WATER = [
         { atom_index: 1, element: "O", x: 0, y: 0, z: 0, isotope_mass_number: null },
         { atom_index: 2, element: "H", x: 0.76, y: 0.59, z: 0, isotope_mass_number: 2 },

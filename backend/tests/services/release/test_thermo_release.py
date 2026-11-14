@@ -6,7 +6,7 @@ from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.services.record_review import set_record_review_status
 from app.services.release.manifest import load_manifest, verify_release
 from app.workflows.thermo import persist_thermo_upload
-from tests.schemas.test_thermo_phase_a_contract import IDENTITY
+from tests.schemas.test_thermo_creation_strictness import IDENTITY
 from tests.services.release._attest import attest_thermo
 from tests.services.release.test_release_manifest import _publish_with_selection
 

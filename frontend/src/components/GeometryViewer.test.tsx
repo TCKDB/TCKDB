@@ -146,14 +146,14 @@ describe("GeometryViewer", () => {
         expect(calls.addModel[0][1]).toBe("xyz")
     })
 
-    it("hands 3Dmol H, not D/T, for hydrogen-isotope spellings (#732), leaving the count and comment lines alone", async () => {
+    it("hands 3Dmol H, not D/T, for hydrogen-isotope spellings, leaving the count and comment lines alone", async () => {
         const xyz = "3\nD comment\nC 0 0 0\nD 0 0 1.09\nT 0 1.09 0"
         render(<GeometryViewer atoms={CH_ATOMS} formula="CHD" xyzText={xyz} />)
         await waitFor(() => expect(calls.addModel).toHaveLength(1))
         expect(calls.addModel[0][0]).toBe("3\nD comment\nC 0 0 0\nH 0 0 1.09\nH 0 1.09 0")
     })
 
-    it("rewrites lowercase d/t too, and leaves multi-letter symbols alone (#732)", async () => {
+    it("rewrites lowercase d/t too, and leaves multi-letter symbols alone", async () => {
         const xyz = "9\n\nd 0 0 0\nt 0 0 1\nTi 1 0 0\nDy 2 0 0\nTI 3 0 0\nDY 4 0 0\nD1 5 0 0\nT1 6 0 0\nH 7 0 0"
         render(<GeometryViewer atoms={CH_ATOMS} formula="X" xyzText={xyz} />)
         await waitFor(() => expect(calls.addModel).toHaveLength(1))
@@ -162,7 +162,7 @@ describe("GeometryViewer", () => {
         )
     })
 
-    it("keeps the isotope labels 2H/3H after the symbol rewrite (#732)", async () => {
+    it("keeps the isotope labels 2H/3H after the symbol rewrite", async () => {
         const atoms = [
             { atom_index: 1, element: "C", x: 0, y: 0, z: 0 },
             { atom_index: 2, element: "H", isotope_mass_number: 2, x: 0, y: 0, z: 1.09 },
@@ -178,7 +178,7 @@ describe("GeometryViewer", () => {
         expect(calls.addLabel.map((call) => call[0])).toEqual(["C", "²H", "³H"])
     })
 
-    it("also rewrites D in the synthesized fallback block (#732)", async () => {
+    it("also rewrites D in the synthesized fallback block", async () => {
         const atoms = [
             { atom_index: 1, element: "C", x: 0, y: 0, z: 0 },
             { atom_index: 2, element: "D", x: 0, y: 0, z: 1.09 },
@@ -715,7 +715,7 @@ describe("GeometryViewer", () => {
  * Theme-aware 3D canvas background. This is 3Dmol's own JS-level
  * `backgroundColor` (`createViewer` config, and later `setBackgroundColor()`
  * on the live viewer) — not a CSS property, so a `.css`-file-only fix
- * (owned by the parallel `frontend/theme-tokens` PR, #296) cannot reach it.
+ * (owned by the parallel `frontend/theme-tokens` PR) cannot reach it.
  * This component reads the SAME `data-theme`/`prefers-color-scheme`
  * convention #296 established for CSS, directly in TypeScript, without
  * editing any file #296 owns.

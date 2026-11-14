@@ -353,7 +353,7 @@ def test_exact_rejects_the_partial_query_contains_accepts(db_session):
     assert len(search_reactions(db_session, whole).records) == 1
 
 
-def test_exact_reproduces_the_old_result_for_a_full_query(db_session):
+def test_exact_returns_the_reaction_for_a_full_query(db_session):
     """The migration path for callers who relied on the old default.
 
     A full two-sided query returned exactly this reaction before ``match``

@@ -414,7 +414,7 @@ def test_no_statmech_citation_refusal_discloses_a_row_id(client, db_session) -> 
             _CONFORMER_SELECTION_MISMATCH,
         ),
     ]
-    assert len(cases) == 2, "both kinetics-side citations #195 coded"
+    assert len(cases) == 2, "both kinetics-side citations carrying a code"
 
     forbidden = (
         str(entries["oh"].id),

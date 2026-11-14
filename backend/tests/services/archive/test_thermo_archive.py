@@ -6,7 +6,7 @@ from app.db.models.thermo import Thermo, ThermoNASA
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.services.archive import restore_archive, write_archive
 from app.workflows.thermo import persist_thermo_upload
-from tests.schemas.test_thermo_phase_a_contract import IDENTITY
+from tests.schemas.test_thermo_creation_strictness import IDENTITY
 from tests.services.archive.test_archive import _empty_archive_tables
 
 

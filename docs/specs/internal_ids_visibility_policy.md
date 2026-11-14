@@ -409,8 +409,8 @@ exercises an internal helper, not a public response shape).
 
 | File | Current ID dependency | Phase D.1 action |
 |---|---|---|
-| `test_phase_b_refs.py` | Asserts both `*_id` and `*_ref` present and matching per model | **K** — Phase B regression. Continue asserting ref/id pairs (this is the canonical contract). Add `include=["internal_ids"]` to its calls so the responses still carry both. |
-| `test_phase_c_handles.py` | None (handle-parsing unit tests) | **K** — no change needed. |
+| `test_read_endpoint_refs.py` | Asserts both `*_id` and `*_ref` present and matching per model | **K** — Phase B regression. Continue asserting ref/id pairs (this is the canonical contract). Add `include=["internal_ids"]` to its calls so the responses still carry both. |
+| `test_handle_resolution.py` | None (handle-parsing unit tests) | **K** — no change needed. |
 | `test_search_species.py` | Asserts integer `species_id`, `species_entry_id` in records | **M** — switch to `species_ref` / `species_entry_ref`. |
 | `test_search_reactions.py` | Asserts `reaction_id`, `reaction_entry_id`, `species_entry_id` | **M**. |
 | `test_search_thermo.py` | Asserts `thermo_id`, `species_entry_id` | **M**. |
@@ -424,7 +424,7 @@ exercises an internal helper, not a public response shape).
 
 | File | Current ID dependency | Phase D.1 action |
 |---|---|---|
-| `test_api_phase_c_refs.py` | Asserts both integer and ref forms (Phase C acceptance) | **K** — Phase C contract. May need `include=["internal_ids"]` on a subset to keep the id-form assertions; most assertions already prefer refs. |
+| `test_api_ref_handles.py` | Asserts both integer and ref forms (Phase C acceptance) | **K** — Phase C contract. May need `include=["internal_ids"]` on a subset to keep the id-form assertions; most assertions already prefer refs. |
 | `test_api_species_search.py` | Asserts `species_id` etc. in response | **M**. |
 | `test_api_reaction_search.py` | Asserts `reaction_id`, `reaction_entry_id` | **M**. |
 | `test_api_species_thermo.py` | Asserts `species_entry_id` in envelope and records | **M**. |
@@ -433,7 +433,7 @@ exercises an internal helper, not a public response shape).
 | `test_api_thermo_search.py` | Asserts `thermo_id`, `species_entry_id` | **M**. |
 | `test_api_kinetics_search.py` | Asserts `kinetics_id`, `reaction_entry_id` | **M**. |
 | `test_api_reaction_full.py` | Asserts `reaction_entry_id`, `species_entry_id`, `transition_state_entry_id`, `calculation_id` | **M**. |
-| (new file) `test_api_phase_d_internal_ids.py` | n/a | **C** — new file. Verifies: (1) default response omits integer ids; (2) `include=internal_ids` restores them when allowed; (3) `include=internal_ids` is silently dropped (no 4xx) in the hosted default; (4) `include=all` does **not** include `internal_ids`. |
+| (new file) `test_api_internal_id_visibility.py` | n/a | **C** — new file. Verifies: (1) default response omits integer ids; (2) `include=internal_ids` restores them when allowed; (3) `include=internal_ids` is silently dropped (no 4xx) in the hosted default; (4) `include=all` does **not** include `internal_ids`. |
 
 ### Client tests (`clients/python/tests/`)
 
@@ -550,7 +550,7 @@ If OpenAPI consumers complain, revisit (c) for the next major version.
    alongside the per-element `*_id` keys; object-array siblings stay.
 
 7. **Tests.**
-   - Add `test_api_phase_d_internal_ids.py`: asserts default shape
+   - Add `test_api_internal_id_visibility.py`: asserts default shape
      omits `*_id` and bare arrays; `include=internal_ids` restores
      them when allowed; `include=all` does not include
      `internal_ids`; request echo never leaks resolved IDs.

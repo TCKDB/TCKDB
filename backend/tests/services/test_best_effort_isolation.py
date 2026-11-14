@@ -188,7 +188,7 @@ class TestIsolatedBestEffort:
 class TestParameterExtractionWriteHalf:
     """Site 5 proper: the guard existed, it just did not cover the writes."""
 
-    def test_a_database_error_in_the_write_half_no_longer_escapes(
+    def test_a_database_error_in_the_write_half_does_not_escape(
         self, db_engine, committed_scratch, monkeypatch
     ) -> None:
         """``_extract_safe`` must survive a failure past the parse layer.

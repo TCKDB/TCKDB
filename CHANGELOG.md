@@ -32,6 +32,10 @@ dataset must never require a code release.
 - **Behaviour:** the scientific check register lists each check's code, rule, tier, enforcement and repair; justification text was removed. The `adr` and `tier_rationale` fields and the enforcement `note` text are gone from the register and its generated document, and the producer contract quotes the shorter text. Checks and entry numbers are unchanged.
 - **Schema and migration:** none. No new environment variable. **Versions:** `tckdb-schemas` 0.174.1.
 
+## Script help, test names and site text describe behaviour only (Unreleased)
+
+Script `--help` and printed text, test names and assertion messages, and site wording describe current behaviour without design-record, issue or date references. `bulk_load_arc.py` takes its source directory from `--src` or `TCKDB_ARC_RUNS_DIR` instead of a built-in path. `tckdb-client` 0.207.0 changes help text only.
+
 ## Decision narrative removed from the API, workflows and chemistry modules (Unreleased)
 
 - **Behaviour:** none. Comments and docstrings in `backend/app/api`, `workflows`, `chemistry`, `importers` and related modules now state behaviour only. Route descriptions in the OpenAPI document and `PRODUCER_CONTRACT.md` are reworded accordingly.

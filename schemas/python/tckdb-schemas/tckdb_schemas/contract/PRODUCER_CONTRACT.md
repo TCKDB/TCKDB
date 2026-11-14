@@ -225,7 +225,7 @@ to your write:
 
 Further reading: `backend/docs/specs/ingestion_submission_model.md`
 (submissions), `docs/contribution-bundles/format.md` (bundles),
-`docs/adr/0008-validation-tiers-definitions-block-expectations-warn.md`
+`docs/guides/scientific_check_register.md`
 (why some checks refuse and others only warn),
 `docs/guides/scientific_check_register.md` (the chemistry positions TCKDB
 enforces), `docs/guides/api_vocabulary.md` (every code and token).

@@ -89,8 +89,8 @@ def test_chemkin_export_discloses_transcribed_rates_if_it_emits_them(serializer:
     assert any(marker in code for marker in _ORIGIN_MARKERS), (
         f"{serializer.name} now reads network kinetics but never reads the "
         "solve's origin kind, so a `reported` solve's rates would enter a "
-        "mechanism file indistinguishable from rates this database derived "
-        "(ADR 0010). Decide explicitly: annotate with a `!` comment beside the "
+        "mechanism file indistinguishable from rates this database derived. "
+        "Decide explicitly: annotate with a `!` comment beside the "
         "rate (the file already emits `! SMILES=... ref=...` per species), "
         "exclude reported solves unless requested, or gate them behind an "
         "include token. Then update this test to assert whichever you chose."

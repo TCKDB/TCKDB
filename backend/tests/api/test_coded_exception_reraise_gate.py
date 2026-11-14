@@ -194,8 +194,7 @@ JUDGED_SITES: dict[str, str] = {
         "`unique_conflict` -- a real code that says less than the sentence "
         "it replaced, because a duplicate username and a duplicate email "
         "are the same SQLSTATE -- and that the honest repair was a code of "
-        "its own, filed separately rather than smuggled in. #225 is that "
-        "repair: the site now reads `exc.orig.diag.constraint_name` and "
+        "its own. The site now reads `exc.orig.diag.constraint_name` and "
         "raises `username_taken` or `email_taken`, so it mints a *stricter* "
         "code than the handler it bypasses rather than losing one. "
         "Still listed, and still a replaced message, because the scan's "
@@ -225,7 +224,7 @@ JUDGED_SITES: dict[str, str] = {
         "409 (backend/app/api/code_catalogue.py) naming exactly what "
         "happened. What a client loses: nothing worth having -- the "
         "alternative is a raw driver message under an uncatalogued code. "
-        "This is the same shape #225's `email_taken`/`username_taken` "
+        "This is the same shape as the `email_taken`/`username_taken` site, "
         "judged, not the shape that rule warns about: there is one "
         "constraint this flush can violate, so the classification is not a "
         "guess."
@@ -473,7 +472,7 @@ class TestTheSweepIsComplete:
         assert len(replacing) >= _REPLACING_SITES_THE_SCAN_MUST_SEE, (
             f"the scan classifies only {len(replacing)} handlers as replacing "
             f"the caught message, below the floor of "
-            f"{_REPLACING_SITES_THE_SCAN_MUST_SEE} measured 2026-08-17. Either "
+            f"{_REPLACING_SITES_THE_SCAN_MUST_SEE}. Either "
             "a judged site was genuinely repaired -- lower the floor and say "
             "so -- or the classifier has stopped recognising the shape, in "
             "which case every assertion in this class passes having checked "
@@ -558,7 +557,7 @@ class TestTheSweepIsComplete:
         assert path not in replaced_by_file, (
             f"{path} has regrown a handler that catches an exception and "
             "raises an HTTPException with a new message -- the exact shape "
-            "#212 repaired, twice in one function"
+            "of a handler that rewrites a caught exception"
         )
 
 
@@ -842,7 +841,7 @@ class TestTheAbsorbingScanSeesWhatItIsWrittenOver:
         )
         assert _caught_names(handler) & ABSORBING_CATCHES
         assert not _reraises_the_original(handler), (
-            "the exact shape #212 removed from the artifact-integrity route "
+            "the exact shape removed from the artifact-integrity route "
             "was classified as safe; the gate would then permit its return"
         )
 

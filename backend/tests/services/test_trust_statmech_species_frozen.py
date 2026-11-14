@@ -128,7 +128,7 @@ def test_the_scenario_list_is_not_empty_and_every_scenario_has_a_frozen_expectat
 
 
 @pytest.mark.parametrize("name", sorted(SCENARIOS))
-def test_a_species_owned_statmech_evaluates_exactly_as_it_did_before_the_change(db_session, name):
+def test_a_species_owned_statmech_evaluates_to_its_frozen_result(db_session, name):
     statmech = SCENARIOS[name](db_session)
     assert statmech.species_entry_id is not None and statmech.transition_state_entry_id is None
     evaluation = evaluate_computed_statmech(db_session, statmech.id)

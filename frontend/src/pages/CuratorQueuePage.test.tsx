@@ -345,7 +345,7 @@ describe("how a row names the record it concerns", () => {
         meIs(admin)
         // Includes the row that cannot be named: that is where a row id is
         // most tempting as a fallback, and where #479 put one last time.
-        // Also includes a container-shaped row (#493): the sweep otherwise
+        // Also includes a container-shaped row: the sweep otherwise
         // only ever exercises the pre-#493 shape, which is the exact
         // seed-omission pattern that let #492's original complaint ship
         // twice.
@@ -1371,7 +1371,7 @@ describe("the rubric a finding's review was made under", () => {
         expect(lines.map((l) => l.getAttribute("data-state"))).toEqual(["inputs_unchecked", "stale"])
         expect(lines[0]).toHaveTextContent("Reviewed under rubric computed kinetics, version 1 (the current version).")
         expect(lines[0]).not.toHaveTextContent(/assess/i)
-        expect(lines[1]).toHaveTextContent("Reviewed under rubric computed kinetics (stamped before the 2026-10 versioning reset)")
+        expect(lines[1]).toHaveTextContent("Reviewed under rubric computed kinetics (no version recorded)")
         expect(lines[1]).toHaveTextContent("It has not been re-reviewed under the current version.")
         expect(within(table).getAllByText("Stale")).toHaveLength(1)
     })

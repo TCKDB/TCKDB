@@ -143,7 +143,7 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                         only, exactly like every other software_release
                                         consumer in this app. `FrequencyScaleFactor` gained
                                         the same release grain in its own sibling revision
-                                        (#464) and never links its ref either, for the same
+                                        and never links its ref either, for the same
                                         auth-gated-route reason. */}
                                     <div>
                                         <dt>Frequency level</dt>

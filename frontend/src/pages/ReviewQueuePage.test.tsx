@@ -322,7 +322,7 @@ describe("the page says which review this is", () => {
     })
 })
 
-describe("what a subject block shows (task #269, defect #4: nothing said what the chemistry was)", () => {
+describe("what a subject block shows", () => {
     it("does not print a species entry's own ref twice inside its own block (defect #1)", async () => {
         // A species deposit gets a
         // species_entry review row, that row is its own subject, and it
@@ -553,7 +553,7 @@ describe("what a subject block shows (task #269, defect #4: nothing said what th
         expect(heading).not.toHaveTextContent(/^Reaction entry/)
     })
 
-    it("shows each participant's formula ONCE, not its SMILES and formula both (review #492 follow-up)", async () => {
+    it("shows each participant's formula ONCE, not its SMILES and formula both", async () => {
         // The default <ReactionEquation> rendering shows BOTH -- "[CH3]
         // (CH3) + [H] (H) ⇌ C (CH4)" -- which review of #492 caught as
         // noise here: a bare "C" next to "(CH4)" reads as a typo, and the
@@ -1489,7 +1489,7 @@ describe("paging counts subjects, never records", () => {
  * regressions-to-avoid, ported to subject/record
  * fixtures instead of the old flat rows.
  */
-describe("guarantees carried over from the flat queue (review #492, finding 4)", () => {
+describe("guarantees carried over from the flat queue", () => {
     it("opens every queue link in a new tab, safely (rel carries both noopener and noreferrer)", async () => {
         // Scoped to the subject list, not the whole page: the lede's own
         // "Machine findings" link is deliberate ordinary in-app

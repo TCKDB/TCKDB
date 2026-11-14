@@ -219,7 +219,7 @@ describe("public archive shell", () => {
         const user = userEvent.setup(); render(<App />)
         await user.type(await screen.findByLabelText("Molecule: name, formula, SMILES, InChI, InChIKey or TCKDB ref"), "smiles:CCO")
         await user.click(screen.getByRole("button", { name: "Search" }))
-        // The structure-search endpoint never returns a formula (#251): the
+        // The structure-search endpoint never returns a formula: the
         // row leads with SMILES instead and says so honestly, rather than
         // leaving a blank or falling back to the ref.
         expect(screen.getByText("formula not available")).toBeVisible()

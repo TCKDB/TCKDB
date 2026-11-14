@@ -729,7 +729,7 @@ function spinContext(match: SearchMatch) {
  * the parenthesised follower, because two isomers can share a formula and
  * only the structure string tells them apart.
  *
- * `formula` is nullable (#251: it is computed, and can legitimately come
+ * `formula` is nullable (it is computed, and can legitimately come
  * back null) and structure-search matches never carry one at all -- see
  * `scientificApi.ts`'s `SearchMatch.formula`. Either way this says so
  * explicitly ("formula not available") rather than leaving a blank where

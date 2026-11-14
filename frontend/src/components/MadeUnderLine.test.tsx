@@ -31,7 +31,7 @@ describe("MadeUnderLine", () => {
             <MadeUnderLine madeUnder={{ ...base, assessed_version: 0, current_version: 1, state: "stale", stale_reason: "rubric_version" }} />,
         )
         expect(screen.getByText("Stale")).toBeVisible()
-        expect(screen.getByText(/stamped before the 2026-10 versioning reset/)).toBeVisible()
+        expect(screen.getByText(/no version recorded/)).toBeVisible()
         expect(container.textContent).not.toMatch(/\bv0\b/)
     })
 

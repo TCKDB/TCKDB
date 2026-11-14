@@ -104,7 +104,7 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle"
  * collapsed cluster of same-type records (two corrections on one
  * species) expands so each one is still reached and judged individually.
  * A per-subject bulk approve is a deliberately separate, later change
- * (task #270): it interacts with permanent data freezing and needs its
+ *: it interacts with permanent data freezing and needs its
  * own design, and nothing here offers it.
  */
 
@@ -804,7 +804,7 @@ export default function ReviewQueuePage() {
      * there is more than one (defect #2: two corrections on one species
      * rendering as an unexplained duplicate). The collapsed line still
      * expands to every individual record's own status and Review action
-     * -- a per-subject bulk approve is explicitly NOT this (task #270).
+     * -- a per-subject bulk approve is explicitly NOT this.
      */
     function renderRecordGroup(
         groupKey: string,

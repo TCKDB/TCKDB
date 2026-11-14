@@ -289,7 +289,7 @@ def test_a_locator_matching_exactly_one_selection_is_still_accepted(
 # ---------------------------------------------------------------------------
 
 
-def test_the_two_halves_no_longer_share_a_status_or_a_code(
+def test_the_two_halves_do_not_share_a_status_or_a_code(
     client, db_session
 ) -> None:
     """One assertion over both, so collapsing them cannot pass.

@@ -47,7 +47,7 @@ trigger, preferred-record selection, trust or certification mutation exists.
 ## Independent review and actual mutations (D0–D3)
 
 An independent review read the initial contracts, authored
-`test_phase_d_numerical.py` and performed temporary mutations with restoration
+`test_advisory_numerical.py` and performed temporary mutations with restoration
 in `try/finally`, checking production bytes after restoration. Expectations
 use independent analytical formulas and SI constants, not the production
 Cantera wrapper. All suites assert nonempty evaluated rows.

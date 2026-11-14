@@ -164,7 +164,7 @@ export function statusClass(status: string): string | null {
 }
 
 /**
- * The subject-grouped queue (task #269): `GET /api/v1/record-reviews/queue`.
+ * The subject-grouped queue: `GET /api/v1/record-reviews/queue`.
  *
  * Source of truth: `backend/app/schemas/entities/record_review.py`'s
  * `ReviewQueuePageRead`/`ReviewQueueSubjectRead`/

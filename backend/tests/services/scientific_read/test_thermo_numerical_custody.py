@@ -14,7 +14,7 @@ from app.services.contribution_bundle_export import _thermo_to_upload
 from app.services.scientific_read.chemkin_serialize import _nasa_card
 from app.services.scientific_read.export import SelectedThermo
 from app.workflows.thermo import persist_thermo_upload
-from tests.schemas.test_thermo_phase_a_contract import IDENTITY, interval
+from tests.schemas.test_thermo_creation_strictness import IDENTITY, interval
 
 
 def reduced(model, temperature):

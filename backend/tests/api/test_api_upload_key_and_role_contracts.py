@@ -348,7 +348,7 @@ class TestTheConformerNamespaceIsNotTheLabel:
     ``key`` this same request already puts on its calculations.
     """
 
-    def test_a_label_is_no_longer_a_reference(self, client):
+    def test_a_label_is_not_a_reference(self, client):
         """The old spelling refuses instead of resolving."""
         payload = _conformer_payload(
             "conf-label-not-key",
