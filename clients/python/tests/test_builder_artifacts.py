@@ -1,4 +1,4 @@
-"""Tests for the Phase-7 two-phase artifact upload path.
+"""Tests for the two-phase artifact upload path.
 
 The artifact subsystem deliberately splits scientific upload from
 file transport: the bundle endpoint creates calculation rows, then a

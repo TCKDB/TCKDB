@@ -1,4 +1,4 @@
-"""Local-validation tests for the Phase-4 :class:`Statmech` builder.
+"""Local-validation tests for the :class:`Statmech` builder.
 
 These tests stay inside the builder layer — they never hit the network
 and never assemble a ``ComputedSpeciesUpload`` /

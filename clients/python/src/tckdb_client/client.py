@@ -894,7 +894,7 @@ class TCKDBClient:
             # A JSON endpoint that answered 2xx with a body that is not JSON
             # did not answer as the API. Returning the text as ``data`` (the
             # old behaviour) handed callers an HTML string where they index a
-            # dict, and they failed far away with a bare TypeError (#568).
+            # dict, and they failed far away with a bare TypeError.
             # An empty body (204, or a 200 with no content) is still ``None``.
             if text is not None:
                 raise _unexpected_response_error(response, self._base_url)
@@ -1079,7 +1079,7 @@ class TCKDBClient:
           raw-dict form. ``endpoint`` accepts a short name from
           :data:`UPLOAD_ENDPOINTS`, an explicit path starting with
           ``/``, or an absolute URL.
-        - ``client.upload(builder_object)`` — Phase-1 builder form.
+        - ``client.upload(builder_object)`` — builder form.
           ``builder_object`` must expose ``upload_kind`` (matching a
           key in :data:`UPLOAD_ENDPOINTS`) and a ``to_payload()``
           method. The builder is asked once for its payload, which is

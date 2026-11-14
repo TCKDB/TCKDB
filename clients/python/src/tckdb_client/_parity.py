@@ -902,10 +902,10 @@ _NOT_APPLICABLE: tuple[tuple[str, str, str], ...] = tuple(
         # Both gated on ``require_admin`` in
         # ``backend/app/api/routes/admin.py``: an operator reads whether
         # the object store is refusing writes, and an operator declares
-        # the condition resolved. Arrived with #218 and were untriaged
-        # here until now -- this workflow runs only on ``clients/python``
-        # and ``schemas/`` paths, and #218 touched neither, so the drift
-        # sat green until the next pull request that did.
+        # the condition resolved. This workflow runs only on
+        # ``clients/python`` and ``schemas/`` paths, so a backend-only
+        # change to these routes leaves the drift green until the next
+        # pull request that touches those paths.
         ("GET", "/api/v1/admin/artifact-storage/capacity"),
         ("POST", "/api/v1/admin/artifact-storage/capacity/clear"),
         (

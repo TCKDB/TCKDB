@@ -213,7 +213,7 @@ clients/python/src/tckdb_client/
         calculation.py       # Calculation, Calculation.opt/freq/sp
         reaction.py          # ChemReaction, TransitionState
         kinetics.py          # Kinetics + factories
-        thermo.py            # Thermo (Phase 3)
+        thermo.py            # Thermo
         uploads.py           # ComputedSpeciesUpload, ComputedReactionUpload
         validation.py        # shared local-validation helpers + error type
 ```
@@ -357,7 +357,7 @@ expand them in coordination with the server schema.
   the backend grows the matching field. Producer conventions for
   what belongs in a note (and what does not) live in
   [`calculation_note_conventions.md`](calculation_note_conventions.md).
-- **Deferred** — `Calculation.irc(...)`, `Calculation.scan(...)`, `Calculation.neb(...)`, `Calculation.path_search(...)` (Phase 3+).
+- **Deferred** — `Calculation.irc(...)`, `Calculation.scan(...)`, `Calculation.neb(...)`, `Calculation.path_search(...)`.
 - **Local validation** —
   - opt requires `output_geometry` and `final_energy_hartree`;
   - freq requires `input_geometry` and a non-empty `frequencies_cm1` list;
@@ -416,7 +416,7 @@ expand them in coordination with the server schema.
   `source_calculations` rewritten to `KineticsSourceCalculationIn` rows
   using local keys.
 
-### 8.7d Upload introspection helpers (Phase 8 — shipped)
+### 8.7d Upload introspection helpers (shipped)
 
 `ComputedSpeciesUpload` and `ComputedReactionUpload` expose the same
 four public helpers:
@@ -444,7 +444,7 @@ state (`_species_calc_pairs`, `_species_thermo_pairs`, etc.). The
 public iteration order is part of the public-beta surface; see the
 stability policy.
 
-### 8.7c Two-phase artifact upload (Phase 7 — shipped)
+### 8.7c Two-phase artifact upload (shipped)
 
 Files (input decks, output logs, checkpoints) attach via
 `Calculation.add_artifact(path, kind, *, label?, sha256?, bytes?)`.
@@ -504,7 +504,7 @@ attached artifacts, so any producer pipeline that escalates warnings
 to errors during dev catches "I attached artifacts but never called
 the plan" cleanly.
 
-### 8.7b Emission diagnostics (Phase 6 — shipped)
+### 8.7b Emission diagnostics (shipped)
 
 The builder layer accepts some fields for forward compatibility
 before the backend bundle schemas carry them. Validation by itself
@@ -540,7 +540,7 @@ the bundle schemas grow the missing fields, the assemblers flip
 emission on and the corresponding diagnostics simply stop appearing,
 no API change required.
 
-### 8.8c `Transport` (Phase 5 — shipped, bundle wiring deferred)
+### 8.8c `Transport` (shipped, bundle wiring deferred)
 
 - **Purpose** — one transport-properties block for a species, mirrors
   the inline shape from
@@ -568,7 +568,7 @@ no API change required.
   the wire. When the bundle schemas grow the field, flip the
   assembler in one place — the validation surface is already pinned.
 
-### 8.8b `Statmech` (Phase 4 — shipped)
+### 8.8b `Statmech` (shipped)
 
 - **Purpose** — one statmech block attached to a species. Targets the
   shared subset between `StatmechInBundle` (computed-species) and
@@ -601,7 +601,7 @@ no API change required.
   computed-reaction wire; top-level `payload["statmech"]` on the
   computed-species wire.
 
-### 8.9 `Thermo` (Phase 3B — shipped)
+### 8.9 `Thermo` (shipped)
 
 - **Purpose** — one thermo block attached to a species. Targets the
   backend's `BundleThermoIn` (computed-reaction) today; a future
@@ -635,9 +635,8 @@ no API change required.
 - **Purpose** — top-level upload object for `POST /uploads/computed-species`.
 - **Required** — `species: Species`, `calculations: list[Calculation]`.
 - **Optional** — `primary_calculation: Calculation` (inferred as the first
-  opt when omitted), `thermo: Thermo | None` (Phase 3C), `statmech:
-  Statmech | None` (Phase 4), `transport: Transport | None` (Phase 5 —
-  validated locally, not yet emitted on the bundle wire), `note: str |
+  opt when omitted), `thermo: Thermo | None`, `statmech:
+  Statmech | None`, `transport: Transport | None` (validated locally, not yet emitted on the bundle wire), `note: str |
   None`. Multiple thermo / statmech / transport records per species,
   and `applied_energy_corrections`, are deferred.
 - **Local validation** — `primary_calculation in calculations`; every
@@ -658,8 +657,8 @@ no API change required.
   `Calculation`s, but a pair may not repeat.
 
 **Per-endpoint distinction with `ComputedReactionUpload`.** The same
-`Thermo` builder is reused by `ComputedReactionUpload.species_thermo`
-(Phase 3B), but the computed-reaction backend's `BundleThermoIn`
+`Thermo` builder is reused by `ComputedReactionUpload.species_thermo`,
+but the computed-reaction backend's `BundleThermoIn`
 schema does **not** carry `source_calculations`. The builder validates
 references locally either way; only the computed-species emission
 path turns the `source_calculations` wire field on (via
@@ -671,11 +670,10 @@ catches up, flip the same flag at the computed-reaction emission site.
 - **Purpose** — top-level upload object for `POST /uploads/computed-reaction`.
 - **Required** — `reaction: ChemReaction`.
 - **Optional** — `calculations: list[Calculation]` (TS-side bucket),
-  `species_calculations: dict[Species, list[Calculation]]` (Phase 3A —
-  reactant/product bucket), `species_thermo: dict[Species, Thermo]`
-  (Phase 3B — per-species thermo), `species_statmech: dict[Species,
-  Statmech]` (Phase 4 — per-species statmech), `species_transport:
-  dict[Species, Transport]` (Phase 5 — validated locally, not yet
+  `species_calculations: dict[Species, list[Calculation]]` (reactant/product bucket), `species_thermo: dict[Species, Thermo]`
+  (per-species thermo), `species_statmech: dict[Species,
+  Statmech]` (per-species statmech), `species_transport:
+  dict[Species, Transport]` (validated locally, not yet
   emitted on the bundle wire), `primary_ts_calculation`, `note`.
 - **Local validation** — every calculation referenced via the reaction's
   TS / kinetics / source-calculation chain resolves to *some* bucket in
@@ -894,7 +892,7 @@ print(result["species_entry_id"], result["primary_calculation"]["id"])
 
 ## 13. Artifact handling
 
-For MVP, artifacts are designed in but not fully implemented in Phase 1.
+For the MVP, artifact handling is designed in but implemented separately from the core species pipeline.
 The intended API:
 
 ```python
@@ -920,12 +918,12 @@ Upload mechanics — inline by default:
    `/api/v1/calculations/{calculation_ref}/artifacts`.
 
 Sidecar / replay-based artifact dispatch (using the existing
-`tckdb_client.replay` machinery) is an option to evaluate during Phase 3.
+`tckdb_client.replay` machinery) is an option to evaluate.
 If `replay_bundle` can already carry artifact bytes on disk between
 runs, artifact integration may fall out of that path without a dedicated
 helper.
 
-Artifact integration is **Phase 3** unless the existing client replay
+Artifact integration is deferred unless the existing client replay
 support makes it trivial.
 
 ---
@@ -1086,22 +1084,22 @@ shorter on-ramp.
 
 ## 16. Implementation phases
 
-Status as of `tckdb-client` 0.185: phases 0-3 shipped. Of phase 4, the worked
+Status as of `tckdb-client` 0.185: the design, core species pipeline, reactions and depth stages shipped. Of the adapter-ergonomics stage, the worked
 examples shipped (`examples/builder_*`, `adapter_authoring_quickstart.md`); the
 cclib/Arkane converters did not and are not planned in this package, because that
 conversion belongs in the producer adapter. The list below is the original plan.
 
-The rollout was four phases. Every phase is independently shippable;
+The rollout has four stages. Every stage is independently shippable;
 no consumer code breaks at any phase boundary because the thin client
 contract is unchanged throughout.
 
-### Phase 0 — design only (this document; shipped)
+### Design only (this document)
 
 - spec lives at `clients/python/docs/builder_api_mvp.md`
 - linked from `clients/python/README.md`
 - no code changes beyond docs
 
-### Phase 1 — core species pipeline (shipped)
+### Core species pipeline
 
 - `tckdb_client/builders/` package skeleton
 - `BuilderObject` / `Upload` protocol in `builders/base.py`
@@ -1114,21 +1112,21 @@ contract is unchanged throughout.
 - unit vocabulary in `builders/validation.py`
 - tests (see §17)
 
-### Phase 2 — reactions (shipped)
+### Reactions
 
 - `ChemReaction`, `TransitionState`
 - `Kinetics.modified_arrhenius` (+ source-calculation wiring)
 - `ComputedReactionUpload.to_payload()`
 - snapshot tests against current backend payload shape
 
-### Phase 3 — depth (shipped: thermo, statmech, transport, artifacts, two-phase upload)
+### Depth (thermo, statmech, transport, artifacts, two-phase upload)
 
 - `Thermo` builder (NASA9, HFn(T))
 - artifact helpers, two-phase upload glue (or replay sidecar)
 - statmech, transport builders if demand exists
 - richer validation (e.g. negative-frequency count in TS freq)
 
-### Phase 4 — adapter ergonomics (examples shipped; converters not planned here)
+### Adapter ergonomics (examples shipped; converters not planned here)
 
 - worked examples for common external producers
 - migration cookbook for ARC users who want to use builders in place of

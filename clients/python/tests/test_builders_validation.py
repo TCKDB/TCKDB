@@ -1,4 +1,4 @@
-"""Local-validation tests for the Phase-1 builder primitives.
+"""Local-validation tests for the builder primitives.
 
 These tests stay inside the builder layer: they never touch a real
 backend or an HTTP transport, and they assert the contract the
@@ -195,7 +195,7 @@ class TestCalculationFactories:
     def test_type_rejects_unknown(self):
         with pytest.raises(TCKDBBuilderValidationError):
             Calculation(
-                type="irc",  # phase 1 supports only opt/freq/sp
+                type="irc",  # only opt/freq/sp are supported
                 software_release=_gaussian(),
                 level_of_theory=_b3lyp(),
             )
@@ -229,6 +229,6 @@ class TestCalculationFactories:
         opt = Calculation.opt(_gaussian(), _b3lyp(), output_geometry=g)
         freq = Calculation.freq(_gaussian(), _b3lyp(), input_geometry=g)
         sp = Calculation.sp(_gaussian(), _b3lyp(), input_geometry=g)
-        # sp depending on freq is not a Phase-1 supported shape
+        # sp depending on freq is not a supported shape
         with pytest.raises(TCKDBBuilderValidationError):
             sp.infer_dependency_role(freq)

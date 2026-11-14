@@ -131,7 +131,7 @@ def test_notebook_exercises_required_public_helpers():
 
 
 def test_notebook_uses_note_kwarg_on_calculation_factories():
-    """Phase 0.26.3 added ``note=`` to the three factories; the
+    """The three factories accept ``note=``; the
     notebook should demonstrate it so producers see the new surface."""
     code_text = _code_text()
     assert "note=" in code_text, (

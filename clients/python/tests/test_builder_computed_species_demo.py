@@ -198,8 +198,8 @@ def test_demo_does_not_attempt_network_without_env_vars(demo_run):
 
 def test_demo_does_not_access_private_upload_attributes():
     text = _DEMO_PATH.read_text(encoding="utf-8")
-    # The Phase-8 cleanup removed every ``_species_calc_pairs`` reach
-    # from the reaction demo; the species demo never had one but we
+    # The reaction demo has no ``_species_calc_pairs`` reach;
+    # the species demo never had one but we
     # pin the rule explicitly to catch any future regression.
     assert "_species_calc_pairs" not in text
     assert "_species_thermo_pairs" not in text

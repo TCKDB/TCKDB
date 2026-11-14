@@ -194,7 +194,7 @@ def build_upload(artifact_paths: dict[str, Path]) -> ComputedReactionUpload:
             ch4: [ch4_opt, ch4_freq, ch4_sp],
         },
         species_thermo={
-            # Phase-3B: source_calculations validated locally on the
+            # source_calculations validated locally on the
             # reaction path but not emitted on the wire — the demo
             # exercises that diagnostic.
             ch4: Thermo.nasa(
@@ -214,7 +214,7 @@ def build_upload(artifact_paths: dict[str, Path]) -> ComputedReactionUpload:
             ),
         },
         species_transport={
-            # Phase-5: bundle schema has no transport field — the
+            # The bundle schema has no transport field — the
             # demo exercises that diagnostic too.
             ch4: Transport(
                 sigma_angstrom=3.8, epsilon_over_k_k=141.4,
@@ -321,7 +321,7 @@ def main() -> None:
         return
 
     with TCKDBClient(base_url, api_key=api_key) as client:
-        # Phase 1 — scientific bundle. ``warn_on_dropped_fields=True``
+        # Step 1 — scientific bundle. ``warn_on_dropped_fields=True``
         # re-emits the diagnostics above as Python ``UserWarning``s so
         # producer pipelines can capture them with the usual
         # warnings.* tooling.
@@ -332,7 +332,7 @@ def main() -> None:
         print(json.dumps(result, indent=2)[:1200])
         print()
 
-        # Phase 2 — artifact upload. Resolve bundle-local keys against
+        # Step 2 — artifact upload. Resolve bundle-local keys against
         # the server's calculation_keys response field, then post each
         # file.
         try:
@@ -345,7 +345,7 @@ def main() -> None:
         # demo invocation under one stable namespace so retries land on
         # the server's stored response.
         idem_prefix = f"builder-demo:{int(time.time())}"
-        print(f"== Artifact upload (phase 2, prefix={idem_prefix!r}) ==")
+        print(f"== Artifact upload (second phase, prefix={idem_prefix!r}) ==")
         if not plan:
             print("(no artifacts to upload)")
             return

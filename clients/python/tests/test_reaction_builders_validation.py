@@ -1,4 +1,4 @@
-"""Local-validation tests for the Phase-2 reaction-side builders.
+"""Local-validation tests for the reaction-side builders.
 
 These tests exercise ``TransitionState``, ``ChemReaction``, and
 ``Kinetics`` in isolation — they never hit the network and never

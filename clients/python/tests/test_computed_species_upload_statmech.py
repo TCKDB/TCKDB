@@ -1,8 +1,8 @@
-"""``ComputedSpeciesUpload`` × ``statmech`` integration tests (Phase 4).
+"""``ComputedSpeciesUpload`` × ``statmech`` integration tests.
 
 Verifies the new ``statmech`` kwarg, source-calculation key resolution,
 deterministic emission, and that the absence of the kwarg preserves
-Phase-1 / Phase-3C behaviour byte-for-byte.
+the base behaviour byte-for-byte.
 """
 
 from __future__ import annotations

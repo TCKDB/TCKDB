@@ -1,8 +1,8 @@
-"""Tests for the Phase-3A ``species_calculations`` extension.
+"""Tests for the ``species_calculations`` extension.
 
-Phase 2 left every Calculation in ``ComputedReactionUpload.calculations``
-attached to the transition state; species blocks shipped identity-only.
-Phase 3A adds the ``species_calculations: dict[Species, list[Calculation]]``
+``ComputedReactionUpload.calculations`` attaches every Calculation to the
+transition state; species blocks are identity-only. The
+``species_calculations: dict[Species, list[Calculation]]``
 bucket so reactant/product opt/freq/sp records can travel in the same
 upload — and the kinetics record can reference them as
 ``reactant_energy`` / ``product_energy`` sources.
@@ -411,7 +411,7 @@ def test_duplicate_species_key_in_dict_rejected(ts_geom, ch4, ch3):
 
 
 def test_multi_opt_per_species_rejected(ts_geom, ch4, ch3):
-    """Phase-3A supports one opt per species. Multi-opt callers must
+    """One opt per species is supported. Multi-opt callers must
     fall back to the raw-dict form until a Conformer builder lands.
     """
     sr = _gaussian()
@@ -432,7 +432,7 @@ def test_multi_opt_per_species_rejected(ts_geom, ch4, ch3):
 
 
 def test_species_with_non_opt_only_rejected(ts_geom, ch4, ch3):
-    """Without an opt, a molecule can't anchor a conformer (only a single atom may use its sp, #610)."""
+    """Without an opt, a molecule can't anchor a conformer (only a single atom may use its sp)."""
     sr = _gaussian()
     lot = _b3lyp()
     g = Geometry.from_xyz("5\nch4\nC 0 0 0\nH 0 0 1\nH 0 0 -1\nH 0 1 0\nH 0 -1 0")

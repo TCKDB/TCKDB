@@ -72,7 +72,7 @@ internal-id visibility policy strips ``calculation_id`` from
 ``GET /scientific/geometries/{ref}`` even with ``include=internal_ids``
 requested -- confirmed empirically in the captured ``calculation.json``
 (the key is simply absent). ``GET /calculations/{id}/hessian`` is *not*
-gated the same way: it is a plain, pre-Phase-D ``/calculations/{id}/...``
+gated the same way: it is a plain, legacy ``/calculations/{id}/...``
 route that requires the caller to already have the integer id, and its
 response body (``CalculationHessianRead``) always carries both
 ``calculation_id`` and ``geometry_id``. See ``exporter.py``'s module
@@ -82,7 +82,7 @@ a deployment that hides it from the scientific read).
 
 Also measured: ``GET /geometries/{id}`` and
 ``GET /geometries?geom_hash=...`` are a *different* pair of routes from
-the ones above -- plain, pre-Phase-D ``/geometries/...`` routes (not
+the ones above -- plain, legacy ``/geometries/...`` routes (not
 ``/scientific/geometries/...``), gated by the exact same
 ``require_auth_for_legacy_reads`` dependency as
 ``GET /calculations/{id}/hessian`` (see ``backend/app/api/router.py``).

@@ -154,7 +154,7 @@ def build_upload(artifact_paths: dict[str, Path]) -> ComputedSpeciesUpload:
         primary_calculation=opt,
         thermo=thermo,
         statmech=statmech,
-        # Phase-5: ComputedSpeciesUpload validates transport locally
+        # ComputedSpeciesUpload validates transport locally
         # but the bundle schema does not yet carry a transport field,
         # so the demo exercises that diagnostic.
         transport=transport,
@@ -256,7 +256,7 @@ def main() -> None:
         return
 
     with TCKDBClient(base_url, api_key=api_key) as client:
-        # Phase 1 — scientific bundle. ``warn_on_dropped_fields=True``
+        # Step 1 — scientific bundle. ``warn_on_dropped_fields=True``
         # re-emits the diagnostics above as Python ``UserWarning``s so
         # producer pipelines can capture them with the usual
         # warnings.* tooling.
@@ -267,7 +267,7 @@ def main() -> None:
         print(json.dumps(result, indent=2)[:1200])
         print()
 
-        # Phase 2 — artifact upload. The computed-species response
+        # Step 2 — artifact upload. The computed-species response
         # carries the calc-key → calculation-id mapping nested under
         # each conformer; ``artifact_plan(result)`` knows how to read
         # it. If the response shape is wrong (older server, or a
@@ -280,7 +280,7 @@ def main() -> None:
             return
 
         idem_prefix = f"species-demo:{int(time.time())}"
-        print(f"== Artifact upload (phase 2, prefix={idem_prefix!r}) ==")
+        print(f"== Artifact upload (second phase, prefix={idem_prefix!r}) ==")
         if not plan:
             print("(no artifacts to upload)")
             return

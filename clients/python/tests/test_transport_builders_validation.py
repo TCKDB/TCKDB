@@ -1,4 +1,4 @@
-"""Local-validation tests for the Phase-5 :class:`Transport` builder.
+"""Local-validation tests for the :class:`Transport` builder.
 
 Coverage for field validation, LJ pair both-or-neither, source-calc
 normalisation, and the role vocabulary.

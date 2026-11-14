@@ -66,20 +66,20 @@ def test_spec_doc_covers_section(heading):
     )
 
 
-def test_spec_doc_states_phase_1_shipped():
-    """Phase 1 (``SourceCalculations``) shipped in ``tckdb-client`` 0.25.0.
+def test_spec_doc_states_it_is_implemented():
+    """``SourceCalculations`` shipped in ``tckdb-client`` 0.25.0.
 
     The doc keeps the original design framing for context but the
-    status line must reflect that Phase 1 is now implemented; the
+    status line must say it is implemented; the
     test pins that so the doc and the released helper don't drift
     apart silently.
     """
     text = _SPEC.read_text(encoding="utf-8").lower()
-    assert "phase 1 now shipped" in text, (
-        "Spec must state Phase 1 has shipped."
+    assert "implemented in `tckdb-client` 0.25.0" in " ".join(text.split()), (
+        "Spec must state the helper is implemented."
     )
     assert "0.25.0" in text, (
-        "Spec must name the release that shipped Phase 1."
+        "Spec must name the release that shipped it."
     )
 
 
@@ -96,7 +96,7 @@ def test_recommended_helper_is_source_calculations():
     assert "SourceCalculations" in text, (
         "Spec must name the recommended helper class."
     )
-    # The §3 method surface that demos and Phase-1 will rely on.
+    # The §3 method surface that demos and the helper rely on.
     assert ".only(" in text, "Spec must describe .only(*roles)."
     assert ".as_list(" in text, "Spec must describe .as_list()."
     assert ".add(" in text, "Spec must describe the .add(role, calc) escape hatch."

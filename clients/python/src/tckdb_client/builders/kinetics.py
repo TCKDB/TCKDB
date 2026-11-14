@@ -1,6 +1,6 @@
 """Kinetics builder + factory and the SDK's small unit vocabulary.
 
-Phase 2 exposes :meth:`Kinetics.modified_arrhenius` only — that covers
+The builder exposes :meth:`Kinetics.modified_arrhenius` only — that covers
 the kinetics fits ARC / Arkane produce today. Future factories
 (plain Arrhenius, Lindemann, multi-channel PDep) plug in here without
 disturbing the wire shape of existing uploads.
@@ -267,7 +267,7 @@ class Kinetics:
     Construct via :meth:`modified_arrhenius`; the bare constructor is
     reserved for internal use and tests. The ``model_kind`` field is
     the discriminator that selects which factory built the object —
-    Phase 2 only supports ``"modified_arrhenius"``.
+    Only ``"modified_arrhenius"`` is supported.
 
     The Arrhenius parameters are stored in the wire-ready form: ``a``
     is the pre-exponential factor, ``a_units`` is the backend enum
@@ -478,7 +478,7 @@ class Kinetics:
         ``source_calculations`` accepts three shapes so producers don't
         have to pre-flatten their data:
 
-        - ``dict[str, Calculation]`` — one calc per role (Phase 2).
+        - ``dict[str, Calculation]`` — one calc per role.
         - ``dict[str, list[Calculation]]`` — multiple calcs per role
           (e.g. two ``reactant_energy`` entries for a bimolecular
           reaction).
@@ -486,7 +486,7 @@ class Kinetics:
           duplicate roles. The most flexible form; preserves caller
           order verbatim.
 
-        Phase-2 roles: ``reactant_energy``, ``product_energy``,
+        Roles: ``reactant_energy``, ``product_energy``,
         ``ts_energy``, ``freq``, ``irc``, ``fit_source``. The
         :class:`tckdb_client.builders.uploads.ComputedReactionUpload`
         assembler resolves each :class:`Calculation` to its

@@ -170,7 +170,7 @@ def _make_species_upload(geom: Geometry) -> ComputedSpeciesUpload:
 
 
 def test_note_not_emitted_in_computed_species_payload(geom):
-    """The Phase-1 ``CalculationInBundle`` shape has no ``note``
+    """The ``CalculationInBundle`` shape has no ``note``
     field; the value must therefore not slip into the wire payload."""
     upload = _make_species_upload(geom)
     blob = json.dumps(upload.to_payload())

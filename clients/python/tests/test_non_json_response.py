@@ -1,4 +1,4 @@
-"""A 2xx body that is not the API's answer is refused, not returned (#568).
+"""A 2xx body that is not the API's answer is refused, not returned.
 
 Point ``base_url`` at a site root (``https://host``) instead of the API root
 (``https://host/api/v1``) and the web app's single-page fallback answers

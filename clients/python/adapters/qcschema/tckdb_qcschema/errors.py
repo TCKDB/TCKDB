@@ -31,7 +31,7 @@ E_DOCUMENT_INVALID = "document_invalid"
 
 #: The conformer upload succeeded but its response names the primary calculation
 #: by row id only, with no ``calculation_ref``. The artifact route takes the
-#: ``calc_`` ref and no row id (#578), so the artifact cannot be attached; the
+#: ``calc_`` ref and no row id, so the artifact cannot be attached; the
 #: server is older than the minimum this adapter supports.
 E_CALCULATION_REF_MISSING = "calculation_ref_missing"
 
@@ -181,7 +181,7 @@ E_EXPORT_ISOTOPES_UNAVAILABLE = "export_isotopes_unavailable"
 E_EXPORT_GEOMETRY_MISMATCH = "export_geometry_mismatch"
 
 #: The mapping report does not account for every field of the imported
-#: document (issue #573): a field this adapter's own mapping branch must
+#: document: a field this adapter's own mapping branch must
 #: classify (``return_result``, ``properties.return_energy``, a mapped
 #: molecule's geometry, ...) was left unclassified, or one field landed in
 #: more than one bucket. This is a defect in the adapter, never in the

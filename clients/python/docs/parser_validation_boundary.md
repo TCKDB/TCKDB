@@ -183,7 +183,7 @@ A parser **may**:
   optimisation history.
 - Compute artifact `sha256` digests on demand (so producers can
   pre-compute hashes if they want; the HTTP client already does
-  this at phase-2 upload time, so this is for *audit* not transport).
+  this at second-phase upload time, so this is for *audit* not transport).
 - Emit one of two output shapes:
   1. **Builder objects directly** — `to_species()`, `to_geometry()`,
      `to_calculation()` returning ready-to-pass builder instances

@@ -1,4 +1,4 @@
-"""The client addresses a calculation by its ``calc_`` ref, and only by it (#578).
+"""The client addresses a calculation by its ``calc_`` ref, and only by it.
 
 Upload responses return ``calculation_ref`` beside ``calculation_id``. The plan
 carries it through, and ``upload_artifacts`` / ``upload_artifact`` put it in the

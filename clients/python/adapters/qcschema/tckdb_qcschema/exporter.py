@@ -54,7 +54,7 @@ not need a backend schema change**, and an earlier revision of this
 docstring was wrong to say so: the isotope is stored
 (``GeometryAtom.isotope_mass_number`` in the backend database) and is
 already served, per atom, by the unrelated, internal-id-only,
-pre-Phase-D ``GET /geometries/{id}`` route (``GeometryRead.atoms``,
+legacy ``GET /geometries/{id}`` route (``GeometryRead.atoms``,
 ``GeometryAtomRead.isotope_mass_number`` --
 :mod:`app.schemas.entities.geometry`) and by its list sibling
 ``GET /geometries?geom_hash=...`` (``geom_hash`` is ``unique=True`` on
@@ -157,7 +157,7 @@ _EXPORTABLE_TYPES = frozenset({"sp", "freq"})
 
 #: Drivers whose ``return_result`` is expressed in the molecule's Cartesian
 #: frame. Exporting one declares that frame fixed (``fix_com`` and
-#: ``fix_orientation``, issue #573): a consumer that recentres or rotates the
+#: ``fix_orientation``): a consumer that recentres or rotates the
 #: molecule would otherwise detach the matrix from the axes it was computed
 #: in. qcelemental's own guidance on ``fix_orientation`` names exactly this
 #: case ("frame-sensitive results (e.g., molecular vibrations)"). An energy

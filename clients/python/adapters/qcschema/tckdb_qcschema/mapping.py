@@ -10,7 +10,7 @@ document (already family-dispatched and strictly validated by
 * driver ``hessian``                -> ``freq`` (``HessianPayload`` with
   ``source=uploaded``; no ``freq_result``, no derived modes). The
   document's ``properties.return_energy`` is not stored and is reported
-  ``retained_only`` (issue #573): a ``freq`` record has no energy field,
+  ``retained_only``: a ``freq`` record has no energy field,
   and an ``sp`` sibling would be tied to it by a ``single_point_on`` edge,
   whose parent must be an ``opt``.
 * ``OptimizationResult``            -> ``opt``
@@ -350,7 +350,7 @@ def _filter_provenance(provenance: dict, *, report: MappingReport) -> dict:
     report.unsupported.extend(f"provenance.{k}" for k in dropped)
     # The allow-listed keys the branches did not already map (creator and
     # version become a software/workflow-tool release) are copied, not
-    # mapped: retained_only (issue #573 -- they were in no bucket before).
+    # mapped: retained_only (they would otherwise be in no bucket).
     report.retained_only.extend(
         f"provenance.{k}"
         for k in provenance
@@ -536,7 +536,7 @@ def build_conformer_upload_payload(
             report=report,
         ),
     }
-    # Every field of the document in exactly one bucket, or refuse (#573).
+    # Every field of the document in exactly one bucket, or refuse.
     # After the block above, because the provenance allowlist writes its
     # entries while the block is built; the report is then re-snapshotted.
     complete_mapping_report(record, report)
@@ -637,7 +637,7 @@ def _build_atomic(record: QCRecord, report: MappingReport) -> tuple[dict, str | 
         report.transformed.append("return_result")
         if view["return_energy"] is not None:
             # The Hessian job's own energy at this geometry is NOT stored
-            # (issue #573). TCKDB has no energy column on a freq result, and
+            #. TCKDB has no energy column on a freq result, and
             # the one other place -- an sp sibling in additional_calculations
             # -- would be wired to this freq by a single_point_on edge, a role
             # whose parent must be an opt (see

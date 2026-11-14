@@ -1231,7 +1231,7 @@ class ComputedSpeciesUploadRequest(SchemaBase):
         """``scf_stability.source_calculation_key`` must name a usable job.
 
         Every calculation in this bundle belongs to the one species entry, so
-        the owner rule is vacuous here. What is checked: the key is declared,
+        the ownership rule is vacuous here. What is checked: the key is declared,
         it is not the carrier itself, the job is on the same conformer as the
         carrier, and no chain of keys closes into a cycle.
         """

@@ -1,4 +1,4 @@
-"""Thermo builder for the computed-reaction (Phase 3B) upload path.
+"""Thermo builder for the computed-reaction upload path.
 
 Targets ``BundleThermoIn`` in ``app/schemas/workflows/computed_reaction_upload.py``.
 That wire shape supports three representations — scalar (h298 / s298 at

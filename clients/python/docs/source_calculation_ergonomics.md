@@ -1,6 +1,6 @@
 # Source-calculation ergonomics
 
-Status: **design / spec only at first revision; Phase 1 now shipped
+Status: **design / spec only at first revision; implemented
 in `tckdb-client` 0.25.0.** No further implementation work in this
 document. Audience: builder maintainers and producers writing
 repeated `source_calculations=…` lists.
@@ -401,9 +401,9 @@ Each item below is a footgun the principles in §0 rule out.
 
 ## 11. Implementation recommendation
 
-A two-phase rollout, no more:
+A two-step rollout, no more:
 
-### Phase 1 — `SourceCalculations`
+### `SourceCalculations`
 
 - Ship the value type from §3 in a minor release (likely 0.25.0).
 - New module: `tckdb_client/builders/sources.py`. Re-export
@@ -417,9 +417,9 @@ A two-phase rollout, no more:
   `SourceCalculations` instance reused across thermo / statmech /
   kinetics.
 
-### Phase 2 — Reassess `KineticsSources`
+### Reassess `KineticsSources`
 
-- **Only if** post-Phase-1 demos still show repeated
+- **Only if** demos after the helper still show repeated
   duplicate-role tuple lists. The most likely outcome is that the
   `reactant_energy=[…]` kwargs form removes the friction without
   a dedicated helper.
@@ -438,8 +438,7 @@ A two-phase rollout, no more:
 
 ## 12. Test plan for future implementation
 
-These tests should land alongside the Phase-1 implementation, not
-in this design PR:
+These tests should land alongside the implementation:
 
 | Test                                                                                  | Why                                                                                                |
 |---------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------|

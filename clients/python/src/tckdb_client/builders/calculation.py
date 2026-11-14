@@ -37,9 +37,9 @@ __all__ = [
     "Calculation",
 ]
 
-# Allowed calculation types in Phase 1. The full backend
+# Allowed calculation types. The full backend
 # ``CalculationType`` enum has more values (``irc``, ``scan``,
-# ``path_search``, ``conf``) — they are out of scope for this phase
+# ``path_search``, ``conf``) — they are out of scope here
 # (see ``docs/builder_api_mvp.md`` §16).
 _ALLOWED_TYPES: frozenset[str] = frozenset({"opt", "freq", "sp"})
 
@@ -577,7 +577,7 @@ class Calculation:
     def infer_dependency_role(self, parent: "Calculation") -> str:
         """Map a (self, parent) pair to a ``CalculationDependencyRole``.
 
-        Phase 1 supports three unambiguous shapes:
+        Three unambiguous shapes are supported:
 
         - ``freq`` on ``opt`` → ``freq_on``
         - ``sp`` on ``opt`` → ``single_point_on``
@@ -595,7 +595,7 @@ class Calculation:
         raise TCKDBBuilderValidationError(
             "cannot infer dependency role for "
             f"{self.type!r} depending on {parent.type!r}; supported "
-            "phase-1 shapes are freq->opt, sp->opt, opt-><any>."
+            "shapes are freq->opt, sp->opt, opt-><any>."
         )
 
 

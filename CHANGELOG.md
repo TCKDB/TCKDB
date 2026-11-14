@@ -4,6 +4,12 @@ All notable changes to TCKDB are recorded here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Package changelogs, docs and sources in `tckdb-schemas` and `tckdb-client` describe behaviour only (Unreleased)
+
+- **Behaviour:** none. Both package changelogs describe each change by its behaviour, without issue, pull-request or design-record references, and list each version once; the generated producer contract carries the same changelog. Comments, docstrings, docs, examples and test names in `schemas/python` and `clients/python` state the rule without history. The scan-coordinate refusal message in the QCSchema adapter no longer cites a design record.
+- **Schema and migration:** none. No new environment variable.
+- **Versions:** `tckdb-schemas` 0.174.6 (no wire change); `tckdb-client` 0.207.1 (no behaviour change).
+
 ## Two things are versioned, and they are not the same
 
 **The software** (`tckdb-backend`, `tckdb-client`, `tckdb-schemas`,
