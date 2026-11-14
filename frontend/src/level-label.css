@@ -1,7 +1,8 @@
 /* LevelLabel: method/basis and program on one line, qualifiers folded behind "details". */
 .level-label { position: relative; display: inline; }
 .level-label-text { overflow-wrap: break-word; }
-.level-label-cell { display: inline-block; min-width: 16ch; }
+.level-label-base { white-space: nowrap; }
+.level-label-cell { display: inline-block; min-width: 30ch; }
 .level-label-details { display: block; margin-top: .125rem; font-size: .875em; }
 .level-label-details > summary { display: inline-block; cursor: pointer; color: var(--muted); }
 .level-label-pieces { display: grid; grid-template-columns: max-content 1fr; gap: .125rem .75rem; margin: .25rem 0 0; }

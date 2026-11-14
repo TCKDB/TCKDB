@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useId, useMemo, useState, type ReactNode } from "react"
 import { Link } from "react-router-dom"
 import { levelOfTheoryPath } from "../domain/methodsLinks"
-import { inlineQualifiers, levelKey, levelLine, qualifiersOf, type LevelFields, type LevelKey, type Qualifier } from "../domain/levelLabel"
+import { baseLabel, inlineQualifiers, levelKey, levelLine, qualifiersOf, type LevelFields, type LevelKey, type Qualifier } from "../domain/levelLabel"
 import "../level-label.css"
 
 type Scope = { register: (level: LevelFields) => () => void; qualifiers: ReadonlyMap<LevelKey, Qualifier[]> }
@@ -62,9 +62,12 @@ export function LevelLabel({ levelOfTheory, program, link = true, plain = false 
         return register({ method, basis, dispersion, solvent, solvent_model, aux_basis, cabs_basis, core_treatment, spin_treatment, relativistic_hamiltonian, pno_truncation, ri_approximation, level_of_theory_ref, display })
     }, [register, method, basis, dispersion, solvent, solvent_model, aux_basis, cabs_basis, core_treatment, spin_treatment, relativistic_hamiltonian, pno_truncation, ri_approximation, level_of_theory_ref, display])
     const line = levelLine(levelOfTheory, scope?.qualifiers ?? new Map(), program)
+    // The method/basis never breaks; the line only wraps between its " · " pieces.
+    const base = baseLabel(levelOfTheory)
+    const text = <><span className="level-label-base">{base}</span>{line.slice(base.length)}</>
     const head = link && level_of_theory_ref
-        ? <Link className="level-label-text t-preserve-case" to={levelOfTheoryPath(level_of_theory_ref)}>{line}</Link>
-        : <span className="level-label-text t-preserve-case">{line}</span>
+        ? <Link className="level-label-text t-preserve-case" to={levelOfTheoryPath(level_of_theory_ref)}>{text}</Link>
+        : <span className="level-label-text t-preserve-case">{text}</span>
     const pieces = plain ? [] : qualifiersOf(levelOfTheory)
     if (pieces.length === 0) return <span className="level-label">{head}</span>
     return (

@@ -47,6 +47,14 @@ describe("LevelLabel", () => {
         expect(container.querySelector("p")?.textContent?.startsWith("at dlpno-ccsd(t)-f12/cc-pvtz-f12details")).toBe(true)
     })
 
+    it("wraps the method/basis in a nowrap segment so the line only breaks between its pieces", () => {
+        const { container } = page(<LevelLabel levelOfTheory={{ ...base, pno_truncation: "normal" }} program="ORCA 6.0.1" />)
+        const segment = container.querySelector(".level-label-base")
+        expect(segment?.textContent).toBe("dlpno-ccsd(t)-f12/cc-pvtz-f12")
+        expect(getComputedStyle(segment as Element).whiteSpace).toBe("nowrap")
+        expect(container.querySelector(".level-label-text")?.textContent).toBe("dlpno-ccsd(t)-f12/cc-pvtz-f12 · ORCA 6.0.1")
+    })
+
     it("has no toggle when the level states no qualifier", () => {
         page(<LevelLabel levelOfTheory={base} />)
         expect(screen.queryByRole("button")).toBeNull()

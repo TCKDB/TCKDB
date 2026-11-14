@@ -304,7 +304,7 @@ describe("reaction compare page", () => {
         const list = await screen.findByRole("region", { name: "Rate records as a list" })
         const cells = list.querySelectorAll("td .level-label-cell")
         expect(cells.length).toBeGreaterThan(0)
-        expect(getComputedStyle(cells[0]).minWidth).toBe("16ch")
+        expect(getComputedStyle(cells[0]).minWidth).toBe("30ch")
         expect(getComputedStyle(list.querySelector(".level-label-text") as Element).overflowWrap).toBe("break-word")
     })
 
