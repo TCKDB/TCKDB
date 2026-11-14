@@ -31,7 +31,7 @@ F = MethodFamily
 
 APP = Path(__file__).resolve().parents[2] / "app"
 
-# The brief's named cases, written out so a table edit that moves one fails here.
+# The named cases, written out so a table edit that moves one fails here.
 NAMED = [
     ("B3LYP", F.dft, 4),
     ("PBE0", F.dft, 4),
@@ -144,7 +144,7 @@ NAMED = [
 
 @pytest.mark.parametrize(("method", "family", "rung"), NAMED, ids=[n[0] for n in NAMED])
 def test_the_named_methods_are_classified_as_documented(method, family, rung):
-    """Kills: a table edit that moves a method the brief names (B3LYP is rung 4, B97-D rung 2, ...)."""
+    """Kills: a table edit that moves a named method (B3LYP is rung 4, B97-D rung 2, ...)."""
     got = classify_method(method)
     assert (got.family, got.dft_rung) == (family, rung)
 

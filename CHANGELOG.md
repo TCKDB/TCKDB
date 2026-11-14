@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Code comments, docstrings and test text describe behaviour only (Unreleased)
+
+- **Behaviour:** none. Comments, docstrings, fixture notes and the rubric pin ledger in `backend/app`, `backend/tests` and `frontend/src` state current behaviour without issue, pull-request, design-record or phase references; frontend test accounts use a neutral name.
+- **Schema and migration:** none. No new environment variable.
+- **Versions:** no package version changes.
+
 ## Script help, test names and site text describe behaviour only (Unreleased)
 
 - **Behaviour:** script `--help` and printed text, test names and assertion messages, and site wording state current behaviour without design-record, issue or date references. `backend/scripts/bulk_load_arc.py` takes its source directory from `--src` or the new `TCKDB_ARC_RUNS_DIR` environment variable and exits 2 naming both when neither is set. A review stamped with version 0 reads "(no version recorded)".

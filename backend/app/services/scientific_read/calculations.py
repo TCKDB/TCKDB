@@ -370,7 +370,7 @@ def build_record(
     for the same include set.
 
     *includes* must be the **resolved** include set (post-validation,
-    post-Phase-D internal-ids policy) — this builder does not validate
+    post internal-ids policy) — this builder does not validate
     it. *badge* may be supplied by callers that already loaded badges
     in bulk; otherwise this builder fetches the calc's badge itself.
 

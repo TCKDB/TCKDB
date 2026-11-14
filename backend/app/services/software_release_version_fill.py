@@ -1,4 +1,4 @@
-"""Fill a NULL ``software_release.version`` from artifact evidence (issue #305, item 3).
+"""Fill a NULL ``software_release.version`` from artifact evidence.
 
 A calculation cites a release whose ``version`` is NULL: the program was
 recorded, its version was not. If the calculation's own stored output log
@@ -69,8 +69,8 @@ Gaussian banner the build string is filled as well (``enriched``),
 so the target can be a near-duplicate of an existing build-less release;
 the plan says so.
 
-Owner attestation (issue #305, decision (a))
---------------------------------------------
+Owner attestation
+-----------------
 Where no banner can speak -- the playground's version-less ORCA and Molpro
 calculations have no stored artifacts at all -- the person who ran them can.
 :func:`plan_attestation` / :func:`apply_attestation` record that statement in
@@ -479,7 +479,7 @@ def apply_release_fill(
 
 
 # ---------------------------------------------------------------------------
-# Owner attestation (issue #305, decision (a))
+# Owner attestation
 # ---------------------------------------------------------------------------
 
 

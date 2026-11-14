@@ -39,10 +39,11 @@ Design contract
   curator's later ``observation_identity_attach`` call on any row this
   importer wrote could never succeed:
   ``observation_identity_attach_requires_submission`` refuses an
-  observation with no submission link, and until this change every row
-  this importer ever wrote had none. Rows written by this importer
-  *before* this change are not retroactively linked — see the "Legacy
-  CCCBDB rows" section of PR #513 for the operator remediation.
+  observation with no submission link, so every row this importer writes
+  is linked. Rows written by an earlier version of this importer carry no
+  link; ``app.services.observation_submission_link_backfill`` (entry point
+  ``backend/scripts/ops/backfill_observation_submission_links.py``) is the
+  operator remediation.
 * **Dry-run by default.** ``commit=False`` runs the full pipeline
   inside the caller's transaction without committing. ``commit=True``
   commits on success and rolls back on unexpected error.
@@ -407,7 +408,7 @@ def import_cccbdb_molecular_property_payloads(
             )
 
     try:
-        # Phase 1: validate + resolve identity + build row kwargs + a
+        # First pass: validate + resolve identity + build row kwargs + a
         # read-only dedupe pre-check for every payload, WITHOUT inserting
         # anything yet. This decides, before any row is written, whether
         # this run has anything new to deposit at all -- so a fully

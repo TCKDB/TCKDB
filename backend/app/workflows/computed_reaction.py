@@ -242,7 +242,7 @@ def _persist_calculation_unattributed(
     """Persist one bundle-local calculation through the shared calculation seam.
 
     ``is_single_atom_primary`` marks the primary calculation of a conformer
-    whose geometry is one atom (#610); see
+    whose geometry is one atom; see
     :func:`~app.services.calculation_resolution.attach_calculation_output_geometries`.
 
     Routes provenance resolution, typed-result persistence, and parameter
@@ -272,7 +272,7 @@ def _persist_calculation_unattributed(
     # that had already queried this database could supply). It is carried
     # through unresolved: the shared payload now takes the fragment too, so
     # ``resolve_and_persist_calculation_with_results`` resolves it once,
-    # rather than each workflow resolving it for itself (#194).
+    # rather than each workflow resolving it for itself.
     shared_payload = calculation_in_to_with_results_payload(calc_in)
     calculation = resolve_and_persist_calculation_with_results(
         session,
@@ -317,7 +317,7 @@ def _persist_calculation_unattributed(
             )
 
     # Output logs also carry the program's version banner; a version the
-    # declared release lacked re-points the calculation (#305 (c)). Once per
+    # declared release lacked re-points the calculation. Once per
     # calculation, so every log is compared with the declared release.
     software_warning = try_reconcile_software_from_output_uploads(
         session, calculation, calc_in.artifacts
@@ -509,7 +509,7 @@ def _collect_bundle_provenance_warnings(
                     field_prefix=f"species[{sp.key!r}].statmech.",
                 )
             )
-            # (The subject-is-an-atom decision is #608: a geometry, then
+            # (Whether the subject is an atom is decided by a geometry, then
             # ``rigid_rotor_kind``, then the identity -- not the absence of
             # rotational constants, which 26 of 45 real ARC polyatomics lack.)
             #
@@ -811,7 +811,7 @@ def persist_computed_reaction_upload(
                     created_by=created_by,
                 )
 
-    # Phase-1 geometry-identity validation for species-side opt calcs.
+    # Geometry-identity validation for species-side opt calcs.
     # Best-effort: opt only, no-ops on missing data, never aborts the
     # upload, and a failed result is persisted as evidence rather than
     # used as a gate.
@@ -2295,7 +2295,7 @@ def persist_computed_reaction_upload(
     # the bundle is flushed, over every calculation the bundle touched
     # (species-owned and TS-owned alike) — an opt and its sibling sp can
     # arrive as two calcs in the same bundle and both must already be
-    # visible here (#292).
+    # visible here.
     sp_energy_warnings.extend(
         collect_converged_opt_energy_warnings(
             session, calculation_key_to_id.values()

@@ -28,7 +28,7 @@ from app.services.hessian_method_inference import (
 )
 
 # ---------------------------------------------------------------------------
-# Method-family recognition -- the exact list named in the task brief.
+# Method-family recognition -- the exact list of named methods.
 # ---------------------------------------------------------------------------
 
 

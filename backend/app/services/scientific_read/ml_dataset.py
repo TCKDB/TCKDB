@@ -1540,7 +1540,7 @@ def _resolve_lot_ref(session: Session, lot_ref: str | None) -> int | None:
     )
     if lot_id is None:
         raise ValueError(f"ml_export_lot_unresolved: lot ref not found: {lot_ref!r}")
-    # A merged row's ref names the row it was merged into (#574).
+    # A merged row's ref names the row it was merged into.
     return canonical_level_of_theory_id(session, lot_id)
 
 

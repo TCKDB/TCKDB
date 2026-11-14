@@ -25,7 +25,7 @@
       "Z",
       "E"
     ],
-    "reason": "Same graph, so one species (DR-0018 puts the stereo kind on the species); the configuration is perceived from 3D and forks the entry."
+    "reason": "Same graph, so one species (the stereo kind is on the species); the configuration is perceived from 3D and forks the entry."
   },
   {
     "id": "stereo/2_butene_cis_vs_trans",

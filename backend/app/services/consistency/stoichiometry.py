@@ -74,7 +74,7 @@ def entry_facts(species_entry):
     abundant isotope). So on persisted data the species SMILES never shows
     an isotope, and ``has_isotopes`` must come from the entry. A label on
     the species SMILES itself -- a row stored before labels were stripped
-    (#66) -- still counts, so neither source can hide the other.
+    -- still counts, so neither source can hide the other.
     """
     facts = species_facts(species_entry.species)
     return replace(facts, has_isotopes=facts.has_isotopes or species_entry.isotope_key is not None)

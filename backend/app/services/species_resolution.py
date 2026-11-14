@@ -380,14 +380,14 @@ def assert_geometry_composition_matches_identity(
     **Calculation geometries are reached by a sibling rule, not by this one.**
     ``CalculationIn.input_geometries`` and ``output_geometries`` are attached
     to a ``calculation`` row and never resolved through
-    :func:`resolve_species_entry`, so this function does not see them. Until
-    #143 nothing else did either, and benzene coordinates could be attached as
-    a calculation geometry under a ``smiles: "C"`` species entry. They are now
+    :func:`resolve_species_entry`, so this function does not see them. They are
     owned by
     :func:`app.services.calculation_geometry_composition.assert_calculation_geometry_composition`,
     which applies the same comparison against whichever subject the
     calculation is filed under — this entry's own formula for a species-owned
-    calculation, the reaction's reactant sum for a transition-state-owned one.
+    calculation, the reaction's reactant sum for a transition-state-owned one. Benzene coordinates therefore
+    cannot be attached as a calculation geometry under a ``smiles: "C"``
+    species entry.
 
     The note that stood here said closing the gap for *output* geometries
     would be wrong because "an optimisation that dissociated is science to

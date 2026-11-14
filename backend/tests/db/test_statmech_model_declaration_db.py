@@ -1,4 +1,4 @@
-"""Declared statmech models: owner rules as database facts, and the accepted-science freeze.
+"""Declared statmech models: ownership rules as database facts, and the accepted-science freeze.
 
 A declaration, its members and its sources are the declaring record's scientific content: frozen with it once it has
 been approved, and not frozen by the approval of a record that is merely cited as a member.

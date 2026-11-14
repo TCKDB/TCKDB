@@ -407,14 +407,14 @@ class ArticleScanResult:
     matches: list[Candidate] = field(default_factory=list)
     # Every qualifying sMethodName-only (free-text method) match, same shape as `matches`, kept
     # separately: these are the "statistical-thermodynamics-derived ideal-gas" candidates a
-    # playground-empty scan falls back to reporting (finding 4), not proposed as WP0 hits.
+    # playground-empty scan falls back to reporting, not proposed as pilot hits.
     free_method_matches: list[Candidate] = field(default_factory=list)
     skipped_free_method: int = 0
     skipped_prediction: int = 0
     skipped_critical_evaluation: int = 0
     skipped_mixture_blocks: int = 0
     # Compounds referenced by a qualifying (target property, target phase) block that carry an
-    # sStandardInChI but no sStandardInChIKey -- silently dropped before this fix (finding 6).
+    # sStandardInChI but no sStandardInChIKey -- reported here, not dropped.
     compounds_without_inchikey: list[dict] = field(default_factory=list)
 
 
@@ -588,10 +588,10 @@ class ScanSummary:
     playground_hit: set[str] = field(default_factory=set)
     # Every single-component "Ideal gas"/"Gas" Cp block whose only method is a free-text
     # sMethodName -- the "statistical-thermodynamics-derived ideal-gas" set an author may pick
-    # from when no playground species has a qualifying eMethodName record (finding 4).
+    # from when no playground species has a qualifying eMethodName record.
     free_method_candidates: list[Candidate] = field(default_factory=list)
-    # Compounds with sStandardInChI but no sStandardInChIKey, referenced by a qualifying block
-    # (finding 6); kept rather than dropped.
+    # Compounds with sStandardInChI but no sStandardInChIKey, referenced by a qualifying block;
+    # kept rather than dropped.
     compounds_without_inchikey: list[dict] = field(default_factory=list)
 
 
@@ -674,7 +674,7 @@ def _candidate_rank_key(candidate: Candidate) -> tuple:
 def _format_pressure(c: Candidate) -> str:
     """Render a candidate's pressure for the report's P (kPa) column.
 
-    Distinguishes a block-level fixed ``Constraint`` from a per-point ``Variable`` (finding 2):
+    Distinguishes a block-level fixed ``Constraint`` from a per-point ``Variable``:
     a single constraint value prints bare (e.g. ``3000``); several distinct values -- always from
     a per-point ``Variable`` -- print as a range with the distinct count and the kind.
     """
@@ -806,7 +806,7 @@ def main(argv: list[str] | None = None) -> int:
         "fallback_coverage_by_compound": sorted(
             summary.coverage_by_compound.values(), key=lambda b: b["n_values"], reverse=True
         )[:10],
-        # The sMethodName-only, single-component "Ideal gas"/"Gas" Cp set (finding 4): survives
+        # The sMethodName-only, single-component "Ideal gas"/"Gas" Cp set: survives
         # even when the archive has zero playground hits, since scan_archive keeps
         # an article's skip counters/free-method matches even when it has no eMethodName hit.
         "free_method_ideal_gas_candidates": [

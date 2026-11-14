@@ -484,7 +484,7 @@ def map_cp_table(
                 # fresh set built for THIS row alone, so it is
                 # deterministic and does not depend on what rules
                 # earlier rows happened to have already triggered
-                # (see PR body finding 8 -- the accumulator is still
+                # (the accumulator is still
                 # kept, in `transformed`, but only for the table-level
                 # MappingReport summary, never for a single row's own
                 # raw_payload_json).

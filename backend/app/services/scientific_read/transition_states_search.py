@@ -822,7 +822,7 @@ def _materialize_records(
             reaction=reaction,
             entry_badge=badges[cid],
             includes=includes,
-            # A list never runs the structure assessment (#723, O3); it reads the page's declared pins instead.
+            # A list never runs the structure assessment; it reads the page's declared pins instead.
             trust_scope=trust_scope,
             entries_block=entries_block,
             levels_index=levels_index,

@@ -1,10 +1,10 @@
-"""Level-of-theory method and basis filters, compared by identity key (#585).
+"""Level-of-theory method and basis filters, compared by identity key.
 
 ``level_of_theory`` stores the method, basis, dispersion and solvent names
 verbatim, and its ``lot_hash`` is taken over their identity keys
 (:func:`~app.chemistry.method_names.method_identity_key`,
 :func:`~app.chemistry.basis_set_names.basis_identity_key`,
-:func:`~app.chemistry.lot_component_names.component_identity_key`, #602). A search that
+:func:`~app.chemistry.lot_component_names.component_identity_key`). A search that
 compared the stored spelling instead answered a question the database no
 longer asks: ``?method=wb97xd&basis=def2-tzvp`` found nothing against a row
 stored as ``wb97xd`` / ``def2tzvp``, though identity treats both as one level.
@@ -69,7 +69,7 @@ def _stripped_lower(column: ColumnElement) -> ColumnElement[str]:
 
 
 def _name_aliased(key: ColumnElement[str]) -> ColumnElement[str]:
-    """Whole-name aliases (#618), decided on the stripped, lower-cased name."""
+    """Whole-name aliases, decided on the stripped, lower-cased name."""
     return case(
         *[(key == alias.alias, alias.canonical) for alias in NAME_ALIASES],
         else_=key,
@@ -79,10 +79,10 @@ def _name_aliased(key: ColumnElement[str]) -> ColumnElement[str]:
 def method_key_sql(column: ColumnElement) -> ColumnElement[str]:
     """SQL twin of :func:`method_identity_key` over a stored method column.
 
-    The curated aliases (#618) come from the same tables the Python key reads
+    The curated aliases come from the same tables the Python key reads
     (``NAME_ALIASES`` and ``SUFFIX_RULES``), so the two cannot list different
     aliases. This is the method *alone*: the key a level of theory is hashed
-    under also moves a folded dispersion out (#630), see
+    under also moves a folded dispersion out, see
     :func:`level_keys_sql`.
     """
     key = _stripped_lower(column)
@@ -103,7 +103,7 @@ def component_key_sql(column: ColumnElement) -> ColumnElement[str | None]:
 
 
 def dispersion_key_sql(column: ColumnElement) -> ColumnElement[str | None]:
-    """SQL twin of :func:`dispersion_identity_key` over a stored dispersion column (#630).
+    """SQL twin of :func:`dispersion_identity_key` over a stored dispersion column.
 
     Built from the same ``DISPERSION_RULES`` the Python key uses.
     """
@@ -116,7 +116,7 @@ def dispersion_key_sql(column: ColumnElement) -> ColumnElement[str | None]:
 def level_keys_sql(
     method_column: ColumnElement, dispersion_column: ColumnElement
 ) -> tuple[ColumnElement[str], ColumnElement[str | None]]:
-    """SQL twin of :func:`level_identity_keys`: ``(method key, dispersion key)`` (#630).
+    """SQL twin of :func:`level_identity_keys`: ``(method key, dispersion key)``.
 
     A recognised dispersion folded into the method moves into the dispersion
     key, under the same pattern (``FOLDED_PATTERN``) and the same condition
@@ -152,7 +152,7 @@ def basis_key_sql(column: ColumnElement) -> ColumnElement[str | None]:
 def method_matches(value: str) -> ColumnElement[bool]:
     """``LevelOfTheory.method`` names the same method as ``value``, up to case and aliases.
 
-    The comparison is on the level's identity key (#630): a stored
+    The comparison is on the level's identity key: a stored
     ``b3lyp-d3bj`` has method key ``b3lyp``, as ``b3lyp`` with
     ``dispersion=d3bj`` does. A request that folds a dispersion in
     (``b3lyp-d3bj``) also requires the level to have it.
@@ -287,7 +287,7 @@ def _component_matches(column: ColumnElement, value: str) -> ColumnElement[bool]
 
 
 def dispersion_matches(value: str) -> ColumnElement[bool]:
-    """``LevelOfTheory`` has the same dispersion as ``value``, by identity key (#602, #630).
+    """``LevelOfTheory`` has the same dispersion as ``value``, by identity key.
 
     Includes a dispersion folded into the method (``b3lyp-d3bj`` has ``d3bj``).
     """
@@ -299,7 +299,7 @@ def dispersion_matches(value: str) -> ColumnElement[bool]:
 
 
 def solvent_matches(value: str) -> ColumnElement[bool]:
-    """``LevelOfTheory.solvent`` names the same solvent as ``value``, up to case (#602)."""
+    """``LevelOfTheory.solvent`` names the same solvent as ``value``, up to case."""
     return _component_matches(LevelOfTheory.solvent, value)
 
 

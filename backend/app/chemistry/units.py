@@ -154,7 +154,7 @@ def validate_a_units_for_unstated_direction(
     reactant_order: int,
     product_order: int,
 ) -> None:
-    """Raise if a_units matches neither side's order, for a record that states no direction (#695).
+    """Raise if a_units matches neither side's order, for a record that states no direction.
 
     A forward coefficient is a rate of the reactants and a reverse one of the products, so a record
     that says neither could be either. No direction is assumed: units of either side's order are

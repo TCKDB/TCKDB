@@ -165,17 +165,12 @@ button:focus-visible, input:focus-visible, .search-results a:focus-visible { out
     padding: .25rem .55rem;
     background: none;
     color: var(--muted-2);
-    /* .68rem (10.88px) raised to .6875rem (11px) -- accessibility pass
-       finding 10's font-size floor for the smallest, most-repeated UI
-       text; the token fix above (--muted-2) covers contrast, this covered
-       the "9-11px" size half of the same finding.
-
-       
-       11px was still its own bespoke size next to `--type-label-strong`
-       (.72rem/11.52px), the same "brand/toggle" step item 10 maps this
-       chrome onto -- "Light"/"Dark"/"System" render upper-cased now, the
-       same all-caps-label treatment every other `--type-label`-family
-       step on the site already carries (e.g. `.kv-list dt`). */
+    /* 11px (.6875rem) is the font-size floor for the smallest, most-repeated
+       UI text; the token above (--muted-2) covers contrast, this covers size.
+       It uses `--type-label-strong` (.72rem/11.52px) rather than a bespoke
+       size: "Light"/"Dark"/"System" render upper-cased, the same
+       all-caps-label treatment every other `--type-label`-family step on the
+       site carries (e.g. `.kv-list dt`). */
     font: var(--type-label-strong-font);
     letter-spacing: var(--type-label-strong-tracking);
     text-transform: var(--type-label-strong-transform);

@@ -15,7 +15,7 @@
       }
     ],
     "expected": "distinct_species_entries",
-    "reason": "Multiplicity is part of the species key and is authoritative over the radical count RDKit infers from the SMILES (DR-0031). The two share one InChIKey."
+    "reason": "Multiplicity is part of the species key and is authoritative over the radical count RDKit infers from the SMILES. The two share one InChIKey."
   },
   {
     "id": "spin/dioxygen_triplet_vs_singlet",

@@ -385,7 +385,7 @@ export type ViewerStatus = "loading" | "ready" | "unavailable"
 const LIGHT_VIEWER_BACKGROUND = "white"
 const DARK_VIEWER_BACKGROUND = "#1b1e23"
 
-/** Reads the SAME theme signal #296 established for CSS — a `data-theme`
+/** Reads the SAME theme signal the CSS uses — a `data-theme`
  * attribute on the document root when a reader made an explicit choice,
  * falling back to `prefers-color-scheme` for the unstamped default — so
  * this component's 3D canvas background always agrees with the rest of

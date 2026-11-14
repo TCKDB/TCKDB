@@ -312,7 +312,7 @@ def _calculation_is_single_atom(calc: Calculation) -> bool:
     """Whether every geometry this calculation ran on or reported is one atom.
 
     An atom has no geometry to optimise, so its single point has no ``opt``
-    to depend on and no ``opt`` to be linked from a record (#610). False when
+    to depend on and no ``opt`` to be linked from a record. False when
     the calculation declares no geometry: absence is not evidence of an atom.
     """
     geometries = [
@@ -880,7 +880,7 @@ def _check_opt_source_present(thermo: Thermo) -> EvidenceOutcome:
     """Return passed when an opt source calculation is linked.
 
     Not applicable when every linked source calculation is a single atom's:
-    an atom has no optimisation to link (#610).
+    an atom has no optimisation to link.
     """
     if _thermo_sources_by_role(thermo, ThermoCalculationRole.opt):
         return EvidenceOutcome.passed
@@ -1268,7 +1268,7 @@ def _check_statmech_opt_source_present(statmech: Statmech) -> EvidenceOutcome:
     """Return passed when an opt source calculation is linked.
 
     Not applicable when every linked source calculation is a single atom's:
-    an atom has no optimisation to link (#610).
+    an atom has no optimisation to link.
     """
     if _statmech_sources_by_role(statmech, StatmechCalculationRole.opt):
         return EvidenceOutcome.passed
@@ -1776,10 +1776,9 @@ def _check_transport_not_rejected_or_deprecated_if_applicable(
 
 
 # Rubric versions are not bumped for a change that only moves a check between
-# passed/missing/not_applicable (#610 made three checks not_applicable for a
+# passed/missing/not_applicable (three checks are not_applicable for a
 # one-atom calculation): trust is computed on read, and the machine-review
-# context_hash already folds in the per-check sets (context_adapter.py); same
-# ruling as #393, #463, #78.
+# context_hash already folds in the per-check sets (context_adapter.py).
 # Every rubric is at version 1, the release baseline: the numbering that preceded it (computed rubrics at 2, the
 # transition-state rubric at 5) was discarded with the readers of those versions. Contract of the baseline: an automated
 # geometry-validation ``fail`` is advisory (a ``warning`` outcome on the geometry checks), no longer a hard fail, and
@@ -3528,7 +3527,7 @@ THERMO_KINETICS_CONSISTENCY = EvidenceRubric(
 GIBBS_SELF_CONSISTENCY = EvidenceRubric(name="gibbs_self_consistency", version=1, record_type="thermo", checks=())
 HESS_CONSISTENCY = EvidenceRubric(name="hess_consistency", version=1, record_type="kinetics", checks=())
 KIRCHHOFF_CONSISTENCY = EvidenceRubric(name="kirchhoff_consistency", version=1, record_type="thermo", checks=())
-# #672: a protium species entry whose calculation geometries declare a non-standard nuclide.
+# A protium species entry whose calculation geometries declare a non-standard nuclide.
 ISOTOPE_IDENTITY_CONSISTENCY = EvidenceRubric(
     name="isotope_identity_consistency", version=1, record_type="species_entry", checks=(),
 )

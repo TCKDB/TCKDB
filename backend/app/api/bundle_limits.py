@@ -1,6 +1,6 @@
-"""Size caps on one contribution bundle, shared by dry-run and submit (#586).
+"""Size caps on one contribution bundle, shared by dry-run and submit.
 
-``/bundles/dry-run`` rehearses a full submit (#584), so an unbounded bundle
+``/bundles/dry-run`` rehearses a full submit, so an unbounded bundle
 makes the server do an unbounded import's work -- holding row locks and a
 pooled connection -- on every dry run. Two caps, both applied identically to
 ``/bundles/dry-run`` and ``/bundles/submit`` so a bundle one accepts the

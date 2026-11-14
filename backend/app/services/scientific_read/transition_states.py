@@ -361,7 +361,7 @@ def get_transition_state(
     # concept's own ``include=review`` body does (``_build_review_history``
     # below, scoped to ``(transition_state, ts.id)``) — not "do any of
     # this concept's entries have a review", a different record type that
-    # can disagree with that body in either direction (#534).
+    # can disagree with that body in either direction.
     available = _build_available_sections(
         session,
         counted_entry_ids,
@@ -642,7 +642,7 @@ def _build_entry_record(
     means "resolve it for this entry alone" (the single-entry detail path);
     every loop over more than one entry in this module hands one in.
 
-    ``trust_scope`` is required, with no default (#723): :class:`DetailScope` only for a single transition-state-entry
+    ``trust_scope`` is required, with no default: :class:`DetailScope` only for a single transition-state-entry
     detail read, where ``include=trust`` also runs the scoped structure assessment for this one entry; a
     :class:`ListScope` on every surface that lists entries, which carries the coded status ``not_assessed_on_lists`` and
     issues no statement for it. The list scope carries the page's declared curvature pins (read once for the whole page),
@@ -871,7 +871,7 @@ def build_transition_state_entry_trust_fragment(
     status, the disabled LLM-precheck default, and certification default
     (all supplied by :func:`build_trust_fragment`).
 
-    ``context`` is required (#723): the scoped assessment the caller ran, or
+    ``context`` is required: the scoped assessment the caller ran, or
     :func:`~app.services.trust.ts_scoped.context_for` under a list scope on a surface that lists entries.
     The fragment carries it as ``structure_assessment``; it never changes the badge.
 
@@ -1377,9 +1377,9 @@ def _exists_review_for(
     queries (:func:`_build_review_history`) — never a stand-in scope such
     as "any of this concept's child entries" — so the flag can never
     promise a review the body does not return, or deny one it does
-    (#534: the concept-grain flag used to count
-    ``transition_state_entry`` reviews while the concept's own review body
-    is scoped to ``transition_state``).
+    (a concept-grain flag counting
+    ``transition_state_entry`` reviews would disagree with the concept's own
+    review body, which is scoped to ``transition_state``).
     """
     return bool(
         session.scalar(

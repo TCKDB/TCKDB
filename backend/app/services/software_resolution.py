@@ -12,7 +12,7 @@ from app.db.models.software import Software, SoftwareRelease
 from app.schemas.fragments.refs import SoftwareReleaseRef
 
 #: Programs that are workflow tools and can never be the electronic-structure
-#: package that ran a calculation (issue #305). Keyed by the lowercased,
+#: package that ran a calculation. Keyed by the lowercased,
 #: whitespace-collapsed name; the value is the canonical workflow-tool name.
 #:
 #: Arkane computes thermochemistry and rate coefficients *from* the output of

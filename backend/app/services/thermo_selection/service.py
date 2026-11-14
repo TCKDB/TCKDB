@@ -127,7 +127,7 @@ def select_h298(
         )
 
     loaded = load_population(session, scan)
-    # The loader to engine seam (guard PR-3): a hidden ref in the captured facts becomes a placeholder token BEFORE the
+    # The loader to engine seam: a hidden ref in the captured facts becomes a placeholder token BEFORE the
     # candidates are assessed, ordered, decided or written to the manifest. The engine is pure over these facts.
     loaded.subject, loaded.candidates = withhold_selection_facts(session, (loaded.subject, loaded.candidates))
     assessments: list[CandidateAssessment] = []

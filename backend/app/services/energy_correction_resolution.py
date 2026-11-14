@@ -665,11 +665,11 @@ def _resolve_or_create_fsf_row(
 #: transition state carries no bond assignment at all: Arkane's own
 #: Petersson-BAC routine sums whatever bond dictionary it is handed, and
 #: ARC supplies none for a saddle point, so a componentless total there
-#: can never be told apart from "nothing was actually summed" (task
-#: #264's measured 17 rows are exactly that shape). A species entry is
+#: can never be told apart from "nothing was actually summed" (17 measured rows are exactly
+#: that shape). A species entry is
 #: different: its identity SMILES states its bonds, so a monatomic
-#: species has an honest zero total with nothing to decompose (the same
-#: task's other 2 rows, on ``[H]`` and ``[O]``).
+#: species has an honest zero total with nothing to decompose (2 other measured
+#: rows, on ``[H]`` and ``[O]``).
 #:
 #: Scoped to ``bac_petersson``. A ``bac_melius`` total does not decompose
 #: into a stable per-component breakdown even for a bonded species -- see

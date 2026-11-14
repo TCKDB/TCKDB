@@ -56,8 +56,8 @@ def test_embedded_python_compiles(name: str, program: str) -> None:
 @pytest.mark.parametrize(
     ("response", "expected"),
     [
-        ('{"username": "calvin", "role": "admin"}', "calvin (role=admin)"),
-        ('{"username": "calvin"}', "calvin"),
+        ('{"username": "ada", "role": "admin"}', "ada (role=admin)"),
+        ('{"username": "ada"}', "ada"),
         ("not json", "(identity not reported by the server)"),
     ],
 )

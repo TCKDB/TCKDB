@@ -4,7 +4,7 @@ Atom-energy and BAC tables live in RMG-database, but a producer records only
 the RMG-Py commit (the workflow-tool release). The adapter audit found two
 failures of that: every RMG-Py commit created a new scheme row, and a
 database-only change to one parameter under the same identity was refused as a
-conflict. The owner's decision: an optional ``data_revision`` joins scheme
+conflict. An optional ``data_revision`` joins scheme
 identity when present; the tool build stays provenance.
 
 The two baseline tests below pin what happens WITHOUT a ``data_revision``.

@@ -1237,8 +1237,8 @@ def test_record_shape_is_metadata_only(db_session):
     A field added to serve an artifact URI, a raw geometry payload or a
     calculation result on this surface would show up here as an
     unexpected key. Every field is asserted by *name*, not merely
-    "does not contain a suspicious substring" -- the guard the brief
-    warns is vacuous.
+    "does not contain a suspicious substring", which is a vacuous
+    guard.
 
     Checked one level deeper than the top-level record and its immediate
     children: ``availability`` and ``review`` are both nested objects,
@@ -1401,7 +1401,7 @@ def test_structure_filter_exact_by_smiles_matches_inchi_key(db_session):
 
 
 def test_structure_filter_composes_with_charge_in_one_query(db_session):
-    """The composition guarantee the design brief calls out by name:
+    """The composition guarantee:
     setting charge= AND a structure query must AND-combine, not silently
     drop one of the two. Four species cover every quadrant (matches
     structure only / charge only / both / neither) so a filter silently

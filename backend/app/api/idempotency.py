@@ -136,7 +136,7 @@ class IdempotencyContext:
         caller that depends on exactly-once knows this key had no receipt when
         the response was composed. The header is fixed at that moment and is
         never corrected: ``get_write_db`` commits after the response object
-        exists (#616), and the post-commit retry of the receipt
+        exists, and the post-commit retry of the receipt
         (:meth:`_schedule_retry_after_commit`) runs inside that commit, so a
         retry that succeeds still ships ``failed``. Read it as "not recorded
         in the request's own transaction"; the key may well replay. That is

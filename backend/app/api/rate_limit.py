@@ -25,7 +25,7 @@ bucket and chooses an identity:
   - Without credential → ``anon_read`` (per-minute, IP-keyed).
 - ``POST /api/v1/bundles/dry-run`` with a credential → ``bundle_dry_run``
   (per-minute, credential-keyed). Tighter than ``auth_write`` because
-  the dry run rehearses a full submit (#586); it neither spends nor is
+  the dry run rehearses a full submit; it neither spends nor is
   limited by the ``auth_write`` allowance.
 - Any other request with a credential → ``auth_write`` for mutating
   methods (POST/PUT/PATCH/DELETE) or ``auth_read`` for read methods

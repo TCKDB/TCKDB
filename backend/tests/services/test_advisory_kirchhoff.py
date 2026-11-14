@@ -188,7 +188,7 @@ def test_d5_4_nasa9_increment_against_a_neighbours_nasa7_integral(db_session):
         t = a["temperature_k"]
         assert a["reason"] is None
         assert a["residual"] == pytest.approx(_h9(2.5, 50.0, t) - R * (3.5 * t + 10.0) / 1000, rel=1e-9)
-        # Decision 4: cross-record anchors run, and say what they assume.
+        # Cross-record anchors run, and say what they assume.
         assert (a["element_reference_compilation"], a["element_reference_cancellation"]) == (
             "not_recorded", "assumed")
 

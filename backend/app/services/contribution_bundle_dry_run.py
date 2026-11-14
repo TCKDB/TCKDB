@@ -16,7 +16,7 @@ This preview is also submit's *gate*, and it is not the whole of what submit
 checks. Whether a bundle would actually be accepted is decided by rehearsing
 submit itself (``app.workflows.contribution_bundle_submit.
 rehearse_contribution_bundle_submit``); the route folds that verdict in with
-:func:`with_submit_refusal` (#577).
+:func:`with_submit_refusal`.
 """
 
 from __future__ import annotations
@@ -158,8 +158,8 @@ def with_import_warnings(
     """Add the upload warnings submit would return to the preview's messages.
 
     The preview alone cannot know them: some come from the persistence
-    workflows resolving rows. The route gets them by rehearsing submit
-    (#647), which is why they are appended here rather than computed here.
+    workflows resolving rows. The route gets them by rehearsing submit, which is why they are appended
+    here rather than computed here.
     They are warnings, so they change neither ``bundle_valid`` nor any error
     count; ``summary.warnings`` is recounted to include them.
     """

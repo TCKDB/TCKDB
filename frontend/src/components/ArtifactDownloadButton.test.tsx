@@ -15,7 +15,7 @@ const DIGEST = "a".repeat(64)
 const DOWNLOAD = `/api/v1/scientific/artifacts/${DIGEST}/download`
 
 const meResponse = {
-    id: 1, username: "calvin", email: null, full_name: "Calvin Pieters",
+    id: 1, username: "ada", email: null, full_name: "Ada Example",
     role: "user", is_active: true,
 }
 
@@ -64,7 +64,7 @@ describe("who is offered a download", () => {
         /**
          * A 500 on /auth/me states nothing about this visitor. Offering
          * "Sign in to download" would assert they are signed out, which
-         * nobody has said -- the same distinction #467 drew for the header.
+         * nobody has said -- the same distinction the header draws.
          */
         server.use(http.get("/api/v1/auth/me", () => HttpResponse.json({ detail: "boom" }, { status: 500 })))
         const { container } = renderButton()

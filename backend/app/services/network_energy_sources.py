@@ -1,4 +1,4 @@
-"""Which calculation types may be the source of a network solve's energy (#642).
+"""Which calculation types may be the source of a network solve's energy.
 
 What the rule is
 ----------------
@@ -15,9 +15,9 @@ cite the calculation the number came from:
 A calculation type that carries no energy of that kind is refused in all three,
 so a network cannot say a well's energy came from an IRC point or a rotor scan.
 The same mistake is already refused on the transition-state ``energy_ordering`` evidence
-(``app.services.transition_state_validation``, #637); this module is that rule
+(``app.services.transition_state_validation``); this module is that rule
 for the network route. Both read one table of which types carry which energy
-kind, :mod:`app.services.energy_source_types` (#669), which includes the
+kind, :mod:`app.services.energy_source_types`, which includes the
 ``composite`` calculation type: it carries both an electronic energy
 and an E0 in ``calc_composite_result``.
 
@@ -38,7 +38,7 @@ energy claims is its ``correction_convention``:
   ``composite`` that holds the whole E0; the ``freq`` goes in the
   ``well_freq`` / ``barrier_freq`` roles. These kinds are held to the floor
   below and no tighter: every producer and fixture in this repository cites
-  the single point, and #637's "an E0 cites its ``freq``" fits a record that
+  the single point, and the transition-state rule "an E0 cites its ``freq``" fits a record that
   has separate electronic and E0 groups, not this one-slot route.
 
 The floor, for every kind and for the two energy roles, is the shared table's
@@ -47,18 +47,17 @@ electronic set union its E0 set: ``sp``, ``opt``, ``freq`` or ``composite``.
 path, and ``conf`` is a conformer search, so none is ever the source of a state
 or barrier energy.
 
-The frequency roles take a ``freq`` and nothing else (#669). ``well_freq`` and
+The frequency roles take a ``freq`` and nothing else. ``well_freq`` and
 ``barrier_freq`` name the job whose modes the master equation reads, and a
 ``composite`` stores only a ZPE, not the modes. Citing an ``sp`` there would
 also be a mistake the energy roles above cannot see.
 
-Whose calculation it is (#668)
+Whose calculation it is
 ------------------------------
 The type is half the rule. A calculation of the right type can still belong to
 the wrong subject: a well's energy cited to another well's single point, or a
-saddle point's barrier cited to a species single point (#665's own test matrix
-stored exactly that). The transition-state route already refuses this for its
-``energy_ordering`` evidence (#637: each energy must come from the participant
+saddle point's barrier cited to a species single point. The transition-state route already refuses this for its
+``energy_ordering`` evidence (each energy must come from the participant
 it is the energy of); this is the same rule for the network route, read from
 the persisted ``Calculation.species_entry_id`` / ``transition_state_entry_id``
 and never from the payload:
@@ -76,9 +75,9 @@ and never from the payload:
   states, and ``barrier_energy`` one of a transition state the upload declares.
 
 The subject is checked after the type, so a calculation that fails both reports
-the type (the older, narrower refusal). Neither refusal runs on a read.
+the type. Neither refusal runs on a read.
 
-One source per participant, and their sum (#678)
+One source per participant, and their sum
 ------------------------------------------------
 A state with several species has an energy that is a sum, and one source slot cannot name
 where a sum came from. ``state_energies[].source_calculation_keys`` names one calculation per
@@ -99,9 +98,9 @@ energies, ``sum(stoichiometry * stored energy)``, and refuses a contradiction
 
   - a ``composite`` that stores an ``e0`` (its E0);
   - an ``sp`` (or ``opt``) electronic energy plus the zero-point energy of the participant's own
-    ``freq``, named as ``zpe_calculation_key`` (#693): ``E + s * ZPE`` with the state's declared
+    ``freq``, named as ``zpe_calculation_key``: ``E + s * ZPE`` with the state's declared
     ``zpe_scale_factor`` ``s``. The two must be at one geometry (an sp's or freq's input, an opt's
-    final), each declared exactly once, as #677 pairs a transition state's. TCKDB stores the
+    final), each declared exactly once, as a transition state's pair is. TCKDB stores the
     producer's unscaled ZPE, so with no factor stated the state is *not compared*
     (``zpe_scaling_unstated``) whatever the numbers are: unity is never assumed, even when the
     unscaled sum happens to agree. A freq with no stored ZPE is ``zpe_not_stated``; an sp and a freq
@@ -143,7 +142,7 @@ digits of the number.
 
 Tier
 ---------------
-``block``, the tier #637 used for the same mismatch: a type that cannot carry
+``block``, the tier the transition-state route uses for the same mismatch: a type that cannot carry
 the stated energy is not a weaker link, it is a wrong one, and no correct
 deposit produces it. The refusal is a ``CodedValueError`` so a client branches
 on the code and is told the types that would have worked. Uploads only: nothing
@@ -188,18 +187,18 @@ logger = logging.getLogger(__name__)
 W_NETWORK_ENERGY_SOURCE_TYPE_MISMATCH = "network_energy_source_type_mismatch"
 
 #: A network solve cites, as the source of an energy, a calculation owned by a
-#: subject other than the one the energy is stated for (#668).
+#: subject other than the one the energy is stated for.
 W_NETWORK_ENERGY_SOURCE_SUBJECT_MISMATCH = "network_energy_source_subject_mismatch"
 
 #: A state energy contradicts the sum of the stored energies of the calculations it cites,
-#: one per participant, beyond the printed-precision tolerance (#678). Block tier.
+#: one per participant, beyond the printed-precision tolerance. Block tier.
 E_NETWORK_STATE_ENERGY_SUM_MISMATCH = "network_state_energy_sum_mismatch"
 
 #: A state energy could not be held against the sum of its sources; it is stored as not
-#: compared with the reason (#678). Warn tier.
+#: compared with the reason. Warn tier.
 W_NETWORK_STATE_ENERGY_SUM_NOT_COMPARED = "network_state_energy_sum_not_compared"
 
-#: A state energy cites sources for some but not all of its participants (#678). Warn tier.
+#: A state energy cites sources for some but not all of its participants. Warn tier.
 W_NETWORK_STATE_ENERGY_SOURCES_PARTIAL = "network_state_energy_sources_partial"
 
 #: A state or barrier energy states a convention that includes a vibrational term but cites only a
@@ -254,7 +253,7 @@ CONVERSION_CONSTANT_SPREAD = 1e-6
 _TOLERANCE_FLOAT_SLACK = 1e-12
 
 #: Calculation types that report the energy of a stationary point at all, and the
-#: ones that carry a bare electronic energy: the shared table (#669).
+#: ones that carry a bare electronic energy: the shared table.
 _STATIONARY_POINT_ENERGY_TYPES: frozenset[CalculationType] = STATIONARY_POINT_ENERGY_TYPES
 _ELECTRONIC_ENERGY_TYPES: frozenset[CalculationType] = ELECTRONIC_ENERGY_SOURCE_TYPES
 
@@ -352,7 +351,7 @@ def assert_network_energy_source_type(
 
 
 def assert_state_zpe_source_type(calculation: Calculation, *, field: str) -> None:
-    """Refuse a ``zpe_calculation_key`` that is not a ``freq`` calculation (#693).
+    """Refuse a ``zpe_calculation_key`` that is not a ``freq`` calculation.
 
     Only a frequency calculation stores a zero-point energy.
 
@@ -379,7 +378,7 @@ def assert_network_source_role_type(
 
     ``well_energy`` / ``barrier_energy`` state no energy kind, so only the floor
     applies (a type with no energy is refused). ``well_freq`` / ``barrier_freq``
-    take a ``freq`` only (#669). Other roles are not constrained here.
+    take a ``freq`` only. Other roles are not constrained here.
 
     :raises CodedValueError: ``network_energy_source_type_mismatch``.
     """
@@ -627,7 +626,7 @@ def refuse_source_species_outside_state(
 
 
 # ---------------------------------------------------------------------------
-# The sum of a state energy's sources (#678)
+# The sum of a state energy's sources
 # ---------------------------------------------------------------------------
 
 
@@ -636,7 +635,7 @@ class ParticipantSource:
     """One participant of a state, and the calculation cited for it (None: none cited).
 
     ``zpe_calculation`` is the participant's own ``freq`` whose zero-point energy is added to the
-    energy of ``calculation`` (``electronic_plus_zpe``, #693). ``electronic_geometry_ids`` and
+    energy of ``calculation`` (``electronic_plus_zpe``). ``electronic_geometry_ids`` and
     ``zpe_geometry_ids`` are the geometries the two calculations' energies are at, read from the
     persisted rows by the caller; ``None`` means not looked up, which pairs nothing. ``is_atom`` is
     true only when the cited calculation's stored geometry is a single atom.
@@ -798,7 +797,7 @@ def _allowance_kj_mol(precision_kj_mol: float | None) -> tuple[float, bool]:
 def _classify(gap_hartree: float, tolerance_hartree: float, allowance_kj_mol: float, *, all_stated: bool) -> str:
     """``agrees``, ``imprecise`` or ``bad`` for one comparison gap, in hartree.
 
-    Three bands (the pattern of #677's scaled-ZPE energies): within the printed-precision
+    Three bands (the pattern of a transition state's scaled-ZPE energies): within the printed-precision
     tolerance the energies agree; beyond it but within the honest-rounding allowance the stated
     value may be a correctly rounded or unit-converted one, which cannot be told from a wrong one,
     so it is ``imprecise`` (stored as not compared) unless the producer stated its precision, in
@@ -1028,7 +1027,7 @@ def collect_zpe_source_absent_warnings(
     species_entries_with_freq: Collection[int],
     transition_state_entries_with_freq: Collection[int],
 ) -> list[UploadWarning]:
-    """Warn when a composed energy cites a bare electronic energy and the upload has no freq for it (#669).
+    """Warn when a composed energy cites a bare electronic energy and the upload has no freq for it.
 
     A composed convention (``electronic_plus_zpe``, ``atom_and_bond_corrected``,
     ``thermal_enthalpy_298k``) adds a vibrational term to an electronic energy. Citing an ``sp`` or

@@ -1,4 +1,4 @@
-"""Withholding hidden refs from the export streams (curated-guard PR-4).
+"""Withholding hidden refs from the export streams.
 
 The NDJSON exports are generators of plain dicts and bypass the response boundary the other scientific routes
 return through. This batcher is their seam: it buffers up to :data:`EXPORT_BATCH_SIZE` record dicts, asks the ref

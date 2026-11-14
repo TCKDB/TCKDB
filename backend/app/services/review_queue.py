@@ -8,7 +8,7 @@ one subject's records across a page boundary.
 
 **The subject is the container, with one deliberate exception.**
 :mod:`app.services.record_containers` already resolves every record to the
-record it belongs to (PR #488) -- ``thermo`` and ``statmech`` belong to a
+record it belongs to -- ``thermo`` and ``statmech`` belong to a
 ``species_entry``, ``kinetics`` and ``transition_state`` to a
 ``reaction_entry``, and so on. For most types that container IS the subject:
 grouping a ``calculation`` or an ``applied_energy_correction`` under the
@@ -85,12 +85,12 @@ reaction it sits on.
 
 **Naming a reaction subject.** ``kinetics`` and ``transition_state`` both
 container to ``reaction_entry`` (see :mod:`app.services.record_containers`),
-and -- since the self-subject fix above -- so does a ``reaction_entry``'s
+and so does a ``reaction_entry``'s
 OWN review row, which every reaction workflow writes one of. A
 ``reaction_entry`` is therefore a common subject type in real data --
-review #492 measured a kinetics reviewer seeing "Reaction entry rxe_..."
-and nothing else, the exact defect the species side of this module exists
-to avoid, just not yet closed on the reaction side. Fixed the same way: a
+a kinetics reviewer seeing "Reaction entry rxe_..." and nothing else is
+the exact defect the species side of this module exists to avoid. The
+reaction side handles it the same way: a
 reaction_entry has no formula (it is not one molecule), but it does have
 the fact a reviewer actually wants, the equation itself -- reactants,
 products and reversibility, resolved via ``reaction_entry_structure_
@@ -205,9 +205,9 @@ class SubjectChemistry:
     #: disagree: a depositor can record a reaction-shaped string
     #: (``"[CH3].[H]>>C"``) that RDKit's single-molecule parser rejects,
     #: which yields ``formula=None`` while this field is very much set.
-    #: Without it, review #492 caught the client unable to tell "nothing
+    #: Without it, the client cannot tell "nothing
     #: was ever recorded" from "something was recorded but no formula
-    #: could be derived from it" -- two different facts that had been
+    #: could be derived from it" -- two different facts that would be
     #: collapsed into the same caveat sentence. Never populated for a
     #: species_entry subject, which has no analogous raw-text fallback
     #: (species.smiles is NOT NULL by the time a species exists at all).
@@ -230,7 +230,7 @@ class ReactionEquationParticipant:
 class ReactionEquation:
     """A reaction_entry subject's own chemistry: what it says, not a ref.
 
-    Review #492, finding 6: a kinetics reviewer saw "Reaction entry
+    Without it a kinetics reviewer sees "Reaction entry
     rxe_..." and nothing else -- the species-only half of this module's
     "the page names species well and everything else not at all". A
     reaction_entry has no formula of its own (it is not one molecule),
@@ -492,7 +492,7 @@ def list_review_queue(
         # Reusing composed_search_candidate_limit_exceeded's CODE (the
         # shape -- a filtered set too large to traverse -- is the same),
         # but not its usual message. That message says "narrow the query
-        # by status", and review of #492 caught that here the caller has
+        # by status", but here the caller has
         # typically already done exactly that: the default and most
         # common filter IS one status (``not_reviewed``), and there is no
         # narrower one below it. Telling a curator to do the thing they

@@ -35,10 +35,10 @@ SAME_LEVEL = [
     ("DLPNO-CCSD(T)-F12", "cc-pVDZ-F12", "dlpno-ccsd(t)-f12", "cc-pvdz-f12", "ORCA vs ARC"),
     ("B3LYP", "Def2SVP", "b3lyp", "def2-svp", "Gaussian basis spelling vs Psi4"),
     ("CCSD(T)-F12a", "cc-pVTZ", "ccsd(t)-f12A", "ccpvtz", "Molpro vs PySCF key"),
-    ("wb97xd", "def2tzvp", "wB97X-D", "def2-tzvp", "#618: stored ARC, Q-Chem-style request"),
-    ("wb97x-d", "def2tzvp", "WB97XD", "def2-tzvp", "#618: second ARC corpus, Gaussian request"),
-    ("M062X", "6-311+G(d,p)", "m06-2x", "6-311+g(d,p)", "#618: Gaussian stored, ARC request"),
-    ("B3LYP-D3(BJ)", "def2-tzvp", "b3lyp-gd3bj", "def2-tzvp", "#618: folded dispersion"),
+    ("wb97xd", "def2tzvp", "wB97X-D", "def2-tzvp", "stored ARC, Q-Chem-style request"),
+    ("wb97x-d", "def2tzvp", "WB97XD", "def2-tzvp", "second ARC corpus, Gaussian request"),
+    ("M062X", "6-311+G(d,p)", "m06-2x", "6-311+g(d,p)", "Gaussian stored, ARC request"),
+    ("B3LYP-D3(BJ)", "def2-tzvp", "b3lyp-gd3bj", "def2-tzvp", "folded dispersion"),
 ]
 
 

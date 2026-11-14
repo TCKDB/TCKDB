@@ -20,8 +20,8 @@ import themeCss from "./theme.css?raw"
  * centralising them.
  */
 // DISCOVERED, never enumerated. An explicit list is a guard pointed at a
-// fixed set of targets, and this one was already escaped once: #295 landed
-// `geometry-measure.css` with 22 hex literals while this suite was green,
+// fixed set of targets, and this one was already escaped once: `geometry-measure.css`
+// landed with 22 hex literals while this suite was green,
 // because a file absent from the list is not "passing" -- it is unexamined,
 // and the two are indistinguishable from the outside. The comment that used
 // to sit here asked a future author to remember to add their file. Asking is

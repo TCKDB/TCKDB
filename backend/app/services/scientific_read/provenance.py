@@ -797,7 +797,7 @@ def _build_transition_states_section(
                         ts_entry,
                         review_status=badge.status,
                         # The reaction document embeds every TS entry of a reaction entry: a list, so no
-                        # structure assessment (#723, O3). Its fragment equals the standalone detail fragment
+                        # structure assessment. Its fragment equals the standalone detail fragment
                         # except for ``structure_assessment``, which here says ``not_assessed_on_lists``.
                         context=context_for(session, ts_entry, trust_scope),
                     )

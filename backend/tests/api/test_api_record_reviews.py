@@ -143,7 +143,7 @@ class TestDirectUploadsCreateNotReviewedSubmissions:
         )
         assert link is not None
 
-        # Calculation gets one too — included by Decision 2 in the design.
+        # Calculation gets one too.
         calc_id = body["primary_calculation"]["calculation_id"]
         calc_review = db_session.scalar(
             select(RecordReview).where(

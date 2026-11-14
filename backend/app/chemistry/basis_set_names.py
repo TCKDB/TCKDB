@@ -1,4 +1,4 @@
-"""The identity key of a basis-set name (issue #574).
+"""The identity key of a basis-set name.
 
 Electronic-structure programs spell one basis set in different ways. The
 group knowledge base's "Basis set spelling" card

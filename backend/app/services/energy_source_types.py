@@ -1,12 +1,12 @@
-"""Which calculation types may be the source of a stated energy (#669).
+"""Which calculation types may be the source of a stated energy.
 
 One table, read by both rules that hold a cited calculation against the kind of
 energy it is cited for:
 
 * the transition-state ``energy_ordering`` evidence rule
-  (:mod:`app.services.transition_state_validation`, #637), and
+  (:mod:`app.services.transition_state_validation`), and
 * the pressure-dependent network rule
-  (:mod:`app.services.network_energy_sources`, #642).
+  (:mod:`app.services.network_energy_sources`).
 
 Both rules read this one table, so they cannot disagree about which
 calculation types carry an energy kind.

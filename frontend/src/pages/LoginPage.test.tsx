@@ -14,7 +14,7 @@ afterEach(() => { server.resetHandlers(); cleanup() })
 afterAll(() => server.close())
 
 const meResponse = {
-    id: 1, username: "calvin", email: "calvin@example.com", full_name: "Calvin Pieters", role: "user", is_active: true,
+    id: 1, username: "ada", email: "ada@example.com", full_name: "Ada Example", role: "user", is_active: true,
 }
 
 /**
@@ -43,19 +43,19 @@ describe("LoginPage", () => {
             http.get("/api/v1/auth/me", () => new HttpResponse(null, { status: 401 })),
             http.post("/api/v1/auth/login", async ({ request }) => {
                 expect(request.credentials).toBe("include")
-                expect(await request.json()).toEqual({ username: "calvin", password: "correct-horse" })
+                expect(await request.json()).toEqual({ username: "ada", password: "correct-horse" })
                 return HttpResponse.json(meResponse)
             }),
         )
         const user = userEvent.setup()
         renderLoginPage()
 
-        await user.type(await screen.findByLabelText("Username"), "calvin")
+        await user.type(await screen.findByLabelText("Username"), "ada")
         await user.type(screen.getByLabelText("Password"), "correct-horse")
         await user.click(screen.getByRole("button", { name: "Sign in" }))
 
         expect(await screen.findByText("Account landing")).toBeInTheDocument()
-        expect(await screen.findByRole("button", { name: "Calvin Pieters" })).toBeInTheDocument()
+        expect(await screen.findByRole("button", { name: "Ada Example" })).toBeInTheDocument()
     })
 
     it("shows the server's message and leaves the user signed out on a failed login", async () => {
@@ -66,7 +66,7 @@ describe("LoginPage", () => {
         const user = userEvent.setup()
         renderLoginPage()
 
-        await user.type(await screen.findByLabelText("Username"), "calvin")
+        await user.type(await screen.findByLabelText("Username"), "ada")
         await user.type(screen.getByLabelText("Password"), "wrong-password")
         await user.click(screen.getByRole("button", { name: "Sign in" }))
 
@@ -89,7 +89,7 @@ describe("LoginPage", () => {
         renderLoginPage()
 
         await user.click(await screen.findByRole("radio", { name: "Create account" }))
-        await user.type(screen.getByLabelText("Username"), "calvin")
+        await user.type(screen.getByLabelText("Username"), "ada")
         await user.type(screen.getByLabelText("Password"), "password123")
         await user.click(screen.getByRole("button", { name: "Create account" }))
 

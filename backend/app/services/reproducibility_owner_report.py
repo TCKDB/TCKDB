@@ -1,4 +1,4 @@
-"""Read-only report: what the owner-scoped reproducibility rubric does to a database's statmech records (#760).
+"""Read-only report: what the owner-scoped reproducibility rubric does to a database's statmech records.
 
 Under the shared rubric every transition-state-owned statmech reads
 ``insufficient`` on ``scientific_context``, whatever its evidence. This report says, for the database it is pointed
