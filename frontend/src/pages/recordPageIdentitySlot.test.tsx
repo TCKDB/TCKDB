@@ -139,8 +139,8 @@ describe("Every record page routes its header through PageShell's identity slot"
                 </Routes>
             </MemoryRouter>,
         )
-        await screen.findByRole("heading", { name: "Frequency of [CH3]" })
-        assertIdentityLeadsContentColumn(container, "Frequency of [CH3]")
+        await screen.findByRole("heading", { name: "Frequency calculation of [CH3]" })
+        assertIdentityLeadsContentColumn(container, "Frequency calculation of [CH3]")
     })
 
     it("ConformerObservationPage: the observation header leads the content column", async () => {

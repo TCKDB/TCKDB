@@ -25,18 +25,9 @@
 
 .calc-headline-energy { margin: var(--s-4) 0 0; }
 
-/* The label-less
-   TS fallback in the h1 (`CalculationDetailPage.tsx`'s `titleSubject`,
-   `<code className="data calc-headline-ref">`) would otherwise render at
-   `.data`'s own `--type-data-font` size (13px mono) sitting on the
-   baseline of the surrounding `--type-display-1` h1 (52px display face).
-   `.data`'s face/weight (mono, 400) is still correct here -- only the size
-   should track the heading around it, not the shared data-run default. */
-.calc-headline-ref { font-size: inherit; }
-
-/* The compact stage/conformer note sits between the identity header and
+/* The conformer note sits between the identity header and
    the full provenance row -- same shared `.kv-list` primitive underneath
-   (see `StageAndConformerNote` in `CalculationDetailPage.tsx`), just a
+   (see `ConformerNote` in `CalculationDetailPage.tsx`), just a
    tighter top margin since it directly follows the identity block rather
    than a full section break. */
 .record-context--compact {
@@ -105,60 +96,48 @@
 }
 
 /* ---------------------------------------------------------------------
-   Optimisation stage strip -- "Coarse optimisation → Fine optimisation",
-   the current calculation's own box emphasised (see `StageAndConformerNote`'s docstring in
-   `CalculationDetailPage.tsx`). Deliberately reuses
-   `species-entry.css`'s `.linkage-flow`/`.linkage-connector` PATTERN
-   (flex row, an arrow between items, `.value-pill`-adjacent spacing) --
-   this is a second, page-local instance of that same shape (two `.card`
-   boxes rather than three numeric steps), never a third bespoke arrow
-   style. `.card`/`.card--selected` (design-system.css) supply the box
-   chrome itself; the rules below are layout only.
+   Dependency strip and "What this produced" list.
    --------------------------------------------------------------------- */
-.opt-stage-flow {
+.dep-strip {
     display: flex;
-    align-items: stretch;
-    gap: .75rem;
-    margin-top: .3rem;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--s-3) var(--s-4);
 }
 
-.opt-stage-box {
+.dep-strip-parents {
     display: flex;
-    flex: 1 1 12rem;
     flex-direction: column;
-    gap: .35rem;
-    min-width: 10rem;
+    gap: var(--s-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
 }
 
-.opt-stage-box-label {
+.dep-strip-step,
+.dep-strip-own {
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+    min-width: 0;
+}
+
+.dep-strip-arrow { color: var(--faint); }
+
+.dep-strip-words {
     color: var(--muted);
     font: var(--type-label-strong-font);
     letter-spacing: var(--type-label-strong-tracking);
     text-transform: var(--type-label-strong-transform);
 }
 
-.opt-stage-box code {
-    color: var(--accent-700);
-}
+.dep-strip-own { font-weight: 600; }
 
-/* Same recipe as `.linkage-connector` (`species-entry.css`): a bare arrow
-   glyph, centred on the row, muted until it stacks. */
-.opt-stage-connector {
-    display: flex;
-    flex: none;
-    align-items: center;
-    color: var(--faint);
-    font-size: 1.4rem;
-}
-
-/* Same 680px stack breakpoint every other flow-with-connector on this app
-   stacks at (`species-entry.css`'s `.linkage-flow`) -- two boxes fit side
-   by side well below that width, so this needs no earlier tablet-band
-   breakpoint the three-step linkage flow does. */
-@media (max-width: 680px) {
-    .opt-stage-flow { flex-direction: column; }
-    .opt-stage-box { flex: none; }
-    .opt-stage-connector { align-self: flex-start; transform: rotate(90deg); margin: .2rem 0 .2rem .4rem; }
+.produced-list,
+.used-by-list {
+    margin: 0;
+    padding-left: var(--s-5);
+    max-width: var(--measure-note);
 }
 
 /* No mobile breakpoint override for `.record-context`/`.record-context--

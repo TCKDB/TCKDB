@@ -34,7 +34,7 @@ describe("calculationNodes", () => {
         const nodes = calculationNodes(base)
         expect(ids(nodes)).toEqual(["owner", "conformer-group", "conformer-observation", "geometry", "related", "level-of-theory"])
         expect(nodes.map((n) => n.label)).toEqual([
-            "Molecule version", "Conformer group", "Conformer observation", "Geometries", "Related calculations", "Level of theory",
+            "Molecule version", "Conformer group", "Conformer observation", "Geometries", "Calculations it links to", "Level of theory",
         ])
         expect(byId(nodes, "owner")).toMatchObject({ to: "/species-entries/spe_1", sub: "CH3" })
         expect(byId(nodes, "level-of-theory")).toMatchObject({ to: "/methods/lot_1", sub: "b3lyp/def2tzvp" })
@@ -42,7 +42,11 @@ describe("calculationNodes", () => {
 
     it("counts distinct related calculations and links to the page's own sections", () => {
         const nodes = calculationNodes(base)
-        expect(byId(nodes, "related")).toMatchObject({ sub: "depends\u00a0on\u00a01, used\u00a0by\u00a02", to: "#dependencies-heading" })
+        expect(byId(nodes, "related")).toMatchObject({
+            sub: "depends\u00a0on\u00a01, used\u00a0by\u00a02", to: "#dependencies-heading", relation: "Listed under Depends on and Used by",
+        })
+        const onlyChildren = calculationNodes({ ...base, dependencies: base.dependencies.filter((d) => d.direction === "parent") })
+        expect(byId(onlyChildren, "related")).toMatchObject({ to: "#used-by-heading", relation: "Listed under Used by" })
         expect(byId(nodes, "geometry")).toMatchObject({ sub: "1 input, 2 output", to: "#geometries-heading" })
     })
 
