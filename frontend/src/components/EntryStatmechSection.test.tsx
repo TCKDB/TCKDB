@@ -504,7 +504,7 @@ describe("EntryStatmechSection", () => {
         }))
         page()
         await screen.findByText("sm_one")
-        // Neither sm_one nor sm_two has electronic levels. Finding 6: this
+        // Neither sm_one nor sm_two has electronic levels. This
         // collapses to one line, with no heading at all -- there is no
         // destination to jump to, so no `SectionHeading` registers one.
         expect(screen.queryByRole("heading", { name: "Electronic levels" })).not.toBeInTheDocument()
@@ -840,7 +840,7 @@ describe("EntryStatmechSection -- conformer derived from source calculations", (
 })
 
 // ---------------------------------------------------------------------------
-// Finding 6: the vibrational-frequency evidence -- the CONTENT of a
+// The vibrational-frequency evidence -- the CONTENT of a
 // statmech record -- renders on each card directly, loaded by default,
 // gated by that record's own `available_sections.has_frequencies`.
 // ---------------------------------------------------------------------------
@@ -930,7 +930,7 @@ describe("EntryStatmechSection: frequencies render on the card by default", () =
 })
 
 // ---------------------------------------------------------------------------
-// Finding 7: "seven byte-identical statmech records render as fourteen
+// "seven byte-identical statmech records render as fourteen
 // full cards" (paired with thermo's identical finding). See
 // `EntryThermoSection.test.tsx`'s matching describe block for the same
 // rule, applied to `statmechRecordFingerprint`.

@@ -522,7 +522,7 @@ describe("EntryThermoSection", () => {
         expect(within(card).queryByText("Evaluated points")).not.toBeInTheDocument()
     })
 
-    // Finding 16: "REQUESTED RANGE (K): No temperature filter applied" /
+    // "REQUESTED RANGE (K): No temperature filter applied" /
     // "COVERS REQUESTED RANGE: Yes" / "EXTRAPOLATION DISTANCE (K): 0"
     // describe the REQUEST, not the record -- this page never sends a
     // temperature filter, so these three rows must not print on a record
@@ -560,7 +560,7 @@ describe("EntryThermoSection", () => {
         expect(ddFor(card, "Extrapolation distance (K)")).toBe("50")
     })
 
-    // Finding 16: "MODEL KIND: nasa" under a heading that already says
+    // "MODEL KIND: nasa" under a heading that already says
     // "NASA 7-coefficient polynomial thermo record" repeats the exact word the heading just used.
     it("never prints a 'Model kind' row that repeats the card's own heading", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
@@ -603,7 +603,7 @@ describe("EntryThermoSection", () => {
         expect(within(alphaCard).queryByText("Superseded")).not.toBeInTheDocument()
     })
 
-    // Finding 16: an empty "Group-additivity estimation" box rendered on
+    // An empty "Group-additivity estimation" box rendered on
     // every card, including `nasa`/computed records that were never going
     // to have one — group-additivity is a scheme only an ESTIMATED record
     // ever carries at all, unlike nasa/nasa9/wilhoit/points (the four
@@ -1217,7 +1217,7 @@ describe("EntryThermoSection: thermo records register in the ToC", () => {
 })
 
 // ---------------------------------------------------------------------------
-// Finding 7 of the block review: "seven byte-identical thermo records
+// "seven byte-identical thermo records
 // render as fourteen full cards" -- 12,000px of scrolling to learn one
 // fact. `domain/identicalRecordGroups.ts`'s `thermoRecordFingerprint`
 // compares model_kind, scientific_origin, H298/S298 (+ uncertainties), the

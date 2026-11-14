@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A test guards against decision narrative in source text (Unreleased)
+
+- **Behaviour:** none in the running service. `backend/tests/invariants/test_no_decision_narrative.py` scans `backend/app`, `backend/scripts`, `backend/tests`, `schemas/python`, `clients/python` and `frontend/src` and fails on design-record pointers, links into decision-record folders, manuscript-folder paths, an owner's name, owner-decision wording, issue, pull-request and review-finding ids, and phase labels, naming each hit as `path:line`. Ten allowlisted occurrences are listed with reasons in the test. Small wording fixes elsewhere remove the remaining hits (an admin schema description example, comments in thermoml and frontend tests).
+- **Schema and migration:** none. No new environment variable.
+- **Versions:** none changed.
+
 ## Package changelogs, docs and sources in `tckdb-schemas` and `tckdb-client` describe behaviour only (Unreleased)
 
 - **Behaviour:** two refusal and error messages are reworded; no change to when they fire (the builder's dependency-role error and the QCSchema adapter's scan-coordinate refusal). Both package changelogs describe each change by its behaviour, without issue, pull-request or design-record references, and list each version once; the generated producer contract carries the same changelog. Comments, docstrings, docs, examples and test names in `schemas/python` and `clients/python` state the rule without history. The scan-coordinate refusal message in the QCSchema adapter no longer cites a design record.

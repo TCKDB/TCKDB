@@ -81,7 +81,7 @@ describe("ConformerAttributionGroups", () => {
         expect(within(details).getByRole("heading", { name: "From Conformer Group 3" })).toBeVisible()
     })
 
-    // Finding 4 of the BLOCK review: `partitionByConformerLink` files a
+    // `partitionByConformerLink` files a
     // record naming MULTIPLE other groups under EVERY one of those groups'
     // own buckets -- the SAME record reference appears in more than one
     // bucket array. The prior summary count (`reduce` summing bucket

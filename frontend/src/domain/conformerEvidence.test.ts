@@ -345,7 +345,7 @@ describe("optimizationStaging", () => {
         expect(staging).toMatchObject({ kind: "aggregate", rawOptCount: 4, chainCount: 3, stagedRowCount: 1 })
     })
 
-    // Finding 5 of the BLOCK review: the safety guard's `!==` was only
+    // The safety guard's `!==` was only
     // tested in the direction where the chain count EXCEEDS
     // observations-with-opt (the fixture above). The `<` direction is real
     // too -- the backend's `_feeds_a_refinement_on_the_same_observation`
@@ -450,7 +450,7 @@ describe("describeConformerEvidence", () => {
         expect(story).toContain("three of those calculations are a coarse pass later refined")
     })
 
-    // Finding 1 of the BLOCK review: the per-observation branch had no
+    // The per-observation branch had no
     // equivalent of the aggregate branch's `rawOptCount === 0` guard. A
     // conformer whose loaded observations carry freq/sp but no opt at all
     // satisfies the safety condition (chainCount 0 === coverageOpt 0, every
@@ -483,7 +483,7 @@ describe("describeConformerEvidence", () => {
         )
     })
 
-    // Finding 2: the staging clause silently dropped sightings with no opt
+    // The staging clause silently dropped sightings with no opt
     // row -- `perObservation` only gets an entry when `optCount > 0`, and
     // the old clause text carried no denominator, so 4 sightings with only
     // 2 having opt printed a staging clause that read as a complete
