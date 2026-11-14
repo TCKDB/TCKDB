@@ -227,8 +227,8 @@ def render() -> str:
         raise SystemExit(
             "The catalogue declares no Replay.never_succeeds code that a "
             "client would otherwise replay. Emitting an empty "
-            "NON_RETRYABLE_CODES would make every client retry forever codes "
-            "that never clear while leaving the export in place; refusing."
+            "NON_RETRYABLE_CODES would make every client retry codes that "
+            "never clear, forever, while leaving the export in place; refusing."
         )
 
     lines = [_HEADER]

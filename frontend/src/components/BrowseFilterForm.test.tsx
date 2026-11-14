@@ -18,7 +18,7 @@ import { BrowseFilterForm } from "./BrowseFilterForm"
  * archive's real vocabulary, not invented
  * values: Gaussian genuinely has two version strings that look like
  * duplicates and are not (`"16"` vs `"Gaussian 16, Revision C.02"`, a
- * parsed output banner deposited into the version column -- issue #305),
+ * parsed output banner deposited into the version column),
  * Arkane genuinely appears in both the software and workflow-tool lists,
  * and ORCA/Molpro/Arkane genuinely have zero recorded versions
  * (`software_release.version` is NULL for all three).

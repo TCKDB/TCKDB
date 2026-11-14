@@ -72,7 +72,7 @@ export async function loadConformerGroup(
     const query = new URLSearchParams()
     // `observation_details` is required alongside `observations` to get
     // each embedded observation's own `calculations`/`geometries` inline
-    // -- since issue #537, the default `observations` shape is a lean
+    // -- the default `observations` shape is a lean
     // per-observation summary (ref/review/origin/note only) and does not
     // carry either. Without this token this page's `ObservationCard`
     // would render every observation with an empty calculation table and

@@ -922,7 +922,7 @@ describe("the home-page identifier search recognizes and routes public reference
     })
 })
 
-describe("unmatched routes (finding #12)", () => {
+describe("unmatched routes", () => {
     it("shows the not-found page instead of silently rendering the home page", async () => {
         window.history.replaceState({}, "", "/this-route-does-not-exist")
         render(<App />)

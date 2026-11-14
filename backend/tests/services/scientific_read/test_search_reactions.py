@@ -353,13 +353,11 @@ def test_exact_rejects_the_partial_query_contains_accepts(db_session):
     assert len(search_reactions(db_session, whole).records) == 1
 
 
-def test_exact_returns_the_reaction_for_a_full_query(db_session):
-    """The migration path for callers who relied on the old default.
+def test_exact_and_contains_agree_on_a_full_query(db_session):
+    """A full two-sided query returns exactly this reaction under both modes.
 
-    A full two-sided query returned exactly this reaction before ``match``
-    existed. ``match=exact`` must still return exactly it, and the default
-    ``contains`` must return it too — containment widens the answer set, it
-    never drops a record the old semantics returned.
+    ``match=exact`` returns it, and the default ``contains`` returns it too:
+    containment widens the answer set but never drops a record ``exact`` returns.
     """
     _setup_reaction(
         db_session,

@@ -685,7 +685,7 @@ describe("ReactionEntryPage -- kinetics card evidence prose and k(T) table forma
         expect(aRow?.nextElementSibling?.textContent).toContain("2.3400×10⁻³")
     })
 
-    // #620: A only means something beside the T0 it was fitted at.
+    // A only means something beside the T0 it was fitted at.
     const kineticsLabels = (container: HTMLElement) =>
         Array.from(container.querySelectorAll('section[aria-labelledby="kinetics-heading"] dt')).map((dt) => dt.textContent)
 

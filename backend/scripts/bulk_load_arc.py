@@ -1,5 +1,8 @@
 """Bulk-load ARC run directories into the dev database.
 
+The source directory is required: pass ``--src`` or set ``TCKDB_ARC_RUNS_DIR``.
+The examples below assume ``TCKDB_ARC_RUNS_DIR`` is set.
+
 Usage:
     # Fresh start: drop + recreate DB, then load all ARC runs
     conda run -n tckdb_env python scripts/bulk_load_arc.py --fresh
@@ -414,7 +417,7 @@ def print_db_stats(session):
 
 def main():
     parser = argparse.ArgumentParser(description="Bulk-load ARC runs into dev DB")
-    parser.add_argument("--src", type=Path, default=_DEFAULT_ARC_DIR, required=_DEFAULT_ARC_DIR is None,
+    parser.add_argument("--src", type=Path, default=_DEFAULT_ARC_DIR,
                         help="Source directory containing ARC run folders (default: $TCKDB_ARC_RUNS_DIR)")
     parser.add_argument("--fresh", action="store_true", help="Drop + recreate DB and clear progress")
     parser.add_argument("--limit", type=int, default=0, help="Load only first N runs")
@@ -435,6 +438,8 @@ def main():
                         help="Explicit declaration required for ARC thermo deposits.")
     args = parser.parse_args()
 
+    if args.src is None:
+        parser.error("the source directory is required: pass --src or set TCKDB_ARC_RUNS_DIR")
     src = args.src.resolve()
     if not src.is_dir():
         print(f"Error: {src} is not a directory.", file=sys.stderr)

@@ -51,8 +51,7 @@ export function AuthStatus() {
                 // it in `signOutIncomplete`, which the login page renders.
                 // `void logout()` alone left the rejection unhandled, which
                 // printed the server's error to the console and failed the
-                // test run as an unhandled rejection. Raised in review of
-                // #467.
+                // test run as an unhandled rejection. The rejection is swallowed.
                 void logout().catch(() => {})
             }}
         />

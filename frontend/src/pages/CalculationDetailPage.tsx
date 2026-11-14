@@ -72,8 +72,8 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle"
 // The archive advertises 19 public opt-in sections via `include=<token>`
 // (a 20th, `internal_ids`, is never requested by a public client; `trust`
 // is a further, separate opt-in kept out of this slice). Fetching all 19
-// on every page load is exactly what issue #269 charges the sibling
-// surface for. Fetching none until every disclosure is clicked would make
+// on every page load is exactly what the sibling
+// surface is faulted for. Fetching none until every disclosure is clicked would make
 // dependency arrows — the one thing this slice exists to get right — an
 // extra click away from a page whose entire point is showing them.
 //
@@ -1047,7 +1047,7 @@ function GeometriesSection({
                         optimisation stage stores its input and output as
                         the same geometry row -- either because only ONE
                         geometry was ever deposited for that pass, or
-                        (its backfill) because the starting geometry
+                        because the starting geometry
                         was extracted from a deposited ESS artifact and
                         happens to dedupe to the same stored row as the
                         output. Calling this "Input and output" implied a

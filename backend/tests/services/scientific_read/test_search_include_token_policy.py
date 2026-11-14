@@ -133,8 +133,8 @@ def test_search_legal_includes_match_the_declared_policy(
         assert "trust" in legal, (
             f"{module_path}.{legal_name} does not accept 'trust'. This "
             f"surface's record declares a trust field; without the token the "
-            f"field is one no request can fill, which no request can "
-            f"fill. If the eager-load cost forced a rollback, "
+            f"field is one no request can fill. "
+            f"If the eager-load cost forced a rollback, "
             f"cap or paginate — do not un-legalise the token."
         )
     else:

@@ -15,7 +15,7 @@ import { AuthProvider } from "../components/AuthProvider"
  * 1. Who gets in (curator or admin; a plain signed-in user is told why).
  * 2. That the page says which review axis it is, since "review" alone
  *    does not distinguish it from Machine findings.
- * 3. Task #269's redesign: records group under the SUBJECT a curator
+ * 3. Subject grouping: records group under the SUBJECT a curator
  *    actually judges (a species entry, a transition-state entry, ...),
  *    a same-type cluster collapses to a count and still expands to reach
  *    every record, and the header reports honest totals over the WHOLE
@@ -555,7 +555,7 @@ describe("what a subject block shows", () => {
 
     it("shows each participant's formula ONCE, not its SMILES and formula both", async () => {
         // The default <ReactionEquation> rendering shows BOTH -- "[CH3]
-        // (CH3) + [H] (H) ⇌ C (CH4)" -- which review of #492 caught as
+        // (CH3) + [H] (H) ⇌ C (CH4)" -- which is
         // noise here: a bare "C" next to "(CH4)" reads as a typo, and the
         // species blocks above this one already show formula alone. This
         // page must pass `formulaOnly` so exactly one notation appears.
@@ -842,8 +842,8 @@ describe("collapsing same-type records under one subject (defect #2: the duplica
         expect(within(section).getByText("atom-energy correction")).toBeInTheDocument()
         expect(within(section).getByText("bond-additivity correction")).toBeInTheDocument()
         // Each expanded record keeps its OWN Review... control -- a
-        // collapsed cluster is not a per-subject bulk approve (task #270
-        // is explicitly not this).
+        // collapsed cluster is not a per-subject bulk approve (no bulk
+        // approve is offered).
         expect(within(section).getAllByRole("button", { name: "Review…" })).toHaveLength(2)
     })
 

@@ -10,7 +10,7 @@ from tests.schemas.test_thermo_creation_strictness import IDENTITY
 from tests.services.archive.test_archive import _empty_archive_tables
 
 
-def test_archive_preserves_unknown_state_zero_kelvin_and_legacy_partial_fit(db_session):
+def test_archive_preserves_null_phase_and_reference_pressure_zero_kelvin_and_partial_nasa_fit(db_session):
     values = {"phase": None, "reference_pressure_bar": None,
               "enthalpy_formation_0k_kj_mol": 0,
               "enthalpy_formation_0k_uncertainty_kj_mol": 0.125}

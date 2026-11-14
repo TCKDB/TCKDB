@@ -344,11 +344,10 @@ describe("how a row names the record it concerns", () => {
     it("puts no internal row id anywhere in the table", async () => {
         meIs(admin)
         // Includes the row that cannot be named: that is where a row id is
-        // most tempting as a fallback, and where #479 put one last time.
+        // most tempting as a fallback.
         // Also includes a container-shaped row: the sweep otherwise
-        // only ever exercises the pre-#493 shape, which is the exact
-        // seed-omission pattern that let #492's original complaint ship
-        // twice.
+        // only ever exercises the plain shape, which would hide a
+        // seed omission.
         queueIs([
             task(),
             otherTask(),

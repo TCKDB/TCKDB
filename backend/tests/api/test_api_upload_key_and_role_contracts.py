@@ -349,7 +349,7 @@ class TestTheConformerNamespaceIsNotTheLabel:
     """
 
     def test_a_label_is_not_a_reference(self, client):
-        """The old spelling refuses instead of resolving."""
+        """A label is refused rather than resolved."""
         payload = _conformer_payload(
             "conf-label-not-key",
             applied_energy_corrections=[

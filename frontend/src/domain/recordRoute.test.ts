@@ -179,7 +179,7 @@ describe("the ref goes into the path safely", () => {
 
 
 /**
- * #262: where a record can be SEEN, when it has no page of its own.
+ * Where a record can be SEEN, when it has no page of its own.
  *
  * `recordRoute` answers "is there a page for this type". Six of the types
  * without one are still rendered -- inside their parent -- and the review
@@ -241,7 +241,7 @@ describe("where a record can be seen", () => {
     it("locates a record that cannot be named at all", () => {
         // applied_energy_correction, 164 of the 385 and the only table in the
         // archive with no public ref. "a correction on spe_1" is
-        // what a reviewer needs, and it does not wait on #253.
+        // what a reviewer needs, and it does not wait on a public ref.
         expect(
             resolveRecordLocation(
                 "applied_energy_correction",

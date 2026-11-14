@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Script help, test names and site text describe behaviour only (Unreleased)
+
+- **Behaviour:** script `--help` and printed text, test names and assertion messages, and site wording state current behaviour without design-record, issue or date references. `backend/scripts/bulk_load_arc.py` takes its source directory from `--src` or the new `TCKDB_ARC_RUNS_DIR` environment variable and exits 2 naming both when neither is set. A review stamped with version 0 reads "(no version recorded)".
+- **Schema and migration:** none. New environment variable: `TCKDB_ARC_RUNS_DIR`.
+- **Versions:** `tckdb-client` 0.207.0 (help text and docstrings only).
+
 ## The migration chain is one revision (Unreleased)
 
 - **Behaviour:** none. `alembic upgrade head` on an empty database builds the same schema and seed rows from a single revision, `d5b8e2f4a916`; `alembic downgrade base` removes them. Revision ids that no longer exist are removed from comments, docs and tests. The OpenAPI descriptions of the two ML export routes lose a sentence that cited a revision, and the contribution-bundle example carries `schema_version` `d5b8e2f4a916` (the field is a free-form string that nothing reads).
@@ -31,10 +37,6 @@ dataset must never require a code release.
 
 - **Behaviour:** the scientific check register lists each check's code, rule, tier, enforcement and repair; justification text was removed. The `adr` and `tier_rationale` fields and the enforcement `note` text are gone from the register and its generated document, and the producer contract quotes the shorter text. Checks and entry numbers are unchanged.
 - **Schema and migration:** none. No new environment variable. **Versions:** `tckdb-schemas` 0.174.1.
-
-## Script help, test names and site text describe behaviour only (Unreleased)
-
-Script `--help` and printed text, test names and assertion messages, and site wording describe current behaviour without design-record, issue or date references. `bulk_load_arc.py` takes its source directory from `--src` or `TCKDB_ARC_RUNS_DIR` instead of a built-in path. `tckdb-client` 0.207.0 changes help text only.
 
 ## Decision narrative removed from the API, workflows and chemistry modules (Unreleased)
 

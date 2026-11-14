@@ -60,7 +60,7 @@ def _blocking(result, thermo):
 
 
 def test_p1_a_sole_record_whose_only_flaw_is_an_automated_geometry_fail_is_selectable(db_session, methane):
-    """Main: no_applicable_candidate (blocked, source_calculation_hard_failed_for_required_role). Now: selectable."""
+    """A geometry fail does not block the sole record: it is selectable."""
     thermo = make_thermo(db_session, methane, proto=protocol("g4"))
     _source(db_session, methane, thermo, geometry=ValidationStatus.fail)
     result = _run(db_session, methane)
@@ -69,7 +69,7 @@ def test_p1_a_sole_record_whose_only_flaw_is_an_automated_geometry_fail_is_selec
 
 
 def test_p2_a_geometry_fail_does_not_let_a_competitor_win_by_exclusion(db_session, methane):
-    """Main: the G4 with the geometry fail was excluded, so the G3 was the sole eligible record. Now: both compete."""
+    """The G4 with the geometry fail is not excluded, so it competes with the G3."""
     g4 = make_thermo(db_session, methane, proto=protocol("g4"), age_days=400)
     g3 = make_thermo(db_session, methane, proto=protocol("g3"), age_days=1)
     _source(db_session, methane, g4, geometry=ValidationStatus.fail)

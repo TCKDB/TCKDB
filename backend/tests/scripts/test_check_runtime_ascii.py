@@ -611,7 +611,7 @@ def test_the_shipped_client_trees_are_clean(tree: Path):
 
 
 def test_the_mcp_integration_is_clean():
-    """Coverage, not repair -- said here so the diff is not misread.
+    """Coverage, not repair.
 
     ``tckdb_mcp`` has no violations and is on the target
     list so the *next*

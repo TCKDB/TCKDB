@@ -30,8 +30,7 @@ and a workflow that has not been created yet look identical: both are an
 absence. Reading an absence as "not applicable" too eagerly gives a false
 pass; reading it as "still pending" forever gives a hang. This repository
 has shipped guards that could not fail, some written to close that very
-family, so the
-mechanism here is built to make absence *provable* rather than assumed:
+family, so the mechanism here is built to make absence *provable* rather than assumed:
 
   * Absence is never interpreted at all until the run listing for this
     head SHA contains **this job's own run id**. Our run and the gate

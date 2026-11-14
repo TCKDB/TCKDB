@@ -464,7 +464,7 @@ def test_caller_supplied_id_filter_is_echoed_back(client, db_session):
 
 
 def test_integer_path_handle_resolves(client, db_session):
-    """Response IDs are hidden, but route inputs remain unchanged."""
+    """Response IDs are hidden, but an integer in the route still resolves."""
     species = make_species(
         db_session, smiles="C#CCONOCC", inchi_key=next_inchi_key("PD_IP")
     )

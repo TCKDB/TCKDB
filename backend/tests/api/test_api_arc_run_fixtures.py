@@ -138,7 +138,7 @@ def test_arc_run_payload_uploads_cleanly(
         assert resp.status_code == 422, (
             f"{case_id}: POST {url} returned {resp.status_code}, expected 422 "
             f"(this payload's transition_state carries a "
-            f"componentless, zero-valued bac_total, which is now refused).\n"
+            f"componentless, zero-valued bac_total, which is refused).\n"
             f"response: {resp.text[:2000]}"
         )
         body = resp.json()

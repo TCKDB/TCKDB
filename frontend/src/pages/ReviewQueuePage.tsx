@@ -73,7 +73,7 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle"
  * write that ends every upload, starting at `not_reviewed`. The default
  * filter is therefore the backlog: everything nobody has looked at.
  *
- * ## Task #269: subject grouping
+ * ## Subject grouping
  *
  * A flat, one-row-per-record table would render two
  * corrections on one species as two lines with nothing telling
@@ -103,9 +103,8 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle"
  * presentation of the same rows, not a new kind of approval -- a
  * collapsed cluster of same-type records (two corrections on one
  * species) expands so each one is still reached and judged individually.
- * A per-subject bulk approve is a deliberately separate, later change
- *: it interacts with permanent data freezing and needs its
- * own design, and nothing here offers it.
+ * A per-subject bulk approve is not offered: it interacts with permanent
+ * data freezing and needs its own design.
  */
 
 type LoadState =
@@ -248,7 +247,7 @@ function SubjectHeading({ subject }: { subject: ReviewQueueSubject }) {
         // (from `spin` below) already says the electronic state is the
         // unremarkable default for nearly every species in the archive,
         // so restating "ground state" next to it on almost every block
-        // was noise review #492 measured, not information. Any REAL
+        // was noise, not information. Any REAL
         // extra (a term symbol in a recognised shape) still survives
         // `includeState: false` -- see `facetChips`'s own docstring.
         //
@@ -307,7 +306,7 @@ function SubjectHeading({ subject }: { subject: ReviewQueueSubject }) {
     if (subject.subject_type === "transition_state_entry") {
         const spin = spinWord(subject.chemistry.multiplicity)
         // Two DIFFERENT absences, told apart honestly rather than
-        // collapsed into one sentence (review #492 caught the collapse):
+        // collapsed into one sentence (they are not collapsed):
         // `unmapped_smiles` is the candidate's OWN saddle-point SMILES,
         // never a "reaction SMILES" -- that word was simply wrong, not
         // just terse -- and it can be present while `formula` is still
@@ -363,7 +362,7 @@ function SubjectHeading({ subject }: { subject: ReviewQueueSubject }) {
         // why), and a per-participant in-page navigation link here would
         // be the one exception to that rule.
         //
-        // `formulaOnly` -- review #492 caught the component's DEFAULT
+        // `formulaOnly` -- the component's DEFAULT
         // rendering ("[CH3] (CH3) + [H] (H) ⇌ C (CH4)") printing every
         // participant twice, once as SMILES and once as formula, right
         // below species subject headings that already show formula

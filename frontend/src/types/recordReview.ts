@@ -40,7 +40,7 @@ export const ALL_STATUSES: readonly RecordReviewStatus[] = [
  * One review row.
  *
  * `record_public_ref` is the handle the archive is addressed by, added
- * to this read in #484 so a queue can name what it is asking somebody to
+ * to this read so a queue can name what it is asking somebody to
  * look at. `record_id` is the internal row id; it is what the PATCH path
  * takes, so the page reads a ref and writes an id -- an asymmetry that
  * is tolerable only while this surface is curator-gated and the id never
@@ -58,7 +58,7 @@ export const RecordReviewSchema = z.object({
     record_id: z.number().int(),
     record_public_ref: z.string().nullable().default(null),
     // Where the record can be SEEN, as opposed to what it is called. Added
-    // in #262: six record types are rendered only inside their parent, so a
+    // here: six record types are rendered only inside their parent, so a
     // ref addresses no route and 30% of this queue pointed at nothing.
     //
     // `.default(null)` on both, so a server that predates the field parses

@@ -338,7 +338,7 @@ def test_the_statmech_pair_needs_no_exemptions():
         "rotational_constant_c_cm1",
     ):
         assert field in reaction_fields, (
-            f"BundleStatmechIn lost '{field}', which the schema declares"
+            f"BundleStatmechIn lost '{field}', which its species-root counterpart also declares"
         )
 
 

@@ -717,8 +717,8 @@ describe("GeometryViewer", () => {
  * on the live viewer) — not a CSS property, so a `.css`-file-only fix
  * (owned by the parallel `frontend/theme-tokens` PR) cannot reach it.
  * This component reads the SAME `data-theme`/`prefers-color-scheme`
- * convention #296 established for CSS, directly in TypeScript, without
- * editing any file #296 owns.
+ * convention the CSS uses, directly in TypeScript, without
+ * editing any CSS file.
  */
 describe("GeometryViewer — theme-aware 3D canvas background", () => {
     let originalMatchMedia: typeof window.matchMedia | undefined

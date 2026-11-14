@@ -672,8 +672,7 @@ export function GeometryViewer({
 
     // Keeps `isDarkTheme` in sync with the SAME two signals
     // `resolveIsDarkTheme` reads: a `MutationObserver` for `data-theme`
-    // changing on the document root (an explicit reader theme choice —
-    // #296's mechanism), and a `matchMedia` listener for
+    // changing on the document root (an explicit reader theme choice), and a `matchMedia` listener for
     // `prefers-color-scheme` changing (the unstamped-default case, e.g.
     // the OS theme changing while this page is open). Runs once, not
     // keyed on anything reactive — this is app-wide theme state, not

@@ -60,7 +60,7 @@ export type VocabRecordKind = "species" | "transition_state"
 
 /**
  * `recordKind` narrows to software actually used by a calculation owned by
- * that kind of record (added in #308, `/meta/software`'s own doc comment
+ * that kind of record (see `/meta/software`'s own doc comment
  * for the full rationale) -- omitted, the list is unscoped (any kind).
  */
 export function loadSoftwareNames(recordKind?: VocabRecordKind, signal?: AbortSignal): Promise<VocabEntry[]> {

@@ -48,7 +48,8 @@ read needs it; see the exporter's "calculation-id gap"). Then:
 * **Identity.** Symbols, charge, multiplicity and mass numbers equal.
 * **Energy.** Not carried, and asserted not carried. The C1 mapping maps a
   driver-``hessian`` document to a ``freq`` record holding only the matrix;
-  ``properties.return_energy`` is not stored, and the import's mapping report names it ``retained_only``: a
+  ``properties.return_energy`` is not stored, and the import's mapping report
+  names it ``retained_only``: a
   ``freq`` record has no energy field, and a sibling ``sp`` would need a
   dependency edge the schema does not allow from a ``freq``. The exporter
   fills ``properties.return_energy`` only from a same-level ``sp`` record on

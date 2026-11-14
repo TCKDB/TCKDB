@@ -194,7 +194,7 @@ JUDGED_SITES: dict[str, str] = {
         "`unique_conflict` -- a real code that says less than the sentence "
         "it replaced, because a duplicate username and a duplicate email "
         "are the same SQLSTATE -- and that the honest repair was a code of "
-        "its own. The site now reads `exc.orig.diag.constraint_name` and "
+        "its own. The site reads `exc.orig.diag.constraint_name` and "
         "raises `username_taken` or `email_taken`, so it mints a *stricter* "
         "code than the handler it bypasses rather than losing one. "
         "Still listed, and still a replaced message, because the scan's "
@@ -556,8 +556,7 @@ class TestTheSweepIsComplete:
         path = "backend/app/api/routes/scientific/artifacts.py"
         assert path not in replaced_by_file, (
             f"{path} has regrown a handler that catches an exception and "
-            "raises an HTTPException with a new message -- the exact shape "
-            "of a handler that rewrites a caught exception"
+            "raises an HTTPException with a new message"
         )
 
 

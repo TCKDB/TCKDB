@@ -149,7 +149,7 @@ Reminder -- the two correct configurations for talking to Postgres:
     DB_PORT=<host-published port>   # e.g. 5432, or 5434 if remapped
                                     # to avoid a host-installed Postgres
 
-  API inside the compose network (API inside the compose network):
+  API inside the compose network:
     DB_HOST=db                      # the compose service name
     DB_PORT=5432                    # the container port (does not move)
 EOF

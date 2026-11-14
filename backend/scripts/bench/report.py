@@ -278,7 +278,8 @@ KNOWN_UNFIXED: tuple[dict[str, str], ...] = (
         "shape": "thermo_search_broad",
         "symptom": (
             "1,331 SQL statements and 1,009 ms for a 50-record page over 171 "
-            "matches (50k corpus). The cause below is architectural."
+            "matches (recheck_20260804.json, 50k corpus). The cause below is "
+            "architectural."
         ),
         "cause": (
             "`thermo_search` is a *composed* search: it walks every page of "
@@ -291,8 +292,8 @@ KNOWN_UNFIXED: tuple[dict[str, str], ...] = (
         "why_not_fixed": (
             "Collapsing it would mean rewriting the composed searches as single "
             "SQL queries — a large change to the most intricate ranking logic in "
-            "the read layer, with real regression risk to the D9 selection "
-            "chain. The supported path for this question is the bounded "
+            "the read layer, with real regression risk to the selection "
+            "logic. The supported path for this question is the bounded "
             "analytics surface for quantitative dataset construction, not the "
             "transactional searches. The defect is recorded here, measured."
         ),
@@ -301,7 +302,7 @@ KNOWN_UNFIXED: tuple[dict[str, str], ...] = (
         "shape": "structure_search_substructure",
         "symptom": (
             "535 ms p50 for a substructure query matching 12,649 entries "
-            "(50k corpus)."
+            "(recheck_20260804.json, 50k corpus)."
         ),
         "cause": (
             "Diagnosed from the captured plan, replacing the earlier "

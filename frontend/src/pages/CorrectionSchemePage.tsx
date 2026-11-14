@@ -108,8 +108,7 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                                 : <span className="record-identity-absent-inline">not tied to a specific level of theory</span>}
                                         </dd>
                                     </div>
-                                    {/* Software and workflow-tool release, added by #439
-                                        (deployed). Both are ALWAYS their own row, same
+                                    {/* Software and workflow-tool release, Both are ALWAYS their own row, same
                                         rule as the literature row below: an absence here
                                         is a fact about this record that the reader needs
                                         to see was checked, not a row that silently isn't

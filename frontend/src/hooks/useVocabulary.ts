@@ -62,7 +62,7 @@ export function useVocabulary(loader: (signal?: AbortSignal) => Promise<VocabEnt
  * workflow tool version): no parent chosen yet, loading the chosen
  * parent's versions, loaded (an EMPTY list here is real -- most of this
  * archive's software packages have no recorded release version, see
- * `BrowseFilterForm`'s doc comment and issue #305 -- never collapsed into
+ * `BrowseFilterForm`'s doc comment -- never collapsed into
  * the "no parent" or "loading" copy), or the fetch failed. Re-fetches
  * whenever `parent` changes; the caller is responsible for also CLEARING
  * the version filter's own value on that same change (see `VersionField`
