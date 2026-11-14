@@ -57,14 +57,7 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                         <RecordIdentityHeader
                             kicker="Energy-correction scheme"
                             lede={CORRECTION_SCHEME_LEDE}
-                            title={(
-                                <>
-                                    {title}
-                                    {record.level_of_theory && (
-                                        <> <span className="value-pill record-identity-title-pill"><LevelOfTheoryLink levelOfTheory={record.level_of_theory} /></span></>
-                                    )}
-                                </>
-                            )}
+                            title={title}
                             ownRef={{ label: "Scheme ref", value: scheme.energy_correction_scheme_ref }}
                             ownFacts={(
                                 <>

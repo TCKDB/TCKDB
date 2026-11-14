@@ -47,14 +47,14 @@ function FrequencyScaleFactorDetail({ record }: { record: FrequencyScaleFactorRe
     return (
         <section className="conformer-page methods-page">
             <PageShell
-                crumbs={[{ label: "Methods", to: "/methods" }, { label: `Frequency scale factor ${fsf.value}` }]}
+                crumbs={[{ label: "Methods", to: "/methods" }, { label: `Frequency scale factor ${shown?.value ?? fsf.value}` }]}
                 contents="none"
                 identity={(
                     <header className="basin-header">
                         <RecordIdentityHeader
                             kicker="Frequency scale factor"
                             lede={FREQUENCY_SCALE_FACTOR_LEDE}
-                            title={<>{kind} <span className="data"><Stored full={shown?.full}>{shown?.value ?? String(fsf.value)}</Stored></span></>}
+                            title={<>{kind} <span><Stored full={shown?.full}>{shown?.value ?? String(fsf.value)}</Stored></span></>}
                             ownRef={{ label: "Frequency scale factor ref", value: fsf.frequency_scale_factor_ref }}
                             ownFacts={(
                                 <>

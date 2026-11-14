@@ -78,13 +78,11 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
         // Titled from the controlled `scheme_kind` vocabulary plus the
         // owning level of theory -- NOT the depositor's own `name` text
         // (see the dedicated mutation-table test below).
-        expect(await screen.findByRole("heading", { name: "Petersson bond-additivity correction b3lyp/def2tzvp", level: 1 })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: "Petersson bond-additivity correction", level: 1 })).toBeVisible()
         await waitFor(() => expect(titleHasKind(document.title, "/methods/schemes/:ref")).toBe(true))
-        // Two links to the SAME level of theory -- one inside the title
-        // (the new fix) and one in the identity kv-list below it, which
-        // already linked before this change and is unaffected by it.
+        // The level of theory is linked once, in the identity facts.
         const lotLinks = screen.getAllByRole("link", { name: "b3lyp/def2tzvp" })
-        expect(lotLinks).toHaveLength(2)
+        expect(lotLinks).toHaveLength(1)
         for (const link of lotLinks) expect(link).toHaveAttribute("href", "/methods/lot_b3lyp")
 
         const paramTable = screen.getByRole("table", { name: "Bond correction parameters" })
@@ -120,7 +118,7 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
             energy_correction_scheme: { ...mockResponse().record.energy_correction_scheme, name: "Bob's custom BAC v3 (DO NOT USE)", scheme_kind: "atom_energy" },
         }))))
         page()
-        expect(await screen.findByRole("heading", { name: "Atom-energy correction b3lyp/def2tzvp", level: 1 })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: "Atom-energy correction", level: 1 })).toBeVisible()
         expect(screen.queryByText("Bob's custom BAC v3 (DO NOT USE)")).not.toBeInTheDocument()
     })
 
@@ -247,7 +245,7 @@ describe("CorrectionSchemePage -- no depositor-typed text", () => {
         ;(value.record.corrections as { target: string }[]).forEach((row, index) => { row.target = index === 0 ? ADVERSARIAL.elementKey : "Xx" })
         server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(value)))
         page()
-        expect(await screen.findByRole("heading", { name: "Petersson bond-additivity correction b3lyp/def2tzvp", level: 1 })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: "Petersson bond-additivity correction", level: 1 })).toBeVisible()
         expect(within(screen.getByRole("table", { name: "Applications of this correction scheme" })).getByText("spe_one")).toBeVisible()
 
         expectNoDepositorText()
