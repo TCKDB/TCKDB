@@ -1295,15 +1295,10 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("database_error", 503, Surface.generic_fallback,
             "backend/app/api/errors.py",
             note=(
-                "The operational-error handler's fallback_code, and it is "
-                "dead: that handler always passes an explicit code "
-                "(database_unavailable, or query_timeout on SQLSTATE "
-                "57014), and error_envelope reads the fallback only when "
-                "code is falsy. Listed because the argument is written "
-                "and a future edit that stops setting code would emit it "
-                "-- an enumeration that omits a fallback nobody has "
-                "reached yet is one that goes stale silently. Found by "
-                "widening the closure scan to *_code keywords."
+                "The operational-error handler's fallback_code, and it is unreachable: that handler always passes an "
+                "explicit code (database_unavailable, or query_timeout on SQLSTATE 57014), and error_envelope reads "
+                "the fallback only when code is falsy. Listed because a future edit that stops setting code would "
+                "emit it, and an enumeration that omits a fallback goes stale silently."
             )),
     ApiCode("database_request_failed", 500, Surface.response_literal,
             "backend/app/api/errors.py",
@@ -1676,20 +1671,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("last_admin_demotion", 409, Surface.message_prefix,
             "backend/app/api/routes/admin.py",
             note=(
-                "PATCH /admin/users/{user_id}/role refuses to take admin "
-                "from the archive's only active admin. No route grants the "
-                "role back once nobody holds it, so the request would be "
-                "unrecoverable through the API: repair means running "
-                "scripts/bootstrap_admin.py against the database, which "
-                "needs shell access to the host. Shape is a thing, not a "
-                "relationship -- the code names the whole situation and the "
-                "repair (promote someone else first) follows from the name, "
-                "so there is nothing for context to carry. The broader rule "
-                "'an admin may never demote themselves' was rejected "
-                "because it would make this code unreachable: auth requires "
-                "is_active and the route requires admin, so the caller is "
-                "always an active admin and any demotion of someone else "
-                "leaves one standing by construction."
+                "PATCH /admin/users/{user_id}/role refuses to take admin from the archive's only active admin. No "
+                "route grants the role back once nobody holds it, so the request would be unrecoverable through the "
+                "API: repair means running scripts/bootstrap_admin.py against the database, which needs shell access "
+                "to the host. Shape is a thing, not a relationship -- the code names the whole situation and the "
+                "repair (promote someone else first) follows from the name, so there is nothing for context to carry. "
+                "The refusal is scoped to the last admin: auth requires is_active and the route requires admin, so "
+                "the caller is always an active admin and any demotion of someone else leaves one standing by "
+                "construction."
             )),
     ApiCode("level_of_theory_handle_conflict", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/handles.py",
@@ -1720,7 +1709,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
             shape=Shape.relationship,
             note=(
                 "A limit above the hosted cap is recoverable by resending the same query with a smaller page size; a "
-                "negative offset is a caller bug, which is why this is its own code. Unreachable through a GET route "
+                "negative offset is a caller bug. The two have different repairs, so they are separate codes. Unreachable through a GET route "
                 "in the shipped configuration, where MAX_LIMIT and public_max_limit are both 200 and Query(le=200) "
                 "refuses anything larger first -- reachable through a POST search body, and through any GET on a "
                 "deployment that lowers public_max_limit. Published with its limit: context carries limit_max (a "
@@ -1762,14 +1751,10 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("missing_version_parent", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/meta.py",
             note=(
-                "Shared by /meta/software-versions, "
-                "/meta/workflow-tool-versions, and (since the species "
-                "provenance filters) /species/browse: a version filter "
-                "(software_version= / workflow_tool_version=) was supplied "
-                "without its named parent (software= / workflow_tool=). "
-                "Named which field like missing_identifier does, not a "
-                "relationship -- there is nothing on the other side to "
-                "compare it against."
+                "Shared by /meta/software-versions, /meta/workflow-tool-versions and /species/browse: a version "
+                "filter (software_version= / workflow_tool_version=) was supplied without its named parent (software= "
+                "/ workflow_tool=). Named which field like missing_identifier does, not a relationship -- there is "
+                "nothing on the other side to compare it against."
             )),
     ApiCode("ml_export_all_cap_exceeded", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/ml_dataset.py",
@@ -2012,7 +1997,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
             note=(
                 "The observation carries its own identity_hint.inchikey and its connectivity block (the InChIKey's "
                 "first, hyphen-delimited segment) disagrees with the attach target species's own InChIKey. Only the "
-                "connectivity block is compared -- a hint with no stereo layer can still be attached to a stereo- "
+                "connectivity block is compared -- a hint with no stereo layer can still be attached to a stereo-"
                 "specific entry (the isomer case this tool is for) -- but a different molecular skeleton is refused "
                 "rather than silently attached."
             )),
@@ -2022,7 +2007,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
             note=(
                 "The target must be a ground-state minimum entry of its species; it need not be the unique one, "
                 "because the curator's choice of which entry it is resolves the isomer ambiguity this tool exists "
-                "for. An observation carries no stereo/excited-state resolution of its own, so attaching it to a non- "
+                "for. An observation carries no stereo/excited-state resolution of its own, so attaching it to a non-"
                 "minimum or non-ground-state target would silently claim specificity the source data does not have."
             )),
     ApiCode("observation_rights_basis_incompatible", 422, Surface.message_prefix,
@@ -2083,9 +2068,9 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/schemas/reads/removed_parameters.py",
             shape=Shape.relationship,
             note=(
-                "temperature_min / temperature_max on the thermo and kinetics reads are named "
-                "coverage_temperature_min_k / coverage_temperature_max_k: the old names never filtered. context "
-                "carries the old and the new name."
+                "temperature_min / temperature_max on the thermo and kinetics reads are refused; the parameters "
+                "are coverage_temperature_min_k / coverage_temperature_max_k. They never filtered records; they "
+                "set the window temperature_coverage is computed against. context carries the old and the new name."
             )),
     ApiCode("parameter_value_requires_key", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/calculations_search.py"),
@@ -2326,19 +2311,13 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("server_response_invalid", 500, Surface.response_literal,
             "backend/app/api/errors.py",
             note=(
-                "The server failed its own response model; the request was "
-                "not at fault. Two sources, one handler: FastAPI's "
-                "ResponseValidationError (what a route returned does not fit "
-                "its response_model) and ServerFaultRoute, the route class "
-                "that turns a pydantic ValidationError escaping an endpoint "
-                "into ServerFaultError when the failing model is a response or "
-                "read model (a read model built from a row that does not fit "
-                "it); any other model keeps its 422. Before this a ResponseValidationError was "
-                "a text/plain 500 and a route-built read model a 422 that "
-                "blamed the caller. Fixed text, empty context; the errors go "
-                "to the server log. data_integrity_error keeps its own "
-                "meaning: a stored row combination the serializer cannot "
-                "represent."
+                "The server failed its own response model; the request was not at fault. Two sources, one handler: "
+                "FastAPI's ResponseValidationError (what a route returned does not fit its response_model) and "
+                "ServerFaultRoute, the route class that turns a pydantic ValidationError escaping an endpoint into "
+                "ServerFaultError when the failing model is a response or read model (a read model built from a row "
+                "that does not fit it); any other model keeps its 422. Fixed text, empty context; the errors go to "
+                "the server log. data_integrity_error has its own meaning: a stored row combination the serializer "
+                "cannot represent."
             )),
     ApiCode("smiles_too_long", 422, Surface.coded_exception,
             "backend/app/schemas/reads/scientific_kinetics_search.py",
@@ -2789,7 +2768,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "/species/browse's elements= composition filter. Same cap family as limit_too_large / "
                 "offset_too_large: a cap refusal that does not state the limit is un-actionable. context carries "
                 "max_elements (the configured cap, a module constant here rather than a setting) and elements_count "
-                "(the caller's own comma-separated symbol count). Each additional symbol adds one more unindexed per- "
+                "(the caller's own comma-separated symbol count). Each additional symbol adds one more unindexed per-"
                 "row cartridge regex on a public, unauthenticated endpoint; see MAX_ELEMENT_SYMBOLS in "
                 "app/schemas/reads/_field_bounds.py."
             )),
@@ -2850,7 +2829,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
             shape=Shape.relationship,
             note=(
                 "A calculation of a transition state states a conformer_key. A transition state has no conformers, so "
-                "the key would anchor nothing and is refused. Raised by the request schemas of /uploads/computed- "
+                "the key would anchor nothing and is refused. Raised by the request schemas of /uploads/computed-"
                 "reaction and /uploads/networks/pdep."
             )),
     ApiCode("transition_state_calculation_species_geometry", 422, Surface.coded_exception,
@@ -2956,23 +2935,12 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("unknown_conformer_group_ref", 404, Surface.coded_exception,
             "backend/app/services/upload_reference.py",
             note=(
-                "The third refusal a conformer_selection locator can "
-                "produce, and the newest: it arrived with the locator's "
-                "conformer_group_ref field, which was added because two "
-                "conformer groups under one species entry made the locator "
-                "unanswerable -- every ambiguous_conformer_selection_"
-                "locator refusal reported locator_can_express=false and no "
-                "corrected body existed. Not folded into "
-                "unknown_conformer_selection, by that code's own argument: "
-                "a ref naming nothing is repaired by fixing the string the "
-                "caller wrote, a real group holding no such selection by "
-                "depositing the selection. The third case -- a real group "
-                "belonging to a different species entry -- is neither a "
-                "404 nor a new code: the row exists and the locator "
-                "contradicts itself, so it is 422 kinetics_interpretation_"
-                "conformer_selection_owner_mismatch from the shared "
-                "ownership guard, separated from that code's other raise "
-                "site by context['field']."
+                "A conformer_selection locator's conformer_group_ref names no conformer group. Not folded into "
+                "unknown_conformer_selection: a ref naming nothing is repaired by fixing the string the caller wrote, "
+                "a real group holding no such selection by depositing the selection. A real group belonging to a "
+                "different species entry is neither a 404 nor a new code: the row exists and the locator contradicts "
+                "itself, so it is 422 kinetics_interpretation_conformer_selection_owner_mismatch from the shared "
+                "ownership guard, separated from that code's other raise site by context['field']."
             )),
     ApiCode("unknown_conformer_selection", 404, Surface.coded_exception,
             "backend/app/services/conformer_selection_locator.py",

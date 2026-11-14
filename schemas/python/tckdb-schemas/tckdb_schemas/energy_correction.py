@@ -250,8 +250,8 @@ class EnergyCorrectionSchemeRef(SchemaBase):
         A frequency level is accepted only on the Petersson and Melius BAC
         kinds: those are the correction tables Arkane keys on an
         ``energy//frequency`` pair. (Arkane's isodesmic reference data is
-        keyed on a pair too; the ``isodesmic`` kind has no defined content
-        yet, so it is revisited when it does.) And a frequency half is a
+        keyed on a pair too; the ``isodesmic`` kind has no defined content,
+        so it takes no frequency level.) And a frequency half is a
         half: without the energy level there is no pair. Both are contradictions in the payload, not
         gaps in it, so they are refused with a code.
         """

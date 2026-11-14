@@ -39800,7 +39800,7 @@
         "type": "object"
       },
       "NetworkSolveStateEnergySourceSummary": {
-        "description": "The calculation one participant of a state contributes to its energy.\n\n``species_entry_ref`` is the participant it is the source for; null only for a single\nsource that belongs to no participant of the state (never inferred from another row).\n``stoichiometry`` is that participant's coefficient in the state.",
+        "description": "The calculation one participant of a state contributes to its energy.\n\n``species_entry_ref`` is the participant it is the source for; null only when the\nstate-level ``source_calculation_ref`` slot names a calculation that belongs to no participant of the\nstate (never inferred from another row).\n``stoichiometry`` is that participant's coefficient in the state.",
         "properties": {
           "calculation_ref": {
             "title": "Calculation Ref",

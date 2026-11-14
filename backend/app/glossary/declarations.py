@@ -336,9 +336,9 @@ _HARD_FAIL = Vocabulary(
         Term(
             token="geometry_validation_failed",
             means=(
-                "Carried only by stored trust results under the version 1 rubrics, when an automated geometry "
-                "comparison failed. Version 2 and later rubrics report that failure as a warning on the "
-                "geometry check."
+                "Not issued by any current rubric; kept so stored reviews made before rubric versioning "
+                "(version 0) still parse. Current rubrics report a failed automated geometry comparison as "
+                "a warning on the geometry check."
             ),
         ),
         Term(
@@ -399,15 +399,16 @@ _HARD_FAIL = Vocabulary(
         Term(
             token="geometry_validation_failed_for_source_calculation",
             means=(
-                "Carried only by stored version 2 transition-state trust results, when a supporting calculation "
-                "failed the automated geometry comparison. Version 3 and later rubrics report it as a warning."
+                "Not issued by any current rubric; kept so stored reviews made before rubric versioning "
+                "(version 0) still parse. Current rubrics report a supporting calculation that failed the "
+                "automated geometry comparison as a warning on the geometry check."
             ),
         ),
         Term(
             token="frequency_source_has_zero_imaginary_modes_for_validated_ts",
             means=(
-                "Carried only by stored version 2 transition-state trust results, when the latest "
-                "frequency result reported no imaginary mode. Version 3 and later issue no frequency verdict; the same fact is "
+                "Not issued by any current rubric; kept so stored reviews made before rubric versioning "
+                "(version 0) still parse. Current rubrics issue no frequency verdict; the same fact is "
                 "the warning `no_frequency_result_lacks_an_imaginary_mode`, and the scoped judgement (does a usable "
                 "result on the evaluated geometry contradict the saddle claim) is the structure assessment's."
             ),
@@ -415,9 +416,8 @@ _HARD_FAIL = Vocabulary(
         Term(
             token="frequency_source_reaction_coordinate_not_designated_for_validated_ts",
             means=(
-                "Carried only by stored version 2 transition-state trust results, when the latest "
-                "frequency result reported several imaginary modes without a designated reaction coordinate. Version 3 "
-                "and later issue no frequency verdict; the missing designation is the missing check "
+                "Not issued by any current rubric; kept so stored reviews made before rubric versioning "
+                "(version 0) still parse. Current rubrics issue no frequency verdict; a missing designation is the missing check "
                 "`reaction_coordinate_designated_for_ts`, and the structure assessment reports it as the unresolved "
                 "`reaction_coordinate_not_established`."
             ),

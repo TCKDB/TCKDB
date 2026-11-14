@@ -592,7 +592,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 503; not a client refusal; arrives as: generic_fallback; defined in `backend/app/api/errors.py`.
 - Any request can receive it.
 - Message: not found by the static search.
-- Note: The operational-error handler's fallback_code, and it is dead: that handler always passes an explicit code (database_unavailable, or query_timeout on SQLSTATE 57014), and error_envelope reads the fallback only when code is falsy.
+- Note: The operational-error handler's fallback_code, and it is unreachable: that handler always passes an explicit code (database_unavailable, or query_timeout on SQLSTATE 57014), and error_envelope reads the fallback only when code is falsy.
 
 <a id="c-database-request-failed"></a>
 
@@ -1910,7 +1910,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 
 - Status: 404; client-facing; arrives as: coded_exception; defined in `backend/app/services/upload_reference.py`.
 - Message: not found by the static search.
-- Note: The third refusal a conformer_selection locator can produce, and the newest: it arrived with the locator's conformer_group_ref field, which was added because two conformer groups under one species entry made the locator unanswerable -- every ambiguous_conformer_selection_locator refusal reported locator_can_express=false and no corrected body existed.
+- Note: A conformer_selection locator's conformer_group_ref names no conformer group.
 
 <a id="c-unknown-conformer-selection"></a>
 

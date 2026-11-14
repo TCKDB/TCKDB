@@ -236,7 +236,7 @@ The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verb
 
 ### 0.174.4 - 2026-11-14
 
-Refusal and warning messages in the package state the rule without design-record references, and the energy-correction frequency-level refusal drops "for now". The package README points to this changelog instead of repeating it. No code, field, payload shape or condition changes.
+Refusal and warning messages in the package state the rule without design-record references, and the energy-correction frequency-level refusal drops "for now". The package README points to this changelog, and its changelog entries for 0.23.0 to 0.34.0 now live at the bottom of this file, without design-record references. No code, field, payload shape or condition changes.
 
 ### 0.174.3 - 2026-11-12
 
@@ -6702,8 +6702,8 @@ Unknown keys are refused.
   A frequency level is accepted only on the Petersson and Melius BAC
   kinds: those are the correction tables Arkane keys on an
   ``energy//frequency`` pair. (Arkane's isodesmic reference data is
-  keyed on a pair too; the ``isodesmic`` kind has no defined content
-  yet, so it is revisited when it does.) And a frequency half is a
+  keyed on a pair too; the ``isodesmic`` kind has no defined content,
+  so it takes no frequency level.) And a frequency half is a
   half: without the energy level there is no pair. Both are contradictions in the payload, not
   gaps in it, so they are refused with a code.
 

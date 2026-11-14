@@ -180,7 +180,7 @@ def evaluate_frequency_list_completeness(
                     f"{location}: the frequency list carries {n_modes} mode(s) "
                     f"but a harmonic analysis of this {n_atoms}-atom geometry "
                     f"produces at least {floor} "
-                    f"({W_FREQ_LIST_INCOMPLETE}). The deposit must carry the "
+                    f"({W_FREQ_LIST_INCOMPLETE}). The deposit should carry the "
                     f"complete signed unrounded list, never filtered: a "
                     f"partial list agrees with an independently recovered "
                     f"spectrum on every mode it contains and is silent about "
