@@ -13,8 +13,11 @@ import { loadNetworkEntry } from "../api/networkEntryApi"
 import { Disclosure } from "../components/Disclosure"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
 import { QuantityValue } from "../components/QuantityValue"
-import { NetworkDiagram } from "../components/NetworkDiagram"
-import { NetworkKtpChart } from "../components/NetworkKtpChart"
+import { Lede } from "../components/Lede"
+import { NetworkKtpHeatmap } from "../components/NetworkKtpHeatmap"
+import { NetworkMap } from "../components/NetworkMap"
+import { NetworkChannelsTable, NetworkStatesTable } from "../components/NetworkTables"
+import { ReviewChip } from "../components/ReviewChip"
 import { PageShell } from "../components/PageShell"
 import { RecordMap } from "../components/RelationshipMap"
 import { networkNodes } from "../domain/recordMapNodes"
@@ -24,15 +27,15 @@ import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDis
 import { ReviewNote } from "../components/ReviewNote"
 import { formatQuantity } from "../domain/quantityFormat"
 import { computeSpeciesEnergyCoverage, solveEnergySourceSentence, STATE_ENERGY_ORDER_NOTE } from "../domain/networkEnergyCoverage"
+import { networkLede, NETWORK_ENERGY_LEDE } from "../domain/networkLede"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 import { LiteratureCitation } from "../components/LiteratureCitation"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 /**
- * `/networks/:networkRef` -- identity, evidence (incl. the
- * live-computed energy-coverage fact), reactions, review, the
- * network diagram and the k(T,P) chart.
+ * `/networks/:networkRef` -- identity, the network map with its tables, the k(T,P) heat map, reactions, energies,
+ * evidence and review.
  */
 export default function NetworkEntryPage() {
     const { networkRef = "" } = useParams<{ networkRef: string }>()
@@ -103,13 +106,14 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
                     <header className="basin-header">
                         <div className="record-identity-header">
                             <div className="record-identity-kicker-row">
-                                <span className="t-kicker record-identity-kicker">Pressure-dependent network · deposited scientific record</span>
-                                <span className={reviewPillClass(network.review.status)}>{statusLabel(network.review.status)}</span>
+                                <span className="t-kicker record-identity-kicker">Pressure-dependent network</span>
+                                <ReviewChip status={network.review.status} />
                             </div>
                             {/* `network.name` and `network.description` are depositor
                                 prose and are not printed (house rule): the heading is a
                                 TCKDB noun, the network is identified by its ref below. */}
                             <h1 className="t-display-2 record-identity-title">Pressure-dependent network</h1>
+                            <Lede>{networkLede({ states: record.evidence_summary.state_count, channels: record.evidence_summary.channel_count, rates: record.evidence_summary.kinetics_count })}</Lede>
                             <div className="record-identity-known">
                                 <dl className="kv-list record-identity-facts">
                                     <div>
@@ -147,8 +151,32 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
                     </header>
                 )}
             >
+                <section className="ledger-section" aria-labelledby="map-heading">
+                    <SectionHeading id="map-heading">Network map</SectionHeading>
+                    <NetworkMap states={record.states} channels={record.channels} channelBarriers={record.channelBarriers} />
+                    <NetworkStatesTable states={record.states} />
+                    <NetworkChannelsTable channels={record.channels} states={record.states} />
+                </section>
+
+                <section className="ledger-section" aria-labelledby="ktp-heading">
+                    <SectionHeading id="ktp-heading">k(T,P)</SectionHeading>
+                    <NetworkKtpHeatmap key={network.network_ref} networkRef={network.network_ref} network={network} channels={record.channels} states={record.states} />
+                </section>
+
+                <section className="ledger-section" aria-labelledby="reactions-heading">
+                    <SectionHeading id="reactions-heading">Reactions</SectionHeading>
+                    <ReactionsSection channels={record.channels} reactionEntries={record.reactionEntries} totalChannels={record.evidence_summary.channel_count} />
+                </section>
+
+                <section className="ledger-section" aria-labelledby="energy-heading">
+                    <SectionHeading id="energy-heading">Energies</SectionHeading>
+                    {((record.stateEnergies?.length ?? 0) > 0 || (record.channelBarriers?.length ?? 0) > 0) && <p className="t-body section-intro">{NETWORK_ENERGY_LEDE}</p>}
+                    <Disclosure summary="Energy coverage">
+                        <EnergyCoverageCard record={record} />
+                    </Disclosure>
+                </section>
+
                 <section className="ledger-section" aria-labelledby="evidence-heading">
-                    <p className="t-kicker section-kicker">What this network carries</p>
                     <SectionHeading id="evidence-heading">Evidence on this network</SectionHeading>
                     <EvidenceChecklist
                         heading="Evidence on this network"
@@ -171,42 +199,9 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
                         ]}
                         note={`Counts reflect what this network's own record carries today, not an assumption about the underlying chemistry. "None deposited" describes the archive, not the chemistry.`}
                     />
-                    <EnergyCoverageCard record={record} />
-                </section>
-
-                <section className="ledger-section" aria-labelledby="diagram-heading">
-                    <p className="t-kicker section-kicker">States as energy levels, deposited barriers as saddle points</p>
-                    <SectionHeading id="diagram-heading">Potential-energy surface</SectionHeading>
-                    <p className="t-body section-intro">
-                        {`${record.evidence_summary.state_count} state${record.evidence_summary.state_count === 1 ? "" : "s"}, ${record.evidence_summary.channel_count} channel${record.evidence_summary.channel_count === 1 ? "" : "s"}. Energies here are electronic-only, referenced to the lowest state — see `}
-                        <a href="#energy-coverage">Energy coverage</a>
-                        {" above for what that means, and why it is not a thermal free-energy surface."}
-                    </p>
-                    <NetworkDiagram
-                        states={record.states}
-                        channels={record.channels}
-                        stateEnergies={record.stateEnergies}
-                        channelBarriers={record.channelBarriers}
-                    />
-                </section>
-
-                <section className="ledger-section" aria-labelledby="ktp-heading">
-                    <p className="t-kicker section-kicker">Evaluated, server-side, from the stored fits — never re-derived here</p>
-                    <SectionHeading id="ktp-heading">k(T,P)</SectionHeading>
-                    <p className="t-body section-intro">
-                        {`A channel carrying more than one fit — a Chebyshev and a PLOG parameterization of the same channel is the norm on this network, not an edge case — shows every one of them, never a single picked or averaged rate.`}
-                    </p>
-                    <NetworkKtpChart networkRef={network.network_ref} network={network} channels={record.channels} states={record.states} />
-                </section>
-
-                <section className="ledger-section" aria-labelledby="reactions-heading">
-                    <p className="t-kicker section-kicker">Elementary steps with a deposited reaction entry</p>
-                    <SectionHeading id="reactions-heading">Reactions</SectionHeading>
-                    <ReactionsSection channels={record.channels} reactionEntries={record.reactionEntries} totalChannels={record.evidence_summary.channel_count} />
                 </section>
 
                 <section className="ledger-section" aria-labelledby="review-heading">
-                    <p className="t-kicker section-kicker">Curation status</p>
                     <SectionHeading id="review-heading">Review</SectionHeading>
                     <EvidenceChecklist
                         heading="Network review"
@@ -245,24 +240,29 @@ function speciesThermoSentence(withThermo: number, total: number): string {
         return "This network's states name no participant species entries to check for thermochemistry."
     }
     if (withThermo === 0) {
-        return `No thermochemistry is deposited for the species these states are built from — none of the ${total} participant species entries carry a thermo (H298) record. A thermal free-energy surface needs every participant covered, so it cannot be drawn from species-level data today.`
+        return `No thermochemistry is deposited: none of the ${total} participant species entries carry a thermo (H298) record.`
     }
     if (withThermo === total) {
         return `Every one of the ${total} participant species entries carries a thermo (H298) record.`
     }
-    return `${withThermo} of the ${total} participant species entries carry a thermo (H298) record; the remaining ${total - withThermo} do not. A thermal free-energy surface needs every participant covered, so it cannot be drawn from species-level data today.`
+    return `${withThermo} of the ${total} participant species entries carry a thermo (H298) record.`
 }
 
 /** Which solve the sentence about solve energies is about: the one solve, or the first of several (named, and not preferred). */
 function solveSubject(solveRefs: readonly string[]): string {
     if (solveRefs.length <= 1) return "This network's own solve"
-    return `The first of this network's ${solveRefs.length} deposited solves (${solveRefs[0]}; the others are not read here, and it is not preferred over them)`
+    return `The first of this network's ${solveRefs.length} solves (${solveRefs[0]}; none is preferred)`
 }
 
-function solveEnergySentence(solveRefs: readonly string[], meMethod: string | null | undefined, stateCovered: number, stateTotal: number, barrierCovered: number, channelTotal: number): string | null {
+function solveEnergySentence(solveRefs: readonly string[], stateCovered: number, stateTotal: number, barrierCovered: number, channelTotal: number): string | null {
     if (stateCovered === 0 && barrierCovered === 0) return null
-    const solverLabel = meMethod ?? "master equation"
-    return `That is a different claim from "no energies are deposited on this network." ${solveSubject(solveRefs)} separately carries a relative electronic-only energy, referenced to its own lowest state, for ${stateCovered} of ${stateTotal} states, and a forward/reverse electronic barrier for ${barrierCovered} of ${channelTotal} channels — real, deposited data. It is an internal ${solverLabel} solver input, not thermo-grade H298, and mixing the two conventions on one axis would misrepresent the surface — so it is shown below as its own disclosure, not folded into a potential-energy surface.`
+    return `${solveSubject(solveRefs)} carries a relative electronic-only energy for ${stateCovered} of ${stateTotal} states and a forward and reverse barrier for ${barrierCovered} of ${channelTotal} channels.`
+}
+
+/** The channel's 1-based position in the served list, as the map and the other tables number it. */
+function channelNumber(channels: NetworkChannel[], channelKey: string): ReactNode {
+    const index = channels.findIndex((channel) => channel.channel_key === channelKey)
+    return index < 0 ? <span className="record-identity-absent-inline">not on a listed channel</span> : <code className="data">{index + 1}</code>
 }
 
 function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
@@ -271,16 +271,15 @@ function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
     const channelBarriers = record.channelBarriers ?? []
     const stateTotal = record.evidence_summary.state_count
     const channelTotal = record.evidence_summary.channel_count
-    const solveSentence = solveEnergySentence(record.solves.map((solve) => solve.network_solve_ref), record.solves[0]?.me_method, stateEnergies.length, stateTotal, channelBarriers.length, channelTotal)
+    const solveSentence = solveEnergySentence(record.solves.map((solve) => solve.network_solve_ref), stateEnergies.length, stateTotal, channelBarriers.length, channelTotal)
 
     const stateLabelByHash = new Map(record.states.map((state) => [state.composition_hash, state.composition.state_label]))
     const solveSource = solveEnergySourceSentence(record.solves.map((solve) => solve.network_solve_ref))
     const sortedStateEnergies = [...stateEnergies].sort((a, b) => a.energy_kj_mol - b.energy_kj_mol)
 
     return (
-        <div className="card" style={{ marginTop: "1.25rem" }} id="energy-coverage">
-            <span className="t-label">Energy coverage</span>
-            <p className="t-body" style={{ margin: ".6rem 0 0" }}>{speciesThermoSentence(speciesCoverage.withThermo, speciesCoverage.total)}</p>
+        <div id="energy-coverage">
+            <p className="t-body" style={{ margin: 0 }}>{speciesThermoSentence(speciesCoverage.withThermo, speciesCoverage.total)}</p>
             {solveSentence && <p className="t-body" style={{ margin: ".6rem 0 0" }}>{solveSentence}</p>}
             {record.solveEnergiesUnavailable && (
                 // Read failure, not an absence. Without this the page would
@@ -288,16 +287,11 @@ function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
                 // energies at all, which understates the archive -- the same
                 // conflation the sentence above exists to prevent.
                 <p className="t-body" style={{ margin: ".6rem 0 0" }}>
-                    This network has a deposited solve, but its state and channel energies came back in a form
-                    this page could not read, so they are not shown. That is a read failure on this page, not a
-                    statement that no energies were deposited.
+                    This network has a solve, but its energies could not be read here. That is not a statement that none were deposited.
                 </p>
             )}
             {(stateEnergies.length > 0 || channelBarriers.length > 0) && (
-                <Disclosure
-                    className="disclosure--inset"
-                    summary="Solve-internal state & channel energies (electronic-only, referenced to the lowest state)"
-                >
+                <>
                     {solveSource && <p className="t-body" style={{ margin: "0 0 .6rem" }}>{solveSource}</p>}
                     {stateEnergies.length > 0 && (
                         <>
@@ -330,9 +324,9 @@ function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
                                 <table className="data-table" aria-label="Solve-internal channel barriers">
                                     <thead><tr><th scope="col">Channel</th><th scope="col">Forward barrier</th><th scope="col">Reverse barrier</th><th scope="col">Source calculation</th></tr></thead>
                                     <tbody>
-                                        {channelBarriers.map((row, barrierIndex) => (
+                                        {channelBarriers.map((row) => (
                                             <tr key={row.channel_key}>
-                                                <td data-label="Channel"><code className="data">{barrierIndex + 1}</code></td>
+                                                <td data-label="Channel">{channelNumber(record.channels, row.channel_key)}</td>
                                                 <td className="num" data-label="Forward barrier">{formatKjMol(row.forward_barrier_kj_mol)}</td>
                                                 <td className="num" data-label="Reverse barrier">{formatKjMol(row.reverse_barrier_kj_mol)}</td>
                                                 <td data-label="Source calculation">
@@ -347,7 +341,7 @@ function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
                             </div>
                         </>
                     )}
-                </Disclosure>
+                </>
             )}
         </div>
     )
@@ -396,7 +390,7 @@ function ReactionsSection({ channels, reactionEntries, totalChannels }: {
     return (
         <>
             <p className="t-body section-intro">
-                {`${channelsWithReaction} of this network's ${totalChannels} channels carry a directly deposited elementary reaction/transition-state pair — ${barrierlessCount} of those are barrierless, so no transition state. ${withoutReaction > 0 ? `The remaining ${withoutReaction} channels have no elementary reaction or transition state on file — an archive gap, not something this page invents around.` : ""}`}
+                {`${channelsWithReaction} of ${totalChannels} channels name a deposited reaction; ${barrierlessCount} are barrierless.${withoutReaction > 0 ? ` ${withoutReaction} name none.` : ""}`}
             </p>
             <div className="table-scroll">
                 <table className="data-table" aria-label="Reaction entries admitted to this network">

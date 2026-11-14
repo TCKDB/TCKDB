@@ -23,6 +23,7 @@ import { ReactionKineticsSection } from "../components/ReactionKineticsSection"
 import { ReactionTransitionStatesSection } from "../components/ReactionTransitionStatesSection"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
 import { PageShell } from "../components/PageShell"
+import { ReactionNetworkRail } from "../components/ReactionNetworkRail"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
@@ -153,7 +154,11 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
     return (
         <section className="conformer-page tse-page">
             <PageShell
-                side={<RelationshipMap selfKind="reaction" selfLabel="This entry" state={neighbours} />}
+                side={<RelationshipMap selfKind="reaction" selfLabel="This entry" state={neighbours}>
+                    {networksState.status === "ready" && (
+                        <ReactionNetworkRail networkRefs={networksState.networks.map((network) => network.network_ref)} reactionEntryRef={entry.reaction_entry_ref} />
+                    )}
+                </RelationshipMap>}
                 identity={(
                     <>
                         <Breadcrumbs crumbs={[

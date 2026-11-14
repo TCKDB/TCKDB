@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, type Ref } from "react"
+import { useId, useMemo, useRef, type ReactNode, type Ref } from "react"
 import { Link, useLocation } from "react-router-dom"
 import "../relationship-map.css"
 import { RecordGlyph, type RecordKind } from "./RecordGlyph"
@@ -26,11 +26,13 @@ const nodeAria = (node: NeighbourNode) =>
  * records" list says the same in text and is the keyboard and screen-reader twin. On wide screens the list is visually
  * hidden and replaces the drawing while focus is inside it; below the narrow breakpoint only the list is shown.
  */
-export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This entry" }: {
+export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This entry", children }: {
     selfKind: RecordKind
     state: NeighboursState
     innerRef?: Ref<HTMLElement>
     selfLabel?: string
+    /** Extra blocks under the connected records, such as a small map of the network this record belongs to. */
+    children?: ReactNode
 }) {
     const headingId = useId()
     const { pathname } = useLocation()
@@ -104,6 +106,7 @@ export function RelationshipMap({ selfKind, state, innerRef, selfLabel = "This e
                     </li>
                 ))}
             </ul>
+            {children}
         </section>
     )
 }
