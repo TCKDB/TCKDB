@@ -80,17 +80,11 @@ function ddFor(container: HTMLElement, term: string): string {
     return dt.nextElementSibling?.textContent ?? ""
 }
 
-/**
- * Finds the `<code>` element whose immediately preceding text node
- * contains `precedingText` — see `EntryThermoSection.test.tsx`'s identical
- * helper for why this is necessary to detect a superseded_by/current swap.
- */
-function codeAfter(container: HTMLElement, precedingText: string): string {
-    const codes = Array.from(container.querySelectorAll("code"))
-    for (const code of codes) {
-        if ((code.previousSibling?.textContent ?? "").includes(precedingText)) return code.textContent ?? ""
-    }
-    throw new Error(`No <code> immediately preceded by text containing "${precedingText}" found`)
+/** The value of the labelled row in a card's References: binds each ref to its role, so a swap of the two correction pointers shows. */
+function refValue(container: HTMLElement, label: string): string {
+    const row = Array.from(container.querySelectorAll(".ref-item")).find((item) => item.querySelector(".ref-item-label")?.textContent === label)
+    if (!row) throw new Error(`No reference labelled "${label}" found`)
+    return row.querySelector(".ref-item-value")?.textContent ?? ""
 }
 
 describe("EntryTransportSection", () => {
@@ -150,8 +144,11 @@ describe("EntryTransportSection", () => {
         await screen.findByText("trn_one")
         const card = screen.getByText("trn_one").closest("article") as HTMLElement
         expect(within(card).getByText("Superseded")).toBeVisible()
-        expect(codeAfter(card, "replaced by")).toBe("trn_one_v2")
-        expect(codeAfter(card, "current record in this chain is")).toBe("trn_one_v3")
+        expect(card).toHaveTextContent("replaced by a newer record")
+        expect(card).toHaveTextContent("current record in this chain is a newer record")
+        expect(card.querySelector(".supersession-notice code")).toBeNull()
+        expect(refValue(card, "Replaced by")).toBe("trn_one_v2")
+        expect(refValue(card, "Current record in this chain")).toBe("trn_one_v3")
         // Sigma is now formatted at 3dp (`quantityFormat.ts`'s digits table).
         expect(within(card).getByText("3.800")).toBeVisible()
     })

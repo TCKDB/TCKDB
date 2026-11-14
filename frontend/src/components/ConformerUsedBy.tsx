@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom"
 import { RecordLink } from "./RecordLink"
-import { recordWords } from "../domain/recordWords"
+import { usedByWords } from "../domain/recordWords"
 import "../molecule-page.css"
 import type { ConformerUsage, ConformerUsageGroup } from "../api/conformerUsageApi"
 import type { LoadedState } from "../hooks/useLoaded"
@@ -29,7 +29,7 @@ export function ConformerUsedBy({ usage, group, entryRef, groupRef, labelOf, sho
                     {group.thermo.map((record, index) => (
                         <span key={record.thermo_ref}>
                             {index > 0 && ", "}
-                            <RecordLink kind="thermo" to={`/species-entries/${entryRef}/thermo?conformer=${encodeURIComponent(groupRef)}`} hash={`thermo-heading-${record.thermo_ref}`} label={recordWords(index + 1)} />
+                            <RecordLink kind="thermo" to={`/species-entries/${entryRef}/thermo?conformer=${encodeURIComponent(groupRef)}`} hash={`thermo-heading-${record.thermo_ref}`} label={usedByWords("Thermo record", index, group.thermo.length)} />
                         </span>
                     ))}
                 </p>
@@ -40,7 +40,7 @@ export function ConformerUsedBy({ usage, group, entryRef, groupRef, labelOf, sho
                     {group.kinetics.map((record, index) => (
                         <span key={`${record.kinetics_ref}-${record.role ?? ""}-${index}`}>
                             {index > 0 && ", "}
-                            <RecordLink kind="kinetics" to={`/reaction-entries/${record.reaction_entry_ref}`} hash="kinetics-heading" label={recordWords(index + 1)} />
+                            <RecordLink kind="kinetics" to={`/reaction-entries/${record.reaction_entry_ref}`} hash={`kinetics-${record.kinetics_ref}`} label={usedByWords("Record", index, group.kinetics.length)} />
                             {record.role && ` (${record.role})`}
                         </span>
                     ))}

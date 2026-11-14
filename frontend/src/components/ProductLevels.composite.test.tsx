@@ -11,7 +11,7 @@ const cbs: LevelOfTheory = {
     method: "CBS-QB3",
     display: "CBS-QB3",
     level_of_theory_ref: "lot_cbs",
-    composite_scheme: { composite_scheme_ref: "csch_1", kind: "named_method", name: "CBS-QB3" },
+    composite_scheme: { composite_scheme_ref: "csch_1", kind: "named_method", name: "CBS-QB3", geometry_level_of_theory_ref: "lot_g" },
 }
 
 afterEach(cleanup)
@@ -29,6 +29,24 @@ describe("ProductLevelsFact, composite additions", () => {
         const { container } = show(levels({ notation: "CBS-QB3" }))
         expect(container.querySelector("[data-levels-notation]")?.textContent).toContain("CBS-QB3")
         for (const label of ["Geometry", "Frequencies", "Energy"]) expect(screen.getByText(label)).toBeInTheDocument()
+    })
+
+    it("writes the headline from the levels' short labels, never the server's long notation string", () => {
+        const energy: LevelOfTheory = { method: "CCSD(T)", basis: "cc-pVTZ", level_of_theory_ref: "lot_e", core_treatment: "frozen_core", label: "CCSD(T)/cc-pVTZ (core=frozen_core)" }
+        const geometry: LevelOfTheory = { method: "B3LYP", basis: "def2-TZVP", level_of_theory_ref: "lot_g2", dispersion: "d3bj" }
+        const { container } = show({ ...EMPTY_PRODUCT_LEVELS, energy, geometry, frequency: geometry, notation: "CCSD(T)/cc-pVTZ (core=frozen_core)//B3LYP/def2-TZVP (disp=d3bj)" })
+        const headline = container.querySelector("[data-levels-notation]") as HTMLElement
+        expect(headline.querySelector("code")?.textContent).toBe("CCSD(T)/cc-pVTZ//B3LYP/def2-TZVP")
+        expect(headline.textContent).not.toMatch(/core=|disp=/)
+    })
+
+    it("writes a recipe's name alone when the geometry is the recipe's own, and the name then the geometry when it is not", () => {
+        const own = show(levels({ notation: "CBS-QB3" }))
+        expect(own.container.querySelector("[data-levels-notation] code")?.textContent).toBe("CBS-QB3")
+        own.unmount()
+        const other: LevelOfTheory = { method: "wB97X-D", basis: "def2-TZVP", level_of_theory_ref: "lot_other" }
+        const { container } = show(levels({ notation: "CBS-QB3//wB97X-D/def2-TZVP", geometry: other }))
+        expect(container.querySelector("[data-levels-notation] code")?.textContent).toBe("CBS-QB3//wB97X-D/def2-TZVP")
     })
 
     it("shows no headline, and composes none, when the notation is null", () => {

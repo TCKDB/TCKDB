@@ -58,8 +58,9 @@ describe("RecordIdentityHeader", () => {
             identity: { kind: "ambiguous", owners: [{ kind: "species_entry", ref: "spe_a" }, { kind: "species_entry", ref: "spe_b" }] },
         })
         expect(screen.getByTestId("record-identity-ambiguous")).toHaveTextContent(/more than one distinct owner/)
-        expect(screen.getByText("spe_a")).toBeVisible()
-        expect(screen.getByText("spe_b")).toBeVisible()
+        expect(screen.getByRole("link", { name: "Species entry 1" })).toHaveAttribute("href", "/species-entries/spe_a")
+        expect(screen.getByRole("link", { name: "Species entry 2" })).toHaveAttribute("href", "/species-entries/spe_b")
+        expect(screen.getByTestId("record-identity-ambiguous").textContent).not.toMatch(/spe_/)
         expect(screen.queryByText("SMILES")).not.toBeInTheDocument()
         expect(screen.queryByText("InChIKey")).not.toBeInTheDocument()
     })
@@ -242,6 +243,8 @@ describe("RecordIdentityHeader", () => {
             })
             expect(screen.queryByRole("button", { name: /copy reaction smiles/i })).not.toBeInTheDocument()
             expect(screen.getByRole("button", { name: /copy transition state entry/i })).toBeVisible()
+            expect(screen.getByRole("link", { name: "Transition state" })).toHaveAttribute("href", "/transition-state-entries/tse_demo")
+            expect(screen.getByText("Transition state entry").closest("div")?.textContent).not.toContain("tse_demo")
         })
 
         it("a transition-state identity with no unmapped SMILES deposited renders no copy button for that fact -- 'not recorded' isn't copyable", () => {
@@ -369,7 +372,8 @@ describe("ownRef -- the record's own ref, shown first, always", () => {
         expect(within(facts).getByText("geom_demo")).toBeVisible()
         // Still renders the ambiguous-owner content alongside it.
         expect(screen.getByTestId("record-identity-ambiguous")).toBeVisible()
-        expect(screen.getByText("spe_a")).toBeVisible()
+        expect(screen.getByRole("link", { name: "Species entry" })).toHaveAttribute("href", "/species-entries/spe_a")
+        expect(screen.getByTestId("record-identity-ambiguous").textContent).not.toMatch(/spe_/)
     })
 
     it("renders the own ref even when the identity is absent -- a record can always name itself even with no known molecular owner", () => {

@@ -411,7 +411,7 @@ describe("ArchiveHomePage: the example record", () => {
         })
         server.use(configJson(REACTION_ENTRY), ...countHandlers(), http.get(`/api/v1/scientific/reaction-entries/${REACTION_ENTRY}/full`, () => HttpResponse.json({
             reaction_entry: {
-                reaction_entry_ref: REACTION_ENTRY, reaction_ref: "rxn_test1", equation: "[CH3] <=> C", reversible: false,
+                reaction_entry_ref: REACTION_ENTRY, deposit_position: 1, reaction_ref: "rxn_test1", equation: "[CH3] <=> C", reversible: false,
                 family: null, review: { status: "not_reviewed" }, atom_maps: [],
             },
             review_summary: summary,

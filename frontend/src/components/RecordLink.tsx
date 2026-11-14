@@ -24,7 +24,7 @@ export function RecordLink({ to, kind, label, children, detail, hash, context }:
 }) {
     const noun = RECORD_KIND_NOUN[kind]
     const words = looksLikeRef(label) ? noun : label
-    const base = words === noun ? noun : `${noun}: ${words}`
+    const base = words === noun || words.startsWith(`${noun} `) ? words : `${noun}: ${words}`
     const name = context ? `${base}, ${context}` : base
     return (
         <>

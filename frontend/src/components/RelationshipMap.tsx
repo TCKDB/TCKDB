@@ -6,7 +6,7 @@ import { useNearViewport, useSpeciesEntryNeighbours, type NeighboursState } from
 import { wrapLabel } from "../domain/wrapLabel"
 import type { NeighbourNode } from "../domain/neighbourNodes"
 import type { SpeciesOverview } from "../api/speciesOverviewApi"
-import { versionFacts } from "../domain/entryVersions"
+import { versionName } from "../domain/entryVersions"
 
 const WIDTH = 224
 const PAD = 4
@@ -122,10 +122,10 @@ const MAP_VERSIONS = 8
 /** The map for a molecule page: no reads connect a molecule to reactions or networks, so its nodes are its own versions. */
 export function SpeciesRelationshipMap({ species }: { species: SpeciesOverview }) {
     const shown = species.entries.slice(0, MAP_VERSIONS)
-    const nodes: NeighbourNode[] = shown.map((version) => ({
+    const nodes: NeighbourNode[] = shown.map((version, index) => ({
         id: version.species_entry_ref,
         kind: "species-entry",
-        label: versionFacts(version),
+        label: versionName(version, index + 1),
         relation: "A version of this molecule",
         ref: version.species_entry_ref,
         to: `/species-entries/${version.species_entry_ref}`,

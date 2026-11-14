@@ -124,7 +124,7 @@ describe("public archive shell", () => {
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("heading", { name: "H2O" })).toBeVisible()
         expect(screen.getByText(speciesRef)).toBeVisible()
-        expect(screen.getAllByRole("link", { name: "minimum · ground state" })[0])
+        expect(screen.getAllByRole("link", { name: "Version 1 · minimum · ground state" })[0])
             .toHaveAttribute("href", `/species-entries/${entryRef}`)
     })
 
@@ -767,6 +767,7 @@ it("routes a reaction ref to the chooser page (ReactionOverviewPage)", async () 
         records: [{
             reaction_ref: "rxn_abc",
             reaction_entry_ref: "rxe_abc",
+            deposit_position: 1,
             equation: "A <=> B",
             reversible: true,
             family: null,
@@ -805,7 +806,7 @@ it("an rxe_ ref handed to /reactions/:ref redirects to /reaction-entries/:ref wi
     // redirect) would fail this test outright on that request alone.
     server.use(http.get("/api/v1/scientific/reaction-entries/rxe_abc/full", () => HttpResponse.json({
         reaction_entry: {
-            reaction_entry_ref: "rxe_abc", reaction_ref: "rxn_abc", equation: "A <=> B",
+            reaction_entry_ref: "rxe_abc", deposit_position: 1, reaction_ref: "rxn_abc", equation: "A <=> B",
             reversible: true, family: null, review: { status: "not_reviewed" }, atom_maps: [],
         },
         review_summary: { total: 0, not_reviewed: 0, approved: 0, under_review: 0, deprecated: 0, rejected: 0 },
@@ -841,6 +842,7 @@ describe("the home-page identifier search recognizes and routes public reference
             records: [{
                 reaction_ref: `rxn_${REF_BODY}`,
                 reaction_entry_ref: `rxe_${REF_BODY}`,
+                deposit_position: 1,
                 equation: "A <=> B",
                 reversible: true,
                 family: null,
@@ -866,7 +868,7 @@ describe("the home-page identifier search recognizes and routes public reference
         // that request alone.
         server.use(http.get(`/api/v1/scientific/reaction-entries/rxe_${REF_BODY}/full`, () => HttpResponse.json({
             reaction_entry: {
-                reaction_entry_ref: `rxe_${REF_BODY}`, reaction_ref: `rxn_${REF_BODY}`, equation: "A <=> B",
+                reaction_entry_ref: `rxe_${REF_BODY}`, deposit_position: 1, reaction_ref: `rxn_${REF_BODY}`, equation: "A <=> B",
                 reversible: true, family: null, review: { status: "not_reviewed" }, atom_maps: [],
             },
             review_summary: { total: 0, not_reviewed: 0, approved: 0, under_review: 0, deprecated: 0, rejected: 0 },

@@ -169,17 +169,11 @@ function ddFor(container: HTMLElement, term: string): string {
     return dt.nextElementSibling?.textContent ?? ""
 }
 
-/**
- * Finds the `<code>` element whose immediately preceding text node
- * contains `precedingText` — see `EntryThermoSection.test.tsx`'s identical
- * helper for why this is necessary to detect a superseded_by/current swap.
- */
-function codeAfter(container: HTMLElement, precedingText: string): string {
-    const codes = Array.from(container.querySelectorAll("code"))
-    for (const code of codes) {
-        if ((code.previousSibling?.textContent ?? "").includes(precedingText)) return code.textContent ?? ""
-    }
-    throw new Error(`No <code> immediately preceded by text containing "${precedingText}" found`)
+/** The value of the labelled row in a card's References: binds each ref to its role, so a swap of the two correction pointers shows. */
+function refValue(container: HTMLElement, label: string): string {
+    const row = Array.from(container.querySelectorAll(".ref-item")).find((item) => item.querySelector(".ref-item-label")?.textContent === label)
+    if (!row) throw new Error(`No reference labelled "${label}" found`)
+    return row.querySelector(".ref-item-value")?.textContent ?? ""
 }
 
 /**
@@ -231,6 +225,15 @@ describe("EntryStatmechSection", () => {
         expect(within(cardOf("sm_one")).getByText("sm_one")).not.toBeVisible()
     })
 
+    it("links a transition-state record's subject to its page instead of saying none exists", async () => {
+        const record = baseRecord({ species: null, transition_state: { transition_state_ref: "ts_one", transition_state_entry_ref: "tse_one" } })
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([record]))))
+        page()
+        await screen.findByText("sm_one")
+        expect(screen.getByRole("link", { name: "Transition state" })).toHaveAttribute("href", "/transition-state-entries/tse_one")
+        expect(document.body.textContent).not.toContain("no dedicated page")
+    })
+
     it("never hides a superseded record, and never swaps the direction of the correction pointer", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
@@ -242,8 +245,11 @@ describe("EntryStatmechSection", () => {
         // this chain is" sentence — a direction swap is invisible to a
         // presence-only "does sm_two_v2 appear somewhere" check, since both
         // refs are present on the card either way.
-        expect(codeAfter(twoCard, "replaced by")).toBe("sm_two_v2")
-        expect(codeAfter(twoCard, "current record in this chain is")).toBe("sm_two_v3")
+        expect(twoCard).toHaveTextContent("replaced by a newer record")
+        expect(twoCard).toHaveTextContent("current record in this chain is a newer record")
+        expect(twoCard.querySelector(".supersession-notice code")).toBeNull()
+        expect(refValue(twoCard, "Replaced by")).toBe("sm_two_v2")
+        expect(refValue(twoCard, "Current record in this chain")).toBe("sm_two_v3")
 
         const oneCard = cardOf("sm_one")
         expect(within(oneCard).queryByText("Superseded")).not.toBeInTheDocument()
@@ -965,7 +971,7 @@ describe("EntryStatmechSection: identical-value records group under one card", (
         expect(document.querySelectorAll("article.identical-record-group")).toHaveLength(1)
         const groupCard = document.querySelector("article.identical-record-group") as HTMLElement
         const ownHeadingRow = groupCard.querySelector(":scope > .science-record-heading") as HTMLElement
-        expect(ownHeadingRow.querySelector("h3")?.textContent).toBe("computed statmech record")
+        expect(ownHeadingRow.querySelector("h3")?.textContent).toBe("computed statmech record 1")
 
         const refsTable = within(groupCard).getByRole("table", { name: "Records sharing these identical values" })
         expect(within(refsTable).getAllByRole("columnheader")[0]).toHaveTextContent("Record")
@@ -1243,6 +1249,25 @@ describe("EntryStatmechSection: design-system adoption (design/species-entry)", 
     // `textContent` assertion cannot see this -- the DOM text stays
     // correctly-cased; only the COMPUTED style differs -- so this asserts
     // `getComputedStyle`, per `vite.config.ts`'s `test.css: true`.
+    it("numbers a record the same in its card, its lazy rows and the tables", async () => {
+        const withLevels = (record: ReturnType<typeof baseRecord>) => ({
+            ...record,
+            available_sections: { ...record.available_sections, has_electronic_levels: true },
+            electronic_levels: [{ level_index: 0, energy_cm1: 0, degeneracy: 1 }],
+        })
+        const [one, two] = mockRecords()
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([withLevels(one), withLevels(two)]))))
+        page()
+        await screen.findByText("sm_one")
+        fireEvent.click(screen.getByText("Electronic levels", { selector: "summary" }))
+        await screen.findAllByRole("table", { name: "Electronic levels" })
+        const headings = Array.from(document.querySelectorAll("h3")).map((heading) => heading.textContent)
+        const numbered = headings.filter((text) => text?.includes("statmech record"))
+        expect(numbered.length).toBeGreaterThanOrEqual(4)
+        expect(new Set(numbered)).toEqual(new Set(["computed statmech record 1", "estimated statmech record 2"]))
+        expect(document.getElementById("statmech-heading-sm_two")).toHaveTextContent("estimated statmech record 2")
+    })
+
     it("computed text-transform is none on the Electronic-levels table's 'Energy (cm⁻¹)' header", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
             baseRecord({
@@ -1302,6 +1327,25 @@ describe("EntryStatmechSection: conformer context & review history fold into one
         expect(cellAt(rows[0], "Conformer")).not.toContain("cg_one")
         expect(cellAt(rows[0], "Conformer")).not.toContain("conformer_1")
         expect(cellAt(rows[0], "Review")).toBe("not reviewed")
+    })
+
+    it("numbers a conformer group once for the whole table, not again for each row", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const includes = new URL(request.url).searchParams.getAll("include")
+            const [one, two] = mockRecords()
+            const group = (ref: string) => ({ conformer_group_ref: ref, label: "x" })
+            return HttpResponse.json(mockResponse([
+                { ...one, ...(includes.includes("conformers") ? { conformers: [group("cg_a")] } : {}) },
+                { ...two, ...(includes.includes("conformers") ? { conformers: [group("cg_b"), group("cg_a")] } : {}) },
+            ]))
+        }))
+        page()
+        await screen.findByText("sm_one")
+        fireEvent.click(screen.getByText("Conformer context & review history", { selector: "summary" }))
+        const table = await screen.findByRole("table", { name: "Conformer context and review history" })
+        const rows = within(table).getAllByRole("row").slice(1)
+        expect(cellAt(rows[0], "Conformer")).toBe("Conformer group 1")
+        expect(cellAt(rows[1], "Conformer")).toBe("Conformer group 2 · Conformer group 1")
     })
 
     it("collapses multiple conformer-context or review-history entries for one record into a single cell, joined, rather than adding rows", async () => {

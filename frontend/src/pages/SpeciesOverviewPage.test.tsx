@@ -192,12 +192,12 @@ describe("molecule overview: versions", () => {
         const section = await versionsSection()
         const items = within(section).getAllByRole("listitem")
         expect(items).toHaveLength(2)
-        const ground = within(items[0]).getByRole("link", { name: "minimum · ground state" })
+        const ground = within(items[0]).getByRole("link", { name: "Version 1 · minimum · ground state" })
         expect(ground).toHaveAttribute("href", `/species-entries/${entryRef}`)
         expect(items[0]).toHaveTextContent("14 calculations; conformers, thermochemistry, statistical mechanics")
         expect(within(items[0]).getByText("not reviewed")).toBeVisible()
         expect(section.textContent).not.toContain(entryRef)
-        expect(within(items[1]).getByRole("link", { name: "minimum · excited state · 3B1" })).toHaveAttribute("href", `/species-entries/${excitedEntryRef}`)
+        expect(within(items[1]).getByRole("link", { name: "Version 2 · minimum · excited state · 3B1" })).toHaveAttribute("href", `/species-entries/${excitedEntryRef}`)
         expect(within(items[1]).getByText("approved")).toBeVisible()
         expect(within(items[0]).getAllByRole("link")).toHaveLength(1)
     })
@@ -205,8 +205,12 @@ describe("molecule overview: versions", () => {
     it("lists repeated ground-state versions as separate links to their own entries, printing no ref", async () => {
         await open(speciesPayload([groundEntry(), secondGroundEntry(), excitedEntry()]))
         const section = await versionsSection()
-        const ground = within(section).getAllByRole("link", { name: "minimum · ground state" })
+        const ground = [
+            within(section).getByRole("link", { name: "Version 1 · minimum · ground state" }),
+            within(section).getByRole("link", { name: "Version 2 · minimum · ground state" }),
+        ]
         expect(ground.map((link) => link.getAttribute("href"))).toEqual([`/species-entries/${entryRef}`, "/species-entries/spe_secondgroundentryrecordabcdefgh"])
+        expect(new Set(ground.map((link) => link.textContent)).size).toBe(2)
         expect(section.textContent).not.toContain("spe_secondgroundentryrecordabcdefgh")
         expect(within(section).getByText("7 calculations; conformers, thermochemistry, statistical mechanics")).toBeVisible()
     })
@@ -215,7 +219,7 @@ describe("molecule overview: versions", () => {
         const entry = { ...groundEntry(), stereo_label: "R", species_entry_label: "R" }
         await open(speciesPayload([entry]))
         const link = within(await versionsSection()).getByRole("link", { name: /minimum/ })
-        expect(link).toHaveAccessibleName("minimum · ground state · R enantiomer")
+        expect(link).toHaveAccessibleName("Version 1 · minimum · ground state · R enantiomer")
         expect(link).not.toHaveTextContent(/^R$/)
     })
 
@@ -260,12 +264,15 @@ describe("molecule overview: versions", () => {
         expect(rail.querySelector(".rel-map-note:not(svg *)")).toBeNull()
         expect(within(rail).queryByText(/This map shows/)).toBeNull()
         const list = within(rail).getByRole("list", { name: "Connected records" })
-        const named = within(rail).getAllByRole("link", { name: "minimum · ground state, A version of this molecule", hidden: true })
+        const named = within(rail).getAllByRole("link", { name: "Version 1 · minimum · ground state, A version of this molecule", hidden: true })
         expect(named.map((link) => link.getAttribute("href"))).toContain(`/species-entries/${entryRef}`)
         expect(within(list).getAllByRole("listitem")[1]).toHaveTextContent("A version of this molecule")
         expect(rail.textContent).not.toMatch(/spe_/)
-        const same = within(list).getAllByRole("link", { name: "minimum · ground state" })
-        expect(same).toHaveLength(2)
+        const same = [
+            within(list).getByRole("link", { name: "Version 1 · minimum · ground state" }),
+            within(list).getByRole("link", { name: "Version 2 · minimum · ground state" }),
+        ]
+        expect(new Set(same.map((link) => link.textContent)).size).toBe(2)
         expect(same[0]).toHaveAccessibleDescription("A version of this molecule")
         expect(same[1]).toHaveAccessibleDescription("A version of this molecule")
         expect(same.map((link) => link.getAttribute("href"))).toEqual([`/species-entries/${entryRef}`, "/species-entries/spe_secondgroundentryrecordabcdefgh"])
@@ -288,11 +295,14 @@ describe("molecule overview: versions", () => {
         await open(speciesPayload([groundEntry(), secondGroundEntry(), excitedEntry()]), { thermo: [thermoRow("thm_c1", "spe_secondgroundentryrecordabcdefgh", lotA, 1)], statmech: [] })
         const versions = within(await versionsSection())
         expect(versions.getAllByRole("link")[1]).toHaveAccessibleDescription("")
+        expect(versions.getAllByRole("link").map((link) => link.textContent)).toEqual([
+            "Version 1 · minimum · ground state", "Version 2 · minimum · ground state", "Version 3 · minimum · excited state · 3B1",
+        ])
         expect(versions.getAllByRole("link")[1]).toHaveAttribute("href", "/species-entries/spe_secondgroundentryrecordabcdefgh")
         const region = await valuesRegion()
         await waitFor(() => expect(rowIds(region)).toHaveLength(1))
         const row = region.querySelector("#thermo-thm_c1") as HTMLElement
-        const link = within(row).getByRole("link", { name: "minimum · ground state" })
+        const link = within(row).getByRole("link", { name: "Version 2 · minimum · ground state" })
         expect(link).toHaveAccessibleDescription("")
         expect(link).toHaveAttribute("href", "/species-entries/spe_secondgroundentryrecordabcdefgh")
         expect(row.textContent).not.toContain("spe_secondgroundentryrecordabcdefgh")
@@ -308,9 +318,9 @@ describe("molecule overview: all values for this molecule", () => {
         expect(calls.length).toBeGreaterThanOrEqual(2)
         for (const call of calls) expect(call.searchParams.get("species_ref")).toBe(speciesRef)
         const ground = region.querySelector("#thermo-thm_g1") as HTMLElement
-        const link = within(ground).getByRole("link", { name: "minimum · ground state" })
+        const link = within(ground).getByRole("link", { name: "Version 1 · minimum · ground state" })
         expect(link).toHaveAttribute("href", `/species-entries/${entryRef}`)
-        expect(ground).toHaveTextContent("Version: minimum · ground state")
+        expect(ground).toHaveTextContent("Version: Version 1 · minimum · ground state")
         expect(within(region.querySelector("#thermo-thm_e1") as HTMLElement).getByRole("link", { name: /excited state/ })).toHaveAttribute("href", `/species-entries/${excitedEntryRef}`)
         expect(within(region.querySelector("#statmech-stm_g1") as HTMLElement).getByRole("link", { name: /ground state/ })).toBeVisible()
         expect(within(ground).getByText("143.90")).toBeVisible()
@@ -503,7 +513,7 @@ describe("molecule overview: depositor text", () => {
         })
         const region = await valuesRegion()
         await waitFor(() => expect(rowIds(region)).toEqual(["thermo-thm_g1", "statmech-stm_g1"]))
-        expect(await within(await versionsSection()).findByRole("link", { name: "minimum · ground state" })).toBeVisible()
+        expect(await within(await versionsSection()).findByRole("link", { name: "Version 1 · minimum · ground state" })).toBeVisible()
         expect(document.querySelector(".entry-versions-meta code")).toBeNull()
         expectNoDepositorText()
         expectDepositorTextOnlyInNotes()

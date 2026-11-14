@@ -1,13 +1,11 @@
 /**
- * The short label of a level of theory, its qualifier pieces, and the rule
- * that keeps two different levels from reading alike on one page.
- * Everything is built from the structured fields the reads return; the
- * server's long `label` is only used when no structured field reached the view.
+ * The short label of a level of theory (method/basis), its qualifier pieces,
+ * and the rule that keeps two different levels from reading alike on one page.
+ * Everything is built from the structured fields the reads return.
  */
 export type LevelFields = {
     method: string
     basis?: string | null
-    label?: string | null
     display?: string
     level_of_theory_ref?: string
     dispersion?: string | null
@@ -17,9 +15,12 @@ export type LevelFields = {
     cabs_basis?: string | null
     core_treatment?: string | null
     spin_treatment?: string | null
+    relativistic_hamiltonian?: string | null
+    pno_truncation?: string | null
+    ri_approximation?: string | null
 }
 
-type QualifierKey = "aux_basis" | "cabs_basis" | "dispersion" | "solvent" | "solvent_model" | "spin_treatment" | "core_treatment"
+type QualifierKey = "aux_basis" | "cabs_basis" | "dispersion" | "solvent" | "solvent_model" | "spin_treatment" | "core_treatment" | "relativistic_hamiltonian" | "pno_truncation" | "ri_approximation"
 
 export type Qualifier = { key: QualifierKey; name: string; value: string }
 
@@ -32,10 +33,13 @@ const QUALIFIERS: readonly { key: QualifierKey; name: string }[] = [
     { key: "solvent_model", name: "solvent model" },
     { key: "spin_treatment", name: "spin" },
     { key: "core_treatment", name: "core" },
+    { key: "relativistic_hamiltonian", name: "relativistic" },
+    { key: "pno_truncation", name: "PNO" },
+    { key: "ri_approximation", name: "RI" },
 ]
 
 /** Stored enum tokens read as words; free text (a basis, a dispersion name) keeps its stored spelling. */
-const TOKEN_FIELDS: ReadonlySet<QualifierKey> = new Set(["spin_treatment", "core_treatment", "solvent_model"])
+const TOKEN_FIELDS: ReadonlySet<QualifierKey> = new Set(["spin_treatment", "core_treatment", "solvent_model", "relativistic_hamiltonian", "pno_truncation", "ri_approximation"])
 
 function stated(value: string | null | undefined): value is string {
     return value !== null && value !== undefined && value.trim() !== ""
@@ -54,13 +58,14 @@ export function baseLabel(level: LevelFields): string {
     return level.basis ? `${level.method}/${level.basis}` : level.method
 }
 
-/** Stable identity of a level's qualifiers: two levels with the same base label and signature are the same level. */
+/** The qualifiers of a level as one string; with the base label it tells two levels apart when neither has a ref. */
 export function qualifierSignature(level: LevelFields): string {
     return qualifiersOf(level).map((q) => `${q.key}=${q.value}`).join("|")
 }
 
 export type LevelKey = string
-export const levelKey = (level: LevelFields): LevelKey => `${baseLabel(level)}\u0000${qualifierSignature(level)}`
+/** A level's identity on one page: its ref when it has one, else its base label and qualifiers. */
+export const levelKey = (level: LevelFields): LevelKey => level.level_of_theory_ref ?? `${baseLabel(level)}\u0000${qualifierSignature(level)}`
 
 /** What prints for one qualifier inside the short label. */
 export const inlineText = (q: Qualifier): string => (q.key === "core_treatment" || q.key === "spin_treatment" ? q.value : `${q.name} ${q.value}`)
@@ -86,4 +91,9 @@ export function inlineQualifiers(levels: readonly LevelFields[]): Map<LevelKey, 
         for (const member of members) result.set(member.key, member.pieces.filter((p) => differing.some((d) => d.key === p.key)))
     }
     return result
+}
+
+/** The plain text of a level on one line: short label, the qualifiers `inline` names for it, then the program. */
+export function levelLine(level: LevelFields, inline: ReadonlyMap<LevelKey, Qualifier[]>, program?: string | null): string {
+    return [baseLabel(level), ...(inline.get(levelKey(level)) ?? []).map(inlineText), ...(program ? [program] : [])].join(" · ")
 }

@@ -23,7 +23,7 @@ import {
     transitionStateNamer,
     UNAVAILABLE_WORDS,
 } from "../domain/energyProfile"
-import { levelOfTheoryPath } from "../domain/methodsLinks"
+import { recordWords } from "../domain/recordWords"
 import { useOverflows } from "../hooks/useOverflows"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 import { Disclosure } from "./Disclosure"
@@ -295,7 +295,7 @@ function CitedRow({ keyRef, position, calculation, labels, levels }: { keyRef: s
     const subjectLabel = calculation.species_entry_ref ? labels.get(calculation.species_entry_ref) : undefined
     return (
         <tr>
-            <th scope="row"><a href={`#kinetics-${keyRef}`} aria-label={`Rate record ${position}`}>{`Rate record ${position}`}</a></th>
+            <th scope="row"><a href={`#kinetics-${keyRef}`}>{recordWords(position)}</a></th>
             <td data-label="What it cites">{roleWord(calculation.role)}{subject && <>{": "}<span className="t-preserve-case">{subjectLabel ?? (calculation.species_entry_ref ? "species" : "transition state")}</span></>}</td>
             <td data-label="Electronic energy">
                 {calculation.electronic_energy_hartree == null
@@ -306,7 +306,7 @@ function CitedRow({ keyRef, position, calculation, labels, levels }: { keyRef: s
                 {calculation.level_of_theory_ref
                     ? (levels.has(calculation.level_of_theory_ref)
                         ? <LevelLabel levelOfTheory={levels.get(calculation.level_of_theory_ref)!} program={calculation.software ? programText(calculation.software) : null} />
-                        : <RecordLink kind="level-of-theory" to={levelOfTheoryPath(calculation.level_of_theory_ref)} label="Level of theory" />)
+                        : <span className="energy-profile-absent">not named here</span>)
                     : "not recorded"}
             </td>
             <td data-label="Kind of energy">{energyTypeWord(calculation.energy_type)}</td>
@@ -316,8 +316,8 @@ function CitedRow({ keyRef, position, calculation, labels, levels }: { keyRef: s
     )
 }
 
-function CitedEnergies({ read, labels }: { read: EnergyProfileRead; labels: ReadonlyMap<string, string> }) {
-    const rows = read.cited_by_kinetics.flatMap((record, position) => record.calculations.map((calculation) => ({ ref: record.kinetics_ref, position: position + 1, calculation })))
+function CitedEnergies({ read, labels, recordNumbers }: { read: EnergyProfileRead; labels: ReadonlyMap<string, string>; recordNumbers?: ReadonlyMap<string, number> }) {
+    const rows = read.cited_by_kinetics.flatMap((record, position) => record.calculations.map((calculation) => ({ ref: record.kinetics_ref, position: recordNumbers?.get(record.kinetics_ref) ?? position + 1, calculation })))
     if (rows.length === 0) return null
     // Structured levels of this read, keyed by ref: a cited calculation names only its level's ref.
     const levels = new Map<string, LevelOfTheory>()
@@ -326,14 +326,14 @@ function CitedEnergies({ read, labels }: { read: EnergyProfileRead; labels: Read
     }
     return (
         <div className="energy-profile-cited">
-            <h3 className="t-heading-2">Energies a rate record cites</h3>
-            <p className="note">Named by the rate records; not combined with the profiles.</p>
-            <div className="table-scroll energy-profile-scroll" tabIndex={0} role="region" aria-label="Energies cited by rate records">
+            <h3 className="t-heading-2">Energies a record cites</h3>
+            <p className="note">Named by the records; not combined with the profiles.</p>
+            <div className="table-scroll energy-profile-scroll" tabIndex={0} role="region" aria-label="Energies cited by records">
                 <table className="data-table energy-profile-table">
-                    <caption className="energy-profile-caption-table">Calculations cited by each rate record on this entry</caption>
+                    <caption className="energy-profile-caption-table">Calculations cited by each record on this entry</caption>
                     <thead>
                         <tr>
-                            <th scope="col">Rate record</th>
+                            <th scope="col">Record</th>
                             <th scope="col">What it cites</th>
                             <th scope="col">Electronic energy</th>
                             <th scope="col">Level of theory</th>
@@ -387,9 +387,11 @@ export function Profiles({ read, labels, markPeak = false }: { read: Pick<Energy
  * stay a separate table. With `onlyTransitionState` the read is narrowed to that transition-state entry's own profiles
  * and reasons, its peak is marked, and the rate records' cited energies are kept only where they cite this transition state.
  */
-export function EnergyProfile({ entryRef, speciesLabels, onlyTransitionState }: {
+export function EnergyProfile({ entryRef, speciesLabels, onlyTransitionState, recordNumbers }: {
     entryRef: string
     speciesLabels: ReadonlyMap<string, string>
+    /** The page's one "Record N" numbering by kinetics ref; the cited order when absent. */
+    recordNumbers?: ReadonlyMap<string, number>
     onlyTransitionState?: string
 }) {
     const state = useScientificRecord(entryRef, loadReactionEnergyProfile)
@@ -420,7 +422,7 @@ export function EnergyProfile({ entryRef, speciesLabels, onlyTransitionState }: 
                     {onlyTransitionState && read.profiles.length === 0 && read.unavailable.length === 0 && (
                         <p className="note">The energy profile read gives no reason for this transition state: it was not among the entries it listed.</p>
                     )}
-                    <CitedEnergies read={read} labels={speciesLabels} />
+                    <CitedEnergies read={read} labels={speciesLabels} recordNumbers={recordNumbers} />
                     {hiddenNotes(read).map((note) => <p className="note" role="note" key={note}>{onlyTransitionState ? `For this reaction entry: ${note}` : note}</p>)}
                 </>
             )}

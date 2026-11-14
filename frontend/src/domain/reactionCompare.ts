@@ -79,8 +79,11 @@ export function groupDifference(groups: readonly KineticsGroup[]): "methods" | "
 
 /** The program line's label: the energy calculation's program when every record cites one, else the record's primary source calculation. */
 export function programLabel(group: KineticsGroup): string {
-    return group.columns.every((column) => column.record.provenance.ts_sp_calculation_ref) ? "Program of the energy calculation" : "Program of the source calculation"
+    return programFromSource(group) ? "Program of the source calculation" : "Program of the energy calculation"
 }
+
+/** True when the group's program is the primary source calculation's, not the energy calculation's. */
+export const programFromSource = (group: KineticsGroup): boolean => !group.columns.every((column) => column.record.provenance.ts_sp_calculation_ref)
 
 const sameLevel = (a: LevelOfTheory, b: LevelOfTheory) => (a.level_of_theory_ref && b.level_of_theory_ref ? a.level_of_theory_ref === b.level_of_theory_ref : lotLabel(a) === lotLabel(b))
 

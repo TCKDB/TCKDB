@@ -1632,9 +1632,10 @@ describe("species-entry page: relative energies on the shape cards", () => {
         await openEntry({ energyAnswer: "disagree" })
         const card = cardFor("Conformer Group 2")
         expect(await within(card).findByText(/Records disagree\./)).toBeVisible()
-        expect(card).toHaveTextContent(/Stored values: \u221276\.100000 hartree \(d1\), \u221276\.200000 hartree \(d2\)\./)
-        // The determinations have no page of their own, so they are plain refs, not links.
-        expect(within(card).queryByRole("link", { name: "d1" })).not.toBeInTheDocument()
+        expect(card).toHaveTextContent(/Stored values: \u221276\.100000 hartree \(determination 1\), \u221276\.200000 hartree \(determination 2\)\./)
+        // The determinations have no page of their own, so they are numbered words, not links, and no ref is printed.
+        expect(within(card).queryByRole("link", { name: /determination/ })).not.toBeInTheDocument()
+        expect(card.textContent).not.toMatch(/\bd1\b|\bd2\b/)
     })
 
     it("explains an unavailable reference instead of showing differences", async () => {
@@ -1649,12 +1650,12 @@ describe("species-entry page: which records use each shape", () => {
         await openEntry()
         expect(await screen.findByText(/Describes all shapes together:/)).toBeVisible()
         const ensemble = document.querySelector(`a[href="/species-entries/${entryRef}/thermo?conformer=${groupOneRef}#thermo-heading-thm_ensemble"]`) as HTMLElement
-        expect(ensemble).toHaveAccessibleName("Thermo record: Record 1")
-        expect(ensemble.textContent).toBe("Record 1")
+        expect(ensemble).toHaveAccessibleName("Thermo record")
+        expect(ensemble.textContent).toBe("Thermo record")
         const one = within(cardFor("Conformer Group 1"))
-        expect(await one.findByRole("link", { name: "Thermo record: Record 1" })).toHaveAttribute("href", expect.stringContaining("/thermo?conformer=cg_one#thermo-heading-thm_one"))
+        expect(await one.findByRole("link", { name: "Thermo record" })).toHaveAttribute("href", expect.stringContaining("/thermo?conformer=cg_one#thermo-heading-thm_one"))
         const two = within(cardFor("Conformer Group 2"))
-        expect(await two.findByRole("link", { name: "Rate record: Record 1" })).toHaveAttribute("href", "/reaction-entries/rxe_one#kinetics-heading")
+        expect(await two.findByRole("link", { name: "Record" })).toHaveAttribute("href", "/reaction-entries/rxe_one#kinetics-kin_one")
         expect(two.getByText(/This shape was merged into/)).toBeVisible()
         expect(screen.getByText("Not listed by default: 2 rejected records.")).toBeVisible()
     })

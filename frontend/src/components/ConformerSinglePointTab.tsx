@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { RecordLink } from "./RecordLink"
+import { observationWords } from "../domain/recordWords"
 import "../conformer-group.css"
 import "../entry-science.css"
 import "../energy-display.css"
@@ -67,6 +68,7 @@ export function ConformerSinglePointTab({ conformer, spEnergies }: {
     const [unit, setUnit] = useState<EnergyDisplayUnit>("hartree")
     const observations = conformer.observations ?? []
     const rows = buildRows(observations)
+    const observationNumbers = new Map(observations.map((observation, index) => [observation.conformer_observation.conformer_observation_ref, index + 1] as const))
     const energyByCalculationRef = new Map(
         (spEnergies.status === "ready" ? spEnergies.records : []).map((record) => [record.calculation.calculation_ref, record.energy?.energy_hartree ?? null]),
     )
@@ -124,18 +126,18 @@ export function ConformerSinglePointTab({ conformer, spEnergies }: {
                                 </tr>
                             </thead>
                             <tbody>
-                                {rows.map((row) => {
+                                {rows.map((row, index) => {
                                     const valueHartree = row.calculation
                                         ? energyByCalculationRef.get(row.calculation.calculation_ref) ?? null
                                         : null
                                     return (
                                         <tr key={row.key}>
                                             <td data-label="Observation">
-                                                <RecordLink kind="conformer-observation" to={`/conformer-observations/${row.observationRef}`} label="Observation" />
+                                                <RecordLink kind="conformer-observation" to={`/conformer-observations/${row.observationRef}`} label={observationWords(observationNumbers.get(row.observationRef))} />
                                             </td>
                                             <td data-label="Calculation">
                                                 {row.calculation
-                                                    ? <RecordLink kind="calculation" to={`/calculations/${row.calculation.calculation_ref}`} label="Calculation" />
+                                                    ? <RecordLink kind="calculation" to={`/calculations/${row.calculation.calculation_ref}`} label={`Calculation ${index + 1}`} />
                                                     : "not recorded"}
                                             </td>
                                             <td className="num" data-label="Energy">

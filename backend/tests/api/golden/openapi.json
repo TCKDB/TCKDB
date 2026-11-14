@@ -43471,6 +43471,10 @@
             "title": "Atom Maps",
             "type": "array"
           },
+          "deposit_position": {
+            "title": "Deposit Position",
+            "type": "integer"
+          },
           "equation": {
             "title": "Equation",
             "type": "string"
@@ -43515,6 +43519,7 @@
         "required": [
           "reaction_entry_ref",
           "reaction_ref",
+          "deposit_position",
           "equation",
           "reversible",
           "review"
@@ -44387,6 +44392,10 @@
           "availability": {
             "$ref": "#/components/schemas/ReactionAvailability"
           },
+          "deposit_position": {
+            "title": "Deposit Position",
+            "type": "integer"
+          },
           "equation": {
             "title": "Equation",
             "type": "string"
@@ -44448,6 +44457,7 @@
         "required": [
           "reaction_ref",
           "reaction_entry_ref",
+          "deposit_position",
           "equation",
           "matched_direction",
           "reversible",

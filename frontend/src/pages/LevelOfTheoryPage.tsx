@@ -1,5 +1,6 @@
 import { useId, useState } from "react"
 import { calculationWords } from "../domain/recordWords"
+import { baseLabel, levelKey, levelLine, qualifiersOf } from "../domain/levelLabel"
 import { RecordLink } from "../components/RecordLink"
 import { GuideLink } from "../components/GuideLink"
 import { Link, useParams } from "react-router-dom"
@@ -61,9 +62,9 @@ export default function LevelOfTheoryPage() {
 
 function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
     const lot = record.level_of_theory
-    // The full label tells all-electron and frozen-core levels of one method and basis apart.
-    const title = lot.label ?? (lot.basis ? `${lot.method}/${lot.basis}` : lot.method)
-    useDocumentTitle("Level of theory", title)
+    // The heading is the short label (the facts below list every qualifier); the tab title adds them so levels sharing a short label differ.
+    const title = baseLabel(lot)
+    useDocumentTitle("Level of theory", levelLine(lot, new Map([[levelKey(lot), qualifiersOf(lot)]])))
 
     const mapNodes = levelOfTheoryNodes({
         calculationCount: record.evidence_summary.calculation_usage_count,
@@ -99,9 +100,9 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
                                     <div><dt>Core treatment</dt><dd>{lot.core_treatment ? words(lot.core_treatment) : "not recorded"}</dd></div>
                                     {lot.aux_basis && <div><dt>Auxiliary basis</dt><dd>{lot.aux_basis}</dd></div>}
                                     {lot.cabs_basis && <div><dt>CABS basis</dt><dd>{lot.cabs_basis}</dd></div>}
-                                    {lot.relativistic_hamiltonian && <div><dt>Relativistic Hamiltonian</dt><dd>{lot.relativistic_hamiltonian}</dd></div>}
-                                    {lot.pno_truncation && <div><dt>PNO truncation</dt><dd>{lot.pno_truncation}</dd></div>}
-                                    {lot.ri_approximation && <div><dt>RI approximation</dt><dd>{lot.ri_approximation}</dd></div>}
+                                    {lot.relativistic_hamiltonian && <div><dt>Relativistic Hamiltonian</dt><dd>{words(lot.relativistic_hamiltonian)}</dd></div>}
+                                    {lot.pno_truncation && <div><dt>PNO truncation</dt><dd>{words(lot.pno_truncation)}</dd></div>}
+                                    {lot.ri_approximation && <div><dt>RI approximation</dt><dd>{words(lot.ri_approximation)}</dd></div>}
                                     {lot.composite_scheme && (
                                         <div>
                                             <dt>Composite recipe</dt>
@@ -435,7 +436,7 @@ function UsageSection({ rows, available, total }: { rows: LevelOfTheoryUsage[] |
                         <tbody>
                             {list.map((row, position) => (
                                 <tr key={row.calculation_ref}>
-                                    <td data-label="Calculation"><RecordLink kind="calculation" to={`/calculations/${row.calculation_ref}`} label={calculationWords(row.type)} context={`number ${position + 1}`} /></td>
+                                    <td data-label="Calculation"><RecordLink kind="calculation" to={`/calculations/${row.calculation_ref}`} label={`${calculationWords(row.type)} ${position + 1}`} /></td>
                                     <td data-label="Type">{words(row.type)}</td>
                                     <td data-label="Owner">
                                         {row.record_ref && row.record_type

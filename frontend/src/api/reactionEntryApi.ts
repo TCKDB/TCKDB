@@ -72,6 +72,7 @@ const atomMapBadgeSchema = z.object({
 
 const reactionEntrySummarySchema = z.object({
     reaction_entry_ref: z.string(),
+    deposit_position: z.number().int(),
     reaction_ref: z.string(),
     equation: z.string(),
     reversible: z.boolean(),

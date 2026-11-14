@@ -169,6 +169,7 @@ class ReactionEntrySummary(BaseModel):
     reaction_entry_ref: str
     reaction_id: int
     reaction_ref: str
+    deposit_position: int
     equation: str
     reversible: bool
     family: str | None = None

@@ -3,7 +3,7 @@ import "../molecule-page.css"
 import { calculationDid } from "../domain/calculationTypeFormat"
 import { formatHartree, type ShapeCalculation, type ShapeRow } from "../domain/conformerGallery"
 import type { SinglePointsState } from "../hooks/useSpeciesSinglePoints"
-import { LevelLabel } from "./LevelLabel"
+import { LevelDetails, LevelLabel } from "./LevelLabel"
 import { ReviewChip } from "./ReviewChip"
 import { ValueLink } from "./ValueLink"
 import { ValueSource } from "./ValueSource"
@@ -14,7 +14,7 @@ function Where({ calculation }: { calculation: ShapeCalculation }) {
     return (
         <>
             {calculation.level
-                ? <>at <LevelLabel levelOfTheory={calculation.level} program={calculation.program} />{!calculation.program && ", program not recorded"}</>
+                ? <>at <LevelLabel levelOfTheory={calculation.level} program={calculation.program} plain />{!calculation.program && ", program not recorded"}</>
                 : <>level not recorded, {calculation.program ? <>with <span className="t-preserve-case">{calculation.program}</span></> : "program not recorded"}</>}
             {calculation.workflowTool && <>, run by <span className="t-preserve-case">{calculation.workflowTool}</span></>}
         </>
@@ -58,6 +58,7 @@ export function ObservationEvidence({ row, singlePoints, optimisations }: {
                                     {calculationDid(calculation.type) ?? calculation.type} <Where calculation={calculation} />{" "}
                                     <RecordLink kind="calculation" to={`/calculations/${calculation.ref}`} label="Calculation" />
                                     {calculation.review && <>{" "}<ReviewChip status={calculation.review} explain={false} /></>}
+                                    {calculation.level && <LevelDetails levelOfTheory={calculation.level} program={calculation.program} />}
                                 </li>
                             ))}
                         </ul>
@@ -85,6 +86,7 @@ export function ObservationEvidence({ row, singlePoints, optimisations }: {
                                         <ValueSource
                                             source={{ recordType: "calculation", ref: energy.ref }}
                                             did={found ? undefined : energy.type}
+                                            showDetails
                                             levels={level}
                                             programs={program}
                                             review={found?.review ? undefined : energy.review}

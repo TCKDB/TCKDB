@@ -1,9 +1,13 @@
 import { publicPointGroup } from "../domain/publicText"
 import { RecordLink } from "./RecordLink"
 import { RefsDisclosure } from "./RefsDisclosure"
+import { supersessionRefs } from "../domain/supersession"
 import { calculationWords, conformerGroupWords, recordWords } from "../domain/recordWords"
 import type { ReactNode } from "react"
 import { createContext, useContext, useEffect } from "react"
+import { RecordNumbersProvider } from "./RecordNumbers"
+import { numberedWords } from "../domain/recordNumbers"
+import { useRecordNumbers } from "../hooks/useRecordNumbers"
 import { Link } from "react-router-dom"
 import "../conformer-group.css"
 import "../entry-science.css"
@@ -199,6 +203,7 @@ function StatmechList({ listKey, meta, onPage, linkedNote, response, conformer, 
     }, [openSettings])
 
     return (
+        <RecordNumbersProvider refs={records.map((record) => record.statmech.statmech_ref)}>
         <SettingsStateContext.Provider value={settingsState}>
             <section className="ledger-section" aria-labelledby="statmech-heading">
                 <div className="ledger-heading">
@@ -290,8 +295,10 @@ function StatmechList({ listKey, meta, onPage, linkedNote, response, conformer, 
                 conformersState={conformersState}
                 reviewState={reviewState}
                 onOpen={() => { openConformers(); openReview() }}
+                conformers={conformers}
             />
         </SettingsStateContext.Provider>
+        </RecordNumbersProvider>
     )
 }
 
@@ -408,10 +415,11 @@ function StatmechRecordCard({ record, conformers, sourceCalcsState, frequenciesS
     frequenciesState: EntryListSectionState<StatmechRecord["frequencies"]>
 }) {
     const core = record.statmech
+    const numbers = useRecordNumbers()
     return (
         <article className="science-record card" aria-labelledby={`statmech-heading-${core.statmech_ref}`}>
             <div className="science-record-heading">
-                <h3 id={`statmech-heading-${core.statmech_ref}`}>{statusLabel(core.scientific_origin)} statmech record</h3>
+                <h3 id={`statmech-heading-${core.statmech_ref}`}>{numberedWords(`${statusLabel(core.scientific_origin)} statmech record`, core.statmech_ref, numbers)}</h3>
                 <span className="value-pill value-pill--muted">{statusLabel(core.review.status)}</span>
             </div>
             <StatmechRecordBody
@@ -421,7 +429,7 @@ function StatmechRecordCard({ record, conformers, sourceCalcsState, frequenciesS
                 frequenciesState={frequenciesState}
                 productLevels={statmechRecordProductLevels(record, sourceCalcsState)}
             />
-            <RefsDisclosure refs={[{ label: "Statmech record", value: core.statmech_ref }]} />
+            <RefsDisclosure refs={[{ label: "Statmech record", value: core.statmech_ref }, ...supersessionRefs(record.supersession)]} />
         </article>
     )
 }
@@ -463,7 +471,7 @@ function StatmechRecordBody({ record, conformers, sourceCalcsState, frequenciesS
     const core = record.statmech
     return (
         <>
-            {record.supersession && <SupersessionNotice supersession={record.supersession} />}
+            {record.supersession && <SupersessionNotice kind="statmech" supersession={record.supersession} />}
 
             <dl className="kv-list">
                 <div>
@@ -658,6 +666,7 @@ function IdenticalStatmechRecordsCard({ records, conformers, sourceCalcsState, f
     frequenciesState: EntryListSectionState<StatmechRecord["frequencies"]>
 }) {
     const representative = records[0]
+    const numbers = useRecordNumbers()
     const anchorId = `statmech-heading-${representative.statmech.statmech_ref}${STATMECH_GROUP_ID_SUFFIX}`
     const memberLevels = records.map((member) => statmechRecordProductLevels(member, sourceCalcsState))
     const readyMemberLevels = memberLevels.filter((levels): levels is ProductLevels => levels !== "loading" && levels !== "error")
@@ -671,7 +680,7 @@ function IdenticalStatmechRecordsCard({ records, conformers, sourceCalcsState, f
     return (
         <article className="science-record identical-record-group card" aria-labelledby={anchorId}>
             <div className="science-record-heading">
-                <h3 id={anchorId}>{statusLabel(representative.statmech.scientific_origin)} statmech record</h3>
+                <h3 id={anchorId}>{numberedWords(`${statusLabel(representative.statmech.scientific_origin)} statmech record`, representative.statmech.statmech_ref, numbers)}</h3>
                 <span className="value-pill value-pill--muted">{records.length} records with identical values</span>
             </div>
             <p className="note">
@@ -790,6 +799,7 @@ function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesStat
     sourceCalcsState: EntryListSectionState<StatmechRecord["source_calculations"]>
     frequenciesState: EntryListSectionState<StatmechRecord["frequencies"]>
 }) {
+    const numbers = useRecordNumbers()
     const headingId = `identical-refs-${records[0].statmech.statmech_ref}`
     const levelsByRecord = records.map((record) => statmechRecordProductLevels(record, sourceCalcsState))
     const readyLevels = levelsByRecord.filter((levels): levels is ProductLevels => levels !== "loading" && levels !== "error")
@@ -831,7 +841,7 @@ function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesStat
                             const ref = record.statmech.statmech_ref
                             return [
                                 <tr key={ref}>
-                                    <td data-label="Record">{recordWords(index + 1)}</td>
+                                    <td data-label="Record">{recordWords(numbers.get(ref) ?? index + 1)}</td>
                                     <td data-label="Review">{statusLabel(record.statmech.review.status)}</td>
                                     <StatmechLevelsRowCells levels={levelsByRecord[index]} showNotation={showNotation} />
                                     <td data-label="Opt calc"><RecordCalcRefsCell type="opt" refs={sourceCalcRefsByRole(sourceCalcsState, ref, "opt")} /></td>
@@ -1008,8 +1018,7 @@ function SubjectLine({ record }: { record: StatmechRecord }) {
     if (record.transition_state) {
         return (
             <p className="note">
-                Transition-state entry
-                {" — no dedicated page exists yet for this record kind."}
+                Transition-state entry: <RecordLink kind="transition-state" to={`/transition-state-entries/${record.transition_state.transition_state_entry_ref}`} label="Transition state" />
             </p>
         )
     }
@@ -1034,6 +1043,7 @@ function StatmechLazySection<T>({
     rowState: (record: StatmechRecord, data: T | undefined) => "not-present" | "empty" | "populated"
     children: (record: StatmechRecord, data: T) => ReactNode
 }) {
+    const numbers = useRecordNumbers()
     const headingId = `section-${heading.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}`
     // An entry with no statmech records at all has nothing for six separate
     // "No X are recorded…" sections to say beyond what the eager empty
@@ -1077,12 +1087,8 @@ function StatmechLazySection<T>({
                 return (
                     <div key={ref} className="science-record card">
                         <div className="science-record-heading">
-                            {/* A real title (the same "<origin> statmech record" phrase
-                                `StatmechRecordCard`'s own heading above uses
-                                for the primary card) plus the ref in `.data`
-                                (mono, muted -- `entry-science.css`) matches every other heading on
-                                this page. */}
-                            <h3>{statusLabel(record.statmech.scientific_origin)} statmech record</h3>
+                            {/* The same numbered "<origin> statmech record N" title the record's own card uses. */}
+                            <h3>{numberedWords(`${statusLabel(record.statmech.scientific_origin)} statmech record`, ref, numbers)}</h3>
                         </div>
                         {status === "populated" && data !== undefined
                             ? (
@@ -1122,12 +1128,15 @@ function StatmechLazySection<T>({
  * own row, so "one row per record" holds even for a record with an audit
  * trail of several reviews.
  */
-function ConformerAndReviewSection({ records, conformersState, reviewState, onOpen }: {
+function ConformerAndReviewSection({ records, conformersState, reviewState, onOpen, conformers }: {
     records: StatmechRecord[]
+    /** The entry's conformer groups, in the order the page numbers them. */
+    conformers: ConformerProjection[]
     conformersState: EntryListSectionState<StatmechRecord["conformers"]>
     reviewState: EntryListSectionState<StatmechRecord["review_history"]>
     onOpen: () => void
 }) {
+    const numbers = useRecordNumbers()
     if (records.length === 0) return null
     const available = records.some((record) => record.available_sections.has_conformers || record.available_sections.has_review)
     if (!available) {
@@ -1145,6 +1154,15 @@ function ConformerAndReviewSection({ records, conformersState, reviewState, onOp
                 : conformersState.status === "ready" && reviewState.status === "ready"
                     ? { status: "ready" as const }
                     : { status: "idle" as const }
+    // One number per conformer group for the whole table: its place among the entry's groups, else its first appearance.
+    const groupNumbers = new Map(conformers.map((conformer, index) => [conformer.conformer_group.conformer_group_ref, index + 1] as const))
+    if (conformersState.status === "ready") {
+        for (const record of records) {
+            for (const row of conformersState.dataByRef.get(record.statmech.statmech_ref) ?? []) {
+                if (!groupNumbers.has(row.conformer_group_ref)) groupNumbers.set(row.conformer_group_ref, groupNumbers.size + 1)
+            }
+        }
+    }
     return (
         <Disclosure
             id="section-conformer-context-review-history"
@@ -1177,16 +1195,15 @@ function ConformerAndReviewSection({ records, conformersState, reviewState, onOp
                                 const reviewRows = (reviewState.status === "ready" ? reviewState.dataByRef.get(ref) : undefined) ?? []
                                 return (
                                     <tr key={ref}>
-                                        <td data-label="Record">{recordWords(index + 1)}</td>
+                                        <td data-label="Record">{recordWords(numbers.get(ref) ?? index + 1)}</td>
                                         <td data-label="Conformer">
                                             {conformerRows.length > 0
-                                                ? conformerRows.map((row, index) => (
+                                                ? conformerRows.map((row, rowIndex) => (
                                                     <span key={row.conformer_group_ref}>
-                                                        {index > 0 && " · "}
-                                                        {/* The ref, never `row.label` (the depositor's own
-                                                            `conformer_group.label`, e.g. "conformer_1") --
-                                                            no depositor-typed labels on public pages. */}
-                                                        <RecordLink kind="conformer-group" to={`/conformer-groups/${row.conformer_group_ref}`} label={conformerGroupWords(index + 1)} />
+                                                        {rowIndex > 0 && " · "}
+                                                        {/* Numbered once for the whole table, in order of first appearance;
+                                                            never `row.label` (a depositor's own text). */}
+                                                        <RecordLink kind="conformer-group" to={`/conformer-groups/${row.conformer_group_ref}`} label={conformerGroupWords(groupNumbers.get(row.conformer_group_ref))} />
                                                     </span>
                                                 ))
                                                 : "not recorded"}

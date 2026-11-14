@@ -6,7 +6,7 @@ export const RECORD_KIND_NOUN = {
     "species-entry": "Species entry",
     reaction: "Reaction",
     "reaction-entry": "Reaction entry",
-    kinetics: "Rate record",
+    kinetics: "Record",
     thermo: "Thermo record",
     statmech: "Statmech record",
     transport: "Transport record",
@@ -33,6 +33,12 @@ export const versionWords = (position: number): string => `Version ${position}`
 
 /** "Record 2": the position of a rate record among the columns the page shows (1-based). */
 export const recordWords = (position: number): string => `Record ${position}`
+
+/**
+ * A record named from a list that is not the one its own page numbers, so no page number is claimed:
+ * "Thermo record (2 of 3 here)", or the plain words when it is the only one.
+ */
+export const usedByWords = (words: string, index: number, count: number): string => (count > 1 ? `${words} (${index + 1} of ${count} here)` : words)
 
 /** A calculation by what it did: "Single-point energy", "Optimisation". */
 const CALCULATION_WORDS: Readonly<Record<string, string>> = {

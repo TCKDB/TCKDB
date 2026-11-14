@@ -1,5 +1,5 @@
 import { GuideLink } from "../components/GuideLink"
-import { calculationWords } from "../domain/recordWords"
+import { calculationWords, versionWords } from "../domain/recordWords"
 import { transitionStateWords } from "../domain/recordWords"
 import { RecordLink } from "../components/RecordLink"
 import { geometryWords } from "../domain/recordWords"
@@ -250,7 +250,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                 to: `/reactions/${reaction.reaction_ref}`,
             }]
             : []),
-        ...(reaction.reaction_entry_ref ? [{ label: "This deposited version", to: `/reaction-entries/${reaction.reaction_entry_ref}` }] : []),
+        ...(reaction.reaction_entry_ref ? [{ label: participants.status === "ready" ? versionWords(participants.data.reaction_entry.deposit_position) : "This deposited version", to: `/reaction-entries/${reaction.reaction_entry_ref}` }] : []),
         { label: "This transition state" },
     ]
 

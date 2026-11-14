@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import { Link } from "react-router-dom"
 import { levelOfTheoryPath } from "../domain/methodsLinks"
-import { baseLabel, inlineQualifiers, inlineText, levelKey, qualifiersOf, type LevelFields, type LevelKey, type Qualifier } from "../domain/levelLabel"
+import { inlineQualifiers, levelKey, levelLine, qualifiersOf, type LevelFields, type LevelKey, type Qualifier } from "../domain/levelLabel"
 import "../level-label.css"
 
 type Scope = { register: (level: LevelFields) => () => void; qualifiers: ReadonlyMap<LevelKey, Qualifier[]> }
@@ -46,37 +46,50 @@ export type LevelLabelProps = {
 
 /**
  * A level of theory as method/basis and program on one line, with the
- * qualifiers folded behind "details". Built from the structured fields;
- * a view that holds only a label string shows that string and no details.
+ * qualifiers folded behind "details". Built from the structured fields
+ * alone; qualifiers that tell this level from another on the page are
+ * printed inline. The disclosure is block content: inside a sentence use
+ * `plain` and put `LevelDetails` after it.
  */
 export function LevelLabel({ levelOfTheory, program, link = true, plain = false }: LevelLabelProps) {
     const scope = useContext(ScopeContext)
     const register = scope?.register
-    const { method, basis, dispersion, solvent, solvent_model, aux_basis, cabs_basis, core_treatment, spin_treatment, level_of_theory_ref, label, display } = levelOfTheory
-    const key = levelKey(levelOfTheory)
+    const { method, basis, dispersion, solvent, solvent_model, aux_basis, cabs_basis, core_treatment, spin_treatment, relativistic_hamiltonian, pno_truncation, ri_approximation, level_of_theory_ref, display } = levelOfTheory
     useEffect(() => {
         if (!register) return undefined
-        return register({ method, basis, dispersion, solvent, solvent_model, aux_basis, cabs_basis, core_treatment, spin_treatment, level_of_theory_ref, label, display })
-    }, [register, method, basis, dispersion, solvent, solvent_model, aux_basis, cabs_basis, core_treatment, spin_treatment, level_of_theory_ref, label, display])
-    const pieces = qualifiersOf(levelOfTheory)
-    const short = baseLabel(levelOfTheory)
-    const parts = [short, ...(scope?.qualifiers.get(key) ?? []).map(inlineText), ...(program ? [program] : [])]
-    const line = parts.join(" · ")
+        return register({ method, basis, dispersion, solvent, solvent_model, aux_basis, cabs_basis, core_treatment, spin_treatment, relativistic_hamiltonian, pno_truncation, ri_approximation, level_of_theory_ref, display })
+    }, [register, method, basis, dispersion, solvent, solvent_model, aux_basis, cabs_basis, core_treatment, spin_treatment, relativistic_hamiltonian, pno_truncation, ri_approximation, level_of_theory_ref, display])
+    const line = levelLine(levelOfTheory, scope?.qualifiers ?? new Map(), program)
     const head = link && level_of_theory_ref
         ? <Link className="level-label-text t-preserve-case" to={levelOfTheoryPath(level_of_theory_ref)}>{line}</Link>
         : <span className="level-label-text t-preserve-case">{line}</span>
-    if (plain || pieces.length === 0) return <span className="level-label">{head}</span>
+    if (plain) return <span className="level-label">{head}</span>
     return (
         <span className="level-label">
             {head}
-            <details className="level-label-details">
-                <summary aria-label={`Details of ${short}`}>details</summary>
-                <dl className="level-label-pieces">
-                    {pieces.map((piece) => (
-                        <div key={piece.key}><dt>{piece.name}</dt><dd className="t-preserve-case">{piece.value}</dd></div>
-                    ))}
-                </dl>
-            </details>
+            <LevelDetails levelOfTheory={levelOfTheory} program={program} />
         </span>
+    )
+}
+
+/**
+ * The qualifiers of a level behind a native "details" disclosure; nothing when it states none. Block content, so it
+ * goes beside a sentence or in a cell, never inside a paragraph: a sentence uses `<LevelLabel plain>` and puts this
+ * after it. Its name carries the level's inline qualifiers and program, so two disclosures on a page never share one.
+ */
+export function LevelDetails({ levelOfTheory, program }: { levelOfTheory: LevelFields; program?: string | null }) {
+    const scope = useContext(ScopeContext)
+    const pieces = qualifiersOf(levelOfTheory)
+    if (pieces.length === 0) return null
+    const line = levelLine(levelOfTheory, scope?.qualifiers ?? new Map(), program)
+    return (
+        <details className="level-label-details">
+            <summary aria-label={`Details of ${line}`}>details</summary>
+            <dl className="level-label-pieces">
+                {pieces.map((piece) => (
+                    <div key={piece.key}><dt>{piece.name}</dt><dd className="t-preserve-case">{piece.value}</dd></div>
+                ))}
+            </dl>
+        </details>
     )
 }

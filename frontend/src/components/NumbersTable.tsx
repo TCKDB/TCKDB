@@ -65,6 +65,7 @@ export function NumbersTable<R extends NumberRow>({ rows, caption, label, groupL
 }) {
     const [grouped, setGrouped] = useState(false)
     const groups = useMemo(() => (grouped ? groupByLevel(rows) : [{ key: null, rows: [...rows] }]), [grouped, rows])
+    const positions = useMemo(() => recordPositions(rows), [rows])
     const levelCount = new Set(rows.flatMap((row) => row.levels.map((level) => level.label))).size
     return (
         <>
@@ -97,7 +98,7 @@ export function NumbersTable<R extends NumberRow>({ rows, caption, label, groupL
                             )}
                             {group.rows.map((row) => {
                                 const { to, entryPath } = hrefs(row)
-                                return <NumberRowView key={`${row.kind}-${row.ref}`} row={row} entryPath={entryPath} to={to} groupLabels={groupLabels} version={version?.(row)} />
+                                return <NumberRowView key={`${row.kind}-${row.ref}`} row={row} entryPath={entryPath} to={to} groupLabels={groupLabels} version={version?.(row)} position={positions.get(row)} />
                             })}
                         </tbody>
                     ))}
@@ -106,6 +107,22 @@ export function NumbersTable<R extends NumberRow>({ rows, caption, label, groupL
             {rows.some((row) => row.values.some((value) => value.full !== undefined)) && <p className="note">{ROUNDED_NOTE}</p>}
         </>
     )
+}
+
+/** A row's place among the rows of its kind and version, for telling same-kind records apart; absent for the only one. */
+function recordPositions<R extends NumberRow>(rows: readonly R[]): Map<R, number> {
+    const groupOf = (row: R) => `${row.kind}|${(row as { entryRef?: string | null }).entryRef ?? ""}`
+    const sizes = new Map<string, number>()
+    for (const row of rows) sizes.set(groupOf(row), (sizes.get(groupOf(row)) ?? 0) + 1)
+    const seen = new Map<string, number>()
+    const positions = new Map<R, number>()
+    for (const row of rows) {
+        const key = groupOf(row)
+        const position = (seen.get(key) ?? 0) + 1
+        seen.set(key, position)
+        if ((sizes.get(key) ?? 0) > 1) positions.set(row, position)
+    }
+    return positions
 }
 
 function LevelHeading({ levels }: { levels: NumberRow["levels"] }) {
@@ -142,8 +159,9 @@ function DescribesLine({ describes, entryPath, groupLabels }: { describes: Descr
     return <>{body}{describes.implied && " (implied by the CHEMKIN format)"}</>
 }
 
-function NumberRowView({ row, entryPath, to, groupLabels, version }: {
+function NumberRowView({ row, entryPath, to, groupLabels, version, position }: {
     row: NumberRow
+    position?: number
     entryPath: string | null
     to: string | null
     groupLabels: Map<string, string>
@@ -168,7 +186,7 @@ function NumberRowView({ row, entryPath, to, groupLabels, version }: {
                 {row.describes && (
                     <p className="entry-numbers-describes"><span className="entry-numbers-key">Describes:</span> <DescribesLine describes={row.describes} entryPath={entryPath} groupLabels={groupLabels} /></p>
                 )}
-                <ValueSource source={{ recordType: row.kind, ref: row.ref, ...(to ? { to } : {}) }} levels={row.levels} programs={row.programs} />
+                <ValueSource source={{ recordType: row.kind, ref: row.ref, ...(to ? { to } : {}) }} position={position} showDetails levels={row.levels} programs={row.programs} />
             </td>
         </tr>
     )

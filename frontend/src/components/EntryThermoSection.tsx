@@ -1,6 +1,10 @@
-import type { ReactNode } from "react"
+import { useMemo, type ReactNode } from "react"
+import { RecordNumbersProvider } from "./RecordNumbers"
+import { numberedWords, numberRefs, type RecordNumbering } from "../domain/recordNumbers"
+import { useRecordNumbers } from "../hooks/useRecordNumbers"
 import { RecordLink } from "./RecordLink"
 import { RefsDisclosure } from "./RefsDisclosure"
+import { supersessionRefs } from "../domain/supersession"
 import { calculationWords, conformerGroupWords, recordWords } from "../domain/recordWords"
 import "../conformer-group.css"
 import "../entry-science.css"
@@ -146,30 +150,12 @@ function hasModelKindData(record: ThermoRecord): boolean {
  * rendered first. A record with no model-kind data maps to `null` (no ToC
  * entry -- "never register a placeholder for an absent model kind").
  *
- * Two records of the SAME model kind get a disambiguating index appended
- * ("NASA-7 thermo record 1" / "NASA-7 thermo record 2") -- a lone record
- * of a kind keeps the plain label ("NASA-7 thermo record").
+ * A list of several records numbers each by its position in the list the
+ * section shows ("NASA-7 thermo record 2"), the number the card heading and
+ * the group table use too; the only record keeps the plain label.
  */
-function thermoSectionLabels(records: ThermoRecord[]): Map<string, string> {
-    const withData = records.filter(hasModelKindData)
-    const countByBase = new Map<string, number>()
-    for (const record of withData) {
-        const base = `${modelKindLabel(record.model_kind)} thermo record`
-        countByBase.set(base, (countByBase.get(base) ?? 0) + 1)
-    }
-    const seenByBase = new Map<string, number>()
-    const labels = new Map<string, string>()
-    for (const record of withData) {
-        const base = `${modelKindLabel(record.model_kind)} thermo record`
-        if ((countByBase.get(base) ?? 0) <= 1) {
-            labels.set(record.thermo_ref, base)
-            continue
-        }
-        const index = (seenByBase.get(base) ?? 0) + 1
-        seenByBase.set(base, index)
-        labels.set(record.thermo_ref, `${base} ${index}`)
-    }
-    return labels
+function thermoSectionLabels(records: ThermoRecord[], numbers: RecordNumbering): Map<string, string> {
+    return new Map(records.filter(hasModelKindData).map((record) => [record.thermo_ref, numberedWords(`${modelKindLabel(record.model_kind)} thermo record`, record.thermo_ref, numbers)] as const))
 }
 
 /** Binds `renderThermoRecord` to one entry's worth of ToC labels (see
@@ -233,9 +219,11 @@ function ThermoList({ response, meta, onPage, linkedNote, conformer, conformers 
     // ("NASA-7 thermo record 1".."NASA-7 thermo record 7") for content a
     // reader only needs to visit once.
     const representativeRecords = groupByFingerprint(records, thermoRecordFingerprint).map((group) => group.records[0])
-    const sectionLabels = thermoSectionLabels(representativeRecords)
+    const numbers = useMemo(() => numberRefs(records.map((record) => record.thermo_ref)), [records])
+    const sectionLabels = thermoSectionLabels(representativeRecords, numbers)
     const renderThermoRecords = makeThermoGroupedRenderer(sectionLabels)
     return (
+        <RecordNumbersProvider refs={records.map((record) => record.thermo_ref)}>
         <section className="ledger-section" aria-labelledby="thermo-heading">
             <div className="ledger-heading">
                 <p className="eyebrow">Deposited evidence</p>
@@ -296,6 +284,7 @@ function ThermoList({ response, meta, onPage, linkedNote, conformer, conformers 
             )}
             {records.some((record) => (record.calculation_settings?.length ?? 0) > 0) && <SettingsLegend perLevel />}
         </section>
+        </RecordNumbersProvider>
     )
 }
 
@@ -309,15 +298,16 @@ function ThermoList({ response, meta, onPage, linkedNote, conformer, conformers 
  * valid, always-in-the-same-order hook call rather than a conditional one.
  */
 function ThermoRecordCard({ record, sectionLabel }: { record: ThermoRecord; sectionLabel: string | null }) {
+    const numbers = useRecordNumbers()
     useRegisteredSection(sectionLabel ? `thermo-heading-${record.thermo_ref}` : null, sectionLabel ?? "", 2)
     return (
         <article className="science-record card" aria-labelledby={`thermo-heading-${record.thermo_ref}`}>
             <div className="science-record-heading">
-                <h3 id={`thermo-heading-${record.thermo_ref}`}>{modelKindLabel(record.model_kind)} thermo record</h3>
+                <h3 id={`thermo-heading-${record.thermo_ref}`}>{numberedWords(`${modelKindLabel(record.model_kind)} thermo record`, record.thermo_ref, numbers)}</h3>
                 <span className="value-pill value-pill--muted">{statusLabel(record.review.status)}</span>
             </div>
             <ThermoRecordBody record={record} />
-            <RefsDisclosure refs={[{ label: "Thermo record", value: record.thermo_ref }]} />
+            <RefsDisclosure refs={[{ label: "Thermo record", value: record.thermo_ref }, ...supersessionRefs(record.supersession)]} />
         </article>
     )
 }
@@ -357,7 +347,7 @@ function ThermoRecordBody({ record, idSuffix = "", showProvenance = true }: {
 }) {
     return (
         <>
-            {record.supersession && <SupersessionNotice supersession={record.supersession} />}
+            {record.supersession && <SupersessionNotice kind="thermo" supersession={record.supersession} />}
 
             <dl className="kv-list">
                 <div><dt>Scientific origin</dt><dd>{record.scientific_origin}</dd></div>
@@ -444,12 +434,13 @@ const GROUP_ID_SUFFIX = "-group"
  */
 function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: ThermoRecord[]; sectionLabel: string | null }) {
     const representative = records[0]
+    const numbers = useRecordNumbers()
     const anchorId = `thermo-heading-${representative.thermo_ref}${GROUP_ID_SUFFIX}`
     useRegisteredSection(sectionLabel ? anchorId : null, sectionLabel ?? "", 2)
     return (
         <article className="science-record identical-record-group card" aria-labelledby={anchorId}>
             <div className="science-record-heading">
-                <h3 id={anchorId}>{modelKindLabel(representative.model_kind)} thermo record</h3>
+                <h3 id={anchorId}>{numberedWords(`${modelKindLabel(representative.model_kind)} thermo record`, representative.thermo_ref, numbers)}</h3>
                 <span className="value-pill value-pill--muted">{records.length} records with identical values</span>
             </div>
             <p className="note">
@@ -510,6 +501,7 @@ function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: Thermo
  * or not -- see `components/ProductLevels.tsx`'s own header comment.
  */
 function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
+    const numbers = useRecordNumbers()
     const headingId = `identical-refs-${records[0].thermo_ref}`
     const levelsByRecord = records.map(thermoRecordProductLevels)
     const showNotation = anyNotation(levelsByRecord)
@@ -537,7 +529,7 @@ function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
                             const primaryRef = provenance?.primary_calculation?.calculation_ref ?? null
                             return (
                                 <tr key={record.thermo_ref}>
-                                    <td data-label="Record">{recordWords(index + 1)}</td>
+                                    <td data-label="Record">{recordWords(numbers.get(record.thermo_ref) ?? index + 1)}</td>
                                     <td data-label="Review">{statusLabel(record.review.status)}</td>
                                     <ProductLevelsTableCells levels={levelsByRecord[index]} showNotation={showNotation} />
                                     <td data-label="Primary calculation">

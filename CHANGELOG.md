@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Reaction-entry reads carry `deposit_position` (Unreleased)
+
+- **Behaviour:** the reaction-entry summary in `GET /scientific/reactions/search`, `GET /scientific/reactions/browse` and `GET /scientific/reaction-entries/{id}/full` gains `deposit_position`, a 1-based integer: the entry's place among all entries of the same reaction, ordered by `(created_at, id)`. It is computed over every entry of the reaction, so it ignores the read filter, paging, the hidden-by-default rule and review status: a hidden entry leaves a gap, a later page reports the global number, and a review change never renumbers.
+- **Schema and migration:** none. No new environment variable.
+- **Versions:** no distributed package changed.
+
 ## A test guards against decision narrative in source text (Unreleased)
 
 - **Behaviour:** one user-facing message is reworded; no change to when it fires: the QCSchema adapter's unsupported-driver refusal now ends "other atomic drivers are not supported (a scan is imported as a TorsionDriveResult via tckdb_qcschema.scan.build_scan_bundle_payload)" instead of naming a work package. The new test, `backend/tests/invariants/test_no_decision_narrative.py`, lists the tracked files under `backend/app`, `backend/scripts`, `backend/tests`, `schemas/python`, `clients/python` and `frontend/src` with `git ls-files` and fails on design-record pointers, links into decision-record folders, manuscript-folder paths, an owner's name, owner-decision wording, issue, pull-request and review-finding ids, and phase, work-package and chunk labels, naming each hit as `path:line: [pattern] matched text`. The repo gate workflow runs it on every pull request. Wording fixes elsewhere remove the remaining hits (comments, docstrings and fixture notes).

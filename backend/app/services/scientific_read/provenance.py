@@ -107,6 +107,7 @@ from app.services.scientific_read.internal_ids import (
 from app.services.scientific_read.kinetics import get_reaction_kinetics
 from app.services.scientific_read.networks import build_network_record
 from app.services.scientific_read.reaction_participants import collapse_occurrences, format_reaction_equation
+from app.services.scientific_read.reactions import reaction_entry_deposit_positions
 from app.services.scientific_read.species_identity import (
     ENTRY_FACET_COLUMNS,
     STEREO_DISPLAY,
@@ -240,6 +241,7 @@ def get_reaction_full(
         reaction_entry_ref=entry.public_ref,
         reaction_id=entry.reaction_id,
         reaction_ref=chem.public_ref if chem is not None else "",
+        deposit_position=reaction_entry_deposit_positions(session, [entry.id])[entry.id],
         equation=_format_entry_equation(session, entry, chem),
         reversible=chem.reversible if chem else True,
         family=family_name,

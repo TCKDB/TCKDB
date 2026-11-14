@@ -1,5 +1,7 @@
+import { versionWords } from "./recordWords"
+
 /** What the title and equation above the entry table are read from; nothing is said when there is only one version. */
-export function chooserHeaderSourceNote(total: number): string | null {
+export function chooserHeaderSourceNote(total: number, position: number): string | null {
     if (total <= 1) return null
-    return "Title from Version 1; versions can differ."
+    return `Title from ${versionWords(position)}; versions can differ.`
 }

@@ -206,25 +206,11 @@ function ddFor(container: HTMLElement, term: string): string {
     return dt.nextElementSibling?.textContent ?? ""
 }
 
-/**
- * Finds the `<code>` element whose immediately preceding text node
- * contains `precedingText`, and returns its own text. Used to bind a
- * supersession pointer to ITS OWN sentence rather than merely asserting
- * both refs appear somewhere in the notice — `getByText(/thm_beta_v2/)`
- * matches identically whether `superseded_by`/`current` are rendered in
- * the correct order or swapped, since both refs are present either way.
- * A plain-string/regex `getByText` also cannot span the `<p>`/`<code>`
- * boundary at all here (testing-library's default text matcher reads only
- * an element's own direct text-node children, not descendant elements —
- * see the `CalculationDetailPage.test.tsx` caveat-sentence comment for the
- * same limitation), so this reads the DOM directly instead.
- */
-function codeAfter(container: HTMLElement, precedingText: string): string {
-    const codes = Array.from(container.querySelectorAll("code"))
-    for (const code of codes) {
-        if ((code.previousSibling?.textContent ?? "").includes(precedingText)) return code.textContent ?? ""
-    }
-    throw new Error(`No <code> immediately preceded by text containing "${precedingText}" found`)
+/** The value of the labelled row in a card's References: binds each ref to its role, so a swap of the two correction pointers shows. */
+function refValue(container: HTMLElement, label: string): string {
+    const row = Array.from(container.querySelectorAll(".ref-item")).find((item) => item.querySelector(".ref-item-label")?.textContent === label)
+    if (!row) throw new Error(`No reference labelled "${label}" found`)
+    return row.querySelector(".ref-item-value")?.textContent ?? ""
 }
 
 /**
@@ -569,7 +555,21 @@ describe("EntryThermoSection", () => {
         expect(within(alphaCard).queryByText("Model kind")).not.toBeInTheDocument()
         // The heading itself is unaffected -- this isn't "nothing about
         // the model kind renders at all".
-        expect(within(alphaCard).getByText("NASA 7-coefficient polynomial thermo record")).toBeVisible()
+        expect(within(alphaCard).getByText("NASA 7-coefficient polynomial thermo record 1")).toBeVisible()
+    })
+
+    it("names the replacing record by its number on the page and links to its card, when it is listed", async () => {
+        const [alpha, beta, gamma] = mockRecords()
+        const pointing = { ...beta, supersession: { superseded_by: "thm_gamma", current: "thm_alpha", reason: "corrected", superseded_at: "2026-08-15T00:00:00", chain_length: 2 } }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [alpha, pointing, gamma] }))))
+        page()
+        await screen.findByText("thm_beta")
+        const card = screen.getByText("thm_beta").closest("article") as HTMLElement
+        const notice = card.querySelector(".supersession-notice") as HTMLElement
+        expect(within(notice).getByRole("link", { name: "Thermo record 3" })).toHaveAttribute("href", "#thermo-heading-thm_gamma")
+        expect(within(notice).getByRole("link", { name: "Thermo record 1" })).toHaveAttribute("href", "#thermo-heading-thm_alpha")
+        expect(notice.textContent).not.toMatch(/thm_/)
+        expect(document.getElementById("thermo-heading-thm_gamma")).not.toBeNull()
     })
 
     it("never hides a superseded record — renders the notice alongside the record, not instead of it", async () => {
@@ -585,8 +585,11 @@ describe("EntryThermoSection", () => {
         // direction swap (superseded_by <-> current) renders identically
         // under a presence-only check, since both refs are on the card
         // either way. See `codeAfter`'s docstring.
-        expect(codeAfter(betaCard, "replaced by")).toBe("thm_beta_v2")
-        expect(codeAfter(betaCard, "current record in this chain is")).toBe("thm_beta_v3")
+        expect(betaCard).toHaveTextContent("replaced by a newer record")
+        expect(betaCard).toHaveTextContent("current record in this chain is a newer record")
+        expect(betaCard.querySelector(".supersession-notice code")).toBeNull()
+        expect(refValue(betaCard, "Replaced by")).toBe("thm_beta_v2")
+        expect(refValue(betaCard, "Current record in this chain")).toBe("thm_beta_v3")
         expect(within(betaCard).getByText(/corrected transcription error/)).toBeVisible()
         // The record's own data is still fully present, not replaced by the
         // notice. `getByText` only reads an element's own direct text-node
@@ -1145,7 +1148,7 @@ describe("EntryThermoSection: thermo records register in the ToC", () => {
         // the data commit, but a ToC entry registers from an effect that
         // lands a tick later -- under full-suite load that tick was
         // sometimes still pending, and the sync query missed the link.
-        const link = await screen.findByRole("link", { name: "NASA 7-coefficient polynomial thermo record" })
+        const link = await screen.findByRole("link", { name: "NASA 7-coefficient polynomial thermo record 1" })
         expect(link).toHaveAttribute("href", "#thermo-heading-thm_alpha")
         // The href doesn't merely look plausible -- the id it points to is
         // a real element actually on the page.
@@ -1153,9 +1156,9 @@ describe("EntryThermoSection: thermo records register in the ToC", () => {
 
         // The two other present model kinds register too, each under its
         // own label -- not just NASA-7.
-        expect(await screen.findByRole("link", { name: "NASA 9-coefficient polynomial thermo record" }))
+        expect(await screen.findByRole("link", { name: "NASA 9-coefficient polynomial thermo record 2" }))
             .toHaveAttribute("href", "#thermo-heading-thm_beta")
-        expect(await screen.findByRole("link", { name: "Wilhoit polynomial thermo record" }))
+        expect(await screen.findByRole("link", { name: "Wilhoit polynomial thermo record 3" }))
             .toHaveAttribute("href", "#thermo-heading-thm_gamma")
     })
 
@@ -1196,7 +1199,7 @@ describe("EntryThermoSection: thermo records register in the ToC", () => {
         expect(screen.getByText("No NASA-7 polynomial recorded for this record.")).toBeVisible()
     })
 
-    it("disambiguates two records of the same model kind rather than repeating one label", async () => {
+    it("numbers two records of the same model kind by their place in the list rather than repeating one label", async () => {
         const [alpha, beta, gamma] = mockRecords()
         const secondNasa = { ...gamma, thermo_ref: "thm_delta", model_kind: "nasa", nasa: alpha.nasa, nasa9: null, wilhoit: null, points: null }
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [alpha, beta, gamma, secondNasa] }))))
@@ -1204,9 +1207,10 @@ describe("EntryThermoSection: thermo records register in the ToC", () => {
         await screen.findByText("thm_delta")
 
         const first = await screen.findByRole("link", { name: "NASA 7-coefficient polynomial thermo record 1" })
-        const second = await screen.findByRole("link", { name: "NASA 7-coefficient polynomial thermo record 2" })
+        const second = await screen.findByRole("link", { name: "NASA 7-coefficient polynomial thermo record 4" })
         // Absence asserted after the positive waits, so the nav has registered.
         expect(screen.queryByRole("link", { name: "NASA 7-coefficient polynomial thermo record" })).not.toBeInTheDocument()
+        expect(document.getElementById("thermo-heading-thm_delta")).toHaveTextContent("NASA 7-coefficient polynomial thermo record 4")
         expect(first).toHaveAttribute("href", "#thermo-heading-thm_alpha")
         expect(second).toHaveAttribute("href", "#thermo-heading-thm_delta")
     })
@@ -1248,7 +1252,7 @@ describe("EntryThermoSection: identical-value records group under one card", () 
         // detail -- jsdom's default queries do not filter those out by
         // visibility, so this reads the DOM structure directly instead).
         const ownHeadingRow = groupCard.querySelector(":scope > .science-record-heading") as HTMLElement
-        expect(ownHeadingRow.querySelector("h3")?.textContent).toBe("NASA 7-coefficient polynomial thermo record")
+        expect(ownHeadingRow.querySelector("h3")?.textContent).toBe("NASA 7-coefficient polynomial thermo record 1")
         // Every record is still listed, by number, in the always-visible
         // group table (not hidden behind "show all"), with no ref printed.
         const refsTable = within(groupCard).getByRole("table", { name: "Records sharing these identical values" })

@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import { LevelLabel } from "../components/LevelLabel"
+import { LevelDetails, LevelLabel } from "../components/LevelLabel"
 import { RecordLink } from "../components/RecordLink"
 import { geometryWords } from "../domain/recordWords"
 import { Link, useParams } from "react-router-dom"
@@ -153,8 +153,9 @@ function Ledger({ group }: { group: ConformerGroup }) {
                                 <ul className="shape-spread">
                                     {spreads.map((line) => (
                                         <li key={`${line.kind}-${line.levelLabel}-${line.program}`}>
-                                            {line.kind === "sp" ? "Single-point energies" : "Final energies of the optimisations"} at {line.level ? <LevelLabel levelOfTheory={line.level} program={line.program} /> : <span className="t-preserve-case">{line.levelLabel} · {line.program}</span>} differ by up to {line.kjMol.toFixed(2)} <span className="t-preserve-case">kJ/mol</span> across{" "}
+                                            {line.kind === "sp" ? "Single-point energies" : "Final energies of the optimisations"} at {line.level ? <LevelLabel levelOfTheory={line.level} program={line.program} plain /> : <span className="t-preserve-case">{line.levelLabel} · {line.program}</span>} differ by up to {line.kjMol.toFixed(2)} <span className="t-preserve-case">kJ/mol</span> across{" "}
                                             {line.count} calculations.
+                                            {line.level && <LevelDetails levelOfTheory={line.level} program={line.program} />}
                                         </li>
                                     ))}
                                 </ul>

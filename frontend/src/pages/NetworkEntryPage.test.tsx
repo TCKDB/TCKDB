@@ -111,7 +111,7 @@ function handleThermo(refs: Record<string, number>) {
 
 function handleReactionEntry(ref: string, equation: string, status = "not_reviewed") {
     server.use(http.get(`/api/v1/scientific/reaction-entries/${ref}/full`, () => HttpResponse.json({
-        reaction_entry: { reaction_entry_ref: ref, reaction_ref: `rxn_${ref}`, equation, reversible: true, review: { status }, atom_maps: [] },
+        reaction_entry: { reaction_entry_ref: ref, deposit_position: 1, reaction_ref: `rxn_${ref}`, equation, reversible: true, review: { status }, atom_maps: [] },
     })))
 }
 
@@ -860,8 +860,9 @@ describe("NetworkEntryPage -- which solve the energies came from, and the order 
         page()
         const term = await screen.findByText("ME method")
         const value = term.nextElementSibling as HTMLElement
-        expect(value.textContent).toContain("modified strong collision (nsolve_test1)")
-        expect(value.textContent).toContain("reservoir state (nsolve_test2)")
+        expect(value.textContent).toContain("modified strong collision (solve 1 of 2)")
+        expect(value.textContent).toContain("reservoir state (solve 2 of 2)")
+        expect(value.textContent).not.toMatch(/nsolve_/)
     })
 })
 

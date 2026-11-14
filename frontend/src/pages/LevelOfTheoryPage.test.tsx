@@ -442,7 +442,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         expect(refValue.closest("a")).toBeNull()
     })
 
-    it("titles the page, and its breadcrumb, with the server's full label so core treatments are told apart", async () => {
+    it("titles the page and its breadcrumb with the short label, never the server's long one, and lists the qualifiers in the facts and the tab title", async () => {
         const record = baseRecord()
         server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse({
             ...record,
@@ -455,9 +455,27 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
             },
         }))))
         page()
-        expect(await screen.findByRole("heading", { level: 1, name: "CCSD(T)/cc-pCVTZ (core=all_electron)" })).toBeInTheDocument()
+        expect(await screen.findByRole("heading", { level: 1, name: "CCSD(T)/cc-pCVTZ" })).toBeInTheDocument()
         const crumb = screen.getByRole("navigation", { name: "Breadcrumb" })
-        expect(crumb.querySelector("[aria-current='page']")?.textContent).toBe("CCSD(T)/cc-pCVTZ (core=all_electron)")
+        expect(crumb.querySelector("[aria-current='page']")?.textContent).toBe("CCSD(T)/cc-pCVTZ")
+        expect(document.body.textContent).not.toContain("core=all_electron")
+        expect(screen.getByText("Core treatment").nextElementSibling).toHaveTextContent("all electron")
+        expect(document.title).toContain("CCSD(T)/cc-pCVTZ · all electron")
+    })
+
+    it("tells the calculations at this level apart by visible numbered words", async () => {
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord({
+            used_by: [
+                { calculation_ref: "calc_u1", endpoint: "x", type: "opt" },
+                { calculation_ref: "calc_u2", endpoint: "x", type: "opt" },
+                { calculation_ref: "calc_u3", endpoint: "x", type: "sp" },
+            ],
+        })))))
+        page()
+        const table = await screen.findByRole("table", { name: "Calculations at this level of theory" })
+        const texts = within(table).getAllByRole("link").filter((link) => link.getAttribute("href")?.startsWith("/calculations/")).map((link) => link.textContent)
+        expect(texts).toEqual(["Optimisation 1", "Optimisation 2", "Single-point energy 3"])
+        expect(new Set(texts).size).toBe(3)
     })
 
     it("shows each stated method qualifier, and prints no row for one that is not stated", async () => {
@@ -481,7 +499,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         expect(screen.queryByText("Keywords")).toBeNull()
     })
 
-    it("keeps method/basis as the title when the payload carries no label", async () => {
+    it("titles the page with method/basis when the payload carries no label", async () => {
         server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord()))))
         page()
         expect(await screen.findByRole("heading", { level: 1, name: "b3lyp/def2tzvp" })).toBeInTheDocument()

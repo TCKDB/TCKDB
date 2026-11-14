@@ -344,6 +344,7 @@ def search_reactions(
         availability_by_entry=availability_by_entry,
         matched_direction_by_entry=matched_direction_by_entry,
         family_name_by_id=family_name_by_id,
+        deposit_position_by_entry=reaction_entry_deposit_positions(session, [e.id for e in entries]),
     )
 
     summary = review_summary(badges[e.id] for e in entries)
@@ -620,6 +621,7 @@ def browse_reactions(
         availability_by_entry=availability_by_entry,
         matched_direction_by_entry=matched_direction_by_entry,
         family_name_by_id=family_name_by_id,
+        deposit_position_by_entry=reaction_entry_deposit_positions(session, [e.id for e in entries]),
     )
 
     summary = review_summary(badges[e.id] for e in entries)
@@ -1080,6 +1082,34 @@ def _collapsed_participants(
     ]
 
 
+def reaction_entry_deposit_positions(
+    session: Session, entry_ids: list[int]
+) -> dict[int, int]:
+    """1-based deposit position of each entry among ALL entries of its reaction.
+
+    Ordered by ``(created_at, id)`` over every ``reaction_entry`` of the same
+    reaction; read filters, paging and review status do not enter, so an entry
+    keeps its number however it is reached.
+    """
+    if not entry_ids:
+        return {}
+    ranked = (
+        select(
+            ReactionEntry.id.label("entry_id"),
+            func.row_number()
+            .over(
+                partition_by=ReactionEntry.reaction_id,
+                order_by=(ReactionEntry.created_at, ReactionEntry.id),
+            )
+            .label("position"),
+        )
+    ).subquery()
+    rows = session.execute(
+        select(ranked.c.entry_id, ranked.c.position).where(ranked.c.entry_id.in_(entry_ids))
+    ).all()
+    return {entry_id: int(position) for entry_id, position in rows}
+
+
 def _materialize_and_sort_reaction_records(
     *,
     entries: list[ReactionEntry],
@@ -1094,6 +1124,7 @@ def _materialize_and_sort_reaction_records(
     availability_by_entry: dict[int, ReactionAvailability],
     matched_direction_by_entry: dict[int, ReactionDirectionQuery],
     family_name_by_id: dict[int, str],
+    deposit_position_by_entry: dict[int, int],
 ) -> list[ReactionScientificRecord]:
     """Project bulk-loaded per-entry data into sorted ``ReactionScientificRecord`` rows.
 
@@ -1143,6 +1174,7 @@ def _materialize_and_sort_reaction_records(
                     if chem.reaction_family_id is not None
                     else None
                 ),
+                deposit_position=deposit_position_by_entry[e.id],
                 review=badges[e.id],
                 reactants=reactants,
                 products=products,

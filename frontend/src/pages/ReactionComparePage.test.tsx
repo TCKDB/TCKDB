@@ -19,7 +19,7 @@ const summary = { approved: 0, under_review: 0, not_reviewed: 0, deprecated: 0, 
 const sortEcho = { sort: { keys: [{ key: "review_rank", direction: "asc", meaning: "review status" }, { key: "created_at", direction: "desc", meaning: "newest deposited" }] } }
 const server = setupServer(http.get("/api/v1/auth/me", () => new HttpResponse(null, { status: 401 })))
 
-type Spec = { ref: string; level: typeof lotA | null; software: typeof gaussian | null; A: number; n: number; Ea: number; range: [number, number]; tunnelling: string; review?: string; units?: string }
+type Spec = { ref: string; level: (typeof lotA & Record<string, unknown>) | null; software: typeof gaussian | null; A: number; n: number; Ea: number; range: [number, number]; tunnelling: string; review?: string; units?: string; spRef?: string }
 
 function kinetics(spec: Spec) {
     return {
@@ -29,7 +29,7 @@ function kinetics(spec: Spec) {
         temperature_coverage: { record_min_k: spec.range[0], record_max_k: spec.range[1] },
         evidence_completeness: { score: 3, max: 9, checklist: {} },
         levels: { geometry: spec.level, frequency: spec.level, energy: spec.level, energy_source: "sp" },
-        provenance: { primary_software: spec.software, literature: { title: "typed by the depositor" } },
+        provenance: { primary_software: spec.software, ts_sp_calculation_ref: spec.spRef ?? null, literature: { title: "typed by the depositor" } },
         note: "typed by the depositor",
     }
 }
@@ -47,7 +47,7 @@ const participant = (ref: string, smiles: string, formula: string, index: number
 const overview = () => ({
     review_summary: summary,
     records: [{
-        reaction_ref: reactionRef, reaction_entry_ref: "rxe_one", equation: "CH4 + OH <=> CH3 + H2O", reversible: true, family: null, review: { status: "not_reviewed" },
+        reaction_ref: reactionRef, reaction_entry_ref: "rxe_one", deposit_position: 1, equation: "CH4 + OH <=> CH3 + H2O", reversible: true, family: null, review: { status: "not_reviewed" },
         reactants: [participant("spe_a", "C", "CH4", 0), participant("spe_b", "[OH]", "HO", 1)],
         products: [participant("spe_c", "[CH3]", "CH3", 0), participant("spe_d", "O", "H2O", 1)],
         availability: { has_kinetics: true, has_transition_state: true, kinetics_count: 4 },
@@ -220,7 +220,7 @@ describe("reaction compare page", () => {
         const head = within(grid).getAllByRole("columnheader").find((cell) => cell.textContent?.startsWith("Record 1")) as HTMLElement
         expect(head).toHaveTextContent("Origin: computed")
         expect(head).toHaveTextContent(/approved/i)
-        expect(within(head).getByRole("link", { name: "Rate record: Record 1" })).toHaveAttribute("href", "/reaction-entries/rxe_one#kinetics-kin_one")
+        expect(within(head).getByRole("link", { name: "Record 1" })).toHaveAttribute("href", "/reaction-entries/rxe_one#kinetics-kin_one")
         expect(within(head).getByRole("link", { name: "Reaction entry: Version 1" })).toHaveAttribute("href", "/reaction-entries/rxe_one")
         expect(within(rowCells(grid, /Tunnelling model/)[0]).getByText("Wigner")).toBeInTheDocument()
         expect(within(grid).getByRole("row", { name: /Tunnelling model/ })).toHaveTextContent("Not the same within a group")
@@ -249,6 +249,63 @@ describe("reaction compare page", () => {
         expect(screen.getByText(/do not state both an energy level of theory and a program/)).toBeInTheDocument()
         expect(screen.getByText("Each group's profile has its own axis. Profiles of different groups are never drawn together.")).toBeInTheDocument()
         expect(screen.getByText("As deposited; k only within each fitted range, tunnelling only if the fit had it.")).toBeInTheDocument()
+    })
+
+    it("makes each profile heading plain words that the contents list carries, with the level's disclosure beneath it", async () => {
+        await open()
+        await table()
+        await waitFor(() => expect(document.querySelectorAll("svg.energy-profile-svg").length).toBe(2))
+        const headings = screen.getAllByRole("heading", { level: 3 })
+        for (const heading of headings) {
+            expect(heading.querySelector("details, summary, a")).toBeNull()
+            expect(heading.id).toMatch(/^compare-profile-\d$/)
+        }
+        const contents = await screen.findByRole("navigation", { name: "Sections on this page" })
+        await waitFor(() => expect(contents).toHaveTextContent("wb97xd/def2tzvp · Gaussian 16"))
+        expect(contents).toHaveTextContent("ccsdt/ccpvtz · Orca 6.0")
+        expect(contents.textContent).not.toMatch(/compare-profile/)
+        const level = headings[0].nextElementSibling as HTMLElement
+        expect(level.querySelector("a.level-label-text")).toHaveTextContent("wb97xd/def2tzvp · Gaussian 16")
+    })
+
+    it("gives the list's level cell room, and wraps long labels at word breaks only", async () => {
+        await open()
+        const list = await screen.findByRole("region", { name: "Rate records as a list" })
+        const cells = list.querySelectorAll("td .level-label-cell")
+        expect(cells.length).toBeGreaterThan(0)
+        expect(getComputedStyle(cells[0]).minWidth).toBe("16ch")
+        expect(getComputedStyle(list.querySelector(".level-label-text") as Element).overflowWrap).toBe("break-word")
+    })
+
+    it("prints the qualifier that tells two groups of one short label apart, in the heading and the contents list", async () => {
+        const frozen = { ...lotA, level_of_theory_ref: "lot_fc", core_treatment: "frozen_core" }
+        const all = { ...lotA, level_of_theory_ref: "lot_ae", core_treatment: "all_electron" }
+        await open({ records: [{ ...K1, level: frozen }, { ...K2, level: all }].map(kinetics), entryOf: ENTRY_OF, profiles: { rxe_one: [] } })
+        await table()
+        await waitFor(() => expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(2))
+        expect(screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual([
+            "wb97xd/def2tzvp · frozen core · Gaussian 16",
+            "wb97xd/def2tzvp · all electron · Gaussian 16",
+        ])
+        await waitFor(() => expect(screen.getByRole("navigation", { name: "Sections on this page" })).toHaveTextContent("wb97xd/def2tzvp · all electron · Gaussian 16"))
+    })
+
+    it("says where the program came from only when it is not the energy calculation's", async () => {
+        await open({ records: [{ ...K1, spRef: "calc_sp1" }, { ...K2, spRef: "calc_sp2" }, K3].map(kinetics) })
+        const grid = await table()
+        const heads = within(grid).getAllByRole("columnheader").filter((head) => head.getAttribute("scope") === "colgroup")
+        expect(heads[0]).not.toHaveTextContent(/Program of the/)
+        expect(heads[1]).toHaveTextContent("Program of the source calculation")
+        expect(document.body.textContent).not.toContain("Program of the energy calculation")
+    })
+
+    it("names each record's version by the server's deposit position", async () => {
+        const payload = overview()
+        await open({ overviewPayload: { ...payload, records: [{ ...payload.records[0], deposit_position: 4 }], pagination: { offset: 30, limit: 50, returned: 1, total: 31 } } })
+        const grid = await table()
+        const head = within(grid).getAllByRole("columnheader").find((cell) => cell.textContent?.startsWith("Record 1")) as HTMLElement
+        expect(within(head).getByRole("link", { name: "Reaction entry: Version 4" })).toBeInTheDocument()
+        expect(screen.queryByRole("link", { name: "Reaction entry: Version 31" })).toBeNull()
     })
 
     it("names the order and offers the list view with sort buttons", async () => {

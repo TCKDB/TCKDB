@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
+import { numberRefs } from "../domain/recordNumbers"
+import { versionWords } from "../domain/recordWords"
 import { ParticipantChips } from "../components/ParticipantChips"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
@@ -108,7 +110,8 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
     const entry = record.reaction_entry
     const species = record.species ?? { reactants: [], products: [] }
     useDocumentTitle("Reaction entry", equationText(species.reactants, species.products, entry.reversible))
-    const kinetics = record.kinetics ?? []
+    const kinetics = useMemo(() => record.kinetics ?? [], [record.kinetics])
+    const recordNumbers = useMemo(() => numberRefs(kinetics.map((item) => item.kinetics_ref)), [kinetics])
     const transitionStates = record.transition_states ?? []
     const networksState = useReactionEntryNetworks(entry.reaction_entry_ref, record.networks)
     const formulaOnly = !equationNeedsStructure(species.reactants, species.products)
@@ -155,7 +158,7 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
     return (
         <section className="conformer-page tse-page">
             <PageShell
-                side={<RelationshipMap selfKind="reaction" selfLabel="This entry" state={neighbours}>
+                side={<RelationshipMap selfKind="reaction" selfLabel={versionWords(entry.deposit_position)} state={neighbours}>
                     {networksState.status === "ready" && (
                         <ReactionNetworkRail networkRefs={networksState.networks.map((network) => network.network_ref)} reactionEntryRef={entry.reaction_entry_ref} />
                     )}
@@ -165,13 +168,13 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                         <Breadcrumbs crumbs={[
                             { label: "Reactions", to: BROWSE_KIND_PATHS.reaction },
                             { label: equation, to: `/reactions/${entry.reaction_ref}` },
-                            { label: "This deposited version" },
+                            { label: versionWords(entry.deposit_position) },
                         ]} />
                         <header className="basin-header">
                             <div className="record-identity-header">
                                 <div className="record-identity-kicker-row">
                                     <RecordGlyph kind="reaction" size={16} />
-                                    <span className="t-kicker record-identity-kicker">Reaction · one deposited version</span>
+                                    <span className="t-kicker record-identity-kicker">{`Reaction · ${versionWords(entry.deposit_position)}`}</span>
                                     <ReviewChip status={entry.review.status} />
                                 </div>
                                 <h1 className="t-display-2 record-identity-title">
@@ -220,7 +223,7 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                     <ParticipantsTable label="Products" participants={species.products} />
                 </section>
 
-                <EnergyProfile entryRef={entry.reaction_entry_ref} speciesLabels={speciesLabels} />
+                <EnergyProfile entryRef={entry.reaction_entry_ref} speciesLabels={speciesLabels} recordNumbers={recordNumbers} />
 
                 <section className="ledger-section" aria-labelledby="evidence-heading">
                     <SectionHeading id="evidence-heading">Evidence on this entry</SectionHeading>
@@ -271,6 +274,7 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                     {kinetics.length >= 2 && <p><Link className="compare-link" to={`/reactions/${entry.reaction_ref}/compare`}>Compare these values</Link></p>}
                     <ReactionKineticsSection
                         kinetics={kinetics}
+                        recordNumbers={recordNumbers}
                         calculations={record.calculations}
                         transitionStates={transitionStates}
                         networksStatus={networksState.status === "ready" ? (networksState.networks.length ? "populated" : "empty") : "loading"}

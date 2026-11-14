@@ -494,7 +494,7 @@ describe("CalculationDetailPage", () => {
         )
         server.use(http.get("/api/v1/scientific/reaction-entries/rxe_demo/full", () => HttpResponse.json({
             reaction_entry: {
-                reaction_entry_ref: "rxe_demo", reaction_ref: "rxn_demo", equation: "as deposited", reversible: true,
+                reaction_entry_ref: "rxe_demo", deposit_position: 1, reaction_ref: "rxn_demo", equation: "as deposited", reversible: true,
                 family: null, review: { status: "not_reviewed" }, atom_maps: [],
             },
             review_summary: { total: 1, not_reviewed: 1, approved: 0, under_review: 0, deprecated: 0, rejected: 0 },

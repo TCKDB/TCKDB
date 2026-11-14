@@ -17,7 +17,7 @@ import { SectionHeading } from "../components/PageSections"
 import { PageShell } from "../components/PageShell"
 import { ReviewChip } from "../components/ReviewChip"
 import { levelParts, numbersOrderSentence } from "../domain/entryNumbers"
-import { versionFacts } from "../domain/entryVersions"
+import { versionName } from "../domain/entryVersions"
 import { formatWaitSeconds } from "../domain/rateLimitFormat"
 import {
     compareColumns, cpRows, displayLabel, groupByVersion, MAX_COLUMNS_PER_VERSION, sortNumber, thermoValueRows, valueRows,
@@ -137,7 +137,7 @@ function DataView({ columns, rows, versions, order, kind }: {
 function CompareDocument({ species }: { species: SpeciesOverview }) {
     const state = useSpeciesValues(species.species_ref)
     const data = state.status === "ready" ? state.data : null
-    const versions = useMemo(() => new Map(species.entries.map((entry) => [entry.species_entry_ref, versionFacts(entry)])), [species])
+    const versions = useMemo(() => new Map(species.entries.map((entry, index) => [entry.species_entry_ref, versionName(entry, index + 1)])), [species])
     const versionOrder = useMemo(() => species.entries.map((entry) => entry.species_entry_ref), [species])
     const name = species.formula ? <Formula value={species.formula} /> : species.canonical_smiles
     const model = useMemo(() => {

@@ -409,7 +409,7 @@ function ProvenanceSection({ title, description, links, availability, showRole, 
                             {links.map((link, index) => (
                                 <tr key={`${title}-${link.calculation_ref}-${index}`}>
                                     <td data-label="Calculation">
-                                        <RecordLink kind="calculation" to={`/calculations/${link.calculation_ref}`} label={calculationWords(link.calculation_type)} context={`${title} ${index + 1}`} />
+                                        <RecordLink kind="calculation" to={`/calculations/${link.calculation_ref}`} label={`${calculationWords(link.calculation_type)} ${index + 1}`} context={title} />
                                     </td>
                                     <td data-label="Type">{typeLabel(link.calculation_type)}</td>
                                     {showRole && <td data-label="Role">{link.role ? statusLabel(link.role) : "not recorded"}</td>}

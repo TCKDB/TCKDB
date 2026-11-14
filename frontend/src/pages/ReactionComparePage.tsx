@@ -21,12 +21,13 @@ import { SectionHeading } from "../components/PageSections"
 import { PageShell } from "../components/PageShell"
 import { ReactionEquation } from "../components/ReactionEquation"
 import { ReviewChip } from "../components/ReviewChip"
+import { inlineQualifiers, levelLine, type LevelKey, type Qualifier } from "../domain/levelLabel"
 import { orderWords } from "../domain/paging"
 import { originWord } from "../domain/kineticsWords"
 import { formatWaitSeconds } from "../domain/rateLimitFormat"
 import { equationNeedsStructure, equationText } from "../domain/reactionEquation"
 import {
-    DELTA_FORMULA, deltaNames, groupDifference, groupKinetics, kineticsColumns, MAX_COLUMNS_PER_GROUP, MAX_PROFILE_ENTRIES, profilesOfGroup, programLabel, reactionRows,
+    DELTA_FORMULA, deltaNames, groupDifference, groupKinetics, kineticsColumns, MAX_COLUMNS_PER_GROUP, MAX_PROFILE_ENTRIES, profilesOfGroup, programFromSource, reactionRows,
     type KineticsColumn, type KineticsGroup,
 } from "../domain/reactionCompare"
 import { displayLabel, sortNumber, type CompareRow } from "../domain/speciesCompare"
@@ -58,7 +59,7 @@ export default function ReactionComparePage() {
         return <State title="Archive is busy" alert message={`The archive is receiving too many requests right now. Wait ${formatWaitSeconds(state.retryAfterSeconds)} and reload the page.`} />
     }
     if (state.status !== "ready" || !first) return <State title="Reaction unavailable" alert message="The archive response could not be read. Try again later." />
-    return <CompareDocument reactionRef={reactionRef} first={first} labels={speciesLabels(state.record.records)} versions={new Map(state.record.records.map((record, index) => [record.reaction_entry_ref, state.record.pagination.offset + index + 1]))} />
+    return <CompareDocument reactionRef={reactionRef} first={first} labels={speciesLabels(state.record.records)} versions={new Map(state.record.records.map((record) => [record.reaction_entry_ref, record.deposit_position]))} />
 }
 
 function State({ title, busy, alert, message }: { title: string; busy?: boolean; alert?: boolean; message?: string }) {
@@ -93,9 +94,16 @@ function GroupHead({ group }: { group: KineticsGroup }) {
     return (
         <span className="compare-head">
             <span className="compare-head-key"><GroupLevel group={group} /></span>
-            <span>{group.program ? programLabel(group) : NOT_STATED_PROGRAM}</span>
+            {!group.program && <span>{NOT_STATED_PROGRAM}</span>}
+            {group.program && programFromSource(group) && <span>Program of the source calculation</span>}
         </span>
     )
+}
+
+/** A group's level and program as plain text, for a heading; qualifiers that tell it from another group's are inline. */
+function groupHeading(group: KineticsGroup, inline: ReadonlyMap<LevelKey, Qualifier[]>): string {
+    if (!group.level) return `${NOT_STATED_LEVEL}${group.program ? ` · ${group.program.text}` : ""}`
+    return `${levelLine(group.level, inline, group.program?.text ?? null)}${group.levelDeclared ? " (declared)" : ""}`
 }
 
 const versionName = (versions: ReadonlyMap<string, number>, entryRef: string) => (versions.has(entryRef) ? versionWords(versions.get(entryRef)!) : "Another version")
@@ -140,7 +148,7 @@ function DataView({ entries, rows, order, versions }: { entries: Entry[]; rows: 
     }))
     const all: DataColumn<Entry>[] = [
         { key: "record", name: "record", header: "Record", rowHeader: true, sortValue: ({ index }) => index, cell: ({ column, index }) => <RecordLink kind="kinetics" to={`/reaction-entries/${column.entryRef}`} hash={`kinetics-${column.ref}`} label={recordWords(index + 1)} context={versionName(versions, column.entryRef)} /> },
-        { key: "group", name: "group", header: "Level of theory and program", sortValue: ({ group }) => groupText(group), cell: ({ group }) => <GroupLevel group={group} /> },
+        { key: "group", name: "group", header: "Level of theory and program", sortValue: ({ group }) => groupText(group), cell: ({ group }) => <span className="level-label-cell"><GroupLevel group={group} /></span> },
         { key: "review", name: "review status", header: "Review", sortValue: ({ column }) => column.record.review.status, cell: ({ column }) => <ReviewChip status={column.record.review.status} explain={false} /> },
         ...cells,
     ]
@@ -156,14 +164,16 @@ function DataView({ entries, rows, order, versions }: { entries: Entry[]; rows: 
     )
 }
 
-function GroupProfiles({ group, position, reads, readRefs, labels, versions }: {
+function GroupProfiles({ group, position, reads, readRefs, labels, versions, inline }: {
     versions: ReadonlyMap<string, number>
+    inline: ReadonlyMap<LevelKey, Qualifier[]>
     group: KineticsGroup
     position: number
     reads: ReadonlyMap<string, EnergyProfileRead | null>
     readRefs: readonly string[]
     labels: ReadonlyMap<string, string>
 }) {
+    const heading = groupHeading(group, inline)
     const unread = group.entryRefs.filter((ref) => !readRefs.includes(ref))
     const failed = group.entryRefs.filter((ref) => readRefs.includes(ref) && !reads.get(ref))
     const matching = profilesOfGroup(group, group.entryRefs.flatMap((ref) => reads.get(ref)?.profiles ?? []))
@@ -177,7 +187,8 @@ function GroupProfiles({ group, position, reads, readRefs, labels, versions }: {
     }
     return (
         <>
-            <SectionHeading id={`compare-profile-${position}`} subsection><GroupLevel group={group} /></SectionHeading>
+            <SectionHeading id={`compare-profile-${position}`} subsection label={heading}>{heading}</SectionHeading>
+            {group.level && <p className="note"><LevelLabel levelOfTheory={group.level} program={group.program?.text ?? null} />{group.levelDeclared && " (declared by the depositor)"}</p>}
             {unread.length > 0 && <p className="note" role="note">Not read here: {unread.map((ref) => versionName(versions, ref)).join(", ")}. Open the entry's own page for its profile.</p>}
             {failed.length > 0 && <p className="note" role="alert">The energy profile of {failed.map((ref) => versionName(versions, ref)).join(", ")} could not be loaded.</p>}
             {body}
@@ -198,7 +209,8 @@ function CompareDocument({ reactionRef, first, labels, versions }: { reactionRef
         const shown = full.map((group) => ({ ...group, columns: group.columns.slice(0, MAX_COLUMNS_PER_GROUP) }))
         const entries: Entry[] = full.flatMap((group) => group.columns.map((column) => ({ column, group, index: 0 }))).map((entry, index) => ({ ...entry, index }))
         const positions = new Map(entries.map((entry) => [entry.column.key, entry.index + 1] as const))
-        return { full, shown, entries, positions, rows: reactionRows(shown), listRows: reactionRows(full), cut: shown.some((group, index) => group.columns.length < full[index].columns.length), total: entries.length }
+        const inline = inlineQualifiers(full.flatMap((group) => (group.level ? [group.level] : [])))
+        return { full, shown, entries, positions, inline, rows: reactionRows(shown), listRows: reactionRows(full), cut: shown.some((group, index) => group.columns.length < full[index].columns.length), total: entries.length }
     }, [data])
     const tableGroups: CompareTableGroup[] = (model?.shown ?? []).map((group) => ({
         key: group.key,
@@ -258,7 +270,7 @@ function CompareDocument({ reactionRef, first, labels, versions }: { reactionRef
                                 {profiles.status === "retrying" && <p className="note" role="status" aria-busy="true">The archive is busy. Retrying in {formatWaitSeconds(profiles.retryAfterSeconds)}.</p>}
                                 {profiles.status === "loading" && <p className="note" role="status" aria-busy="true">Loading the energy profiles.</p>}
                                 {profiles.status === "ready" && model.full.map((group, position) => (
-                                    <GroupProfiles key={group.key} group={group} position={position} reads={profiles.reads} readRefs={readRefs} labels={labels} versions={versions} />
+                                    <GroupProfiles key={group.key} group={group} position={position} reads={profiles.reads} readRefs={readRefs} labels={labels} versions={versions} inline={model.inline} />
                                 ))}
                             </section>
                         )}

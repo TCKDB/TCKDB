@@ -76,7 +76,7 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
         if (solves.length === 1) return read(solves[0]) ?? <span className="record-identity-absent-inline">not recorded</span>
         return solves.map((solve, index) => (
             <span key={solve.network_solve_ref}>
-                {index > 0 && "; "}{read(solve) ?? "not recorded"} ({solve.network_solve_ref})
+                {index > 0 && "; "}{read(solve) ?? "not recorded"} {`(solve ${index + 1} of ${solves.length})`}
             </span>
         ))
     }

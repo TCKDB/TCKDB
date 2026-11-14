@@ -314,6 +314,26 @@ describe("ConformerGroupPage", () => {
         expect(spread).toHaveTextContent(/at ccsd\(t\)\/cc-pvtz · Molpro 1 differ by up to 60\.39 kJ\/mol across 2 calculations/)
     })
 
+    it("keeps the level's disclosure out of the spread sentence and raises no DOM nesting warning", async () => {
+        const errors = vi.spyOn(console, "error").mockImplementation(() => undefined)
+        try {
+            const record = withSps("Molpro", "Molpro")
+            for (const calculation of record.record.observations[0].calculations) {
+                if (calculation.type === "sp") (calculation.level_of_theory as Record<string, unknown>).dispersion = "d3bj"
+            }
+            serve(record, { sp: [sp("calc_sp_0", -40.123, "Molpro"), sp("calc_sp_1", -40.1, "Molpro")] })
+            page()
+            await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+            const line = (await screen.findByText(/differ by up to/)).closest("li") as HTMLElement
+            expect(line.querySelector(".level-label details")).toBeNull()
+            expect(line.querySelector(":scope > details")?.textContent).toContain("dispersion")
+            const warnings = errors.mock.calls.map((call) => call.map(String).join(" ")).filter((message) => /validateDOMNesting|cannot be a descendant|cannot contain/.test(message))
+            expect(warnings).toEqual([])
+        } finally {
+            errors.mockRestore()
+        }
+    })
+
     it("links each level, names the workflow tool and each found-by review, and gives the origin, ref and chain count", async () => {
         const record = structuredClone(payload)
         ;(record.record.observations[0].calculations[0].level_of_theory as { level_of_theory_ref?: string }).level_of_theory_ref = "lot_b3"
@@ -352,10 +372,39 @@ describe("ConformerGroupPage", () => {
         page()
         await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
         const section = screen.getByRole("heading", { name: "Used by" }).closest("section") as HTMLElement
-        expect(await within(section).findByRole("link", { name: "Thermo record: Record 1" })).toHaveAttribute("href", "/species-entries/spe_demo/thermo?conformer=cg_demo#thermo-heading-thm_one")
-        expect(within(section).getByRole("link", { name: "Rate record: Record 1" })).toHaveAttribute("href", "/reaction-entries/rxe_one#kinetics-heading")
+        expect(await within(section).findByRole("link", { name: "Thermo record" })).toHaveAttribute("href", "/species-entries/spe_demo/thermo?conformer=cg_demo#thermo-heading-thm_one")
+        expect(within(section).getByRole("link", { name: "Record" })).toHaveAttribute("href", "/reaction-entries/rxe_one#kinetics-kin_one")
         expect(within(section).getByText(/was merged into/)).toBeVisible()
         expect(within(section).getByRole("link", { name: "another conformer" })).toHaveAttribute("href", "/conformer-groups/cg_other")
+    })
+
+    it("tells several records of one kind apart by visible words, and links each rate record to its own card", async () => {
+        server.use(
+            ...conformerReadHandlers({
+                entryRef: "spe_demo",
+                usage: {
+                    species_entry_ref: "spe_demo",
+                    groups: [{
+                        conformer_group_ref: "cg_demo",
+                        thermo: [{ thermo_ref: "thm_one" }, { thermo_ref: "thm_two" }],
+                        kinetics: [
+                            { kinetics_ref: "kin_one", reaction_entry_ref: "rxe_one", role: "reactant" },
+                            { kinetics_ref: "kin_two", reaction_entry_ref: "rxe_one", role: "reactant" },
+                        ],
+                    }],
+                    ensemble_thermo_refs: [],
+                },
+            }),
+            http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)),
+        )
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
+        const section = screen.getByRole("heading", { name: "Used by" }).closest("section") as HTMLElement
+        const thermo = await within(section).findAllByRole("link", { name: /^Thermo record/ })
+        expect(thermo.map((link) => link.textContent)).toEqual(["Thermo record (1 of 2 here)", "Thermo record (2 of 2 here)"])
+        const rates = within(section).getAllByRole("link", { name: /^Record/ })
+        expect(rates.map((link) => link.textContent)).toEqual(["Record (1 of 2 here)", "Record (2 of 2 here)"])
+        expect(rates.map((link) => link.getAttribute("href"))).toEqual(["/reaction-entries/rxe_one#kinetics-kin_one", "/reaction-entries/rxe_one#kinetics-kin_two"])
     })
 
     it("says no thermochemistry or rate coefficient names it when none does, never inferring one", async () => {
@@ -401,7 +450,7 @@ describe("ConformerGroupPage", () => {
         page()
         await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
         const row = document.querySelector(".geometry-link") as HTMLElement
-        const calculationLinks = within(row).getAllByRole("link", { name: /^Calculation: Calculation \d$/ })
+        const calculationLinks = within(row).getAllByRole("link", { name: /^Calculation \d$/ })
         expect(calculationLinks.map((link) => link.getAttribute("href"))).toEqual(["/calculations/calc_opt", "/calculations/calc_sp"])
         expect(calculationLinks.map((link) => link.textContent)).toEqual(["Calculation 1", "Calculation 2"])
         expect(screen.getAllByRole("link", { name: "Geometry: Geometry, 4 atoms" })[0]).toHaveAttribute("href", "/geometries/geo_one")

@@ -342,6 +342,7 @@ class ReactionScientificRecord(BaseModel):
     reaction_ref: str
     reaction_entry_id: int
     reaction_entry_ref: str
+    deposit_position: int
     equation: str
     matched_direction: ReactionDirectionQuery
     reversible: bool

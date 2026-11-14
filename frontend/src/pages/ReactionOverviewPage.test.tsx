@@ -41,6 +41,7 @@ function searchResponse() {
             {
                 reaction_ref: REACTION_REF,
                 reaction_entry_ref: "rxe_tku6xu2lt3girf2rsiwl5uds4e",
+                deposit_position: 1,
                 equation: "NN <=> [H][H] + N=N",
                 reversible: true,
                 family: null,
@@ -55,6 +56,7 @@ function searchResponse() {
             {
                 reaction_ref: REACTION_REF,
                 reaction_entry_ref: "rxe_kftcgjn7zalusaouojwi23z3gy",
+                deposit_position: 2,
                 equation: "NN <=> [H][H] + N=N",
                 reversible: true,
                 family: null,
@@ -250,6 +252,21 @@ describe("ReactionOverviewPage", () => {
         expect(checklist).toBeVisible()
         const dt = Array.from(checklist.querySelectorAll("dt")).find((el) => el.textContent === "Total")
         expect(dt?.nextElementSibling?.textContent).toBe("4")
+    })
+})
+
+describe("ReactionOverviewPage: version numbers", () => {
+    it("prints the server's deposit position, not a count from the page offset, and leaves gaps where an entry is hidden", async () => {
+        server.use(http.get("/api/v1/scientific/reactions/search", () => {
+            const response = searchResponse()
+            const records = [{ ...response.records[0], deposit_position: 3 }, { ...response.records[1], deposit_position: 7 }]
+            return HttpResponse.json({ ...response, records, pagination: { offset: 40, limit: 50, returned: 2, total: 9 } })
+        }))
+        page(REACTION_REF)
+        expect(await screen.findByRole("link", { name: "Reaction entry: Version 3" })).toHaveAttribute("href", "/reaction-entries/rxe_tku6xu2lt3girf2rsiwl5uds4e")
+        expect(screen.getByRole("link", { name: "Reaction entry: Version 7" })).toHaveAttribute("href", "/reaction-entries/rxe_kftcgjn7zalusaouojwi23z3gy")
+        expect(screen.queryByRole("link", { name: "Reaction entry: Version 41" })).toBeNull()
+        expect(screen.getByText("Title from Version 3; versions can differ.")).toBeVisible()
     })
 })
 

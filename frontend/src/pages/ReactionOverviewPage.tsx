@@ -117,8 +117,7 @@ function ChooserDocument({ reactionRef, headerRecord, firstPageEntryRefs, total,
     reviewSummary: { approved: number; under_review: number; not_reviewed: number; deprecated: number; rejected: number; total: number }
 }) {
     const first = headerRecord
-    const offset = meta?.pagination.offset ?? 0
-    const headerSourceNote = chooserHeaderSourceNote(total)
+    const headerSourceNote = chooserHeaderSourceNote(total, first.deposit_position)
     const formulaOnly = !equationNeedsStructure(first.reactants, first.products)
     useDocumentTitle("Reaction", equationText(first.reactants, first.products, first.reversible))
     const mapParticipant = (p: (typeof first.reactants)[number]) => ({ entryRef: p.species_entry_ref, formula: p.formula, smiles: p.smiles })
@@ -191,9 +190,9 @@ function ChooserDocument({ reactionRef, headerRecord, firstPageEntryRefs, total,
                                 </tr>
                             </thead>
                             <tbody>
-                                {records.map((record, index) => (
+                                {records.map((record) => (
                                     <tr key={record.reaction_entry_ref}>
-                                        <td data-label="Entry"><RecordLink kind="reaction-entry" to={`/reaction-entries/${record.reaction_entry_ref}`} label={versionWords(offset + index + 1)} /></td>
+                                        <td data-label="Entry"><RecordLink kind="reaction-entry" to={`/reaction-entries/${record.reaction_entry_ref}`} label={versionWords(record.deposit_position)} /></td>
                                         <td data-label="Reactants">
                                             <ParticipantLines>
                                                 {record.reactants.map((p) => <ParticipantCell key={p.species_entry_ref} participant={p} />)}

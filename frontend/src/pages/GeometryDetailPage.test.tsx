@@ -128,8 +128,8 @@ describe("GeometryDetailPage identity", () => {
         page()
         expect(await screen.findByRole("heading", { name: /^Geometry of CH4/ })).toBeVisible()
         expect(screen.getByTestId("record-identity-ambiguous")).toHaveTextContent(/more than one distinct owner/)
-        expect(screen.getByText("spe_a")).toBeVisible()
-        expect(screen.getByText("spe_b")).toBeVisible()
+        expect(screen.getByRole("link", { name: "Species entry 1" })).toHaveAttribute("href", "/species-entries/spe_a")
+        expect(screen.getByRole("link", { name: "Species entry 2" })).toHaveAttribute("href", "/species-entries/spe_b")
     })
 
     it("a transition-state owner never renders an empty SMILES field", async () => {
@@ -437,8 +437,8 @@ describe("GeometryDetailPage", () => {
         expect(hrefs).toEqual(["/calculations/calc_opt_two", "/calculations/calc_opt_one"])
         // Each row is told apart by its position within the section.
         expect(rows.map((row) => within(row).getByRole("link").getAttribute("aria-label"))).toEqual([
-            "Calculation: Optimisation, Produced by 1",
-            "Calculation: Optimisation, Produced by 2",
+            "Calculation: Optimisation 1, Produced by",
+            "Calculation: Optimisation 2, Produced by",
         ])
         expect(section.textContent).not.toMatch(/calc_/)
     })
@@ -474,13 +474,13 @@ describe("GeometryDetailPage", () => {
         // mutation that pointed these at `/geometries/...` instead of
         // `/calculations/...` (or any other wrong target) would still
         // satisfy every name-only assertion above.
-        expect(within(producedSection).getByRole("link", { name: "Calculation: Optimisation, Produced by 1" }))
+        expect(within(producedSection).getByRole("link", { name: "Calculation: Optimisation 1, Produced by" }))
             .toHaveAttribute("href", "/calculations/calc_opt_two")
-        expect(within(producedSection).getByRole("link", { name: "Calculation: Optimisation, Produced by 2" }))
+        expect(within(producedSection).getByRole("link", { name: "Calculation: Optimisation 2, Produced by" }))
             .toHaveAttribute("href", "/calculations/calc_opt_one")
-        expect(within(consumedSection).getByRole("link", { name: "Calculation: Frequency calculation, Used as input by 1" }))
+        expect(within(consumedSection).getByRole("link", { name: "Calculation: Frequency calculation 1, Used as input by" }))
             .toHaveAttribute("href", "/calculations/calc_freq_one")
-        expect(within(consumedSection).getByRole("link", { name: "Calculation: Single-point energy, Used as input by 3" }))
+        expect(within(consumedSection).getByRole("link", { name: "Calculation: Single-point energy 3, Used as input by" }))
             .toHaveAttribute("href", "/calculations/calc_sp_one")
 
         // No role column at all on the consumer table — CalculationInputGeometry
@@ -1041,7 +1041,7 @@ describe("GeometryDetailPage -- no depositor-typed text", () => {
         page()
         // The fixture reached the page: the geometry's ref and its transition-state entry ref rendered.
         await screen.findByRole("heading", { name: /^Geometry of CH4/ })
-        expect(screen.getAllByText("tse_demo").length).toBeGreaterThan(0)
+        expect(screen.getAllByRole("link", { name: "Transition state" })[0]).toHaveAttribute("href", "/transition-state-entries/tse_demo")
 
         expectNoDepositorText()
         expectNoAdversarialText()

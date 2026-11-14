@@ -34,6 +34,7 @@ function participantsRead() {
     return {
         reaction_entry: {
             reaction_entry_ref: REACTION_ENTRY_REF,
+            deposit_position: 2,
             reaction_ref: "rxn_nu4c52up4c4hqtbtxufwbscq3a",
             equation: "as deposited",
             reversible: false,
@@ -1134,9 +1135,9 @@ describe("TransitionStateEntryPage", () => {
 
         // The two same-label, same-lot, same-software siblings are told
         // apart by their position in the list and deposited date.
-        const linkSibling1 = within(section).getByRole("link", { name: "Transition state: Transition state 1" })
+        const linkSibling1 = within(section).getByRole("link", { name: "Transition state 1" })
         expect(linkSibling1).toHaveAttribute("href", "/transition-state-entries/tse_sibling")
-        const linkSibling2 = within(section).getByRole("link", { name: "Transition state: Transition state 2" })
+        const linkSibling2 = within(section).getByRole("link", { name: "Transition state 2" })
         expect(linkSibling2).toHaveAttribute("href", "/transition-state-entries/tse_sibling_2")
 
         expect(within(section).getByText(/deposited 2026-08-02/)).toBeVisible()
@@ -1309,12 +1310,12 @@ describe("transition-state entry page: orders and picks that are now stated", ()
         page()
         const section = (await screen.findByText("Other saddle points deposited for this reaction")).closest("section") as HTMLElement
         expect(await within(section).findByText("Showing 1–2 of 5 saddle points.")).toBeVisible()
-        expect(within(section).getByRole("link", { name: "Transition state: Transition state 1" })).toHaveAttribute("href", "/transition-state-entries/tse_many_1")
+        expect(within(section).getByRole("link", { name: "Transition state 1" })).toHaveAttribute("href", "/transition-state-entries/tse_many_1")
         await user.click(within(section).getByRole("button", { name: "Next" }))
         expect(await within(section).findByText("Showing 3–4 of 5 saddle points.")).toBeVisible()
         expect(seen).toContain("2:2")
-        expect(within(section).getByRole("link", { name: "Transition state: Transition state 3" })).toHaveAttribute("href", "/transition-state-entries/tse_many_3")
-        expect(within(section).queryByRole("link", { name: "Transition state: Transition state 1" })).not.toBeInTheDocument()
+        expect(within(section).getByRole("link", { name: "Transition state 3" })).toHaveAttribute("href", "/transition-state-entries/tse_many_3")
+        expect(within(section).queryByRole("link", { name: "Transition state 1" })).not.toBeInTheDocument()
     })
 })
 
@@ -1346,7 +1347,7 @@ describe("transition-state entry page: siblings when this entry is the only reco
         expect(screen.getByRole("heading", { name: "Other saddle points deposited for this reaction" })).toBeVisible()
         expect(screen.getByText("No other saddle points are on this page.")).toBeVisible()
         await user.click(screen.getByRole("button", { name: "Previous" }))
-        expect(await screen.findByRole("link", { name: "Transition state: Transition state 1" })).toHaveAttribute("href", "/transition-state-entries/tse_p_1")
+        expect(await screen.findByRole("link", { name: "Transition state 1" })).toHaveAttribute("href", "/transition-state-entries/tse_p_1")
         expect(seen).toContain("50:50")
     })
 
@@ -1467,7 +1468,7 @@ describe("TransitionStateEntryPage -- the redesigned page", () => {
         page()
         const nav = await screen.findByRole("navigation", { name: "Breadcrumb" })
         expect(within(nav).getByRole("link", { name: "Reactions" })).toHaveAttribute("href", "/reactions")
-        expect(within(nav).getByRole("link", { name: "This deposited version" })).toHaveAttribute("href", `/reaction-entries/${REACTION_ENTRY_REF}`)
+        expect(await within(nav).findByRole("link", { name: "Version 2" })).toHaveAttribute("href", `/reaction-entries/${REACTION_ENTRY_REF}`)
         expect(within(nav).getByText("This transition state")).toHaveAttribute("aria-current", "page")
         await waitFor(() => expect(within(nav).getAllByRole("link")[1]).toHaveAttribute("href", "/reactions/rxn_nu4c52up4c4hqtbtxufwbscq3a"))
     })
@@ -1684,11 +1685,12 @@ describe("TransitionStateEntryPage -- the redesigned page", () => {
         withRecord()
         server.use(http.get(`/api/v1/scientific/reaction-entries/${REACTION_ENTRY_REF}/energy-profile`, () => HttpResponse.json(citedRead())))
         page()
-        const table = await screen.findByRole("table", { name: /Calculations cited by each rate record/ })
+        const table = await screen.findByRole("table", { name: /Calculations cited by each record/ })
         expect(within(table).getByRole("link", { name: /115\.2/ })).toHaveAttribute("href", "/calculations/calc_cited_mine")
         expect(within(table).getAllByRole("row")).toHaveLength(2)
-        expect(table).toHaveTextContent("Rate record 1")
-        expect(table).not.toHaveTextContent("Rate record 2")
+        expect(table).toHaveTextContent("Record 1")
+        expect(table).not.toHaveTextContent("Record 2")
+        expect(table).not.toHaveTextContent("Rate record")
         expect(table).not.toHaveTextContent(/kin_/)
     })
 
@@ -1699,7 +1701,7 @@ describe("TransitionStateEntryPage -- the redesigned page", () => {
         server.use(http.get(`/api/v1/scientific/reaction-entries/${REACTION_ENTRY_REF}/energy-profile`, () => HttpResponse.json(read)))
         page()
         await screen.findByRole("group", { name: /Energy relative to the reactants/ })
-        expect(screen.queryByRole("table", { name: /Calculations cited by each rate record/ })).toBeNull()
+        expect(screen.queryByRole("table", { name: /Calculations cited by each record/ })).toBeNull()
     })
 
     it("draws the picture without reading the entry a second time", async () => {
@@ -1798,7 +1800,7 @@ describe("TransitionStateEntryPage -- the redesigned page", () => {
             }],
         })))
         page()
-        const sibling = await screen.findByRole("link", { name: "Transition state: Transition state 1" })
+        const sibling = await screen.findByRole("link", { name: "Transition state 1" })
         expect(sibling).toHaveAttribute("href", "/transition-state-entries/tse_sibling")
         expect(screen.queryByText("TS9")).toBeNull()
     })

@@ -1,9 +1,9 @@
 import { Fragment, type ReactNode } from "react"
 import { Link } from "react-router-dom"
 import { calculationDid } from "../domain/calculationTypeFormat"
-import type { LevelFields } from "../domain/levelLabel"
+import { levelKey, type LevelFields } from "../domain/levelLabel"
 import { calculationWords, RECORD_KIND_NOUN, type RecordKind } from "../domain/recordWords"
-import { LevelLabel } from "./LevelLabel"
+import { LevelDetails, LevelLabel } from "./LevelLabel"
 import { resolveRecordLocation } from "../domain/recordRoute"
 import "../record-blocks.css"
 import { numberAnchor, type NumberKind } from "../domain/entryNumbers"
@@ -39,21 +39,26 @@ export type ValueSourceRecord = {
  * own page, else its container's, else the ref is plain text. `review` is the review of the linked
  * record. `compact` is the short form: "from <ref>".
  */
-export function ValueSource({ source, did, levels, programs, review, compact = false }: {
+export function ValueSource({ source, did, position, levels, programs, review, compact = false, showDetails = false }: {
     source: ValueSourceRecord
     /** A calculation type code (`opt`, `freq`, `sp`...); shown as TCKDB wording, omitted when unknown. */
     did?: string | null
+    /** The record's number among records of its kind on the page ("Thermo record 2"); omitted when it is the only one. */
+    position?: number
     levels?: readonly SourceLevel[]
     programs?: readonly string[]
     review?: string | null
     compact?: boolean
+    /** Put each level's qualifiers (as a "details" disclosure) after the line. Leave off when the line sits in a paragraph. */
+    showDetails?: boolean
 }) {
     const location = resolveRecordLocation(source.recordType, source.ref, source.container?.recordType ?? null, source.container?.ref ?? null)
     const kind = SOURCE_KIND[source.recordType]
     const words = source.recordType === "calculation" ? calculationWords(did) : kind ? RECORD_KIND_NOUN[kind] : "Record"
-    const ref = <span className="t-preserve-case">{words}</span>
+    const named = position ? `${words} ${position}` : words
+    const ref = <span className="t-preserve-case">{named}</span>
     const target = source.to ?? (location.kind === "container" && source.container?.recordType === "species_entry" && ANCHORED.has(source.recordType) ? `${location.href}#${numberAnchor(source.recordType as NumberKind, source.ref)}` : location.kind === "record" || location.kind === "container" ? location.href : null)
-    const link = target ? <Link to={target} aria-label={`Source: ${words}`}>{ref}</Link> : ref
+    const link = target ? <Link to={target} aria-label={`Source: ${named}`}>{ref}</Link> : ref
     if (compact) {
         return <span className="value-source value-source--compact"><span className="value-source-key">from</span> {link}</span>
     }
@@ -69,14 +74,18 @@ export function ValueSource({ source, did, levels, programs, review, compact = f
     const shownPrograms = (programs ?? []).filter(Boolean)
     if (shownPrograms.length > 0) parts.push(<span className="t-preserve-case">{shownPrograms.join(", ")}</span>)
     if (review) parts.push(<>Review of this record: <ReviewChip status={review} explain={false} /></>)
+    const detailed = showDetails ? [...new Map(labelled.flatMap((level) => (level.level ? [[levelKey(level.level), level.level] as const] : []))).values()] : []
     return (
-        <span className="value-source">
-            <span className="value-source-key">Source</span> {link}
-            {parts.map((part, index) => <Fragment key={index}>{" · "}{part}</Fragment>)}
-        </span>
+        <>
+            <span className="value-source">
+                <span className="value-source-key">Source</span> {link}
+                {parts.map((part, index) => <Fragment key={index}>{" · "}{part}</Fragment>)}
+            </span>
+            {detailed.map((level) => <LevelDetails key={levelKey(level)} levelOfTheory={level} />)}
+        </>
     )
 }
 
 function SourceLevelLabel({ level }: { level: SourceLevel }) {
-    return level.level ? <LevelLabel levelOfTheory={level.level} /> : <span className="t-preserve-case">{level.label}</span>
+    return level.level ? <LevelLabel levelOfTheory={level.level} plain /> : <span className="t-preserve-case">{level.label}</span>
 }

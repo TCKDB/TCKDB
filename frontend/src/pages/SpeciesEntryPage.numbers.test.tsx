@@ -363,11 +363,11 @@ describe("molecule page: numbers for this entry", () => {
         const region = await open({ transportRecords: [transportRecord] })
         await waitFor(() => expect(rowRefs(region)).toHaveLength(5))
         const source = region.querySelector("#thermo-thm_b1 .value-source") as HTMLElement
-        expect(source).toHaveTextContent("Source Thermo record")
+        expect(source).toHaveTextContent(/Source Thermo record \d/)
         expect(source).toHaveTextContent("geometry, frequency, energy at ccsdt/ccpvtz")
         expect(source).toHaveTextContent("Arkane 1.1.0")
         expect(source).not.toHaveTextContent("Review of this record")
-        expect(within(source).getByRole("link", { name: "Source: Thermo record" })).toHaveAttribute("href", `/species-entries/${entryRef}/thermo?conformer=cg_1#thermo-heading-thm_b1`)
+        expect(within(source).getByRole("link", { name: /^Source: Thermo record \d$/ })).toHaveAttribute("href", `/species-entries/${entryRef}/thermo?conformer=cg_1#thermo-heading-thm_b1`)
         const value = region.querySelector("#thermo-thm_b1 .value-link") as HTMLElement
         expect(value).toHaveAttribute("href", `/species-entries/${entryRef}/thermo?conformer=cg_1#thermo-heading-thm_b1`)
         expect(region.querySelector("#statmech-stm_1 .value-source")).toHaveTextContent("Gaussian 16")

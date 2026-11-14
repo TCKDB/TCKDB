@@ -91,10 +91,10 @@ describe("GeometryDetailPage — a broken structure view", () => {
         // the produced-by table specifically rather than asserting a
         // single page-wide match.
         const producedSection = screen.getByRole("heading", { name: "Produced by" }).closest("section") as HTMLElement
-        expect(within(producedSection).getByRole("link", { name: "Calculation: Optimisation, Produced by 1" }))
+        expect(within(producedSection).getByRole("link", { name: "Calculation: Optimisation 1, Produced by" }))
             .toHaveAttribute("href", "/calculations/calc_opt_one")
         const consumedSection = screen.getByRole("heading", { name: "Used as input by" }).closest("section") as HTMLElement
-        expect(within(consumedSection).getByRole("link", { name: "Calculation: Frequency calculation, Used as input by 1" }))
+        expect(within(consumedSection).getByRole("link", { name: "Calculation: Frequency calculation 1, Used as input by" }))
             .toHaveAttribute("href", "/calculations/calc_freq_one")
 
         consoleSpy.mockRestore()

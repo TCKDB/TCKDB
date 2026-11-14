@@ -123,10 +123,10 @@ import { evaluated } from "../domain/quantityFormat"
 // silently omit the y control" rule above.
 // ---------------------------------------------------------------------------
 
-export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[] }) {
+export function ArrheniusChart({ kinetics, recordNumbers }: { kinetics: ReactionKineticsRecord[]; recordNumbers?: ReadonlyMap<string, number> }) {
     const { panels, excluded } = buildArrheniusChartData(kinetics)
-    const recordNumbers = new Map(kinetics.map((record, index) => [record.kinetics_ref, index + 1] as const))
-    const recordText = (ref: string) => recordWords(recordNumbers.get(ref) ?? 1)
+    const numbers = recordNumbers ?? new Map(kinetics.map((record, index) => [record.kinetics_ref, index + 1] as const))
+    const recordText = (ref: string) => recordWords(numbers.get(ref) ?? 1)
 
     // ONE control for the whole section (see header comment above) --
     // defaults to temperature in K.

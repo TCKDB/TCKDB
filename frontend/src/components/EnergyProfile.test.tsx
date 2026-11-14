@@ -230,7 +230,7 @@ describe("EnergyProfile", () => {
         expect(screen.getByText("No complete energy profile is available for this reaction entry.")).toBeInTheDocument()
     })
 
-    it("lists energies a rate record cites in a table of their own, never inside the profile table", async () => {
+    it("lists energies a record cites in a table of their own, never inside the profile table", async () => {
         mount(read({
             cited_by_kinetics: [{
                 kinetics_ref: "kin_x",
@@ -241,17 +241,54 @@ describe("EnergyProfile", () => {
             }],
         }))
         await loaded()
-        const cited = screen.getByRole("table", { name: /Calculations cited by each rate record/ })
-        expect(screen.getByText("Energies a rate record cites")).toBeInTheDocument()
-        expect(cited).toHaveTextContent("Rate record 1")
+        const cited = screen.getByRole("table", { name: /Calculations cited by each record/ })
+        expect(screen.getByText("Energies a record cites")).toBeInTheDocument()
+        expect(cited).toHaveTextContent("Record 1")
+        expect(cited).not.toHaveTextContent("Rate record")
         expect(cited).not.toHaveTextContent("kin_x")
         expect(cited).toHaveTextContent("Transition-state energy")
         expect(within(cited).getByText("Level of theory", { selector: "th" })).toBeInTheDocument()
-        expect(within(cited).getByRole("link", { name: "Level of theory" })).toHaveAttribute("href", "/methods/lot_c")
+        expect(within(cited).queryByRole("link", { name: "Level of theory" })).toBeNull()
+        expect(cited).toHaveTextContent("not named here")
         expect(cited).toHaveTextContent("not recorded")
         const profileTable = screen.getByRole("table", { name: /Every point of the selected profile/ })
         expect(profileTable).not.toHaveTextContent("calc_cited")
         expect(profileTable).not.toHaveTextContent("kin_x")
+    })
+
+    it("names the level of a cited energy when the read gives that level, and says so when it does not", async () => {
+        mount(read({
+            profiles: [profile("tse_one", lot("lot_a", "wb97xd"), "Gaussian", [0, 3, -2])],
+            cited_by_kinetics: [{
+                kinetics_ref: "kin_x",
+                calculations: [
+                    { role: "ts_energy", calculation_ref: "calc_known", review_status: "approved", transition_state_entry_ref: "tse_one", level_of_theory_ref: "lot_a", energy_type: "single_point", electronic_energy_hartree: -1.5, software: software("16") },
+                    { role: "ts_energy", calculation_ref: "calc_unknown", review_status: "approved", transition_state_entry_ref: "tse_one", level_of_theory_ref: "lot_elsewhere", energy_type: "single_point", electronic_energy_hartree: -1.6, software: software("16") },
+                ],
+            }],
+        }))
+        await loaded()
+        const cited = screen.getByRole("table", { name: /Calculations cited by each record/ })
+        const [known, unknown] = [...cited.querySelectorAll("tbody tr")].map((row) => row.querySelector('[data-label="Level of theory"]')?.textContent)
+        expect(known).toContain("wb97xd/def2tzvp")
+        expect(unknown).toBe("not named here")
+    })
+
+    it("numbers the cited records by the page's numbering when it is given, and by the cited order when it is not", async () => {
+        const cited = (ref: string) => ({ kinetics_ref: ref, calculations: [{ role: "ts_energy", calculation_ref: `calc_${ref}`, review_status: "approved", transition_state_entry_ref: "tse_one", energy_type: "single_point", electronic_energy_hartree: -1.5 }] })
+        server.use(http.get(`/api/v1/scientific/reaction-entries/${REF}/energy-profile`, () => HttpResponse.json(read({ cited_by_kinetics: [cited("kin_b"), cited("kin_a")] }))))
+        render(
+            <MemoryRouter>
+                <EnergyProfile entryRef={REF} speciesLabels={new Map()} recordNumbers={new Map([["kin_a", 1], ["kin_b", 2]])} />
+            </MemoryRouter>,
+        )
+        await loaded()
+        const rows = () => [...screen.getByRole("table", { name: /Calculations cited by each record/ }).querySelectorAll("tbody th a")].map((anchor) => [anchor.getAttribute("href"), anchor.textContent])
+        expect(rows()).toEqual([["#kinetics-kin_b", "Record 2"], ["#kinetics-kin_a", "Record 1"]])
+        cleanup()
+        mount(read({ cited_by_kinetics: [cited("kin_b"), cited("kin_a")] }))
+        await loaded()
+        expect(rows()).toEqual([["#kinetics-kin_b", "Record 1"], ["#kinetics-kin_a", "Record 2"]])
     })
 
     it("says what the default view left out, by kind", async () => {

@@ -7,6 +7,7 @@ import { legacyShapeText } from "../domain/compositeVerification"
 import { shortRecipeName } from "../domain/compositeSchemeFormat"
 import { compositeSchemePath } from "../domain/methodsLinks"
 import { productLevelsAgree, type ProductLevels } from "../domain/productLevels"
+import { levelKey } from "../domain/levelLabel"
 
 // ---------------------------------------------------------------------------
 // A statmech or thermo record can carry different levels of theory for its
@@ -36,6 +37,25 @@ import { productLevelsAgree, type ProductLevels } from "../domain/productLevels"
  */
 function levelNode(level: ProductLevels["geometry"]): ReactNode {
     return level ? <LevelLabel levelOfTheory={level} /> : "not recorded"
+}
+
+/**
+ * The `energy//geometry` shorthand, written from the structured levels as their short labels. A recipe's name stands
+ * for its energy level; the geometry is left out when it is the recipe's own or the same level as the energy.
+ * Nothing when the record has no notation (either level absent).
+ */
+function LevelNotation({ levels }: { levels: ProductLevels }) {
+    const { energy, geometry } = levels
+    if (!levels.notation || !energy || !geometry) return null
+    const level = (value: NonNullable<ProductLevels["energy"]>) => <LevelLabel levelOfTheory={value} plain link={false} />
+    const scheme = energy.composite_scheme
+    const same = energy.level_of_theory_ref !== undefined ? energy.level_of_theory_ref === geometry.level_of_theory_ref : levelKey(energy) === levelKey(geometry)
+    if (same) return scheme ? <>{scheme.name}</> : level(energy)
+    if (scheme) {
+        const own = scheme.geometry_level_of_theory_ref
+        return own && own === geometry.level_of_theory_ref ? <>{scheme.name}</> : <>{scheme.name}//{level(geometry)}</>
+    }
+    return <>{level(energy)}//{level(geometry)}</>
 }
 
 /** The Energy fact's own value node -- `levelNode(level)` when there IS a
@@ -129,7 +149,7 @@ export function ProductLevelsFact({ levels }: { levels: ProductLevels }) {
             {levels.notation && (
                 <div className="kv-list--wide" data-levels-notation="">
                     <dt>Level of theory</dt>
-                    <dd><code className="data">{levels.notation}</code></dd>
+                    <dd><code className="data"><LevelNotation levels={levels} /></code></dd>
                 </div>
             )}
             <div>
@@ -215,7 +235,7 @@ export function ProductLevelsTableCells({ levels, showNotation = false }: { leve
         <>
             {showNotation && (
                 <td data-label="Level of theory">
-                    {levels.notation ? <span className="data">{levels.notation}</span> : "not recorded"}
+                    {levels.notation ? <span className="data"><LevelNotation levels={levels} /></span> : "not recorded"}
                 </td>
             )}
             <td data-label="Geometry"><LevelCell level={levels.geometry} />{recipeSourceNote(levels.geometry_source, levels.energy)}</td>

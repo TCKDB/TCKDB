@@ -34,6 +34,9 @@ export const levelOfTheorySchema = z.object({
     cabs_basis: z.string().nullable().optional(),
     core_treatment: z.string().nullable().optional(),
     spin_treatment: z.string().nullable().optional(),
+    relativistic_hamiltonian: z.string().nullable().optional(),
+    pno_truncation: z.string().nullable().optional(),
+    ri_approximation: z.string().nullable().optional(),
     composite_scheme: compositeSchemeSummarySchema.nullable().optional(),
     // The level written in full by the server: `method/basis`
     // then each stated part of its identity, e.g. `CCSD(T)/cc-pCVTZ

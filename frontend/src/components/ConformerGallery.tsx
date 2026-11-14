@@ -1,6 +1,6 @@
 import { GuideLink } from "./GuideLink"
 import { RecordLink } from "./RecordLink"
-import { recordWords } from "../domain/recordWords"
+import { usedByWords } from "../domain/recordWords"
 import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import "../molecule-page.css"
@@ -72,7 +72,7 @@ function EnergyText({ energy }: { energy: CardEnergy }) {
                         <>
                             {" "}Stored values:{" "}
                             {energy.values.map((value, index) => (
-                                <span key={value.determinationRef}>{index > 0 && ", "}{formatHartree(value.hartree)} <span className="u t-preserve-case">hartree</span> (<code className="t-preserve-case">{value.determinationRef}</code>)</span>
+                                <span key={value.determinationRef}>{index > 0 && ", "}{formatHartree(value.hartree)} <span className="u t-preserve-case">hartree</span> {`(determination ${index + 1})`}</span>
                             ))}
                             .
                         </>
@@ -241,7 +241,7 @@ export function ConformerGallery({
                             {usageData.ensembleThermoRefs.map((ref, index) => (
                                 <span key={ref}>
                                     {index > 0 && ", "}
-                                    <RecordLink kind="thermo" to={`/species-entries/${entryRef}/thermo${selectedRef ? `?conformer=${encodeURIComponent(selectedRef)}` : ""}`} hash={`thermo-heading-${ref}`} label={recordWords(index + 1)} />
+                                    <RecordLink kind="thermo" to={`/species-entries/${entryRef}/thermo${selectedRef ? `?conformer=${encodeURIComponent(selectedRef)}` : ""}`} hash={`thermo-heading-${ref}`} label={usedByWords("Thermo record", index, usageData.ensembleThermoRefs.length)} />
                                 </span>
                             ))}
                         </p>

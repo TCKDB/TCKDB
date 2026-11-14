@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { cleanup, fireEvent, render, screen, within, waitFor } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 // `design-system.css` is normally reached only via `index.css`'s `@import`
@@ -44,6 +44,7 @@ function mockFull(overrides: Record<string, unknown> = {}) {
     return {
         reaction_entry: {
             reaction_entry_ref: ENTRY_REF,
+            deposit_position: 1,
             reaction_ref: "rxn_test1",
             equation: "O + [CH3] <=> C + [OH]",
             reversible: true,
@@ -336,7 +337,8 @@ describe("ReactionEntryPage -- network-only kinetics sentence", () => {
         }))
         page()
         expect(await screen.findByText(/No rate coefficient deposited on this entry/)).toBeVisible()
-        expect(screen.getByText("net_only1", { selector: "a" })).toBeVisible()
+        expect(screen.getByText("the network below", { selector: "a" })).toBeVisible()
+        expect(document.body.textContent).not.toContain("net_only1")
     })
 
     it("kinetics: [] and several networks -- names every network, and says none is preferred, instead of naming only the first", async () => {
@@ -347,8 +349,8 @@ describe("ReactionEntryPage -- network-only kinetics sentence", () => {
         handleFull(mockFull({ kinetics: [], networks: [network("net_one"), network("net_two")] }))
         page()
         expect(await screen.findByText(/served by 2 networks, none preferred over another/)).toBeVisible()
-        expect(screen.getByText("net_one", { selector: "a" })).toBeVisible()
-        expect(screen.getByText("net_two", { selector: "a" })).toBeVisible()
+        expect([...document.querySelectorAll(".empty-projection a[href=\"#network-heading\"]")].map((anchor) => anchor.textContent)).toEqual(["Network 1", "Network 2"])
+        expect(document.body.textContent).not.toMatch(/net_one|net_two/)
     })
 
     it("kinetics: [] and no network -- the plain archive-absence sentence, not the network-only one", async () => {
@@ -1089,6 +1091,40 @@ describe("ReactionEntryPage -- the References disclosure names every kinetics re
         const refs = container.querySelector(".refs-disclosure")?.textContent ?? ""
         expect(refs.split("lot_multi1").length - 1).toBe(1)
     })
+
+    it("keeps a level's disclosure out of a record card's source line and raises no DOM nesting warning", async () => {
+        const errors = vi.spyOn(console, "error").mockImplementation(() => undefined)
+        try {
+            const base = (mockFull().kinetics as Array<{ levels: Record<string, unknown> }>)[0]
+            const energy = { method: "b3lyp", basis: "def2tzvp", level_of_theory_ref: "lot_q", dispersion: "d3bj" }
+            handleFull(mockFull({ kinetics: [{ ...base, levels: { ...base.levels, energy } }] }))
+            const { container } = page()
+            await screen.findAllByText("Model kind")
+            expect(container.querySelector(".kinetics-record-source .level-label-text")?.textContent).toContain("b3lyp/def2tzvp")
+            expect(container.querySelector(".kinetics-record-source details")).toBeNull()
+            const warnings = errors.mock.calls.map((call) => call.map(String).join(" ")).filter((message) => /validateDOMNesting|cannot be a descendant|cannot contain/.test(message))
+            expect(warnings).toEqual([])
+        } finally {
+            errors.mockRestore()
+        }
+    })
+
+    it("numbers the cards, the cited-energies table and the chart alike when the cited order differs from the list order", async () => {
+        handleFull(mockFull({ kinetics: [kineticsWithRefs(1), kineticsWithRefs(2)] }))
+        const cited = (ref: string, calc: string) => ({ kinetics_ref: ref, calculations: [{ role: "ts_energy", calculation_ref: calc, review_status: "approved", transition_state_entry_ref: "tse_test1", level_of_theory_ref: null, energy_type: "single_point", electronic_energy_hartree: -115.1 }] })
+        handleSideReads({ request: {}, reaction_entry_ref: ENTRY_REF, profiles: [], unavailable: [], cited_by_kinetics: [cited("kin_multi2", "calc_c2"), cited("kin_multi1", "calc_c1")] })
+        const { container } = page()
+        await screen.findAllByText("Model kind")
+        const table = await screen.findByRole("table", { name: /Calculations cited by each record/ })
+
+        const cards = [...container.querySelectorAll(".kinetics-record-list > .card")].map((card) => [card.id, card.querySelector("h3")?.textContent])
+        expect(cards).toEqual([["kinetics-kin_multi1", "Record 1"], ["kinetics-kin_multi2", "Record 2"]])
+        const rows = [...table.querySelectorAll("tbody th a")].map((anchor) => [anchor.getAttribute("href"), anchor.textContent])
+        expect(rows).toEqual([["#kinetics-kin_multi2", "Record 2"], ["#kinetics-kin_multi1", "Record 1"]])
+        expect(container.textContent).toContain("k(T) table — Record 1")
+        expect(container.textContent).toContain("k(T) table — Record 2")
+        expect(container.textContent).not.toContain("Rate record")
+    })
 })
 
 describe("ReactionEntryPage -- no depositor-typed text", () => {
@@ -1235,7 +1271,7 @@ describe("ReactionEntryPage -- the energy hill, the scheme and the numbers", () 
         expect(within(section).getByRole("heading", { name: "Numbers for this entry" })).toBeInTheDocument()
         expect(section).toHaveTextContent("Listed approved first, then newest deposited first. This order is not a recommendation.")
         expect(within(section).getAllByRole("link").filter((anchor) => /3025\.44|3\.11242|39\.9711/.test(anchor.textContent ?? ""))).toHaveLength(0)
-        expect(section.querySelector(".value-source")).toHaveTextContent("Source Rate record")
+        expect(section.querySelector(".value-source")).toHaveTextContent("Source Record 1")
         expect(section.querySelector(".value-source")).toHaveTextContent("Review of this record: not reviewed")
     })
 
@@ -1245,6 +1281,18 @@ describe("ReactionEntryPage -- the energy hill, the scheme and the numbers", () 
         await screen.findAllByText("Model kind")
         const scheme = screen.getByRole("group", { name: "H2O plus CH3 reacts reversibly with CH4 plus HO" })
         expect(within(scheme).getAllByRole("link")).toHaveLength(4)
+    })
+
+    it("names itself by the server's deposit position in the breadcrumb, the kicker and the map", async () => {
+        const base = mockFull()
+        handleFull({ ...base, reaction_entry: { ...base.reaction_entry, deposit_position: 3 } })
+        page()
+        await screen.findAllByText("Model kind")
+        const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" })
+        expect(crumbs.querySelector("[aria-current='page']")?.textContent).toBe("Version 3")
+        expect(document.querySelector(".record-identity-kicker")?.textContent).toBe("Reaction · Version 3")
+        expect(document.querySelector(".page-shell-side")?.textContent).toContain("Version 3")
+        expect(document.body.textContent).not.toContain("This deposited version")
     })
 
     it("has breadcrumbs through the reaction, a review word and a lede built from codes", async () => {
