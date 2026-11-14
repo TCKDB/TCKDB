@@ -152,7 +152,7 @@ def _next_geom_hash() -> str:
 
 
 def _make_species(db_session: Session, smiles: str | None = None) -> Species:
-    # Species identity is (smiles, charge, multiplicity) (DR-0031), so each
+    # Species identity is (smiles, charge, multiplicity), so each
     # fixture species needs a distinct smiles or it collides with sibling /
     # cross-test species on the shared DB. Trust evaluation never parses
     # smiles, so a unique placeholder is sufficient here.
@@ -1004,7 +1004,7 @@ class TestGeometryValidation:
 
 
 class TestArtifactIntegrityIsACustodyJudgement:
-    """ADR 0014: a recorded custody break is visible at read time, to everyone.
+    """A recorded custody break is visible at read time, to everyone.
 
     Before this the corruption was visible only to whoever happened to
     request the download and got a 502; the record itself went on grading
@@ -1590,10 +1590,10 @@ class TestComputedKineticsEvaluator:
     def test_single_temperature_range_is_not_hard_failed(self, db_session):
         """A one-point validity range is a datum reported at a single temperature.
 
-        This test previously asserted the opposite. ``tmin == tmax`` is the only
+        ``tmin == tmax`` looks like the only
         definitionally-invalid range reachable end-to-end -- ``ck_*_tmin_le_tmax``
         and ``ck_*_tmin_k_gt_0`` refuse inverted and non-positive ranges at the
-        database -- and it turns out not to be invalid at all: a rate constant
+        database -- but is not invalid at all: a rate constant
         measured at 298 K has a one-point range, and both the upload schema and
         the database already permit it. The definitional rule itself stays pinned
         by ``TestTemperatureRangeDefinitionalPredicate``, which needs no database.
@@ -1606,7 +1606,7 @@ class TestComputedKineticsEvaluator:
     def test_hot_but_ordered_temperature_range_is_not_hard_failed(self, db_session):
         """Shock-tube / detonation / plasma ranges are correct science.
 
-        Per ADR 0008 the upper bound is an expectation, not a definition: it is
+        Per the blocking-tier rule the upper bound is an expectation, not a definition: it is
         demoted to the graded ``temperature_range_valid`` check, which lowers
         completeness without labelling the record ``hard_failed``.
         """
@@ -1922,10 +1922,10 @@ class TestComputedThermoEvaluator:
     def test_single_temperature_range_is_not_hard_failed(self, db_session):
         """A one-point validity range is a datum reported at a single temperature.
 
-        This test previously asserted the opposite. ``tmin == tmax`` is the only
+        ``tmin == tmax`` looks like the only
         definitionally-invalid range reachable end-to-end -- ``ck_*_tmin_le_tmax``
         and ``ck_*_tmin_k_gt_0`` refuse inverted and non-positive ranges at the
-        database -- and it turns out not to be invalid at all: a rate constant
+        database -- but is not invalid at all: a rate constant
         measured at 298 K has a one-point range, and both the upload schema and
         the database already permit it. The definitional rule itself stays pinned
         by ``TestTemperatureRangeDefinitionalPredicate``, which needs no database.
@@ -1938,7 +1938,7 @@ class TestComputedThermoEvaluator:
     def test_hot_but_ordered_temperature_range_is_not_hard_failed(self, db_session):
         """A range above the graded NASA-Glenn cap is hot, not wrong.
 
-        Per ADR 0008 the upper bound is an expectation, not a definition; it is
+        Per the blocking-tier rule the upper bound is an expectation, not a definition; it is
         demoted to the graded ``temperature_range_valid`` check.
         """
         thermo = _make_thermo(db_session, scalar=True, tmin_k=300.0, tmax_k=25_000.0)
@@ -2112,7 +2112,7 @@ class TestComputedThermoEvaluator:
 
 
 class TestCorrectionSchemeTrustChecks:
-    """PR 5, correction-scheme-provenance plan v2 §7.
+    """Correction-scheme provenance.
 
     A different axis from every check above: those ask whether an energy
     correction was *applied* to the record at all; these ask whether the
@@ -2235,7 +2235,7 @@ class TestCorrectionSchemeTrustChecks:
         block a well_supported label (ruling 3's "advised, not required"
         applies to the rubric exactly as it applies to the upload).
 
-        Measured on this rubric: a maximally-provisioned computed_thermo
+        On this rubric a maximally-provisioned computed_thermo
         fixture tops out at evidence_completeness == 0.95 (19/20) even
         before these two checks exist -- one "missing" unit is already
         structurally unavoidable
@@ -2245,7 +2245,7 @@ class TestCorrectionSchemeTrustChecks:
         check ever added to this rubric contributes to the completeness
         *ratio* even when it does not gate reaching well_supported via
         ``all_required_passed`` -- that is true of the 20 optional checks
-        that already existed before this PR, not something new introduced
+        that exist for every record, not something new introduced
         here. What must never happen, and is asserted here, is this
         record's label moving because the *new* checks do not apply to
         it: a thermo record that cites no correction scheme at all.
@@ -2812,7 +2812,7 @@ class TestComputedTransportEvaluator:
 
 
 # ---------------------------------------------------------------------------
-# 14. Temperature-range definitional predicate (ADR 0008)
+# 14. Temperature-range definitional predicate
 # ---------------------------------------------------------------------------
 
 

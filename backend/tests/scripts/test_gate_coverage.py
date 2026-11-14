@@ -24,7 +24,7 @@ The second time was everything this file could not see, because its walk
 stopped at ``backend/tests/``:
 
   * ``clients/python/tests/test_openapi_parity.py`` sat red on main from
-    the moment #121 added two routes it did not classify until #133
+    the moment a route is added that is not classified
     noticed by hand. The "Python client tests" job exists -- it simply
     was not consulted, because nothing made a red client suite block a
     merge, and a job that exists is not a job that is read.
@@ -791,7 +791,7 @@ def _editable_installs(workflow_rel: str) -> set[str]:
     [".github/workflows/backend-ci.yml", ".github/workflows/backend-nightly.yml"],
 )
 def test_backend_workflows_install_what_require_module_needs(workflow_rel: str) -> None:
-    """A dependency a test fails-not-skips on CI must be installed by CI (#575).
+    """A dependency a test fails-not-skips on CI must be installed by CI.
 
     ``tests/_ci_dependency.require_module`` turns a missing package into a
     collection error on CI, so a missing install line is caught when the
@@ -930,7 +930,7 @@ def test_frontend_gate_runs_the_locked_quality_contract() -> None:
     Registering a workflow with the aggregate only proves that GitHub waited
     for it. Pinning the steps here proves the awaited job actually installs
     the lockfile, lints, runs the tests, produces a release build, and then
-    checks that build loads nothing from another host (issue #531) -- the
+    checks that build loads nothing from another host -- the
     check reads ``dist/``, so it must come after the build step.
     """
     workflow = _workflow(".github/workflows/frontend-ci.yml")

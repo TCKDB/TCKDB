@@ -1,9 +1,9 @@
-"""A composed network energy that cites a bare electronic energy and has no freq warns (#669).
+"""A composed network energy that cites a bare electronic energy and has no freq warns.
 
 ``electronic_plus_zpe``, ``atom_and_bond_corrected`` and ``thermal_enthalpy_298k`` add a
 vibrational term to an electronic energy. When the cited source is an ``sp`` or ``opt`` and
 the upload declares no ``freq`` for that subject, the term has no source at all. An absence,
-therefore a warning (ADR 0008), never a refusal. The calculations here are stand-ins carrying
+therefore a warning, never a refusal. The calculations here are stand-ins carrying
 only the three attributes the rule reads, so each case isolates one condition.
 """
 

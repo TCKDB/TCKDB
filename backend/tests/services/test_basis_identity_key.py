@@ -1,4 +1,4 @@
-"""Basis-set spelling and level-of-theory identity (#574).
+"""Basis-set spelling and level-of-theory identity.
 
 The spellings are what each program actually writes, from the group
 knowledge base's "Basis set spelling" card (``ess/capabilities.md``) and each
@@ -195,7 +195,7 @@ def _hash(**fields) -> str:
 
 
 def test_psi4_and_gaussian_water_are_one_level_of_theory():
-    """The #572 pair: Psi4 ``b3lyp/def2-tzvp``, Gaussian record ``b3lyp/def2tzvp``."""
+    """The pair: Psi4 ``b3lyp/def2-tzvp``, Gaussian record ``b3lyp/def2tzvp``."""
     assert _hash(basis="def2-tzvp") == _hash(basis="def2tzvp")
 
 
@@ -231,7 +231,7 @@ def test_a_canonical_spelling_hashes_as_it_always_did():
 
 
 def test_method_case_is_keyed_too():
-    # #574 keyed basis names only; #585 keys the method's case as well
+    # Basis names are keyed, and the method's case is keyed as well
     # (``tests/services/test_method_identity_key.py``).
     assert _hash(basis="def2-tzvp") == _level_of_theory_hash(
         LevelOfTheoryRef(method="B3LYP", basis="def2-tzvp")
@@ -244,15 +244,15 @@ def test_method_case_is_keyed_too():
 
 
 def test_the_merge_record_adds_no_column_to_level_of_theory():
-    """Merges live in ``level_of_theory_merge``, not on the row (#574 review).
+    """Merges live in ``level_of_theory_merge``, not on the row.
 
     Consistency-check inputs (``consistency.core.snapshot``) and
     reproducibility context hashes (``reproducibility_rubric._mapped_columns``)
     snapshot every column of a level of theory. A new column would change
     both for every row, re-keyed or not, unless it is listed in
     ``snapshot_defaults.UNCHANGED_DEFAULTS`` (the digest then ignores it while
-    it holds the value every older row had). ``core_treatment`` (ADR 0021) is
-    the one column added since, and is listed there.
+    it holds the value every older row had). ``core_treatment`` is
+    a later column, and is listed there.
     """
     from app.db.models.level_of_theory import LevelOfTheory
     from app.services.snapshot_defaults import UNCHANGED_DEFAULTS, is_unchanged_default

@@ -186,7 +186,7 @@ class TestDipoleTable:
 # ---------------------------------------------------------------------------
 # Diatomic spectroscopic — live page has no <th> header row, so the
 # parser uses ``configured_column_names`` on PROPERTY_CONFIGS rather
-# than inferring from the first row. These tests pin the Phase 5e
+# than inferring from the first row. These tests pin the
 # fix against regression to the original bug (row 0 / H2 being eaten
 # as the column header).
 # ---------------------------------------------------------------------------
@@ -220,7 +220,7 @@ class TestDiatomicSpectroscopicTable:
     def test_column_names_come_from_configured_tuple_not_first_row(
         self, table
     ):
-        """Regression for the Phase 5d bug where the H2 data row was
+        """Regression for a bug where the H2 data row was
         eaten as the table header. column_names must match the
         configured tuple, never the values from the first data row."""
 
@@ -237,7 +237,7 @@ class TestDiatomicSpectroscopicTable:
         ]
         # Specifically: "H2" must NOT appear as a column name.
         assert "H2" not in table.column_names
-        # Same for the H2 ωe value, which previously became a column.
+        # Same for the H2 ωe value, which must not become a column.
         assert "4401.213" not in table.column_names
 
     def test_first_row_is_h2_data_not_header(self, table):
@@ -267,8 +267,8 @@ class TestDiatomicSpectroscopicTable:
     def test_raw_row_keys_match_configured_names_not_data_values(
         self, table
     ):
-        """raw_row keys are the *configured* column names. The pre-fix
-        bug produced keys like ``"4401.213"`` (the H2 we value) — we
+        """raw_row keys are the *configured* column names. A parser that
+        infers columns produces keys like ``"4401.213"`` (the H2 we value) — we
         explicitly assert that anti-shape."""
 
         h2 = table.rows[0]

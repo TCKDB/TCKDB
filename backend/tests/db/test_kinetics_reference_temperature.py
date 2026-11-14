@@ -1,4 +1,4 @@
-"""``kinetics.t0_k``: an approved row cannot have its reference temperature changed afterwards (#620)."""
+"""``kinetics.t0_k``: an approved row cannot have its reference temperature changed afterwards."""
 
 from __future__ import annotations
 

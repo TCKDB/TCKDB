@@ -284,7 +284,7 @@ def test_species_export_lot_filter(db_session):
 
 
 def test_species_export_lot_filter_follows_a_merged_ref(db_session):
-    """A merged level of theory's ref names the row it was merged into (#591).
+    """A merged level of theory's ref names the row it was merged into.
 
     A dataset request that cites the ref of a duplicate the merge script
     retired must select the kept row's energies, not silently match nothing.
@@ -749,7 +749,7 @@ def test_reaction_export_trust_gate(db_session):
 
 # ---------------------------------------------------------------------------
 # Reaction export -- delta_h298 declines across an unrecorded/mixed
-# enthalpy reference (issue #519, second half)
+# enthalpy reference
 # ---------------------------------------------------------------------------
 
 

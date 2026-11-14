@@ -10,7 +10,7 @@ they are easy to satisfy two out of three:
 * stable **within** a run, so a subprocess-based test inherits the same
   database the fixtures created.
 
-Until 2026-08-10 only the first held. Names derived from
+Names derived from
 ``PYTEST_XDIST_WORKER`` alone were identical across runs, and two agents in
 two worktrees shared eight databases: one reported 2305 errors on a tree
 that passed alone.
@@ -179,7 +179,7 @@ def test_run_token_is_shared_through_the_environment() -> None:
     ``os.environ.setdefault`` at conftest import is what does it; the
     assertion is here so a refactor that drops the export is noticed. A
     per-worker token would still be *correct* (uniqueness is only ever
-    required between runs), but the databases of one run would no longer be
+    required between runs), but the databases of one run would not be
     identifiable as one run.
     """
     assert os.environ.get("TCKDB_TEST_RUN_TOKEN") == conftest.RUN_TOKEN

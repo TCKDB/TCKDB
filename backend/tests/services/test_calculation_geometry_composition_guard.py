@@ -13,7 +13,7 @@ construction** (not each enclosing function) to be preceded by a call to
 ``assert_calculation_geometry_composition`` on the same ``geometry_id``; see
 ``_geometry_link_guard`` for what that does and does not prove. Per function was
 not enough: ``_persist_irc_result`` called the check, but only on the
-forward/reverse branch, and the TS-marker point was written outside it (#680).
+forward/reverse branch, and the TS-marker point was written outside it.
 
 If a future site legitimately cannot check -- it links a geometry before the
 calculation's owner is known, say -- the honest fix is to make that explicit
@@ -62,7 +62,7 @@ def test_every_geometry_link_construction_is_preceded_by_the_composition_check()
 
 
 def test_the_known_write_sites_have_not_silently_disappeared() -> None:
-    """A shrinking set means a write path was removed, which is also news."""
+    """A shrinking set means a write path is removed, which is also news."""
 
     sites = set(construction_sites())
     missing = sorted(_EXPECTED_SITES - sites)
@@ -73,7 +73,7 @@ def test_the_known_write_sites_have_not_silently_disappeared() -> None:
 
 
 def test_an_unchecked_site_in_a_function_that_checks_elsewhere_is_caught() -> None:
-    """The guard's own mutation: the #680 IRC shape, in miniature.
+    """The guard's own mutation: the IRC shape, in miniature.
 
     A function that calls the checker inside one branch and builds a row outside
     it passes a per-function guard and fails this one.

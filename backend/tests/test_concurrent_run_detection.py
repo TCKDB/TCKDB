@@ -7,7 +7,7 @@ too many clients already``, spread across whichever tests happened to be
 executing -- which is indistinguishable from a real regression. It has twice
 been read as one, and one of those times a false baseline was nearly published.
 
-Run-unique database names (#126) removed the *name* collision and left the
+Run-unique database names removed the *name* collision and left the
 *connection* collision with nothing to name it. These tests cover the part of
 ``conftest`` that names it: the attribution of harness databases to the runs
 that stamped them, and the refusal that fires before a doomed session creates

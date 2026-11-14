@@ -1,4 +1,4 @@
-"""A release selection about a species entry that was merged away still counts for the survivor (DR-0038).
+"""A release selection about a species entry that was merged away still counts for the survivor.
 
 Selections are append-only and stay on the row they were made about. After the stereo-identity migration the thermo they
 chose has moved to the surviving entry; so a selection is read as a selection for the survivor, never rewritten:

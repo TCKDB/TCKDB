@@ -1,4 +1,4 @@
-"""A rolled-back request must not leave an assembled composite pending (ADR 0021, P5).
+"""A rolled-back request must not leave an assembled composite pending.
 
 The pending composites live in ``session.info``. The worker records a failed attempt in a *fresh
 transaction of the same session* after the failed one rolled back, so an entry that survived the

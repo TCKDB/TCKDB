@@ -3,7 +3,7 @@
 Every record is written by the real thermo upload workflow
 (``persist_thermo_upload``: species through ``resolve_species_entry``,
 enthalpy-declaration rule, schema validation), except where a test says
-it needs a row that workflow now refuses -- an undeclared legacy row or a
+it needs a row that workflow refuses -- an undeclared legacy row or a
 NASA-9 set with a gap -- and then the service layer beneath it writes the
 row (``resolve_thermo_upload``/``persist_thermo``), as it did before those
 rules existed. Expectations come from hand formulas with the SI R, never
@@ -68,7 +68,7 @@ def upload(session, *, smiles="C", charge=0, **fields):
 
 
 def legacy_row(session, *, smiles="C", nasa9_intervals=(), **fields):
-    """A row the workflow now refuses (undeclared enthalpy, or a NASA-9 gap).
+    """A row the workflow refuses (undeclared enthalpy, or a NASA-9 gap).
 
     Written by the service layer beneath the workflow, the way rows were
     written before the declaration rule and the NASA-9 contiguity rule.
@@ -396,11 +396,11 @@ def test_cli_help_states_what_temperature_means_per_check(capsys):
     assert "kirchhoff -- ADDED to the default grid" in text
 
 
-# --------------------------------------------------------------------------- review round 1 (#552)
+# ---------------------------------------------------------------------------
 
 
 def test_a_pair_with_only_its_start_temperature_is_stated_not_dropped(db_session):
-    """Finding 1: a real pair whose grid holds nothing but T0 used to emit nothing."""
+    """A real pair whose grid holds nothing but T0 must still emit something."""
     single = upload(db_session, nasa=nasa7_block(), points=[{"temperature_k": T298, "h_kj_mol": 1.0}])
     increments = rows(compare_kirchhoff(single), "increment")
     assert len(increments) == 1

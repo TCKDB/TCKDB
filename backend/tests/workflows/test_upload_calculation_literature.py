@@ -2,17 +2,16 @@
 
 ``CalculationWithResultsPayload`` is the calculation block of five upload
 roots (``/uploads/`` conformers, transition-states, statmech, thermo,
-transport) *and*, until #194, the internal shape three bundle workflows
+transport) *and* the internal shape three bundle workflows
 built after resolving literature themselves. Because it was both, it kept
 a raw ``literature_id``: correct for the internal use, a database primary
 key on a depositor-facing surface for the other five.
 
-#118 removed that field from the reaction bundle. #154 removed it from
-the network-PDep route. #172 removed it from ``CalculationIn``. It
-survived all three on the shared payload, and was found by hand a fourth
-time. These tests pin both halves of the correction — the raw id is
-refused, and the inline fragment it was replaced by actually reaches a
-``literature`` row — on the two roots #194 named.
+The raw id is absent from the reaction bundle, the network-PDep route and
+``CalculationIn``, but it survives easily on a shared payload and is then found
+by hand. These tests pin both halves of the correction — the raw id is
+refused, and the inline fragment that replaces it actually reaches a
+``literature`` row — on the two roots that carry it.
 
 The general statement lives in
 ``tests/schemas/test_upload_roots_expose_no_fk_ids.py``, which asserts it

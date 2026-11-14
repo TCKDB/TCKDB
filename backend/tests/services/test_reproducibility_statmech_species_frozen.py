@@ -1,4 +1,4 @@
-"""Species-owned statmech reproducibility, frozen as literals (#760, PR-1).
+"""Species-owned statmech reproducibility, frozen as literals.
 
 Why this file exists
 --------------------
@@ -20,15 +20,12 @@ fix:
   (first appearance) so that two runs on two databases give the same digest. Anything else in the snapshot
   (a key added or removed, a value changed, a check's evidence edited) moves the digest.
 
-The digests were re-captured once, in versioning PR-4, because the stored snapshot's rubric block and reason
-tokens changed shape (name plus integer version), and again when the unreachable ``cycle_detected`` evidence
-key was dropped from ``upstream_dependency_snapshot`` (the dependency graph is acyclic by trigger). Grades and
-checks did not change either time. The digest of
-``declaration_with_members_and_sources`` was re-captured a third time when an ensemble member's relative energy gained
-its stated convention: the scenario's member carries an energy, so its row now carries the convention too (a member
-with no energy keeps its digest, see ``snapshot_defaults``). Grade and checks did not change. All twelve were re-captured a fourth time when ``level_of_theory.keywords`` was dropped: a snapshot holds every
-mapped column of a level of theory, so removing a column removes its key from every digest (a *removed* column cannot
-be listed in ``snapshot_defaults``, which covers added ones). Grades and checks did not change. Otherwise these literals are
+A change to the snapshot's shape moves the digests: the rubric block and reason tokens (name
+plus integer version), the evidence keys of ``upstream_dependency_snapshot``, the convention a
+member's relative energy carries (a member with no energy keeps its digest, see
+``snapshot_defaults``), and the mapped columns of a level of theory (removing a column removes
+its key from every digest; a *removed* column cannot be listed in ``snapshot_defaults``, which
+covers added ones). Grades and checks do not change with these. Otherwise these literals are
 expected to stay byte-identical when the owner-scoped rubric lands. If one of them changes,
 species grading changed: that is the failure this file exists to catch, not a literal to refresh.
 """
@@ -616,7 +613,7 @@ def _observe(db_session, name: str, user: int) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# The literals. Captured from the unchanged rubric; PR-2 must leave them byte-identical.
+# The literals. Captured from the unchanged rubric; the owner-scoped rubric must leave them byte-identical.
 # ---------------------------------------------------------------------------
 
 FROZEN: dict[str, dict] = {
@@ -1152,7 +1149,7 @@ def test_smoke_a_species_row_appended_now_is_current_and_carries_the_original_ru
 
     A row appended by this code reads ``current`` through ``include=assessments`` and says it was graded by
     ``tckdb_reproducibility`` ``v1``. It is not evidence about rows stored earlier: whether those still read
-    ``current`` after the owner-scoped rubric lands is PR-2's to prove (its currency tests append under the old
+    ``current`` after the owner-scoped rubric lands is for the owner-scoped rubric's currency tests to prove (they append under the old
     identity and read back).
     """
     statmech = _computed_no_sources(db_session, None)
@@ -1176,7 +1173,7 @@ def test_smoke_a_species_row_appended_now_is_current_and_carries_the_original_ru
 
 
 # ---------------------------------------------------------------------------
-# The defect (#760): a TS-owned statmech is graded ``insufficient`` whatever its evidence
+# The defect: a TS-owned statmech is graded ``insufficient`` whatever its evidence
 # ---------------------------------------------------------------------------
 
 

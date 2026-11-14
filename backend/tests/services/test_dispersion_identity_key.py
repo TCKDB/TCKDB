@@ -1,6 +1,6 @@
-"""Dispersion-column synonyms and a dispersion folded into the method (#630).
+"""Dispersion-column synonyms and a dispersion folded into the method.
 
-#627 left four spellings of one calculation as four levels of theory:
+Four spellings of one calculation must be one level of theory:
 ``b3lyp`` + ``d3bj``, + ``gd3bj``, + ``EmpiricalDispersion=GD3BJ``, and
 ``b3lyp-d3bj``. ARC's Gaussian adapter writes ``level.dispersion`` into the
 route unchanged, so the second and third are what a Gaussian-run ARC upload

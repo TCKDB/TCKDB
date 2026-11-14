@@ -1,10 +1,10 @@
-"""No ``persist_*`` call on the bundle or worker path may drop its warnings (#647).
+"""No ``persist_*`` call on the bundle or worker path may drop its warnings.
 
 ``/bundles/submit``, ``/bundles/dry-run`` and the background job worker each call
 the persistence workflows that the direct ``/uploads/<kind>`` routes call. A
 workflow that accepts a warnings sink and is not given one loses every warning
 it would have reported, silently: nothing fails, the depositor just never sees
-them. That is how #647 happened, and it is invisible to a behavioural test of any
+them. That is how a silent drop happens, and it is invisible to a behavioural test of any
 kind that has not been written yet.
 
 So the rule is structural. Every ``persist_*`` call in the two modules is found
@@ -12,8 +12,8 @@ by parsing them, resolved to the function it names, and checked against that
 function's own signature: if the function takes ``warnings_out`` or
 ``warnings``, the call must pass it as a keyword and not as ``None``. A workflow
 with no sink is allowed only if it is listed below with the reason, and the
-list is checked both ways: an entry whose function has since gained a sink, or
-that is no longer called, fails.
+list is checked both ways: an entry whose function gains a sink, or
+that is not called, fails.
 """
 
 from __future__ import annotations

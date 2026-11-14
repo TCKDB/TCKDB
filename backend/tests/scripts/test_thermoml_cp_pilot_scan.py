@@ -798,7 +798,7 @@ class TestDigestGate:
 
 class TestArchiveNotFound:
     """Finding 7: a missing --archive path is a distinct exit code (3) from a digest mismatch
-    (2); previously both returned 2."""
+    (2); both return 2."""
 
     def test_missing_archive_exits_three(self, scan_module, monkeypatch, inchikeys_file, tmp_path):
         missing = tmp_path / "does-not-exist.tgz"

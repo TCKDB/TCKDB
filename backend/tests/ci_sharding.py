@@ -2,7 +2,7 @@
 
 Why
 ---
-Each backend gate used to be one job running one pytest process on a 4-core
+An unsharded backend gate is one job running one pytest process on a 4-core
 runner for 20-35 minutes, so a pull request waited for the slowest gate. A
 gate can be run as ``N`` jobs, each taking a slice of the gate's test
 *files*; the wall clock becomes the slowest slice.
@@ -42,7 +42,7 @@ Three independent checks keep this honest:
 2. Every slice reports what it collected and ran
    (``TCKDB_TEST_SHARD_REPORT``). The ``Backend CI`` job sums the reports
    and refuses unless every slice saw the same total, the slices' selected
-   counts add up to that total, and the DR-0028 body-sweep floor holds on the
+   counts add up to that total, and the error-body sweep floor holds on the
    sum -- the per-slice floor cannot, because a slice sees a fraction.
 3. A slice refuses to start if its own selection is empty, so a slice that
    matches nothing is a failure and not a quiet green job.

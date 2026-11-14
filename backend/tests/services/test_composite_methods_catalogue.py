@@ -1,4 +1,4 @@
-"""The named-composite-method catalogue's own rules (ADR 0021).
+"""The named-composite-method catalogue's own rules.
 
 A catalogue entry is only worth having if every value in it can be traced, so
 the rules are tests: every value cited, every NULL explained, every key the

@@ -848,7 +848,7 @@ def test_a_channel_target_must_be_a_transition_state_of_the_records_reaction_in_
 
 
 # ---------------------------------------------------------------------------
-# #694 review: the target is part of identity, and a determination holds one role
+# The target is part of identity, and a determination holds one role
 # ---------------------------------------------------------------------------
 
 

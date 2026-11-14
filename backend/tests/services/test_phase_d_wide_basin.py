@@ -1,4 +1,4 @@
-"""D8: a wide conformer basin reaches a curator through the Phase D advisory mechanism.
+"""D8: a wide conformer basin reaches a curator through the advisory mechanism.
 
 A chain of optimised structures can be linked end to end while its ends are further apart than the tolerance. The
 basin is reported, never split. This is the check that reports it: explicit invocation only, one append-only

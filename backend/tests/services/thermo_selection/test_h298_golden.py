@@ -3,7 +3,7 @@
 ``golden/h298_decisions.json`` is regenerated only with ``TCKDB_REGEN_H298_GOLDEN=1``, and only for a change to the
 H298 semantics. It was regenerated when the method-preference rules were removed. The scenario names are the ones the
 rule-era golden used and the candidate populations are unchanged, so a reviewer diffing the golden sees each
-key move in place: a decision that used to carry an edge (9 of them E1's, 21 a synthetic R1-R4 test rule) or a
+key move in place: a decision that carries an edge (9 of them E1's, 21 a synthetic R1-R4 test rule) or a
 ``policy_conflict`` is now ``incomparable_alternatives`` in one front, while sole, empty and already-incomparable
 populations are unchanged. The names that mention a rule describe the population, not a rule that still exists.
 The matrix runs every administrative policy over those populations. Each decision is compared as the exact JSON

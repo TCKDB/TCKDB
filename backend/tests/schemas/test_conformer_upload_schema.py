@@ -94,7 +94,7 @@ def test_conformer_upload_statmech_accepts_literature_submission_payload() -> No
 
 
 # ---------------------------------------------------------------------------
-# Statmech source calculations: local keys, never row ids (#118, DR-0029 Req 1)
+# Statmech source calculations: local keys, never row ids
 # ---------------------------------------------------------------------------
 
 
@@ -149,8 +149,8 @@ def _assert_field_forbidden(exc_info, field: str) -> None:
 def test_statmech_source_calculation_rejects_raw_calculation_id() -> None:
     """The published contract must not accept a calculation primary key.
 
-    A depositor cannot know one. Before #118 this field was
-    ``calculation_id: int`` and was the only way to declare the link.
+    A depositor cannot know one. The field is not
+    ``calculation_id: int``; a local key declares the link.
     """
     payload = _keyed_conformer_request(
         source_calculations=[{"calculation_id": 7, "role": "freq"}]

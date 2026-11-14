@@ -1,4 +1,4 @@
-"""Method-name case, curated aliases and level-of-theory identity (#585, #618).
+"""Method-name case, curated aliases and level-of-theory identity.
 
 The spellings are what each producer writes. ARC lower-cases every method
 (``arc/level.py``, ``Level.lower``) and every fixture under
@@ -8,7 +8,7 @@ Molpro inputs are written in mixed or upper case.
 Every same-method case asserts the exact key, not only that two spellings
 agree, and the negative table pins what must stay two levels of theory.
 Punctuation is equated only through the curated alias table
-(``method_names.NAME_ALIASES`` / ``SUFFIX_ALIASES``, #618); the tests below
+(``method_names.NAME_ALIASES`` / ``SUFFIX_ALIASES``); the tests below
 also hold that table to its rules (every entry cited, none program-scoped
 while the hash cannot see a program, each canonical key stable).
 """
@@ -99,7 +99,7 @@ SAME_METHOD: list[tuple[str, list[tuple[str, str]], str]] = [
     ),
     ("wB97X-D3BJ", [("ORCA", "wB97X-D3BJ"), ("ARC", "wb97x-d3bj")], "wb97x-d3bj"),
     ("wB97X-D3(BJ)", [("Psi4 alias", "wB97X-D3(BJ)")], "wb97x-d3bj"),
-    # Named composite methods (ADR 0021). The key is the Gaussian / ARC spelling.
+    # Named composite methods. The key is the Gaussian / ARC spelling.
     (
         "CBS-QB3",
         [
@@ -164,7 +164,7 @@ DIFFERENT_METHOD: list[tuple[str, str, str]] = [
     ("B3LYP", "UB3LYP", "unrestricted"),
     ("DLPNO-CCSD(T)", "CCSD(T)", "local approximation"),
     ("PBE", "PBE0", "different functionals"),
-    # Named composite methods (ADR 0021): recipes that look alike and are not.
+    # Named composite methods: recipes that look alike and are not.
     ("W1BD", "W1-BD", "no source writes W1-BD, so it is not an alias; it stays its own key"),
     ("W1-BD", "W1U", "a hyphenated W1BD is not W1U either"),
     ("W1", "W1U", "W1 uses ROCCSD; W1U uses UCCSD (Gaussian 09 manual, W1 methods)"),
@@ -235,7 +235,7 @@ def _hash(method: str, **fields) -> str:
 
 
 def test_arc_and_orca_ccsdt_f12_are_one_level_of_theory():
-    """The #585 pair: ARC ``ccsd(t)-f12/cc-pvtz-f12``, stored ``CCSD(T)-F12/cc-pVTZ-F12``."""
+    """The pair: ARC ``ccsd(t)-f12/cc-pvtz-f12``, stored ``CCSD(T)-F12/cc-pVTZ-F12``."""
     assert _hash("ccsd(t)-f12", basis="cc-pvtz-f12") == _hash(
         "CCSD(T)-F12", basis="cc-pVTZ-F12"
     )
@@ -273,7 +273,7 @@ def test_a_lower_case_method_hashes_as_it_always_did():
 
 
 def test_dispersion_and_solvent_case_is_no_longer_identity():
-    # Reproduces #602 on main: these were two levels of theory.
+    # Without keying these are two levels of theory.
     assert _hash("b3lyp", dispersion="d3bj") == _hash("b3lyp", dispersion="D3BJ")
 
 
@@ -290,7 +290,7 @@ def test_the_upload_path_resolves_both_spellings_to_one_row(db_session):
 
 
 def test_the_upload_path_joins_the_two_arc_corpus_spellings_of_wb97xd(db_session):
-    """The #618 pair: one Gaussian functional, spelled two ways by two ARC corpora."""
+    """The pair: one Gaussian functional, spelled two ways by two ARC corpora."""
     a = resolve_level_of_theory_ref(db_session, LevelOfTheoryRef(method="wb97xd", basis="def2-tzvp"))
     b = resolve_level_of_theory_ref(db_session, LevelOfTheoryRef(method="wb97x-d", basis="def2-tzvp"))
     assert a.id == b.id
@@ -304,7 +304,7 @@ def test_the_upload_path_keeps_gaussian_wb97xd_apart_from_orca_wb97x_d3(db_sessi
 
 
 def test_the_upload_path_joins_a_folded_dispersion_to_the_dispersion_column(db_session):
-    """#630: ``b3lyp-d3(bj)`` and ``b3lyp`` + ``d3bj`` are one level (they were two in #627)."""
+    """``b3lyp-d3(bj)`` and ``b3lyp`` + ``d3bj`` are one level."""
     folded = resolve_level_of_theory_ref(db_session, LevelOfTheoryRef(method="b3lyp-d3(bj)"))
     column = resolve_level_of_theory_ref(
         db_session, LevelOfTheoryRef(method="b3lyp", dispersion="d3bj")
@@ -319,7 +319,7 @@ def test_the_upload_path_joins_a_folded_dispersion_to_the_dispersion_column(db_s
 
 
 # ---------------------------------------------------------------------------
-# The alias table's own rules (#618)
+# The alias table's own rules
 # ---------------------------------------------------------------------------
 
 

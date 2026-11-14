@@ -99,7 +99,7 @@ def test_an_undeclared_target_is_assessed_against_itself_not_counted_as_a_mismat
     assert delta(after, before, "h298_not_applicable_reasons", "thermodynamic_target_not_declared") == 1
 
 
-# -- a confirmed finding about a record's own source calculation (#724) ------------------------------------------------
+# -- a confirmed finding about a record's own source calculation ------------------------------------------------
 
 
 def test_a_confirmed_finding_on_a_records_source_is_counted_as_blocking_validation_for_that_record_only(db_session):

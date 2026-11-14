@@ -165,7 +165,7 @@ def test_statmech_create_rejects_duplicate_source_calculation_pairs() -> None:
 
 
 # ---------------------------------------------------------------------------
-# One concept, one component (#119)
+# One concept, one component
 # ---------------------------------------------------------------------------
 
 
@@ -173,7 +173,7 @@ def test_torsion_coordinate_has_exactly_one_definition() -> None:
     """The atom quartet is defined once and inherited everywhere.
 
     ``StatmechTorsionCoordinateIn``, ``StatmechTorsionCoordinateBase`` and
-    ``StatmechTorsionCoordinateCreate`` used to be field-for-field and
+    ``StatmechTorsionCoordinateCreate`` is not field-for-field and
     validator-for-validator identical, which a client generator turned
     into two classes for one concept. The read schema now inherits the
     one class instead of restating its fields.

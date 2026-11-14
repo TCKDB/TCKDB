@@ -452,7 +452,7 @@ def test_a_source_withheld_by_the_profile_reads_generically_and_names_nothing(db
 
 
 def test_an_unreviewed_source_is_used_under_curated_and_the_callers_own_floor_still_holds_it_out(db_session):
-    """ADR 0023 (Q4): the calculations inside a basin are evidence. The record floor does not apply to them.
+    """The calculations inside a basin are evidence. The record floor does not apply to them.
 
     Kills: the earlier rule, under which this source read as unavailable and the determination as unresolved.
     """

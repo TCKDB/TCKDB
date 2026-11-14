@@ -118,7 +118,7 @@ class TestReconcileSpeciesEntry:
 
     def test_n_imag_one_minimum_produces_no_warning(self) -> None:
         """A declared minimum with an imaginary mode blocks, so it is not
-        re-derived here: ADR 0008 gives the blocking tier sole ownership
+        re-derived here: the blocking-tier rule gives the blocking tier sole ownership
         of a fact it refuses, and the schema tier already rejected the
         payload with a 422 before any route body ran."""
         assert reconcile_species_entry(_identity(), freq_n_imag=1) == []

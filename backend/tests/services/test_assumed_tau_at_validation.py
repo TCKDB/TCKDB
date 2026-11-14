@@ -1,6 +1,6 @@
-"""ADR 0012's assumed Hessian default is applied where tau is *decided*.
+"""The assumed Hessian default is applied where tau is *decided*.
 
-Owner decision 2026-10-31 (follow-up to #834): when a frequency job's Hessian
+When a frequency job's Hessian
 method is not recorded, tau resolves through the producing program's assumed
 default (``Gaussian`` + DFT -> ``assumed_analytic_default``, 30 cm-1) at
 validation, so that what a deposit is judged at is exactly what is stored.

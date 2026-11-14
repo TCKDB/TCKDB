@@ -176,7 +176,7 @@ class TestKineticsUploadAUnitsMolecularity:
 
     def test_bimolecular_with_per_s_is_possible_when_direction_is_unstated(self) -> None:
         # 2 reactants -> 1 product: with no direction stated the coefficient could be the reverse
-        # (first-order) rate, so per_s is accepted (#695); no direction is assumed. Units matching
+        # (first-order) rate, so per_s is accepted; no direction is assumed. Units matching
         # neither side (third order) are still refused.
         req = KineticsUploadRequest(
             reaction=_reaction_with_n_reactants(2),

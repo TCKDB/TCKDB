@@ -3,7 +3,7 @@
 Uses the per-test transactional ``db_session`` fixture so every test
 rolls back at teardown.
 
-Phase C-E5 review round 3 (R1): every ``commit=True`` call now opens (or
+Every ``commit=True`` call opens (or
 reuses) a bulk-import ``Submission`` and links every inserted row to it --
 mirrors ``app.services.thermoml_cp_import`` / ``tests/services/
 test_thermoml_cp_import.py``. Without this, ``observation_identity_attach``
@@ -349,7 +349,7 @@ class TestIdentityResolution:
         # Two genuinely distinct isotopologues of water: ordinary H2O
         # (isotope_key NULL) and D2O. Previously this fixture forked identity
         # with meaningless free-text labels ("entryA"/"entryB"), which the
-        # schema no longer permits — and which was never science.
+        # schema does not permit — and which was never science.
         for isotope_key in (None, "[2H]O[2H]"):
             db_session.add(
                 SpeciesEntry(
@@ -541,7 +541,7 @@ def test_service_does_not_import_parsers_or_fetchers():
 
 
 # ---------------------------------------------------------------------------
-# Submission wiring (Phase C-E5 review round 3, R1)
+# Submission wiring
 # ---------------------------------------------------------------------------
 
 

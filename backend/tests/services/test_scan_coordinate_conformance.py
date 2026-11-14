@@ -1,4 +1,4 @@
-"""ADR 0020's conformance check: does coordinate_value match its geometry?
+"""The scan-coordinate conformance check: does coordinate_value match its geometry?
 
 This suite is built around one non-negotiable: it must not be possible to
 believe the check is doing anything just because a suite of good-data-only
@@ -11,7 +11,7 @@ per positive one:
   round-tripping the module's own formula through itself;
 * :func:`evaluate_point_coordinate_conformance` is proved to both pass a
   correct point and catch a **0.01 degree** injected error -- the exact
-  number ADR 0020 names as one the previously-rejected 0.5/1.0 degree floor
+  number a 0.5/1.0 degree floor
   would have missed;
 * ``not_applicable`` and ``not_checkable`` are each reached and asserted
   distinct from a pass and from a fail (``deviates``);
@@ -83,7 +83,7 @@ from tests.services.scientific_read._factories import make_species, make_species
 # names: a round-trip test between two hand-written formulas cannot tell a
 # shared sign error from correctness. The fix is that neither
 # ``dihedral_deg`` nor ``place_next_atom`` is asserted correct by the
-# other any more -- both are checked directly against RDKit,
+# other -- both are checked directly against RDKit,
 # independently, in ``TestDihedralDegAgreesWithRDKit`` and
 # ``TestPlacementHelperAgreesWithRDKit``. The round-trip test that
 # follows them is kept only as a *secondary* consistency check between two
@@ -386,7 +386,7 @@ class TestEvaluatePointCoordinateConformance:
     def test_1dp_dihedral_matches_the_reviewed_measurement(self) -> None:
         """Pins the exact numbers a review measured against the unbounded
         tolerance: 1 decimal place derives a ~21.1 degree tolerance, and a
-        15 degree error used to conform under it."""
+        15 degree error would conform under it."""
         a, b, c, d = _quartet_at_dihedral(47.0)
         result = evaluate_point_coordinate_conformance(
             kind=ScanCoordinateKind.dihedral,
@@ -696,7 +696,7 @@ class TestInferPrecisionDecimals:
         assert infer_precision_decimals(values) == 4
 
     def test_trusts_a_genuinely_coarse_precision_given_enough_samples(self) -> None:
-        """The exact defect a review found: this used to check the wrong
+        """The exact defect a review found: this must not check the wrong
         quantity (the inferred decimal count, not the sample size) and
         fell back to 6 dp here, tightening the tolerance far past what a
         legitimately-coarse-but-conforming 2 dp deposit could pass."""
@@ -958,7 +958,7 @@ class TestClassifySeries:
 
 # ---------------------------------------------------------------------------
 # End-to-end through the database: a whole scan series shaped like the real
-# corpus (ADR 0019's relative sweep), built from real Cartesian geometries.
+# corpus (the relative sweep), built from real Cartesian geometries.
 # ---------------------------------------------------------------------------
 
 
@@ -1032,7 +1032,7 @@ class TestEndToEndThroughTheDatabase:
         db_session.flush()
 
         for i in range(n_points):
-            relative_value = i * step  # 0, 8, 16, ... -- ADR 0019's axis
+            relative_value = i * step  # 0, 8, 16, ... -- the relative axis
             absolute_dihedral = ((start_value + relative_value + 180.0) % 360.0) - 180.0
             atoms = _quartet_at_dihedral(absolute_dihedral)
             geometry = _make_geometry_for_quartet(db_session, atoms)

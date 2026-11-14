@@ -65,7 +65,7 @@ class FakeHost:
     requests: list[Request] = field(default_factory=list)
     #: Response for GET /status: (http_code, body).
     status_response: tuple[int, str] = (200, "")
-    #: Paths that answer 500, used to prove failed publishes are retried.
+    #: Paths that answer 500, to prove failed publishes are retried.
     failing_paths: set[str] = field(default_factory=set)
     #: Canned JSON answers keyed by path prefix, for the GitHub API stand-in.
     #: Longest prefix wins, and the query string is ignored when matching.

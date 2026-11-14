@@ -129,7 +129,7 @@ def test_a_second_cohort_that_cannot_be_ordered_never_leaves_the_first_as_the_si
     b2 = basin(4, -76.51, obs="cobs_2", target="conformer_basin", lot=LOT_B, declared=DECL_B)
     both = decide_dets([a1, a2, b1, b2], minimum_request())
     assert both.outcome is O.incomparable_alternatives and both.coverage["cohorts"] == 2
-    # One more, disagreeing, repeat in B: B can no longer be ordered, and the outcome must not get stronger.
+    # One more, disagreeing, repeat in B: B cannot be ordered, and the outcome must not get stronger.
     b1_again = basin(5, -76.55, obs="cobs_1", target="conformer_basin", lot=LOT_B, declared=DECL_B)
     broken = decide_dets([a1, a2, b1, b2, b1_again], minimum_request())
     assert broken.outcome is O.incomparable_alternatives and broken.selected_refs == ()

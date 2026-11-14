@@ -45,7 +45,7 @@ Why the failure modes get as many tests as the success
 -------------------------------------------------------
 This probe is supplementary. The authoritative signal is the write path's
 own refusal, and a probe that could *damage* that by failing would be a
-worse bug than the one it was added for. So every failure returns ``None``
+worse bug than the one it guards against. So every failure returns ``None``
 — "no opinion" — and ``None`` never clears a refusal and never degrades
 ``/status``. Against AWS S3, which has no such endpoint and no notion of
 "full", ``None`` is the permanent and correct answer.

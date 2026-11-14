@@ -364,7 +364,7 @@ def test_solve_inputs_of_an_unapproved_solve_stay_editable(db_session) -> None:
 
 
 def _sourced_bundle(db_session, tag: str):
-    """A solve bundle whose state energy cites one calculation for its one participant (#678)."""
+    """A solve bundle whose state energy cites one calculation for its one participant."""
     from app.db.models.network_pdep import NetworkSolveStateEnergySource, NetworkStateParticipant
 
     bundle = _solve_bundle(db_session, tag)
@@ -388,7 +388,7 @@ def _sourced_bundle(db_session, tag: str):
 
 
 def test_participant_sources_of_an_approved_solve_are_frozen(db_session) -> None:
-    """The source rows are as immutable as the state energy they explain (#678)."""
+    """The source rows are as immutable as the state energy they explain."""
     from app.db.models.network_pdep import NetworkSolveStateEnergySource
 
     actor = _curator(db_session, "source-curator")

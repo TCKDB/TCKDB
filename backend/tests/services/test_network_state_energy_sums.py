@@ -1,4 +1,4 @@
-"""``compare_state_energy_sums``: which sums are defined, and what each outcome is (#678).
+"""``compare_state_energy_sums``: which sums are defined, and what each outcome is.
 
 A pure function over persisted-calculation-shaped objects, so the stored-energy kinds the upload
 fixtures cannot easily build (a composite's E0, an opt's final energy, a result row that is

@@ -309,8 +309,8 @@ def test_failed_push_is_retried_on_the_next_run(fake_host, run_ci_watchdog):
 
     Edge triggering means a missed transition is missed until the next
     reminder window -- up to a week of a red suite and a quiet phone. So
-    the state file only moves once ntfy has accepted the push. This bug
-    was found and fixed in the Pi-side checker; it is not being rebuilt.
+    the state file only moves once ntfy has accepted the push. The Pi-side
+    checker follows the same rule.
     """
     serve_runs(fake_host, red_history(2))
     serve_jobs(fake_host)
@@ -648,8 +648,8 @@ def test_every_ntfy_publish_fails_loudly_on_an_http_error(path):
     """Without --fail a 401 or a 5xx is counted as a delivered alert.
 
     curl exits 0 on an HTTP error unless told otherwise, so the caller
-    records "they have been told" when nobody has. That bug was fixed in
-    the Pi-side checker and had survived in uptime-check.yml; every place
+    records "they have been told" when nobody has. That bug is absent from
+    the Pi-side checker and must be absent from uptime-check.yml; every place
     that pushes to ntfy is pinned against it here so it cannot come back
     in the next one.
     """

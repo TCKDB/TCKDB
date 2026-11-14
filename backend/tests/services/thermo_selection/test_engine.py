@@ -32,7 +32,7 @@ def test_no_eligible_candidate_is_no_applicable_candidate():
 
 
 def test_several_eligible_candidates_are_incomparable_whatever_they_declare():
-    """A newer G3 and an older G4 used to be ordered by a method rule. TCKDB carries none: they tie, in one front."""
+    """A newer G3 and an older G4 are not ordered by a method rule. TCKDB carries none: they tie, in one front."""
     g4 = cand("g4", proto="g4", age_days=400, id_rank=1)
     g3 = cand("g3", proto="g3", age_days=1, id_rank=2)
     for policy in SelectionPolicy:

@@ -379,7 +379,7 @@ def test_every_constraint_rejection_code_is_provoked_against_postgres() -> None:
 
     The weak version of this guard would assert the mapping is non-empty
     and stop. That would not catch the failure that actually matters:
-    a constraint whose *name* in the register no longer matches what
+    a constraint whose *name* in the register does not match what
     PostgreSQL reports, because a migration renamed it or because the
     violation trips a different constraint first. Neither is visible from
     Python -- only from provoking the violation and reading
@@ -553,7 +553,7 @@ def test_anchors_name_the_function_rather_than_a_line() -> None:
 
     This is what keeps :func:`test_generated_document_is_in_sync` a *semantic*
     gate. With line numbers the register is a build artifact of every line
-    above every declared check: #109 added one line to
+    above every declared check: adding one line to
     ``app/services/geometry_validation.py``, shifting a check from 120 to 121,
     and turned the tier red on main -- the entire drift being that digit.
 
@@ -561,7 +561,7 @@ def test_anchors_name_the_function_rather_than_a_line() -> None:
     without anyone reading the diff, which is how a real drift eventually
     lands unnoticed. So the anchor names the function, and the sync test keeps
     its teeth for the things that matter: a renamed check, a removed code, a
-    vocab key that no longer resolves.
+    vocab key that does not resolve.
 
     Asserted on both sides -- the live objects and the committed document --
     because either one alone could regress without the other noticing.
@@ -774,8 +774,8 @@ def test_design_positions_are_prose_not_placeholders() -> None:
                 )
 
 
-#: Register numbers as of origin/main before #839. Numbers are identifiers: they are stored on
-#: ``deposit_warning.register_entry`` (append-only, deployed with #837) and cited from docs, so a
+#: Register numbers on origin/main. Numbers are identifiers: they are stored on
+#: ``deposit_warning.register_entry`` (append-only) and cited from docs, so a
 #: new entry takes the next free number and never shifts one. Entries #15 to #18 are the
 #: stationary-point entries every other document cites.
 _PINNED_NUMBERS: dict[str, int] = {
@@ -790,7 +790,7 @@ _PINNED_NUMBERS: dict[str, int] = {
     "reaction_atom_map_atoms_incomplete": 33,
     "reported_network_solve": 37,
     "network_wide_energy_transfer_scope": 38,
-    # Registered by widening an existing entry (#835), so the number is the entry's own.
+    # Registered by widening an existing entry, so the number is the entry's own.
     "term_symbol_mismatch": 12,
     "electronic_state_contradicts_method": 12,
     "freq_list_incomplete_for_geometry": 22,
@@ -911,7 +911,7 @@ def test_existing_entries_keep_their_numbers() -> None:
         if code in REGISTER_ENTRY:
             assert REGISTER_ENTRY[code] == expected, code
     assert number_of["hessian_method_contradicts_input_deck"] == 50
-    # The entry added in #835 takes the next free number, in a group listed after every earlier one.
+    # A newly added entry takes the next free number, in a group listed after every earlier one.
     assert number_of["species_stereo_contradiction"] == 51
     # Every entry by its declaration: a new check added to an earlier group shifts every later number (the
     # generator only protects against new *groups*), and this is the test that notices.

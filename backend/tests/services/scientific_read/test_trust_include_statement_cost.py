@@ -463,7 +463,7 @@ def test_transport_search_trust_does_not_scale_with_page_size(
     Nine tuple entries: no ``torsions`` subtree, and none of ``lot``,
     ``software_release``, ``workflow_tool_release``, ``scf_stability`` or
     ``child_dependencies``. The transport table is empty on the hosted
-    instance, so before this fixture no response from that surface had ever
+    instance, so without this fixture no response from that surface would ever
     been seen. The cost objection was weakest exactly where the evidence was
     thinnest.
     """
@@ -484,7 +484,7 @@ def test_transport_search_trust_does_not_scale_with_page_size(
 
 
 # ---------------------------------------------------------------------------
-# The other token this PR gave a field to
+# The other token that has a field
 # ---------------------------------------------------------------------------
 
 

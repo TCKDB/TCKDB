@@ -331,7 +331,7 @@ def test_persist_thermo_upload_resolves_all_provenance_refs(
 def test_persist_thermo_upload_surfaces_literature_title_mismatch_warning(
     db_conn, monkeypatch,
 ) -> None:
-    """#248: a depositor-supplied title that disagrees with the DOI's
+    """a depositor-supplied title that disagrees with the DOI's
     fetched title still resolves (DOI wins, as above) but is now reported
     as an ``UploadWarning`` when the caller asks for one via
     ``warnings_out``."""
@@ -798,7 +798,7 @@ def test_thermo_upload_with_multiple_source_calculations_and_roles(db_conn) -> N
 
 
 def test_applied_correction_source_calculation_key_resolves_to_id(db_conn) -> None:
-    """Applied corrections attached to a thermo upload no longer drop their
+    """Applied corrections attached to a thermo upload do not drop their
     source-calculation provenance.
 
     The FSF correction path requires ``source_calculation_key`` by schema.
@@ -945,7 +945,7 @@ def test_wrong_owner_source_calc_rejected_by_workflow_check(db_conn) -> None:
                 context="test wrong-owner guard",
                 species_entry_id=calc_a.species_entry_id + 1,
             )
-    # The code, not the sentence, is what a client branches on (#158).
+    # The code, not the sentence, is what a client branches on.
     assert excinfo.value.code == "thermo_source_calculation_owner_mismatch"
     assert excinfo.value.context["field"] == "test wrong-owner guard"
 
@@ -1084,7 +1084,7 @@ def session_scalar_count(session: Session, model, **filters) -> int:
 
 
 # ---------------------------------------------------------------------------
-# DR-0028: existing_calculation_id source-calculation references
+# existing_calculation_id source-calculation references
 # ---------------------------------------------------------------------------
 #
 # Thermo uploads may reference calcs that were already persisted by a prior
@@ -1109,7 +1109,7 @@ def _make_persisted_calc(
 def test_thermo_upload_links_existing_calculation_ids_for_opt_freq_sp(
     db_conn,
 ) -> None:
-    """DR-0028: existing_calculation_id references for opt/freq/sp produce
+    """existing_calculation_id references for opt/freq/sp produce
     thermo_source_calculation rows that point at those exact calc ids."""
     distinct = {"smiles": "CC", "charge": 0, "multiplicity": 1}
     with Session(db_conn) as session, session.begin():
@@ -1159,7 +1159,7 @@ def test_thermo_upload_links_existing_calculation_ids_for_opt_freq_sp(
 def test_thermo_upload_with_existing_calc_id_creates_no_duplicate_calc(
     db_conn,
 ) -> None:
-    """DR-0028: linking an existing calc must NOT insert a new calculation
+    """Linking an existing calc must NOT insert a new calculation
     row — the whole point is to avoid row explosion."""
     distinct = {"smiles": "CCN", "charge": 0, "multiplicity": 1}
     with Session(db_conn) as session, session.begin():
@@ -1198,7 +1198,7 @@ def test_thermo_upload_with_existing_calc_id_creates_no_duplicate_calc(
 
 
 def test_thermo_upload_mixed_inline_and_existing_calc_references(db_conn) -> None:
-    """DR-0028: a single source_calculations list may mix inline keys with
+    """A single source_calculations list may mix inline keys with
     existing-id references. Both produce link rows; inline calcs are
     inserted as new calc rows, existing references reuse prior rows."""
     distinct = {"smiles": "CCO", "charge": 0, "multiplicity": 1}
@@ -1258,10 +1258,10 @@ def test_thermo_upload_mixed_inline_and_existing_calc_references(db_conn) -> Non
 def test_thermo_upload_existing_calc_id_not_found_raises_not_found(
     db_conn,
 ) -> None:
-    """DR-0028 Req 2: a missing existing_calculation_id must surface as 404
+    """A missing existing_calculation_id must surface as 404
     via NotFoundError (mapped to HTTP 404 by the API exception handler).
 
-    Since #230 the 404 also declares ``unknown_calculation_ref`` and names
+    The 404 also declares ``unknown_calculation_ref`` and names
     the field in ``context``, so this asserts the contract rather than a
     substring of the sentence. The status is unchanged.
     """
@@ -1291,7 +1291,7 @@ def test_thermo_upload_existing_calc_id_not_found_raises_not_found(
 def test_thermo_upload_existing_calc_id_wrong_species_entry_raises_422(
     db_conn,
 ) -> None:
-    """DR-0028 Req 2: an existing_calculation_id whose species_entry_id
+    """An existing_calculation_id whose species_entry_id
     differs from the thermo target's must surface as 422 (ValueError) and
     must NOT leak the conflicting species_entry_id in the message."""
     species_a = {"smiles": "[OH]", "charge": 0, "multiplicity": 2}
@@ -1317,17 +1317,17 @@ def test_thermo_upload_existing_calc_id_wrong_species_entry_raises_422(
             )
             persist_thermo_upload(session, request)
 
-    # The error must not leak any internal id (DR-0028 Req 2).
+    # The error must not leak any internal id.
     detail = str(exc_info.value)
     assert "species_entry_id=" not in detail
     assert "id=" not in detail
-    # #158: the refusal declares its own code rather than leaving the
+    # the refusal declares its own code rather than leaving the
     # envelope to guess one out of the field path.
     assert exc_info.value.code == "thermo_source_calculation_owner_mismatch"
 
 
 def test_thermo_upload_role_freq_with_opt_calc_raises_422(db_conn) -> None:
-    """DR-0028 Req 1: role=freq pointing at a calc whose type=opt is rejected."""
+    """role=freq pointing at a calc whose type=opt is rejected."""
     distinct = {"smiles": "CCC", "charge": 0, "multiplicity": 1}
     with pytest.raises(ValueError, match="incompatible"):
         with Session(db_conn) as session, session.begin():
@@ -1352,7 +1352,7 @@ def test_thermo_upload_role_freq_with_opt_calc_raises_422(db_conn) -> None:
 
 
 def test_thermo_upload_role_sp_with_freq_calc_raises_422(db_conn) -> None:
-    """DR-0028 Req 1: role=sp pointing at a calc whose type=freq is rejected."""
+    """role=sp pointing at a calc whose type=freq is rejected."""
     distinct = {"smiles": "CCCO", "charge": 0, "multiplicity": 1}
     with pytest.raises(ValueError, match="incompatible"):
         with Session(db_conn) as session, session.begin():
@@ -1377,7 +1377,7 @@ def test_thermo_upload_role_sp_with_freq_calc_raises_422(db_conn) -> None:
 
 
 def test_thermo_upload_inline_calc_role_type_mismatch_raises_422(db_conn) -> None:
-    """DR-0028 Req 1: the role/type compatibility check applies to inline
+    """The role/type compatibility check applies to inline
     calcs too. Declaring a freq inline and tagging it role=opt is the same
     error class as a typo'd existing_calculation_id."""
     distinct = {"smiles": "CCCN", "charge": 0, "multiplicity": 1}
@@ -1400,7 +1400,7 @@ def test_thermo_upload_inline_calc_role_type_mismatch_raises_422(db_conn) -> Non
 
 
 def test_schema_rejects_both_calculation_key_and_existing_id_set() -> None:
-    """DR-0028 Req 2: both reference fields set on one entry is rejected
+    """Both reference fields set on one entry is rejected
     at the Pydantic layer (422)."""
     with pytest.raises(
         ValidationError, match="exactly one of calculation_key or "
@@ -1423,7 +1423,7 @@ def test_schema_rejects_both_calculation_key_and_existing_id_set() -> None:
 
 
 def test_schema_rejects_neither_calculation_key_nor_existing_id_set() -> None:
-    """DR-0028 Req 2: an entry with neither reference is rejected (422)."""
+    """An entry with neither reference is rejected (422)."""
     with pytest.raises(
         ValidationError, match="exactly one of calculation_key or "
     ):
@@ -1451,7 +1451,7 @@ def test_schema_rejects_existing_calculation_id_zero_or_negative() -> None:
 
 
 def test_schema_allows_role_composite_with_any_calc_type(db_conn) -> None:
-    """DR-0028 Req 1: role=composite has no strict type check at v0 — it
+    """role=composite has no strict type check — it
     describes a scientific origin rather than a specific job type."""
     distinct = {"smiles": "CCCC=O", "charge": 0, "multiplicity": 1}
     with Session(db_conn) as session, session.begin():
@@ -1488,7 +1488,7 @@ def test_schema_allows_role_composite_with_any_calc_type(db_conn) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Reference-state semantics (2026-07-15): reference pressure, phase,
+# Reference-state semantics: reference pressure, phase,
 # ΔfH°(0 K), and statmech linkage.
 # ---------------------------------------------------------------------------
 
@@ -1537,8 +1537,8 @@ def test_thermo_upload_persists_reference_state_fields(db_conn) -> None:
 def test_thermo_upload_defaults_phase_leaves_pressure_unset(db_conn) -> None:
     """Omitting phase applies the gas default; omitting pressure stays unset.
 
-    reference_pressure_bar is never defaulted (decided 2026-09-24, issue
-    #529): ARC computes entropy at 1 atm and records no pressure anywhere
+    reference_pressure_bar is never defaulted:
+    ARC computes entropy at 1 atm and records no pressure anywhere
     in its output, so stamping 1 bar on an omitted value would assert a
     standard state the record's own numbers were not computed at.
     """
@@ -1598,7 +1598,7 @@ def test_non_computed_origin_does_not_default_phase_or_pressure(
 
 def test_computed_origin_defaults_phase_not_pressure(db_conn) -> None:
     """A computed upload without phase/pressure defaults phase to gas only;
-    reference_pressure_bar stays unrecorded (issue #529)."""
+    reference_pressure_bar stays unrecorded."""
     request = ThermoUploadRequest(
         enthalpy_reference_kind="formation_298k", species_entry={"smiles": "CCCCCCCCCCC", "charge": 0, "multiplicity": 1},
         scientific_origin="computed",
@@ -1679,9 +1679,9 @@ def test_thermo_upload_links_existing_statmech(db_conn) -> None:
 def test_thermo_upload_statmech_not_found_raises_not_found(db_conn) -> None:
     """A missing existing_statmech_id surfaces as 404 (NotFoundError).
 
-    Carrying ``unknown_statmech_ref`` since #230 — the same code the
+    It carries ``unknown_statmech_ref`` — the same code the
     public-ref spelling on ``/uploads/kinetics`` uses, because the missing
-    row and its repair are the same. The status did not move.
+    row and its repair are the same. The status is 404.
     """
     from app.api.errors import NotFoundError
 
@@ -1709,7 +1709,7 @@ def test_thermo_upload_statmech_wrong_species_entry_raises_422(db_conn) -> None:
     """A statmech owned by a different species entry is rejected (422),
     names its own code, and leaks no internal ids.
 
-    The code assertion is new in #195. This refusal was a bare
+    The code is asserted: a bare
     ``ValueError`` matched on the substring "different species entry", so
     a client received ``validation_error`` and could not tell it from any
     other malformed thermo upload. The id assertions are kept unchanged --

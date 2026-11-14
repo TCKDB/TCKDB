@@ -9,13 +9,13 @@ afterwards.
 
 The forgetting has now happened twice:
 
-* the deployed Pi's ``template1`` (task #109), so every database created
+* the deployed Pi's ``template1``, so every database created
   there inherited SQL_ASCII while the real database was UTF8;
 * ``backend-nightly.yml`` (this file's reason for existing). The PR gates were
   pinned and the nightly was not, so the two jobs disagreed about what the
   database would accept. Every ``\\uXXXX`` escape above U+007F that the gates
   stored happily raised ``22P05 untranslatable_character`` in the nightly. On
-  2026-08-13 that surfaced as an idempotency receipt failing to write, which
+  one case that surfaced as an idempotency receipt failing to write, which
   turned a 409 replay into a 201 and failed a test that was correct about the
   code and wrong about nothing.
 

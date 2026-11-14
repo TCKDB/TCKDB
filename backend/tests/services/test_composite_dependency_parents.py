@@ -1,4 +1,4 @@
-"""A composite with an output geometry is a valid parent of freq / sp / scan (ADR 0021, P3a).
+"""A composite with an output geometry is a valid parent of freq / sp / scan.
 
 A program-run named composite optimises the geometry as the first step of its
 recipe, so a frequency, single point or scan that ran on that geometry hangs off

@@ -100,7 +100,7 @@ def _make_opt_calc_with_rubric(db_session: Session) -> Calculation:
     species = Species(
         kind=MoleculeKind.molecule,
         # Unique per call: species identity is (smiles, charge, multiplicity)
-        # (DR-0031), so a fixed "CCO" collides with cross-test species.
+        #, so a fixed "CCO" collides with cross-test species.
         smiles=_next_inchi_key(),
         inchi_key=_next_inchi_key(),
         charge=0,

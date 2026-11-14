@@ -1,16 +1,16 @@
 """Psi4 Hessian on water at the Gaussian geometry, written as a QCSchema document.
 
-Phase C C-Q4 demonstration input. Run in the pinned environment the adapter's
+Demonstration input. Run in the pinned environment the adapter's
 test corpus was generated in (Psi4 1.11, qcengine 0.51.0, qcelemental 0.51.2):
 
-    conda run -n tckdb_qcschema_psi4 python paper/qcschema_demo/run_psi4_water_hessian.py
+    conda run -n tckdb_qcschema_psi4 python backend/tests/fixtures/qcschema/water_b3lyp_def2tzvp_psi4/run_psi4_water_hessian.py
 
 The environment is reproducible from
 clients/python/adapters/qcschema/tests/fixtures/ENVIRONMENT.lock.txt.
 
 Geometry: the input geometry of the Gaussian 16 B3LYP/def2-TZVP freq record
 calc_cg3uwkx4ud4o7owh73orzxosfe (geometry geom_yfbeuczxncz7kxfjnuaivx72ne),
-read from the TCKDB scientific API on 2026-09-29. The frame is fixed so the
+read from the TCKDB scientific API. The frame is fixed so the
 Psi4 Hessian is expressed in the same Cartesian axes as the Gaussian one.
 
 Level: B3LYP/def2-TZVP chosen to match the Gaussian record as closely as the

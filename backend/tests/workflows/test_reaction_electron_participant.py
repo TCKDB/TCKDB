@@ -7,7 +7,7 @@ electron is written down. Dissociative attachment, photoionization and
 photodetachment are the same family.
 
 Until this door existed the refusal was not merely inconvenient, it was
-**out of tier**. Under ADR 0008 a check may block only when it asserts a
+**out of tier**. Under the blocking-tier rule a check may block only when it asserts a
 definition. Charge conservation is definitional only if the participant list
 can be *complete*; with no way to name an electron, the rule was in fact
 asserting "every participant was declared", which is an expectation about the
@@ -101,7 +101,7 @@ def test_associative_detachment_deposits(db_conn) -> None:
 def test_the_same_reaction_without_its_electron_is_still_refused(db_conn) -> None:
     """The check did not go soft. Omit the electron and the deposit still fails.
 
-    This is the pairing that makes the tier claim honest: the rule now refuses
+    This is the pairing that makes the tier claim honest: the rule refuses
     exactly what it says it refuses — a reaction whose two sides describe
     different numbers of electrons — rather than refusing a reaction whose
     participant list happened to be inexpressible.

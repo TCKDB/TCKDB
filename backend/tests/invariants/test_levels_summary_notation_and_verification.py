@@ -1,6 +1,6 @@
-"""Every ``ScientificLevelsSummary(...)`` states the composite annotations, and none passes ``notation`` (ADR 0021, P7a).
+"""Every ``ScientificLevelsSummary(...)`` states the composite annotations, and none passes ``notation``.
 
-Same shape as ``test_level_summary_carries_composite_scheme.py`` (#651): the fields
+Same shape as ``test_level_summary_carries_composite_scheme.py``: the fields
 default to ``None``, which reads as "not a composite energy / not a legacy shape", so a
 builder that forgot one would not fail, it would report an unchecked composite as
 ordinary. The rule is therefore structural and checked over every call in ``app/``:

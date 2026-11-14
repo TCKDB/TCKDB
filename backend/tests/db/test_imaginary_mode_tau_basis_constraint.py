@@ -1,6 +1,6 @@
 """A tolerance basis nobody recognises must not be able to reach a reader.
 
-``calc_freq_result.imaginary_mode_tau_basis`` says which row of ADR 0012's
+``calc_freq_result.imaginary_mode_tau_basis`` says which row of the imaginary-mode
 protocol table set the tolerance a record's imaginary modes were judged
 at. It is ``TEXT``, and a CHECK constraint keeps it to the rows that exist
 (eight, including the ``assumed_*`` bases):
@@ -21,7 +21,7 @@ What is pinned here:
 
 1. **Every ``TauBasis`` value is accepted**, so the constraint cannot
    refuse a record the upload path legitimately produces. NULL too: the
-   column is NULL on every record deposited before ADR 0012, and nothing
+   column is NULL on every record deposited before the protocol table, and nothing
    was backfilled.
 2. **Nothing else is**, including the near misses -- wrong case, hyphen
    for underscore, empty string.
@@ -56,7 +56,7 @@ from tests.services.scientific_read._factories import (
 
 _CONSTRAINT = "ck_calc_freq_result_imaginary_mode_tau_basis_known"
 
-#: Values that are not rows of ADR 0012's protocol table. The first three
+#: Values that are not rows of the protocol table. The first three
 #: are the realistic typos; ``""`` is the one a form-driven writer
 #: produces; ``analytic`` is a ``HessianMethod`` value, which is the
 #: adjacent vocabulary most likely to be written here by mistake.

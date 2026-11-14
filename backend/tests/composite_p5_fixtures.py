@@ -1,4 +1,4 @@
-"""Worked payloads (b) and (c) of the composite plan, as computed-species bundles (ADR 0021, P5).
+"""Worked payloads (b) and (c) of the composite plan, as computed-species bundles.
 
 Shared by the API, service and migration tests so each exercises the same
 recipes. Numbers are the ORCA 6.1 manual's water energies for (b) (so the

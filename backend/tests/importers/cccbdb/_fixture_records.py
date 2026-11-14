@@ -1,4 +1,4 @@
-"""Shared fixtures: parsed CCCBDB records for the three Phase 1 fixtures."""
+"""Shared fixtures: parsed CCCBDB records for the three hand-authored fixtures."""
 
 from __future__ import annotations
 

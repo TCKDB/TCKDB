@@ -1,7 +1,7 @@
 """Mapping-rule behavior: uncertainty precedence, origin classification,
 unit token, record-key uniqueness, and the Gas/Ideal-gas pressure rule.
 
-Mutation checks (verified manually; see the PR body's mutation table):
+Mutation checks (verified manually):
 
 * ``test_uncertainty_precedence_prefers_combined_expanded`` /
   ``test_uncertainty_precedence_order_with_all_four_kinds_present``:

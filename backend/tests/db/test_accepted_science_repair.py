@@ -57,7 +57,7 @@ def _predating_the_canonicality_constraint(db_session):
     """Reproduce a database whose stored rows predate the canonical-element constraint.
 
     ``ck_geometry_atom_element_canonical`` is in force, so ``CL`` can
-    no longer be *written*. The rows this mechanism exists for are exactly the
+    not be *written*. The rows this mechanism exists for are exactly the
     rows a later rule would refuse -- a repair is needed because the data
     predates the constraint, never because it was written under it -- so a test
     that builds one has to build the state that came before. Dropped inside the

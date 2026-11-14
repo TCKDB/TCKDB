@@ -1,7 +1,7 @@
 """A statmech record must be attributable to the subject it actually describes.
 
 ``statmech`` carries a strict XOR: either a species entry or a transition-state
-entry owns it. The read layer used to project every record through a species
+entry owns it. The read layer must not project every record through a species
 context, so a TS-owned partition function came back with an empty species
 stand-in (``species_ref: ""``) and no mention of the transition state at all —
 a fabricated attribution for a record whose real subject was unreachable.

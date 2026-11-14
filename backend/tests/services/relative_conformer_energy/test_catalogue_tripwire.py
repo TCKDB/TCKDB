@@ -1,4 +1,4 @@
-"""PR-2's flip is enforced, not remembered.
+"""The reachability flip is enforced, not remembered.
 
 The two relative-conformer-energy codes are catalogued ``Reach.guard`` because no route calls the service yet. The
 moment a route module imports the service, that claim is false and the codes must be request-reachable.

@@ -1,9 +1,9 @@
 """H298 under the trust-contract correction: which live answers change, and which must not.
 
 The correction (computed rubrics at the next version): an automated geometry-validation ``fail`` is a curator-attention
-signal (see ``CalculationGeometryValidation``), not a hard failure. A record is no longer ``hard_failed`` because a source
+signal (see ``CalculationGeometryValidation``), not a hard failure. A record is not ``hard_failed`` because a source
 calculation's automated identity check said ``fail``, so the H298 assessor, which blocks on ``evidence.hard_fail_reason``,
-no longer excludes it for that reason alone. Rejected calculation quality, broken artifact custody and the other
+does not exclude it for that reason alone. Rejected calculation quality, broken artifact custody and the other
 structural hard fails still block exactly as before.
 
 Each scenario states the main-branch answer and the answer now. The H298 golden (``test_h298_golden.py``) is synthetic

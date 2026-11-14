@@ -1,4 +1,4 @@
-"""Archive coverage for source custody (Phase C-E1).
+"""Archive coverage for source custody.
 
 ``external_source`` and ``external_source_record`` are new tables; a
 forgotten entry in ``INCLUDED_TABLES``/``EXCLUDED_TABLES`` fails closed at

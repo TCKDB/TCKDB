@@ -328,7 +328,7 @@ def test_min_review_status_approved_filters_to_approved(db_session):
 
 
 def test_min_review_status_excluding_every_entry_still_returns_the_species(db_session):
-    """The search-side contrast with browse's #277 fix.
+    """The search-side contrast with browse's drop rule.
 
     Search names the species by identifier, so a species whose entries
     *all* fail the review filter is still returned -- with ``entries: []``

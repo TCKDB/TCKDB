@@ -1,4 +1,4 @@
-"""Contract test: the client's ``T0`` reaches the wire schema as ``t0_k`` (#620).
+"""Contract test: the client's ``T0`` reaches the wire schema as ``t0_k``.
 
 The builder sends ``t0_k`` only when it is not 1 K. The payload is validated by
 the backend's own ``BundleKineticsIn``, so a rename on either side is caught
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from tests._ci_dependency import require_module
 
-# Skips locally without the client; fails on CI, which installs it (#575).
+# Skips locally without the client; fails on CI, which installs it.
 require_module("tckdb_client.builders", install="pip install -e clients/python")
 
 from tckdb_client.builders import Kinetics

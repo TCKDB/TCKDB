@@ -495,10 +495,10 @@ def test_chemkin_falloff_emits_low_and_troe(db_session):
 # ---------------------------------------------------------------------------
 # NDJSON export: pressure-dependent / third-body kinetics forms.
 #
-# Regression: SelectedKinetics.to_dict used to emit only scalar
+# Regression: SelectedKinetics.to_dict must emit more than scalar
 # modified-Arrhenius fields, silently dropping every non-Arrhenius form
 # (multi_arrhenius / plog / chebyshev / falloff / third-body). These assert
-# the export dict mirrors the PR #41 reaction-kinetics read surface.
+# the export dict mirrors the reaction-kinetics read surface.
 # ---------------------------------------------------------------------------
 
 
@@ -729,7 +729,7 @@ def test_falloff_export_emits_block_and_sorted_third_body(db_session):
 
 # ---------------------------------------------------------------------------
 # Transport geometry index: linearity comes only from a witness the selected
-# transport LINKS to (#730), in this order: the geometry of a calculation it
+# transport LINKS to, in this order: the geometry of a calculation it
 # cites, then a linked statmech record, then the atom count where that decides.
 # A sibling statmech record the transport does not link to is never read.
 # ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 """Hidden == absent: a curated selection over a world with hidden records equals the exploratory selection over the same
 world with those records never created.
 
-Owner decision (2026-10-18): selection evidence that points at a record the reader cannot open is treated exactly like a
+Selection evidence that points at a record the reader cannot open is treated exactly like a
 reference to nothing, so the curated decision may differ from the exploratory one and that is intended. The proof is an
 equivalence, per engine:
 
@@ -304,11 +304,11 @@ def withhold_hidden_refs(session, refs) -> None:
     """Turn every record of the scene that is not approved from merely-unreviewed into rejected, so the evidence rule
     withholds it (``refs`` is every ref the scene labelled, the identity-position groups and entries included).
 
-    ADR 0023: under curated a record that is only below the floor is linked evidence, shown; "hidden == absent" is the
+    Under curated a record that is only below the floor is linked evidence, shown; "hidden == absent" is the
     property of evidence the profile WITHHOLDS (rejected, deprecated). The scenes build their hidden records unreviewed, so
     this pins them to the withheld state before the curated run. A record reviewed through a parent (a network-kinetics fit,
     through its solve) has no review row of its own and is left to the parent. The loaders' own populations follow the
-    evidence rule since step 5; what they do with the UNLISTED state is pinned in ``test_curated_selection_documents``.
+    evidence rule; what they do with the UNLISTED state is pinned in ``test_curated_selection_documents``.
     """
     from datetime import datetime, timezone
 

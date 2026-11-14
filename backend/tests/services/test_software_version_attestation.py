@@ -1,9 +1,9 @@
-"""Owner attestation of a software version (issue #305, decision (a)).
+"""Owner attestation of a software version.
 
 Seeded like the playground instance: ORCA and Molpro releases with a NULL
 version, cited by calculations that have **no stored artifacts**, so no
 banner can fill them. The owner attested "ORCA 6" and "Molpro 26" about
-their own runs (2026-09-12). The attestation mode records that statement and
+their own runs. The attestation mode records that statement and
 re-points exactly the calculations it covers, one link row per calculation.
 """
 
@@ -443,13 +443,13 @@ def test_script_attestation_flags_go_together(script, monkeypatch, db_session, p
         _run(script, monkeypatch, db_session, _Store(), ["--software", "ORCA", "--attest-version", "6"])
 
 
-# Review findings on #566 ----------------------------------------------------
+# ----------------------------------------------------
 
 
 def test_archive_round_trip_survives_a_later_re_point(db_session, playground):
     """Finding 5. Restore replays the link rows' INSERTs after the
     calculations are back at their *final* release. A calculation re-pointed
-    again after the attestation (here by DR-0008's name correction, the
+    again after the attestation (here by the software name correction, the
     Gaussian log proving ORCA never ran it) must still restore."""
     import io
 

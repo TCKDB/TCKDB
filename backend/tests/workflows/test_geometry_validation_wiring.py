@@ -1,6 +1,6 @@
-"""Workflow wiring tests for ``calc_geometry_validation`` (phase 1).
+"""Workflow wiring tests for ``calc_geometry_validation``.
 
-Phase 1 wires :func:`run_and_persist_geometry_validation` into the
+The upload workflows wire :func:`run_and_persist_geometry_validation` into the
 computed-species and computed-reaction upload workflows for opt
 calculations only. These tests verify the wiring contract:
 
@@ -13,8 +13,8 @@ calculations only. These tests verify the wiring contract:
 The pure chemistry seam is exercised separately in
 ``tests/services/test_geometry_validation.py``.
 
-**The ``fail`` status is no longer reachable through any upload path, and
-that is a conclusion rather than a regression.** ``resolve_atom_mapping``
+**The ``fail`` status is not reachable through any upload path, and
+that is a conclusion, not a regression.** ``resolve_atom_mapping``
 falls back to ``_find_matches_using_smiles_graph`` whenever bond perception
 from coordinates yields no substructure match, and that fallback bails out on
 one condition only: an element-count mismatch. So ``is_isomorphic=False`` has
@@ -27,7 +27,7 @@ map over a fixed set of nuclei, so a formula disagreement between a
 calculation's geometry and its subject is not a result, it is a contradiction
 — which is why ``assert_calculation_geometry_composition`` now blocks it, and
 why the advisory row's ``fail`` branch was only ever reachable by depositing
-something no calculation could have produced. Per ADR 0008 §9 the blocking
+something no calculation could have produced. The blocking
 tier owns the fact; this row keeps its ``passed``/``warning`` outcomes, where
 the RMSD signal still lives, and the test below records the refusal that
 replaced the ``fail`` row.
@@ -210,7 +210,7 @@ def _make_minimal_species_calc(
     """Build a Species + SpeciesEntry + bare opt Calculation row with no
     attached geometries. Used by skip-path tests that want a calc
     without any input/output geometry link."""
-    # Species identity is (smiles, charge, multiplicity) (DR-0031); default
+    # Species identity is (smiles, charge, multiplicity); default
     # to the unique inchi_key so repeated/cross-test calls don't collide.
     species = Species(
         smiles=smiles if smiles is not None else inchi_key,
@@ -268,8 +268,8 @@ def test_computed_species_opt_refuses_an_output_geometry_of_another_molecule(
 ) -> None:
     """Ethanol's opt calculation reporting a methane output geometry.
 
-    This used to be accepted and recorded as ``validation_status=fail`` on the
-    advisory ``calc_geometry_validation`` row, on the reasoning that "an
+    Accepting this and recording ``validation_status=fail`` on the
+    advisory ``calc_geometry_validation`` row would rest on the reasoning that "an
     optimisation that rearranged or dissociated the molecule is exactly the
     science this row exists to record rather than refuse".
 
@@ -298,7 +298,7 @@ def test_computed_species_opt_refuses_an_output_geometry_of_another_molecule(
     assert excinfo.value.context["owner_kind"] == "species_entry"
     assert excinfo.value.context["geometry_formula"] == "CH4"
     assert excinfo.value.context["subject_formula"] == "C2H6O"
-    # The field the depositor wrote, not a row id (DR-0028 Requirement 2).
+    # The field the depositor wrote, not a row id.
     assert "output_geometries[0]" in excinfo.value.context["field"]
     assert not any(
         str(value).isdigit() for value in excinfo.value.context.values()

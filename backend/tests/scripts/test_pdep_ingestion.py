@@ -96,12 +96,12 @@ def _rolled_back_session(db_engine) -> Iterator[Session]:
 
 
 def test_grain_size_kcal_mol_to_cm_inv() -> None:
-    # 0.5 kcal/mol maximumGrainSize -> cm^-1 (gotcha #1).
+    # 0.5 kcal/mol maximumGrainSize -> cm^-1.
     assert kcal_mol_to_cm_inv(0.5) == pytest.approx(174.87755, rel=1e-6)
 
 
 def test_pressure_atm_to_bar() -> None:
-    # 100 bar Chebyshev domain == 98.692 atm in chem.inp (gotcha #2).
+    # 100 bar Chebyshev domain == 98.692 atm in chem.inp.
     assert atm_to_bar(98.69232667) == pytest.approx(100.0, rel=1e-6)
     assert atm_to_bar(1.0) == pytest.approx(1.01325, rel=1e-9)
 
@@ -462,10 +462,10 @@ def test_fixture_builds_valid_request() -> None:
     assert et.t_ref_k == 298.0
     assert et.t_exponent == 0.52
     # The Arkane run declared one energyTransferModel for the whole network,
-    # so the ingester deposits exactly that and names no well. It used to
+    # so the ingester deposits exactly that and names no well. It must not
     # expand the value across the (well x collider) cross product to satisfy
     # the old per-pair contract, which made one number look like several
-    # determinations (ADR 0009).
+    # determinations.
     assert et.scope == NetworkEnergyTransferScope.network_wide
     assert et.state_key is None
     assert et.collider_species_key is None
@@ -473,7 +473,7 @@ def test_fixture_builds_valid_request() -> None:
 
 def test_fixture_emits_statmech_and_closes_gap() -> None:
     payload, gap = build_network_pdep_payload(FIXTURE_DIR)
-    # optical_isomers/external_symmetry are now storable (PR #19) -> no gap.
+    # optical_isomers/external_symmetry are now storable -> no gap.
     assert gap.unstorable_fields == []
     # Every reactive species carries a statmech block.
     assert set(gap.species_with_statmech) == {"N2H4", "H2NN", "H2"}
@@ -505,7 +505,7 @@ def test_fixture_emits_statmech_and_closes_gap() -> None:
 
 def test_fixture_artifacts_resolve_local_log_paths() -> None:
     # include_artifacts re-roots the embedded home-dir Log() paths onto the
-    # fixture Data/ tree (gotcha #3) and attaches the trimmed ESS files.
+    # fixture Data/ tree and attaches the trimmed ESS files.
     payload, _gap = build_network_pdep_payload(FIXTURE_DIR, include_artifacts=True)
     n2h4 = next(s for s in payload["species"] if s["key"] == "N2H4")
     sp_calc = next(c for c in n2h4["calculations"] if c["type"] == "sp")
@@ -645,7 +645,7 @@ def test_fixture_full_pipeline_persist_and_read_back(db_engine) -> None:
         assert len(et_rows) == 1
         assert et_rows[0].alpha0_cm_inv == 175.0
 
-        # -- Statmech round-trips (PR #19 closed the optical_isomers gap) --
+        # -- Statmech round-trips (including optical_isomers) --
         from app.db.models.statmech import (
             Statmech,
             StatmechSourceCalculation,
@@ -867,7 +867,7 @@ def test_yml_species_dropped_is_named_fail_loud(tmp_path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# A single atom is deposited as its single point (#615)
+# A single atom is deposited as its single point
 # ---------------------------------------------------------------------------
 
 
@@ -995,7 +995,7 @@ def test_atom_in_the_network_still_supplies_the_solve_its_energy_and_source(tmp_
 
 
 # ---------------------------------------------------------------------------
-# One source per participant, and the sum check (#678)
+# One source per participant, and the sum check
 # ---------------------------------------------------------------------------
 
 

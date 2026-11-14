@@ -1,4 +1,4 @@
-"""The service re-runs every rule the wire carries for assembled composites (ADR 0021, P5).
+"""The service re-runs every rule the wire carries for assembled composites.
 
 A payload built with ``model_copy`` / ``model_construct`` skips the models' validators, so each rule
 that was only a validator is provoked here by such a payload and must still be refused where the

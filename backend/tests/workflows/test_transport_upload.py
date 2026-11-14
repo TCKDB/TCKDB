@@ -376,7 +376,7 @@ def test_wrong_owner_source_calc_rejected_by_workflow_check(db_conn) -> None:
                 context="test wrong-owner guard",
                 species_entry_id=calc.species_entry_id + 1,
             )
-        # #158: transport's refusal carries its own code, distinct from
+        # transport's refusal carries its own code, distinct from
         # thermo's and statmech's -- same rule, different subject.
         assert excinfo.value.code == "transport_source_calculation_owner_mismatch"
 

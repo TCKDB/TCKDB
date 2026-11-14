@@ -5,8 +5,7 @@ TCKDB version fused into a name. It is short on purpose. An entry that
 matches nothing fails the guard, so the list cannot rot into a blanket
 exemption.
 
-``DEBT`` is the list of what the guard still owes. It is **empty**: the versioning programme is finished (PR-2
-deleted the legacy versions, PR-3 renamed the code identifiers, PR-4 split the stored and wire strings), so every match
+``DEBT`` is the list of what the guard still owes. It is **empty**: the versioning programme is finished, so every match
 is either fixed or carries a reasoned ``ALLOWED`` entry. The tuple stays so that ``scripts/check_versioned_debt_not_grown.py``
 has a binding to read at the merge base and at the head, and so a future bulk change (a new generation of rule
 manifests, say) has somewhere to say what it is deferring. Anything put here may only shrink, and the ceilings in

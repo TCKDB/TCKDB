@@ -13,7 +13,7 @@ because the only composition check in the codebase compared a reaction's two
 *sides* against each other and never a structure against its own label.
 
 Formula agreement between a structure and its own identifier is definitional
-under ADR 0008 — no correct calculation can produce a geometry that is not made
+under the blocking-tier rule — no correct calculation can produce a geometry that is not made
 of its own molecule's atoms — so it blocks.
 
 **Scope: conformer geometries, and only those.** The check runs from
@@ -22,7 +22,7 @@ computed-species bundle, ``/uploads/conformers``, the computed-reaction bundle
 and the PDep bundle. It does **not** reach ``CalculationIn.input_geometries``
 or ``output_geometries``, which are attached to a ``calculation`` row and
 never resolved through ``resolve_species_entry``. Those were unchecked
-everywhere until #143 and are now owned by
+everywhere by this rule and are owned by
 ``app.services.calculation_geometry_composition``, tested in
 ``tests/services/test_calculation_geometry_composition.py``. The two rules
 compare the same way on purpose; what differs is the subject each compares
@@ -34,7 +34,7 @@ species, hydrogens written ``D`` or ``T`` *under a matching isotope label*,
 two-letter element symbols written in whatever case an ESS felt like, and
 deposits with no geometry at all must all still go through.
 
-A ``D``/``T`` element token is an isotope declaration (#672, ADR 0022): it is
+A ``D``/``T`` element token is an isotope declaration: it is
 read as ``H`` with mass number 2/3, so it is composition-neutral but not
 isotope-silent. Heavy water filed under a protium ``"O"`` is refused as an
 isotope mismatch, and under ``[2H]O[2H]`` it is accepted.
@@ -101,7 +101,7 @@ _XYZ_CH3CL_MIXED_CASE = (
 )
 #: Heavy water with ``D`` in the element column, the way a hand-written file
 #: spells it. The token declares deuterium: ``parse_xyz`` stores ``H`` with mass
-#: number 2 and ``xyz_text`` keeps the ``D`` (#672, ADR 0022).
+#: number 2 and ``xyz_text`` keeps the ``D``.
 _XYZ_D2O = (
     "3\nheavy water, hydrogens written as D\n"
     "O  0.000  0.000  0.117\n"
@@ -189,7 +189,7 @@ def _upload(session: Session, payload: dict):
 
 
 def test_methane_declared_with_a_methyl_geometry_is_refused(db_conn) -> None:
-    """The exact deposit that used to succeed: CH4's entry given CH3's XYZ."""
+    """An exact deposit that must be refused: CH4's entry given CH3's XYZ."""
 
     with _isolated_session(db_conn) as session:
         with pytest.raises(ValueError) as excinfo:
@@ -339,10 +339,10 @@ def _assert_isotope_mismatch(excinfo) -> None:
 def test_deuterium_written_as_the_element_D_under_protium_is_refused(db_conn) -> None:
     """``D`` declares deuterium, so heavy water cannot be filed under ``"O"``.
 
-    This deposit was accepted before #672 (it asserted acceptance here). The
+    This deposit is refused. The
     identity said H2O while every mass-weighted number computed from the
     geometry described D2O -- a ~15 kJ/mol zero-point error with nothing to
-    flag it. The existing isotope-mismatch refusal now fires, because the
+    flag it. The isotope-mismatch refusal fires, because the
     geometry's isotope multiset is ``{(H, 2): 2}`` and the SMILES's is empty.
     """
 
@@ -364,9 +364,8 @@ def test_tritium_written_as_the_element_T_under_protium_is_refused(db_conn) -> N
 def test_a_2H_species_with_a_D_spelled_geometry_is_accepted(db_conn) -> None:
     """The twin of the refusal above: ``D`` under ``[2H]O[2H]`` is correct.
 
-    Before #672 this was refused (a D geometry carried no isotope, so it never
-    matched a labelled SMILES) and there was no accepted way to deposit a
-    correctly labelled isotopologue spelled with ``D``.
+    A ``D`` geometry carries an isotope, so it matches a labelled SMILES; this is
+    the accepted way to deposit a correctly labelled isotopologue spelled with ``D``.
     """
 
     with _isolated_session(db_conn) as session:
@@ -441,7 +440,7 @@ def test_element_symbols_in_any_case_are_accepted(db_conn) -> None:
     """``CL`` is chlorine and ``c`` is carbon.
 
     Electronic-structure codes are not consistent about capitalisation, and
-    refusing correct chemistry over a string is what ADR 0008 puts out of
+    refusing correct chemistry over a string is what the blocking-tier rule puts out of
     bounds for a blocking check; this exact bug shipped once already. The case is settled on the way into
     ``geometry_atom.element`` rather than at each comparison, but the deposit
     under test is unchanged and so is what it must be allowed to do.
@@ -452,7 +451,7 @@ def test_element_symbols_in_any_case_are_accepted(db_conn) -> None:
     simultaneously recorded ``is_isomorphic=False`` /
     ``validation_status='fail'`` in ``calc_geometry_validation``, a false
     ``fail`` on correct chemistry with two checks in one tree disagreeing about
-    one deposit. Per ADR 0008 §9 a fact gets one owner; asserting the persisted
+    one deposit. A fact gets one owner; asserting the persisted
     row here is what keeps the advisory tier from contradicting the blocking
     one.
     """

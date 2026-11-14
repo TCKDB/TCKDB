@@ -1,4 +1,4 @@
-"""Moving a deployment's stored objects to another S3 store (#541).
+"""Moving a deployment's stored objects to another S3 store.
 
 The tool's claim is "the destination now holds everything the database
 points at, byte for byte", and the way that claim fails in this repository

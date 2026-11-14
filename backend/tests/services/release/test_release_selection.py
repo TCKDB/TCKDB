@@ -1,6 +1,6 @@
 """The selection layer is an opinion about the science, never part of it.
 
-These tests pin the three properties the Stage 3 review asked for by name:
+These tests pin three properties:
 
 * a release selection never mutates the record it selects;
 * superseding appends a row rather than editing one;
@@ -617,8 +617,8 @@ def test_kinetics_interpretation_assignment_ships_with_kinetics():
 
     ``standard_state_convention`` and ``ensemble_policy`` are interpretation
     provenance: a rate coefficient reported under a different standard state is
-    a different number. It was previously excused as a "curation overlay",
-    which was simply the wrong reason.
+    a different number. It is not a "curation overlay",
+    which would be the wrong reason to exclude it.
     """
     from app.db.base import Base
     from app.db.models.common import SubmissionRecordType
@@ -785,7 +785,7 @@ def test_the_selection_ledger_announces_a_post_cut_record_supersession(
 
     This is the state that can mislead someone *outside* the project: a
     DOI-bearing release points at a number, the citation resolves cleanly, and
-    nothing says the number has since been replaced.
+    nothing says the number has been replaced.
 
     ``live_divergence`` is not this answer. It compares per-file byte digests
     and reports "the database has moved" — advisory, routinely ``true``, and

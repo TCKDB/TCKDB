@@ -121,7 +121,7 @@ def _hash_of_canonical_text(atoms: list[tuple[str, float, float, float]]) -> str
 def test_geom_hash_is_untouched_by_element_symbol_canonicalisation() -> None:
     """``geom_hash`` is what it was before ingestion canonicalised anything.
 
-    ``parse_xyz`` now stores ``Cl`` in ``geometry_atom.element`` for a file
+    ``parse_xyz`` stores ``Cl`` in ``geometry_atom.element`` for a file
     that wrote ``CL``, but the hashed text still carries ``CL``. It has to:
     ``geom_hash`` is the dedupe key *and* ``app.services.public_refs`` mints
     ``geometry:geom_hash=<hash>`` as a citable identifier, so moving it would
@@ -189,9 +189,9 @@ def test_two_spellings_of_one_geometry_still_hash_apart() -> None:
 
 
 def test_a_d_or_t_spelling_is_stored_as_hydrogen_with_its_mass_number() -> None:
-    """A ``D``/``T`` element token is an isotope declaration (#672, ADR 0022).
+    """A ``D``/``T`` element token is an isotope declaration.
 
-    Before 2026-10-03 this test pinned the opposite: ``D`` and ``T`` stayed in
+    This test pins that ``D`` and ``T`` stayed in
     ``geometry_atom.element`` and carried no isotope. They are now stored as the
     element ``H`` plus ``isotope_mass_number`` 2 or 3 (the element column must
     stay an element, because ``ck_reaction_atom_map_pair_element_matches``
@@ -287,7 +287,7 @@ def test_lot_hash_treats_none_and_omitted_fields_as_equivalent() -> None:
 
 def test_lot_hash_distinguishes_spin_treatment() -> None:
     """Restricted-open vs unrestricted of the same method/basis are
-    genuinely different levels of theory (DR-0034) and must not collapse."""
+    genuinely different levels of theory and must not collapse."""
     ro = _level_of_theory_hash(_lot(method="CCSD(T)", spin_treatment="restricted_open"))
     u = _level_of_theory_hash(_lot(method="CCSD(T)", spin_treatment="unrestricted"))
     assert ro != u

@@ -55,13 +55,9 @@ from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_PROMPT
 #: to answer is not "what is the new hash" but "does the prompt version need to
 #: move".
 #:
-#: The one exception was the versioning reset (PR-4): the prompt's answer format
-#: changed (a ``format`` block replaced the fused ``schema_version`` marker) in the
-#: same release that restarted every version at 1, so the prompt stayed at version 1
-#: with new words. Reviews stored before it are not read as current under those words:
-#: the context recipe version moved 1 -> 2 in that release, which makes every one of them
-#: stale (see ``MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION``). That is a one-off; from here on
-#: the rule above holds without exception.
+#: A change to the prompt's answer format moves the context recipe version, which
+#: makes every review stored under the earlier words stale (see
+#: ``MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION``); the rule above holds without exception.
 _PROMPT_SHA256 = "c5c39a2b51054d1afb0775510068b8cb1225c5595bb08ff8a0377f5b01b90e13"
 
 

@@ -1,4 +1,4 @@
-"""Default thermo order is review status, then newest (#648).
+"""Default thermo order is review status, then newest.
 
 The evidence checklist and temperature coverage stay on each record as
 displayed fields; neither takes part in the ordering. The read
@@ -99,7 +99,7 @@ def test_newer_experimental_beats_older_computed_with_same_review(db_session):
     )
     by_id = {r.thermo_id: r for r in resp.records}
     # The checklist is still reported, and still favours the computed record,
-    # so this test only passes because the score no longer orders the list.
+    # so this test only passes because the score does not order the list.
     assert (
         by_id[computed.id].evidence_completeness.score
         > by_id[experimental.id].evidence_completeness.score

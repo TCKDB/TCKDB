@@ -213,8 +213,8 @@ def test_temperature_coverage_metadata_returned(db_session):
 
 
 def test_coverage_is_reported_but_does_not_order_full_vs_partial(db_session):
-    """Changed for the #648 rule (review status, then newest): temperature
-    coverage is displayed on each record but no longer ranks them. The fully
+    """Under the review-status-then-newest rule, temperature
+    coverage is displayed on each record but does not rank them. The fully
     covering record is OLDER, so the old coverage-first order would have put
     it first; the newer partial record now leads."""
     from datetime import datetime, timedelta, timezone
@@ -244,7 +244,7 @@ def test_coverage_is_reported_but_does_not_order_full_vs_partial(db_session):
 
 
 def test_extrapolation_distance_is_reported_but_does_not_order(db_session):
-    """Changed for #648: the closer-to-covering record is older and no longer
+    """The closer-to-covering record is older and does not
     wins on extrapolation distance; the distance is still reported."""
     from datetime import datetime, timedelta, timezone
 
@@ -375,7 +375,7 @@ def test_evidence_completeness_includes_uncertainty_when_present(db_session):
 
 
 # ---------------------------------------------------------------------------
-# Non-TS-backed (Phase 2.2)
+# Non-TS-backed
 # ---------------------------------------------------------------------------
 
 
@@ -705,7 +705,7 @@ def test_temperature_min_greater_than_max_rejected(db_session):
 
 def test_limit_max_enforced(db_session):
     """``limit_too_large`` -- the hosted cap, which is not the same refusal
-    as a malformed limit and no longer shares its code."""
+    as a malformed limit and does not share its code."""
     entry = _setup_entry(db_session)
     with pytest.raises(ValueError, match="limit_too_large"):
         get_reaction_kinetics(
@@ -753,7 +753,7 @@ def test_sort_is_deterministic(db_session):
 
 
 # ---------------------------------------------------------------------------
-# DR-0036: direction, sum-of-Arrhenius (multi_arrhenius), network bridge
+# Direction, sum-of-Arrhenius (multi_arrhenius), network bridge
 # ---------------------------------------------------------------------------
 
 
@@ -895,7 +895,7 @@ def test_no_network_bridge_is_null(db_session):
 
 
 # ---------------------------------------------------------------------------
-# DR-0032: PLOG / Chebyshev / falloff / third-body read exposure
+# PLOG / Chebyshev / falloff / third-body read exposure
 # ---------------------------------------------------------------------------
 
 

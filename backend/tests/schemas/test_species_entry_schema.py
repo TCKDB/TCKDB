@@ -28,7 +28,7 @@ def test_species_entry_write_schemas_reject_isotope_identity_fields(
 ) -> None:
     """Neither the retired free-text label nor the derived key is writable.
 
-    ``isotopologue_label`` used to fork species identity from an arbitrary
+    ``isotopologue_label`` must not fork species identity from an arbitrary
     string; ``isotope_key`` is derived server-side from the SMILES. Neither
     may be supplied by a client.
     """

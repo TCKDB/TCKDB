@@ -1,7 +1,7 @@
 """Workflow-layer tests for the computed-species bundle.
 
 Covers the cross-key resolution, conformer-group reuse semantics,
-DR-0028 role/type compatibility, and orchestration order without going
+role/type compatibility, and orchestration order without going
 through HTTP.
 """
 
@@ -394,7 +394,7 @@ def test_bundle_freq_and_sp_get_input_geometry_rows(db_conn) -> None:
 
         # freq: zero output rows; exactly one input row at input_order=1
         # pointing at the conformer geometry (the input fallback for
-        # freq is unchanged by this PR).
+        # freq is not affected).
         freq_outputs = session.scalars(
             select(CalculationOutputGeometry).where(
                 CalculationOutputGeometry.calculation_id == freq_id
@@ -1070,7 +1070,7 @@ def test_bundle_thermo_statmech_sources_trace_to_conformer_observations(
 
 
 # ---------------------------------------------------------------------------
-# Thermo → statmech basis link (audit finding #3)
+# Thermo → statmech basis link
 # ---------------------------------------------------------------------------
 
 
@@ -1162,7 +1162,7 @@ def test_optimized_from_with_freq_parent_raises(db_conn) -> None:
 
     Regression: the bundle path delivers ``role`` as a wire-mirror enum
     (``tckdb_schemas.enums.CalculationDependencyRole.optimized_from``);
-    the service-layer check previously used ``is`` against the backend
+    a service-layer check using ``is`` against the backend
     enum and silently skipped this validation. Pointing ``optimized_from``
     at a freq parent must now raise 422-style ValueError.
     """
@@ -1373,7 +1373,7 @@ def test_per_role_child_uniqueness_rejected_in_session(db_conn) -> None:
         primary_a = outcome.conformers[0].primary_calculation
         freq_child = outcome.conformers[0].additional_calculations[0]
 
-        # Stage a brand-new opt calc as a candidate "different parent".
+        # Add a brand-new opt calc as a candidate "different parent".
         # Build it through the workflow so all FK resolution happens
         # naturally; the simplest way is a fresh bundle.
         outcome2 = persist_computed_species_upload(
@@ -1599,7 +1599,7 @@ def test_dependency_edge_helper_idempotent_against_persisted_row(
 
 
 # ---------------------------------------------------------------------------
-# Cross-bundle conformer-group reuse (DR-0029 Requirement 6)
+# Cross-bundle conformer-group reuse
 # ---------------------------------------------------------------------------
 
 
@@ -1621,7 +1621,7 @@ def test_two_bundles_same_basin_reuse_conformer_group(db_conn) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Statmech block (DR follow-up: computed-species statmech parity)
+# Statmech block (computed-species statmech parity)
 # ---------------------------------------------------------------------------
 
 
@@ -1906,7 +1906,7 @@ def test_species_statmech_torsion_without_coordinates_writes_no_definitions(
 ) -> None:
     """Producers may omit ``coordinates``: the torsion row is created
     but no ``statmech_torsion_definition`` rows are written. This
-    matches behavior prior to the coordinate plumbing."""
+    matches a torsion without coordinates."""
     bundle = ComputedSpeciesUploadRequest(
         **_ethane_bundle_with_scan(
             statmech={
@@ -2215,7 +2215,7 @@ def test_bundle_scan_inline_point_geometry_populates_geometry_id(db_conn) -> Non
     for i, point in enumerate(scan_result["points"], start=1):
         # Ethane, with the carbon-carbon distance stepped per point so the
         # three geometries are distinct. A scan point's geometry is held to the
-        # species' composition (#680), so a stand-in one-atom structure is no
+        # species' composition, so a stand-in one-atom structure is no
         # longer a valid fixture.
         point["geometry"] = {
             "xyz_text": (
@@ -2378,9 +2378,9 @@ def _bac_melius_scheme_ref(**overrides) -> dict:
 def _geom_for_smiles(smiles: str) -> str:
     """Build an XYZ that is genuinely the molecule ``smiles`` names.
 
-    These bundles used to hand every species the same methane geometry, which
+    These bundles must not hand every species the same methane geometry, which
     was accepted because nothing compared a deposited structure against its
-    own identifier. ``assert_geometry_composition_matches_identity`` now does,
+    own identifier. ``assert_geometry_composition_matches_identity`` does,
     and it is right to: a bundle claiming ``BrCCCCCCCCCCCCCCCO`` while storing
     five atoms of methane is not a record of that molecule.
 
@@ -3679,7 +3679,7 @@ def _deuterated_methyl_request(second_conformer_isotopes: dict[int, int] | None)
 def test_every_conformer_geometry_is_isotope_checked(db_conn) -> None:
     """A later conformer cannot smuggle in an all-protium geometry.
 
-    Only ``conformers[0]`` used to be cross-checked, so a deuterated entry
+    Checking only ``conformers[0]`` would let a deuterated entry
     could store all-protium masses for conformers 2..N. A normal-mode
     analysis reading those geometries would compute a different molecule
     from the one the identity names.

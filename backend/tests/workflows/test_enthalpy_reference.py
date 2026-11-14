@@ -105,7 +105,7 @@ def test_computed_origin_does_not_default_reference():
 
 
 # ---------------------------------------------------------------------------
-# A stored Gibbs energy is enthalpy content (Phase D plan, decision 3).
+# A stored Gibbs energy is enthalpy content .
 #
 # ``ThermoPoint.g_kj_mol`` is H(T) - T*S(T) on the parent record's enthalpy
 # zero, so a point G carries H's reference exactly as a point H does. Before

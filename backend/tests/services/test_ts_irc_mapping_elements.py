@@ -14,7 +14,7 @@ correctly read "C2H4 (six atoms)". The partition was valid; the chemistry was
 not. The identical claim written as a ``reaction_atom_map`` was refused the
 whole time, by the composite foreign key into ``geometry_atom``.
 
-The false-positive tests are as load-bearing as the refusal ones: ADR 0008 lets
+The false-positive tests are as load-bearing as the refusal ones: the blocking-tier rule lets
 a check block only when no correct calculation could produce the record it
 refuses, so a blocking rule that fires on a pseudo participant, an isotopologue
 or a deposit that simply declined to map its atoms would be the wrong rule.
@@ -66,7 +66,7 @@ _CORRECT_PRODUCTS = {
     "product:2": [3, 4, 9],  # HO2: O, O, H
 }
 
-#: The partition that used to pass. Nine atoms, each claimed exactly once, and
+#: The partition a count-only check accepts. Nine atoms, each claimed exactly once, and
 #: ethene is made of two carbons, two oxygens and two hydrogens.
 _ETHENE_MADE_OF_OXYGENS = {
     "product:1": [1, 2, 3, 4, 5, 6],  # "C2H4" -- actually C2O2H2
@@ -350,7 +350,7 @@ def test_a_pseudo_participant_is_skipped_without_exempting_its_siblings(
 def test_an_isotopologue_written_with_D_is_not_a_mismatch(db_session) -> None:
     """``D`` in an XYZ is hydrogen by element, and a blocking check may not say otherwise.
 
-    ``D``/``T`` name hydrogen's isotopes, and since #672 (ADR 0022) a ``D``
+    ``D``/``T`` name hydrogen's isotopes, and a ``D``
     token is stored as ``H`` with mass number 2 while ``xyz_text`` keeps the
     ``D``. The SMILES side spells the same nucleus ``[2H]``. Both sides are
     counted through ``resolve_element_symbol``, so the two agree; comparing raw

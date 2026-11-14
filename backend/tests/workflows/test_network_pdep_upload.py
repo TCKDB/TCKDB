@@ -110,7 +110,7 @@ _SOFTWARE = {"name": "Gaussian", "version": "16"}
 _LOT_DFT = {"method": "B3LYP", "basis": "6-31G(d)"}
 _LOT_CC = {"method": "CCSD(T)", "basis": "cc-pVTZ"}
 
-# Machine-token energy conventions (free text is no longer accepted).
+# Machine-token energy conventions (free text is not accepted).
 _CONVENTIONS = {
     "energy_zero_convention": "entrance_channel",
     "correction_convention": "electronic_plus_zpe",
@@ -129,7 +129,7 @@ _CONVENTIONS = {
 # Handing ethene the oxygens instead would still cover nine atoms exactly once,
 # and for a while that was enough to pass: the partition was bounds-checked and
 # never element-checked, so the indices below were only as trustworthy as this
-# comment. ``validate_ts_evidence_participant_composition`` now checks them
+# comment. ``validate_ts_evidence_participant_composition`` checks them
 # against the geometry, and
 # ``test_pdep_ts_evidence_refuses_ethene_made_of_oxygens`` holds that door shut.
 _ELIM_TS_ATOMS = list(range(1, 10))
@@ -494,7 +494,7 @@ def _parallel_path_payload() -> dict:
 def test_parallel_path_upload_persists_ts_subject_and_distinct_barriers(db_conn) -> None:
     """One elementary step retains two distinct saddle-point pathways.
 
-    Regression guard for the schema rule that used to forbid a second TS per
+    Regression guard against a schema rule that forbids a second TS per
     micro reaction: the only way to express parallel paths was to declare a
     duplicate micro reaction with byte-identical stoichiometry, which injects
     a duplicate row into an identity table. Here the two paths share ONE
@@ -1158,7 +1158,7 @@ def test_pdep_workflow_rejects_imbalanced_micro_reaction(db_conn) -> None:
     strict elemental balance on their micro reactions.
 
     Construct an otherwise-valid payload but drop ``O2`` from the
-    association reactants so that ``ethyl -> ethylperoxy`` is no longer
+    association reactants so that ``ethyl -> ethylperoxy`` is not
     element-balanced (2 O atoms appear on the product side with no
     matching source on the reactant side).
     """
@@ -2139,7 +2139,7 @@ def test_seam_torsion_ownership_check_rejects_cross_species_scan(db_conn) -> Non
         )
         # Feed the seam a calc-key map pointing at O2's scan calc while
         # claiming a different species entry owns the statmech.
-        # #158/#162: the seam's torsion scan link carries its own code,
+        # The seam's torsion scan link carries its own code,
         # distinct from the statmech source-link code, because the repair
         # is a different one -- the wrong rotor scan, not the wrong job.
         with pytest.raises(
@@ -2346,7 +2346,7 @@ def test_non_finite_barrier_is_rejected() -> None:
 
 
 def test_pdep_ts_evidence_refuses_ethene_made_of_oxygens(db_engine) -> None:
-    """The partition that used to pass, refused end to end on this path.
+    """The partition a count-only check accepts, refused end to end on this path.
 
     ``product:1`` is declared ``C=C`` and handed atoms 1-6 of a saddle point
     listed ``1 C, 2 C, 3 O, 4 O, 5-9 H`` — two carbons, two oxygens and two
@@ -2445,8 +2445,8 @@ def test_transition_state_without_irc_evidence_succeeds_with_a_warning(
             "reaction_atom_map_absent",
         ]
         # The fixture states each bimolecular state's energy from one species' single point and
-        # on a composed convention, so #678 adds its two warnings about the state energies, and
-        # several of those species have no freq anywhere in the upload (#669).
+        # on a composed convention, so it adds two warnings about the state energies, and
+        # several of those species have no freq anywhere in the upload.
         assert {w.code for w in warnings if w not in about_the_saddle_point} == {
             "network_state_energy_sources_partial",
             "network_state_energy_sum_not_compared",
@@ -2459,7 +2459,7 @@ def test_every_pdep_saddle_point_reports_its_missing_atom_map(
 ) -> None:
     """A network's micro reactions are reactions, and their gaps are visible.
 
-    ADR 0011 accepts an unmapped reaction — the rate constant is still the rate
+    The atom-map rule accepts an unmapped reaction — the rate constant is still the rate
     constant — on condition that the absence is *stated*, loudly enough that a
     depositor who has the mapping notices they are being asked for it. Before
     this warning existed, every micro reaction in a pressure-dependent network
@@ -2496,7 +2496,7 @@ def test_every_pdep_saddle_point_reports_its_missing_atom_map(
 
 
 def test_multiple_transition_states_per_micro_reaction_are_accepted() -> None:
-    """The schema no longer forbids what the database PK exists to allow."""
+    """The schema does not forbid what the database PK exists to allow."""
     request = NetworkPDepUploadRequest(**_parallel_path_payload())
     per_reaction = [
         ts.micro_reaction_key for ts in request.transition_states
@@ -2511,7 +2511,7 @@ def test_energy_transfer_must_cover_every_well_collider_pair() -> None:
 
     Dropping one well's entry while leaving the other scoped ``per_well`` says
     the second well's ⟨ΔE⟩down was resolved and the first one's was simply
-    lost. That is still refused. What is no longer refused is declaring one
+    lost. That is still refused. What is not refused is declaring one
     model for the whole network — see the ``network_wide`` tests below.
     """
     payload = _parallel_path_payload()
@@ -2530,12 +2530,10 @@ def test_upload_schema_exposes_no_fk_ids_or_hashes() -> None:
     hash appearing in an upload schema means someone has to know our primary
     keys to contribute.
 
-    The walker itself no longer lives here. It was the *only* copy of this
-    check in the tree and it pointed at this one root, which is why the
-    same ``literature_id`` leak was found by hand on three other roots over
-    three weeks (#118, #154, #194). It now lives in
-    ``tests/schemas/test_upload_roots_expose_no_fk_ids.py`` and runs over
-    every upload root discovered from the live route table.
+    The walker itself does not live here: it is the shared walker in
+    ``tests/schemas/test_upload_roots_expose_no_fk_ids.py``, which runs over
+    every upload root discovered from the live route table. A walker pointed at
+    one root would miss the same ``literature_id`` leak on the others.
 
     This case stays because it is the strictest one: PDep is checked with
     **no allowlist at all**, where the shared module tolerates a frozen
@@ -2578,7 +2576,7 @@ def test_chebyshev_grid_dimensions_must_match_declared_orders() -> None:
 def test_per_well_energy_transfer_entry_requires_both_scoping_keys() -> None:
     """``per_well`` is a claim about a pair, so it must name the pair.
 
-    Definitional under ADR 0008: an entry that declares itself well-resolved
+    Definitional, so blocking: an entry that declares itself well-resolved
     and then names no well is internally contradictory, and the error points at
     the honest alternative rather than at a dead end.
     """
@@ -2597,9 +2595,9 @@ def test_network_wide_energy_transfer_is_accepted_without_per_well_coverage() ->
     """One ⟨ΔE⟩down for a two-well network is accepted when declared as such.
 
     Arkane, RMG and MESS inputs routinely specify a single
-    ``SingleExponentialDown`` for the whole network. Refusing that used to force
+    ``SingleExponentialDown`` for the whole network. Refusing that would force
     the depositor to paste one number once per well, fabricating specificity the
-    run never had (ADR 0009).
+    run never had.
     """
     payload = _parallel_path_payload()
     payload["solve"]["energy_transfer"] = [
@@ -3027,7 +3025,7 @@ def test_well_skipping_channel_round_trips(db_conn) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Reported (literature) pressure-dependent kinetics — ADR 0010
+# Reported (literature) pressure-dependent kinetics
 # ---------------------------------------------------------------------------
 
 _REPORTED_LITERATURE = {
@@ -3075,7 +3073,7 @@ def _reported_payload(*, with_bath_gas: bool = False) -> dict:
     Deliberately carries *none* of the master-equation inputs: no state
     energies, no channel barriers, no energy transfer, no bath gas, no source
     calculations. That is the whole point — a depositor reading a
-    supplementary table has none of them, and before ADR 0010 this payload was
+    supplementary table has none of them, and this payload would be
     unrepresentable, so the data simply stayed out of the database.
 
     The network topology is still required and still checked: a reported rate
@@ -3109,7 +3107,7 @@ def _reported_payload(*, with_bath_gas: bool = False) -> dict:
 
 
 def test_reported_solve_is_accepted_without_master_equation_inputs() -> None:
-    """Published k(T,P) is depositable at all — the point of ADR 0010.
+    """Published k(T,P) is depositable at all — the point of the reported-kinetics route.
 
     Every coverage rule the old contract applied to a solve asked for
     something a paper's supplementary table does not contain. The result was
@@ -3168,7 +3166,7 @@ def test_computed_solve_still_requires_every_coverage_rule() -> None:
     Each of the three rules is dropped independently from an otherwise valid
     computed payload. All three must still refuse it — a reported escape hatch
     that quietly loosened the computed contract would make the two
-    indistinguishable, which is the failure ADR 0010 exists to avoid.
+    indistinguishable, which is the failure the reported-kinetics route exists to avoid.
     """
     payload = _full_payload()
     payload["solve"]["state_energies"] = payload["solve"]["state_energies"][:1]
@@ -3379,7 +3377,7 @@ def test_network_species_calculation_anchors_to_its_conformer_key(
 ) -> None:
     """The PDep route honours ``conformer_key`` too.
 
-    Before this change the field did not exist on this route and the
+    Without the field on this route the
     calculation below -- an ``opt`` with no ``geometry_key``, which the schema
     permits -- would have been persisted anchored to nothing.
     """

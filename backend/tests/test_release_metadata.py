@@ -1,6 +1,6 @@
 """Repository-level release metadata must actually exist and agree with itself.
 
-The Stage 3 review found `backend/pyproject.toml` claiming a license of
+A review found `backend/pyproject.toml` claiming a license of
 ``TBD — see repository root`` while the repository root shipped an MIT
 ``LICENSE``, and no changelog, citation or security contact anywhere. Those are
 one-line files that silently rot, so they get a test.

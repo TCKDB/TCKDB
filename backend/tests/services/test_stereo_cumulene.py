@@ -1,4 +1,4 @@
-"""Allene (Ra/Sa) and odd-cumulene (E/Z) stereo in the entry descriptor (#827).
+"""Allene (Ra/Sa) and odd-cumulene (E/Z) stereo in the entry descriptor.
 
 RDKit 2025.09 has no allene or odd-cumulene stereo at all (no CIP label, marks dropped on sanitising, no 3D
 perception, ``EnumerateStereoisomers`` returns one isomer), so the tokens come from our own geometric
@@ -151,7 +151,7 @@ def test_twisted_ring_allenes_of_nine_or_more_are_read_and_mirror_cleanly(smiles
 
 @pytest.mark.parametrize("size", [6, 7, 8, 9])
 def test_a_cyclic_allene_of_six_or_more_is_settleable_not_unrepresented(size: int) -> None:
-    """Rings of 6 to 8 were once stated ``?`` always (#832); they read like a ring of 9 now.
+    """Rings of 6 to 8 were once stated ``?`` always; they read like a ring of 9 now.
 
     The geometry cases (QM fixtures, near-planar axis) are in ``test_stereo_cyclic_allene_small_rings.py``.
     """
@@ -166,7 +166,7 @@ def test_a_cyclic_allene_of_six_or_more_is_settleable_not_unrepresented(size: in
 
 @pytest.mark.parametrize("smiles", ["C1=C=CC1", "C1=C=CCC1", "C1=C=C(C)CC1"])
 def test_cyclic_allenes_of_four_and_five_stay_unrepresented_and_refuse_labels(smiles: str) -> None:
-    """Outside the 6 to 8 decision of #832: no QM geometry was checked for these rings."""
+    """Outside rings of 6 to 8: no QM geometry was checked for these rings."""
 
     (element,) = frame(smiles).elements
     assert element.ring_size in (4, 5) and element.never_settled and element.reason == stereo.R_AXIAL_SMALL_RING
@@ -461,7 +461,7 @@ def test_meso_allene_pair_is_one_descriptor_and_the_enantiomer_pair_two() -> Non
 
 def test_a_centre_between_two_allene_axes_has_four_descriptors_not_three() -> None:
     """``CC=C=CC(C)C=C=CC`` has 4 stereoisomers (``Ra,Ra`` and ``Sa,Sa`` with a non-stereogenic centre, and the two
-    meso forms whose middle carbon is pseudo-asymmetric r or s): one descriptor each (#832, part 3)."""
+    meso forms whose middle carbon is pseudo-asymmetric r or s): one descriptor each."""
 
     smiles = "CC=C=CC(C)C=C=CC"
     f = frame(smiles)

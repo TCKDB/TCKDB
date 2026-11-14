@@ -96,7 +96,7 @@ def test_unaffected_methods_keep_their_rows() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Review round: option spellings, ORCA decks, hyphen-free double hybrids, F12-MP2, labels
+# Option spellings, ORCA decks, hyphen-free double hybrids, F12-MP2, labels
 # ---------------------------------------------------------------------------
 
 
@@ -234,7 +234,7 @@ def test_orca_numfreq_numgrad_and_anfreq_decks_are_unchanged() -> None:
 @pytest.mark.parametrize("method", ["MP5", "UMP5", "F12-CCSD(T)", "F12/RI-CCSD(T)"])
 def test_newly_recognised_methods_are_scf_based_so_they_get_the_assumed_scf_default(method) -> None:
     """Side effect of recognising them: ``uses_scf`` follows the family classifier (MPn and coupled cluster are
-    SCF-based), so a Gaussian job in one of these methods now has an assumed ``scf_convergence``."""
+    SCF-based), so a Gaussian job in one of these methods has an assumed ``scf_convergence``."""
     from tckdb_schemas.program_default_settings import assumed_default_setting, uses_scf
 
     assert uses_scf(method, "Gaussian") is True

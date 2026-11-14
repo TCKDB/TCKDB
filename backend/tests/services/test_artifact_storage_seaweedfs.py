@@ -5,7 +5,7 @@ Every payload here is a **recording**, not a hand-written shape. The files in
 ``GET /`` and the volume server's ``GET /status``, captured from
 ``chrislusf/seaweedfs@sha256:ce9e796f...`` (release 4.47, ``weed mini``, the
 digest ``docker-compose.yml`` pins) while filling it through signed S3 with
-4 MiB objects on size-capped tmpfs (#545):
+4 MiB objects on size-capped tmpfs:
 
 ``empty``
     256 MiB disk, nothing written. ``Max: 3`` slots of a ``64MB`` volume
@@ -27,7 +27,7 @@ digest ``docker-compose.yml`` pins) while filling it through signed S3 with
     bytes) and held past ``weed mini``'s 60 s minimum-free check: every
     volume ``ReadOnly``, the master's ``Max`` down from 100 to 16 with
     ``Free: 0``, and both a 4 MiB and a 1 KiB write refused. Recorded after
-    the review of #547 found this regime blamed on slots.
+    this regime must not be blamed on slots.
 """
 
 from __future__ import annotations
@@ -167,7 +167,7 @@ def test_a_nearly_full_store_warns_but_does_not_explain_a_small_refusal() -> Non
     """Before the fill: low headroom, and a 4 MiB refusal still unexplained.
 
     Free slots are already zero here, which is also true of a *healthy*
-    store whose bucket has grown its volumes in advance -- measured on an
+    store whose bucket has grown its volumes in advance -- as on an
     empty store after one write. So ``Free == 0`` is never "full" by
     itself; the room left inside the bucket's writable volumes decides.
     """
@@ -384,7 +384,7 @@ def test_a_dripping_server_cannot_hold_the_probe_past_its_deadline() -> None:
 
 
 # ---------------------------------------------------------------------------
-# The bucket quota, read over signed S3 (#545)
+# The bucket quota, read over signed S3
 # ---------------------------------------------------------------------------
 #
 # ``quota_enforced``: a 20 MiB quota with 30 MiB in the bucket and every write
@@ -598,7 +598,7 @@ def test_a_dripping_server_cannot_hold_the_quota_probe_past_its_deadline() -> No
 
 
 # ---------------------------------------------------------------------------
-# Bounded bodies, bounded threads (re-review of #594)
+# Bounded bodies, bounded threads
 # ---------------------------------------------------------------------------
 
 

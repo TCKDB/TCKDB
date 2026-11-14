@@ -1,4 +1,4 @@
-"""One renderer for a level of theory, behind both the notation and the ML export's label (ADR 0021, P7a).
+"""One renderer for a level of theory, behind both the notation and the ML export's label.
 
 The notation of a record's levels is built from ``LevelOfTheorySummary``; the ML-dataset export's ``label`` is
 built from the ``LevelOfTheory`` row. Both call :func:`app.chemistry.level_label.render_level_label`, and these
@@ -165,7 +165,7 @@ def test_an_unstated_part_is_omitted_not_defaulted_and_empty_strings_count_as_un
 
 @pytest.mark.parametrize("fields", SPREAD, ids=lambda f: "-".join(sorted(f)))
 def test_the_summary_label_field_is_the_same_text_as_the_ml_label_and_the_notation(fields):
-    """``LevelOfTheorySummary.label`` (ADR 0021, P7b) is one more reader of the one renderer."""
+    """``LevelOfTheorySummary.label`` is one more reader of the one renderer."""
     summary = _summary(fields)
     assert summary.label == _lot_label(_row(fields)) == level_label(summary)
     assert summary.model_dump()["label"] == summary.label

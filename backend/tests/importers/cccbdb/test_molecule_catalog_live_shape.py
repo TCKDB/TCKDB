@@ -1,6 +1,6 @@
 """Regression tests for the live ``inchix.asp`` table shape.
 
-The pre-Phase-11 parser silently dropped the entire catalog table
+A parser that does not handle this shape silently drops the entire catalog table
 when CCCBDB's ASP backend timed out mid-response (no closing
 ``</table>``). These tests pin the close-time flush + new live
 column shape (``casno | formula | name | InChI | InChIkey | SMILES
@@ -200,7 +200,7 @@ def test_queue_generator_consumes_parsed_catalog_and_writes_nonzero(
     tmp_path, catalog
 ):
     """End-to-end: parsed catalog JSON feeds the queue generator and
-    yields a non-empty queue. The pre-fix path silently produced 0
+    yields a non-empty queue. A broken parser silently produces 0
     queue records because the parsed catalog itself was empty."""
 
     from scripts.cccbdb_generate_form_queue import (

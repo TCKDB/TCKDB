@@ -92,7 +92,7 @@ class TestCatalogHrefIsAuditOnly:
         assert any("not trusted as data URL" in w for w in co.warnings)
 
     def test_no_entry_has_a_trusted_url_set(self, catalog):
-        """Hard contract: Phase 3b parser never populates trusted URLs."""
+        """Hard contract: The parser never populates trusted URLs."""
 
         for entry in catalog.entries:
             assert entry.trusted_property_url is None

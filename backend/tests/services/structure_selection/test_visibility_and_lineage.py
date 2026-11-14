@@ -172,7 +172,7 @@ def test_a_hidden_irc_calculation_neither_appears_nor_certifies_connectivity(db_
 
 
 def test_a_visible_calculation_names_no_withheld_observation(db_session):
-    """ADR 0023: the observation a calculation is anchored to is evidence. Rejected is withheld; unreviewed is named."""
+    """The observation a calculation is anchored to is evidence. Rejected is withheld; unreviewed is named."""
     world = make_world(db_session)
     obs = make_conformer_observation(db_session, conformer_group=make_conformer_group(db_session, world.entry))
     c = world.sp("c", -76.4, declared=declaration(), observation=obs)
@@ -222,7 +222,7 @@ def test_counts_cover_the_rows_the_caller_can_see_and_nothing_else(db_session):
 
 
 def test_a_species_entrys_review_status_never_excludes_a_calculation_or_a_basin(db_session):
-    """A species entry is a scoping parent (owner decision 2026-10-24): the unit's own review decides, not its entry's."""
+    """A species entry is a scoping parent: the unit's own review decides, not its entry's."""
     world = make_world(db_session, entry_status=None)  # the entry itself is not reviewed
     world.sp("c", -76.4, declared=declaration(), status=RecordReviewStatus.approved)
     world.settle()

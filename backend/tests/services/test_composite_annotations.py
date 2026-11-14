@@ -1,4 +1,4 @@
-"""The rules behind ``composite_energy_verification`` and ``legacy_composite_shape`` on a record's levels (ADR 0021, P7a).
+"""The rules behind ``composite_energy_verification`` and ``legacy_composite_shape`` on a record's levels.
 
 Direct calls on plain objects: no read produced these inputs, so the rules are tested as the
 rules, including on summaries built by hand that no builder would produce.

@@ -1,6 +1,6 @@
-"""An ``energy_ordering`` energy is held against what TCKDB stores for its calculation (#638).
+"""An ``energy_ordering`` energy is held against what TCKDB stores for its calculation.
 
-#637 compared the stated numbers with each other and with nothing TCKDB holds, so
+Comparing the stated numbers with each other and with nothing TCKDB holds is not enough: so
 a record could cite a single point that stores -40.9 Eh, state -40.20 Eh from it,
 and pass. These run at the persistence seam because the stored values must be
 shaped exactly (a NULL energy, a missing ZPE, two geometries) and because the
@@ -169,7 +169,7 @@ def _stored(db_session):
 
 
 # ---------------------------------------------------------------------------
-# The #637 fixture
+# The fixture
 # ---------------------------------------------------------------------------
 
 
@@ -466,7 +466,7 @@ def test_the_service_enforces_it_for_a_payload_that_skipped_validation(db_sessio
 
 
 # ---------------------------------------------------------------------------
-# A composite is a source of both kinds (#669): the table is shared with the network rule
+# A composite is a source of both kinds: the table is shared with the network rule
 # ---------------------------------------------------------------------------
 
 
@@ -539,7 +539,7 @@ def test_a_composite_that_states_no_e0_is_not_compared(db_session) -> None:
 
 
 def test_the_two_energy_source_rules_read_one_table() -> None:
-    """Both rules used to keep a table each, and #637's accepted ``composite`` for neither kind.
+    """Both rules read one shared table, not a private one each.
 
     Mutation: give either module back a private table; the identity checks fail.
     """

@@ -1,6 +1,6 @@
 """The manifest is only worth something if it detects drift.
 
-These tests exercise the claim the Stage 3 exit criterion rests on: a published
+These tests exercise the claim that a published
 release can be re-derived from the database, every checksum still matches, and
 if anything the release depends on changes, verification fails loudly.
 """
@@ -275,7 +275,7 @@ def test_corpus_growth_after_publication_does_not_break_the_release(
     """The finding that failed review: one ordinary upload must not un-cite a release.
 
     A release is a snapshot claim. Publishing it and then uploading a third
-    thermo for a released species used to change the re-rendered candidate set,
+    thermo for a released species must not change the re-rendered candidate set;
     which broke the digest and made the citable artifacts 409. On a corpus
     where review is expected to progress, that made the citable window
     effectively zero.
@@ -311,7 +311,7 @@ def test_corpus_growth_after_publication_does_not_break_the_release(
 def test_review_state_changing_after_publication_does_not_break_the_release(
     db_session, draft_release, curator, thermo_candidates, species_entry
 ):
-    """Review advancing is the other everyday write that used to un-cite a release."""
+    """Review advancing is the other everyday write that must not un-cite a release."""
     from app.db.models.common import RecordReviewStatus, SubmissionRecordType
     from app.services.record_review import set_record_review_status
 
@@ -334,9 +334,9 @@ def test_review_state_changing_after_publication_does_not_break_the_release(
 def test_recording_a_doi_does_not_break_the_manifest_digest(
     db_session, draft_release, curator, thermo_candidates, species_entry
 ):
-    """The runbook's own final step used to permanently invalidate the digest.
+    """The runbook's own final step must not invalidate the digest.
 
-    Every genuinely cited release has a DOI, so under the old design the steady
+    Every genuinely cited release has a DOI, so under a design that rewrites the manifest the steady
     state of every real release was ``verified: false`` and the integrity
     signal was true only for releases nobody had deposited.
     """
@@ -871,7 +871,7 @@ def test_verification_survives_an_edit_to_the_contract_literal(
     ``_contract_block`` holds literals — an ``omits`` list and contract tags —
     and was rebuilt at verification time. Appending one entry (the sort of edit
     any future maintainer makes) turned every past release's cross-check into
-    "the stored document no longer matches its snapshot columns". It affected
+    "the stored document does not match its snapshot columns". It affected
     only the cross-check, never the citation, but it is the same failure mode
     already fixed twice.
     """
@@ -903,7 +903,7 @@ def test_verification_survives_an_edit_to_the_contract_literal(
 def test_the_frozen_document_depends_only_on_the_manifest_row(
     db_session, draft_release, curator, thermo_candidates, species_entry
 ):
-    """Mutate everything the document used to read live, and it must not move.
+    """Mutate everything the document could read live, and it must not move.
 
     Covers the release row, the curation policy row, and the module constants
     at once — the general property, rather than one instance of it.
@@ -1062,7 +1062,7 @@ def test_network_structure_rows_name_their_channel_and_state(
 
 
 def test_a_released_solve_ships_each_participants_source_with_refs_only(db_session, curator) -> None:
-    """The per-participant sources of a state energy ship under the solve (#678).
+    """The per-participant sources of a state energy ship under the solve.
 
     The row's composite key is (solve, state, species entry), so it ships flat under
     ``network_solve``: the state as its composition hash, the participant and the cited

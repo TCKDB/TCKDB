@@ -149,7 +149,7 @@ def test_cycle_is_rejected_before_deprecating_old_record(db_session) -> None:
         actor=actor,
         reason="second edge",
     )
-    # `first` is superseded, so set_record_review_status now refuses to approve
+    # `first` is superseded, so set_record_review_status refuses to approve
     # it again (superseded_record_not_approvable). The setup this test needs is
     # the legacy row that was re-approved before that guard existed, so write
     # that state directly.

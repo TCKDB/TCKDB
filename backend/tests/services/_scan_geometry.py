@@ -26,7 +26,7 @@ being checked against anything external. Both are now pinned to RDKit
 independently, so a future sign flip in either one is caught by the
 consistency test between them, and a sign flip in *both* -- the actual
 prior failure -- is caught because neither one's correctness is asserted
-by the other any more.
+by the other.
 """
 
 from __future__ import annotations

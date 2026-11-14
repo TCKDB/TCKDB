@@ -1,7 +1,7 @@
 """Backend drift test: mirrored wire enums must match backend DB enums.
 
 The ``tckdb_schemas.enums`` mirror is independent of
-``app.db.models.common`` in PR 1 (the boundary forbids backend imports
+``app.db.models.common`` (the boundary forbids backend imports
 from the standalone package). The two sets are kept in lockstep with
 this test — both ``.value`` sets and declaration order are compared so
 serialization order can't drift either.
@@ -103,7 +103,7 @@ def test_every_mirrored_wire_enum_is_paired() -> None:
 
     The pairs above are hand-maintained, so a newly mirrored enum drifts
     silently until someone remembers to add it -- which is exactly what
-    happened to ten of them, five arriving with the Stage 4 restore and five
+    happens to a mirrored enum, with
     older. This closes the loop: mirroring an enum without pairing it now
     fails here rather than at the first serialization mismatch in production.
     """

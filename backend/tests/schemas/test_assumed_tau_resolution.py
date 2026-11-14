@@ -1,4 +1,4 @@
-"""One owner for tau, applied by every validation adapter (owner decision 2026-10-31).
+"""One owner for tau, applied by every validation adapter.
 
 Resolution order: a recorded ``freq.hessian_method`` -> the assumed default of
 the payload's own software and level-of-theory method -> ``protocol_not_recorded``.
@@ -187,7 +187,7 @@ def test_the_reason_uses_human_family_labels() -> None:
 
 
 # ---------------------------------------------------------------------------
-# ORCA release gate (owner decision 2026-10-31)
+# ORCA release gate
 # Sources: see the table note in ``hessian_method_assumption.py``.
 # ---------------------------------------------------------------------------
 

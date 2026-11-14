@@ -517,11 +517,11 @@ def test_restore_rejects_excluded_operational_rows(db_session) -> None:
 def test_archive_round_trip_preserves_stage2_pdep_and_kinetics_evidence(
     db_session, monkeypatch
 ) -> None:
-    """The Stage 2 scientific tables must survive a backup/restore cycle.
+    """The scientific result tables must survive a backup/restore cycle.
 
     Barriers, solve-state energies, channel path identity, interpretation
     assignments, tunneling evidence and TS validation evidence are the most
-    scientifically load-bearing rows added by Stage 2. If the registry does not
+    scientifically load-bearing rows. If the registry does not
     classify them they are silently absent from every archive, which would
     invalidate the project's restore-tested-backup claim.
     """
@@ -754,7 +754,7 @@ def test_binary_codec_round_trips_frozen_release_artifact_bytes() -> None:
 
     A published release's citable bytes live in the database, so a restore that
     silently dropped or corrupted them would restore a database whose releases
-    no longer resolve. Base64 is tagged (``$bytes``) exactly like ``$float`` so
+    do not resolve. Base64 is tagged (``$bytes``) exactly like ``$float`` so
     a byte string can never be confused with a text column that happens to hold
     base64.
     """

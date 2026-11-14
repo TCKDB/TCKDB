@@ -483,11 +483,11 @@ def test_a_minimum_claim_is_supported_only_by_no_imaginary_mode_or_by_every_one_
     # Every imaginary mode below tau (the default tau is 50 cm-1): supported, and the owner's warning is an advisory.
     soft = minimum_verdict(1, (1, -12.0, None), kind=kind, imag_freq=-12.0)
     assert soft.physically_eligible and soft.claim.supported
-    # The owner's own finding differs by kind: a minimum below tau is the accepted-with-warning case (ADR 0012
-    # note, 2026-10-29); a van der Waals complex keeps its original warning.
+    # The owner's own finding differs by kind: a minimum below tau is the accepted-with-warning case (the imaginary-mode
+    # protocol); a van der Waals complex keeps its warning.
     owner_code = "minimum_imaginary_modes_below_tau" if kind == "minimum" else "n_imag_contradicts_minimum"
     assert f"stationary_point_finding:{owner_code}" in soft.advisory and "imaginary_modes_below_tau" in soft.advisory
-    # A stiff mode is real negative curvature (ADR 0012): the owner's warning tier is not a verdict that this is a minimum.
+    # A stiff mode is real negative curvature: the owner's warning tier is not a verdict that this is a minimum.
     stiff = minimum_verdict(1, (1, -420.0, None), kind=kind, imag_freq=-420.0)
     assert stiff.blocking == ("curvature_contradicts_claim",) and not stiff.physically_eligible
     assert "imaginary_mode_at_or_above_tau" in stiff.advisory
@@ -496,7 +496,7 @@ def test_a_minimum_claim_is_supported_only_by_no_imaginary_mode_or_by_every_one_
     # A third-order saddle is not a minimum even when every mode is individually smaller than a reaction coordinate.
     third = minimum_verdict(3, (1, -300.0, None), (2, -200.0, None), (3, -150.0, None), kind=kind)
     assert third.blocking == ("curvature_contradicts_claim",)
-    # Imaginary modes are judged by magnitude, not counted (ADR 0012): several modes that are all below tau do not
+    # Imaginary modes are judged by magnitude, not counted: several modes that are all below tau do not
     # contradict a minimum, and the owner's count-based findings are advisories only.
     several = minimum_verdict(2, (1, -12.0, None), (2, -9.0, None), kind=kind)
     assert several.physically_eligible and several.claim.supported

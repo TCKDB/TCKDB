@@ -1,7 +1,7 @@
 """The committed ``ThermoML.xsd`` must match the pinned digest.
 
 Mutation check: flip one byte of the committed XSD and this test goes
-red (verified manually; see the PR body's mutation table).
+red (verified manually).
 """
 
 from __future__ import annotations

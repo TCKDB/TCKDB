@@ -77,7 +77,7 @@ def test_default_returns_species_kinetics_transition_states_only(db_session):
     assert response.atom_map is None
     # ...but whether the reaction is atom-mapped is never gated behind a
     # token: an unmapped reaction that reads identically to a mapped one is
-    # the failure ADR 0011 exists to remove.
+    # the failure the explicit slot exists to remove.
     assert response.reaction_entry.atom_maps == []
 
 
@@ -264,10 +264,10 @@ def test_two_identical_calls_return_byte_equal_bodies(db_session):
 
 
 # ---------------------------------------------------------------------------
-# Phase 7.1 regression: TS calculation dependency formatting
+# Regression: TS calculation dependency formatting
 # ---------------------------------------------------------------------------
 #
-# Prior to Phase 7.1 the /full endpoint accessed ``CalculationDependency.role``,
+# The /full endpoint must not access ``CalculationDependency.role``,
 # which does not exist (the column is ``dependency_role``). The path was
 # unexercised because no test created a dependency row across the TS calc
 # graph. The test below builds that graph end-to-end via real SQLAlchemy
@@ -318,7 +318,7 @@ def test_full_formats_ts_calculation_dependency_with_real_db_row(db_session):
         role=CalculationDependencyRole.freq_on,
     )
 
-    # The pre-fix code raised AttributeError here (d.role on the ORM row).
+    # A wrong attribute would raise AttributeError here (d.role on the ORM row).
     response = get_reaction_full(
         db_session,
         reaction_entry_id=entry.id,
@@ -406,7 +406,7 @@ def test_full_handles_multiple_ts_dependency_roles(db_session):
 # TS calculation slot: energy + review (this task)
 # ---------------------------------------------------------------------------
 #
-# TransitionStateCalculationSlot previously carried only
+# TransitionStateCalculationSlot carries
 # calculation_id/calculation_ref/type/method. These tests pin the two new
 # fields: energy_hartree (the one energy quantity a calculation's own
 # result row canonically holds — sp/opt only, never a fabricated zero) and
@@ -604,7 +604,7 @@ def test_ts_calc_energy_and_review_do_not_scale_with_calc_count(db_session):
 
     Regression guard for the N+1 this task explicitly calls out. The whole
     ``/full?include=transition_states`` read issues *some* per-TS-entry
-    statements unrelated to this change (evidence summary, atom-map
+    statements unrelated to this check (evidence summary, atom-map
     lookups, ...), so counting every statement would make this fixture
     sensitive to costs this task did not touch. Instead this counts only
     the statements that hit the three tables this task's bulk loaders

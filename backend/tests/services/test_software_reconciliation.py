@@ -213,7 +213,7 @@ class TestRealLogIntegration:
 
 
 # ---------------------------------------------------------------------------
-# Review findings on #565: version precision and declared build
+# Version precision and declared build
 # ---------------------------------------------------------------------------
 
 

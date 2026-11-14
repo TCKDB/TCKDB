@@ -1,7 +1,7 @@
-"""Cyclic allenes in rings of 6, 7 and 8 read Ra/Sa from geometry like any other allene (#832, part 1).
+"""Cyclic allenes in rings of 6, 7 and 8 read Ra/Sa from geometry like any other allene.
 
-These rings used to be stated ``?`` whatever the geometry, because force-field embeddings of them are
-near-planar and no QM geometry was available to check the reader against. Fixtures are now GFN2-xTB optimised
+These rings are read from geometry, not stated ``?``: force-field embeddings of them are
+near-planar, so the fixtures are GFN2-xTB optimised
 minima (``tests/fixtures/cyclic_allene_xtb``; the header line of each file gives the method, the allene torsion,
 the expected label and how that label was derived). Each ring has both enantiomers: ``_a`` is optimised from an
 ETKDG/MMFF start and ``_b`` from the mirror image of that start, so ``_b`` is the mirror image of ``_a`` to 6e-5
@@ -210,7 +210,7 @@ def test_resolving_a_qm_geometry_gives_a_resolved_entry_descriptor(fixture, name
 
 
 # ---------------------------------------------------------------------------
-# Rings of five or fewer stay unrepresented; review round 2
+# Rings of five or fewer stay unrepresented
 # ---------------------------------------------------------------------------
 
 FORCE_FIELD = Path(__file__).resolve().parents[1] / "fixtures" / "cyclic_allene_force_field"

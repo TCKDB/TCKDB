@@ -542,7 +542,7 @@ def test_resolve_and_persist_no_constraints_writes_no_rows(db_conn) -> None:
 
 
 # ---------------------------------------------------------------------------
-# ADR 0012's 2026-09-04 amendment: assumed Hessian method at persistence
+# Assumed Hessian method at persistence
 # ---------------------------------------------------------------------------
 
 
@@ -653,7 +653,7 @@ def test_dependency_role_type_compatible_rejects_wire_optimized_from_with_freq_p
     """``optimized_from`` parent must be opt or path_search, even when the
     role is the wire-mirror enum class from ``tckdb_schemas.enums``.
 
-    Regression: this comparison used ``is`` before the fix, which silently
+    Regression: this comparison must not use ``is``, which silently
     returned False for the wire-enum member and skipped the parent-type
     check in bundle workflows.
     """

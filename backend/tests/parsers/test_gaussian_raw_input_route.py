@@ -1,6 +1,6 @@
 """Tests for Gaussian raw .gjf/.com input route extraction.
 
-The Gaussian parser was originally written against log echoes whose
+The Gaussian parser is written against log echoes whose
 route line is bracketed by dashed delimiter rows. Raw input files have
 no such delimiters; instead the route starts at the first ``#`` line
 and ends at the next blank line. These tests cover that path.

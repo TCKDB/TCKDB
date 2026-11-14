@@ -6,7 +6,7 @@ the same level of theory in Gaussian vs ORCA can legitimately need a
 different factor (``frequency_scale_factor.software_release_id``'s column
 comment has said so since the initial schema, at program grain until the
 correction-scheme-provenance plan v2 §6 sibling revision widened it to
-release grain). Nothing previously checked that the software a
+release grain). Nothing else checks that the software a
 factor was DERIVED FOR is the software that actually produced the
 frequencies it was APPLIED TO. Measured against the deployed archive: 95
 statmech rows compare cleanly today (Gaussian/Gaussian, ORCA/ORCA) and 6
@@ -261,8 +261,8 @@ def test_empty_input_returns_empty(db_conn) -> None:
 # ``test_not_comparable_fsf_has_no_software`` were confirmed to FAIL when
 # ``evaluate_frequency_scale_factor_software`` was mutated to treat an
 # empty ``known_freq`` list as a match instead of `continue`-ing past it
-# (i.e. collapsing state 3 into state 1). See the PR description for the
-# observed failure output; the mutation was reverted before landing.
+# (i.e. collapsing state 3 into state 1). The
+# mutation turns the test red.
 # ---------------------------------------------------------------------------
 
 

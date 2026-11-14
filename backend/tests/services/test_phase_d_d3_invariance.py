@@ -1,6 +1,6 @@
-"""D3 byte-identity across the Phase D foundation (WP-F) extraction.
+"""D3 byte-identity across the foundation extraction.
 
-WP-F moved D3's participant counting, composition and element/charge
+The extraction moved D3's participant counting, composition and element/charge
 balance out of ``consistency/kinetics.py`` into the neutral
 ``consistency/stoichiometry.py`` helper. D3 keeps its own reason tokens by
 mapping at its call site. This module pins, for every D3 fixture scenario
@@ -16,12 +16,9 @@ not, two things captured at ``main`` ``0bc86f03`` *before* the extraction:
 The expected values are literals, not recomputed by production code, so
 any change to D3's reasons, their order or its hashed inputs goes red here.
 
-The 42 hashes were re-captured once, in versioning PR-4. The context hash folds in the
-recipe version (``context_schema_version``), which was the string ``"v1"`` on main and is
-the integer ``1`` now: the same recipe, spelled as a number, hashes differently. (Checked by
-dumping the hashed payload on main and here: identical apart from that one value.) The
-reason sequences are byte-identical to the originals (asserted when the literals were
-re-captured); only the hash moved, for that one stated cause.
+The context hash folds in the recipe version (``context_schema_version``), so the 42
+hashes change when that version changes. The reason sequences are pinned as literals;
+only the hash moves, and only for that one stated cause.
 """
 import json
 

@@ -1,4 +1,4 @@
-"""``backfill_observation_submission_links.py``: CLI wiring for #514.
+"""``backfill_observation_submission_links.py``: CLI wiring.
 
 Service-level behavior (idempotency, dry-run, grouping, the
 ``historical_review`` attestation) is covered in

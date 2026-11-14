@@ -1,4 +1,4 @@
-"""Default kinetics order is review status, then newest (#648 rule for kinetics).
+"""Default kinetics order is review status, then newest.
 
 ``evidence_completeness`` and ``temperature_coverage`` stay on each record as
 displayed fields; neither takes part in the ordering. The read
@@ -117,7 +117,7 @@ def test_newer_experimental_beats_older_computed_with_same_review(db_session):
     resp = _read_all(db_session, entry)
     by_id = {r.kinetics_id: r for r in resp.records}
     # The checklist still favours the computed record; the test only passes
-    # because the score no longer orders the list.
+    # because the score does not order the list.
     assert (
         by_id[computed.id].evidence_completeness.score
         > by_id[experimental.id].evidence_completeness.score

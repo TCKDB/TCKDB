@@ -119,7 +119,7 @@ def test_known_truncated_allow_list_is_empty() -> None:
     """The legacy allow-list must stay empty.
 
     A non-empty allow-list would re-introduce reliance on silent truncation.
-    Every historically-truncated FK now has an explicit short name.
+    Every historically-truncated FK has an explicit short name.
     """
     assert _KNOWN_TRUNCATED_IDENTIFIERS == frozenset()
 

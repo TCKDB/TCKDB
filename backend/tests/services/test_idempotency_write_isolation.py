@@ -1,6 +1,6 @@
 """The idempotency receipt must never be able to destroy the payload it receipts for.
 
-Regression tests for the 2026-08-05 incident: an upload completed, ``201
+Regression tests: an upload completed, ``201
 Created`` was determined, and then the idempotency row failed to serialise
 at commit time. The receipt shared the upload's transaction, so the whole
 unit of work rolled back — species, calculation, everything — while the
@@ -122,7 +122,7 @@ class TestPayloadSurvivesReceiptFailure:
     ) -> None:
         """Reproduces the incident shape and asserts the payload survives.
 
-        On the pre-fix code the receipt shares the payload's transaction,
+        Without isolation the receipt shares the payload's transaction,
         the commit fails, and the species row is gone. The assertion is
         made from a *separate session*, so it reads committed state and
         cannot be satisfied by objects still sitting in an identity map.
@@ -484,7 +484,7 @@ class TestReceiptRetry:
 class TestConcurrentDuplicateStillConflicts:
     """A duplicate key is a conflict, not a receipt malfunction.
 
-    Before this change a concurrent duplicate surfaced as a unique-constraint
+    A concurrent duplicate surfaces as a unique-constraint
     violation at commit, which rolled the write back and returned ``409``.
     Isolating the receipt must not downgrade that into "receipt failed, 201" —
     that would let both racers store their science under one key.

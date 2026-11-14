@@ -89,7 +89,7 @@ def test_a_bool_or_float_semantic_version_is_not_the_integer_it_compares_equal_t
 def test_a_manifest_of_a_retired_or_unwritten_semantic_version_is_refused(manifest, version):
     """Kills: a legacy projection (versions 1 and 2) re-added to replay.
 
-    Version 1 recorded no ``value_geometry_ref``; version 2 carried every field. Neither is read any more: only the
+    Versions 1 and 2 are not read: only the
     running version replays, and the refusal is by version, not by shape."""
     forged = copy.deepcopy(manifest)
     forged["versions"]["relative_energy"] = version
@@ -165,7 +165,7 @@ def curated_manifest_over_an_unreviewed_observation(db_session):
 
 
 def test_a_curated_manifest_over_an_unreviewed_observation_replays(curated_manifest_over_an_unreviewed_observation):
-    """ADR 0023 (Q2): the observation inside an approved group is evidence, so a curated manifest records it unreviewed and the
+    """The observation inside an approved group is evidence, so a curated manifest records it unreviewed and the
     replay accepts it (the statuses it records are ``approved`` and ``not_reviewed``).
 
     Kills: the replay judging a determination by the record floor again (``recorded`` instead of the evidence rule).

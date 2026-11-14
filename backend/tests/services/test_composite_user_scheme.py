@@ -1,4 +1,4 @@
-"""Identity, labels and write-time rules of user-built composite schemes (ADR 0021, P5).
+"""Identity, labels and write-time rules of user-built composite schemes.
 
 Service level, no HTTP. Three groups:
 
@@ -94,7 +94,7 @@ def test_term_keys_are_not_identity_but_formula_exponent_and_cardinals_are(db_se
         mutate(scheme)
         assert _resolve(db_session, scheme).id != base.id
 
-    differs(lambda s: s["terms"][1].update(exponent=3.4))  # exponent 3 vs 3.4: two levels (ADR 0021 2.4)
+    differs(lambda s: s["terms"][1].update(exponent=3.4))  # exponent 3 vs 3.4: two levels
     differs(lambda s: s["terms"][1].update(formula="inverse_power_shifted_half"))
     differs(lambda s: s["terms"][1]["inputs"][0].update(cardinal_number=2))  # declared cardinal
     differs(lambda s: s["terms"][0].update(energy_component="total"))  # which component is read
@@ -225,7 +225,7 @@ def test_the_method_hash_function_refuses_a_ref_that_names_a_scheme():
 def test_normal_level_hashes_are_unchanged_by_this_phase():
     """Pinned: a plain level keeps the hash it had before declared schemes existed.
 
-    Re-pinned by the keywords decision (Stage 2): the free-text ``keywords`` key left every payload, so every hash
+    Re-pinned by the keywords decision: the free-text ``keywords`` key left every payload, so every hash
     changed by design; the instance is reseeded, not re-keyed.
     """
     assert _level_of_theory_hash(LevelOfTheoryRef(method="b3lyp", basis="def2-tzvp")) == (
@@ -273,7 +273,7 @@ def test_exponential_sqrt_is_labelled_with_alpha_not_x():
 
 
 def test_alpha_of_an_exponential_sqrt_term_is_identity(db_session):
-    """#659: alpha 4.42 and 5.46 are two schemes and two levels, the same alpha is one; the term's key is not identity."""
+    """alpha 4.42 and 5.46 are two schemes and two levels, the same alpha is one; the term's key is not identity."""
 
     def scheme(alpha: float, key: str = "scf") -> dict:
         return {
@@ -576,7 +576,7 @@ def test_a_correlation_that_cannot_be_tied_to_its_energy_is_unverifiable_not_gue
 def test_the_level_check_follows_merges_on_the_schemes_side(db_session):
     """A scheme slot whose level was later merged into the input's level still matches that input.
 
-    The scheme was written against a spelling of the TZ level that has since been merged away; the single
+    The scheme was written against a spelling of the TZ level that is merged away; the single
     point ran at the surviving row. Comparing ids literally would call that a level mismatch.
     """
     entry = _species_entry(db_session)

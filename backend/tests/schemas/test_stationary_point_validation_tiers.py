@@ -1,4 +1,4 @@
-"""Imaginary-frequency validation across its tiers (ADR 0008, ADR 0012).
+"""Imaginary-frequency validation across its tiers.
 
 ======================  ==========================================  =====================
 declared                rule                                        tier
@@ -15,10 +15,10 @@ transition state        ``|ω_RC| >= 100 cm⁻¹``                      warn
 ======================  ==========================================  =====================
 
 A minimum's blocking rule is a definition only above the noise floor
-(ADR 0012's 2026-10-29 note): no correct calculation produces a covalently
+(the imaginary-mode protocol): no correct calculation produces a covalently
 bound minimum with an imaginary mode at or above τ, but correct published
 calculations do carry modes below it. The transition-state blocking rules are *contracts about what the
-record says*, not about magnitude — ADR 0012 retired ``n_imag == 1``
+record says*, not about magnitude — the protocol replaces ``n_imag == 1``
 because two scientifically correct calculations of the same saddle point
 can return ``n_imag == 1`` and ``n_imag == 3``, so the count was a gate a
 depositor could pass by changing an integration grid. The warning rules
@@ -132,7 +132,7 @@ class TestSpeciesEntryEvaluator:
         assert _codes(findings) == {W_N_IMAG_CONTRADICTS_MINIMUM}
         assert "calc" in findings[0].message
 
-    # -- ADR 0012 note, 2026-10-29: a minimum is judged by magnitude against tau --
+    # -- a minimum is judged by magnitude against tau --
 
     def test_a_soft_mode_on_a_minimum_is_accepted_with_a_warning(self) -> None:
         """The reproduction: -15 cm-1, no recorded protocol. Refused before."""
@@ -249,7 +249,7 @@ class TestSpeciesEntryEvaluator:
         assert "higher-order saddle" not in finding.message
 
     def test_one_real_mode_plus_noise_points_to_a_transition_state(self) -> None:
-        """-300 and -10: under ADR 0012 one real mode plus noise, not a
+        """-300 and -10: under the protocol one real mode plus noise, not a
         higher-order saddle."""
         (finding,) = evaluate_species_entry_frequency(
             SchemasStationaryPointKind.minimum,
@@ -338,8 +338,8 @@ class TestSpeciesEntryEvaluator:
         assert W_N_IMAG_SUGGESTS_TS not in _codes(just_below)
 
 
-#: The record that forced ADR 0012: a clean reaction coordinate at
-#: -1300 cm⁻¹ plus two soft modes the old rule refused outright.
+#: The motivating record: a clean reaction coordinate at
+#: -1300 cm⁻¹ plus two soft modes a count-based rule would refuse outright.
 _MOTIVATING_MODES = (
     ImaginaryMode(-1300.0, mode_index=1),
     ImaginaryMode(-42.0, mode_index=2),
@@ -396,23 +396,23 @@ class TestTransitionStateEvaluator:
         assert evaluate_transition_state_frequency(None, location="x") == []
 
     def test_zero_imaginary_modes_blocks(self) -> None:
-        """Unchanged in tier, renamed in code: with no imaginary mode there
-        is no reaction coordinate, which is what ADR 0012 kept of the old
-        rule."""
+        """With no imaginary mode there
+        is no reaction coordinate, which is the part of the count rule that
+        remains."""
         findings = evaluate_transition_state_frequency(0, location="ts")
         assert _tiers(findings) == {ValidationTier.block}
         assert _codes(findings) == {W_TS_NO_IMAGINARY_MODE}
 
     @pytest.mark.parametrize("n_imag", [2, 3, 9])
     def test_extra_modes_without_a_designation_block(self, n_imag: int) -> None:
-        """ADR 0012 blocks on the *contract*, not the count: a record that
+        """The protocol blocks on the *contract*, not the count: a record that
         will not say which mode is the barrier cannot be used as one."""
         findings = evaluate_transition_state_frequency(n_imag, location="ts")
         assert _tiers(findings) == {ValidationTier.block}
         assert _codes(findings) == {W_TS_REACTION_COORDINATE_NOT_DESIGNATED}
 
     def test_the_motivating_record_is_accepted_with_a_warning(self) -> None:
-        """-1300, -42, -13 cm⁻¹. Refused outright before ADR 0012."""
+        """-1300, -42, -13 cm⁻¹. A count rule would refuse it outright."""
         findings = evaluate_transition_state_frequency(
             3,
             -1300.0,
@@ -425,7 +425,7 @@ class TestTransitionStateEvaluator:
         assert not any(f.structural_flag for f in findings)
 
     def test_the_motivating_record_is_accepted_under_every_tau(self) -> None:
-        """ADR 0012 claims this record survives every row of the protocol
+        """The protocol claims this record survives every row of the protocol
         table, which is the claim that makes tau uncontroversial here."""
         for method in (None, *HessianMethod):
             tau = resolve_tau(
@@ -442,7 +442,7 @@ class TestTransitionStateEvaluator:
             assert _tiers(findings) == {ValidationTier.warn}, method
 
     def test_a_finding_records_the_tau_it_used_and_why(self) -> None:
-        """ADR 0012 requires that a reader can re-decide the mode later,
+        """The protocol requires that a reader can re-decide the mode later,
         which "tau was 50" alone does not support."""
         tau = resolve_tau()
         findings = evaluate_transition_state_frequency(
@@ -479,7 +479,7 @@ class TestTransitionStateEvaluator:
         assert all(f.structural_flag for f in findings)
 
     def test_the_same_record_is_unflagged_under_a_looser_protocol(self) -> None:
-        """The point of ADR 0012: -42 cm⁻¹ is real curvature under an
+        """The point of the protocol: -42 cm⁻¹ is real curvature under an
         analytic Hessian on a tight grid and indistinguishable from zero
         under an unrecorded protocol. The same numbers, two verdicts."""
         modes = (
@@ -617,7 +617,7 @@ class TestTransitionStateEvaluator:
         assert _codes(just_below) == {W_TS_IMAG_FREQ_TOO_SMALL}
 
     def test_the_softness_rule_reads_the_designated_coordinate(self) -> None:
-        """ADR 0012 changed what this fires on without changing what it
+        """This fires on the designated coordinate, and fires at what it
         fires at: the reaction coordinate, not "the" imaginary mode."""
         findings = evaluate_transition_state_frequency(
             2,
@@ -1194,7 +1194,7 @@ class TestTransitionStateSeams:
         findings = request.stationary_point_findings()
         assert _tiers(findings) == {ValidationTier.warn}
         # No Hessian method is recorded, so tau is Gaussian DFT's assumed
-        # analytic default (30 cm-1, owner decision 2026-10-31): -42 is real
+        # analytic default (30 cm-1): -42 is real
         # curvature and the record is flagged, -13 stays below tau. The
         # unrecorded-and-unknown-program case (tau 50, below tau) is held in
         # ``test_assumed_tau_resolution.py``.

@@ -1,4 +1,4 @@
-"""Snapshot + parser tests for the Phase 5a direct-CAS resolver.
+"""Snapshot + parser tests for the direct-CAS resolver.
 
 Covers the classification gate (the headline behavior), filename
 prefix isolation, rejected_html archiving, and the minimal parser's
@@ -361,7 +361,7 @@ class TestSpeciesAllDataCacheIsolation:
 
 class TestRawHrefNeverUsed:
     def test_only_alldata2x_urls_attempted_for_this_pilot(self, tmp_path):
-        """The Phase 5a pilot's allowlist must use ``alldata2x.asp``
+        """The pilot's allowlist must use ``alldata2x.asp``
         directly, NOT some construction from ``inchix.asp`` hrefs."""
 
         for target in SPECIES_ALLDATA_CAS_PILOT:

@@ -1,4 +1,4 @@
-"""Normal-mode recovery and ADR 0012 projections, against real ESS output.
+"""Normal-mode recovery and imaginary-mode projections, against real ESS output.
 
 Every Hessian here came out of a real program and is already in
 ``backend/tests/fixtures``. That is deliberate: a synthetic matrix that
@@ -20,7 +20,7 @@ for the shapes the corpus actually contains:
 ``freq_g09.log``
     Twelve atoms, an N-N-C-C-C chain with three rotatable bonds and an
     all-real spectrum whose lowest mode is a torsion. The torsion case,
-    and the only one that can support or refute ADR 0012's 70%.
+    and the only one that can support or refute the protocol's 70%.
 """
 
 from __future__ import annotations
@@ -180,7 +180,7 @@ def _orca_printed_normal_modes() -> tuple[list[float], np.ndarray]:
 def test_orca_hessian_reproduces_orca_own_reaction_coordinate_eigenvector():
     """The recovered eigenvector *is* the program's, not merely plausible.
 
-    This is the claim ADR 0013 denies. ORCA prints both the matrix and the
+    This is the claim a projection-free reading denies. ORCA prints both the matrix and the
     eigenvectors it got from diagonalising it, so recovering the second
     from the first is checkable end to end rather than self-consistent.
     The reaction coordinate agrees to seven figures in direction and to
@@ -224,7 +224,7 @@ def test_molpro_hessian_reproduces_its_stored_imaginary_frequency():
 
 
 # ---------------------------------------------------------------------------
-# Rigid-body residue -- ADR 0012's first projection
+# Rigid-body residue -- the first projection
 # ---------------------------------------------------------------------------
 
 
@@ -233,7 +233,7 @@ def test_molpro_hessian_reproduces_its_stored_imaginary_frequency():
     [("orca", 6), ("molpro", 5), ("gaussian", 12)],
 )
 def test_rigid_body_directions_separate_from_vibrations_without_a_threshold(name, expected_natoms):
-    """ADR 0012's 90% names a point inside an empty interval.
+    """The protocol's 90% names a point inside an empty interval.
 
     Diagonalising an *unprojected* Hessian returns the six rigid-body
     directions as ordinary-looking modes: across these three real
@@ -242,7 +242,7 @@ def test_rigid_body_directions_separate_from_vibrations_without_a_threshold(name
     Every one of them scores at least 0.998 rigid-body overlap and no
     genuine vibration scores above 0.01, so the *determination* separates
     them with three orders of magnitude to spare and no frequency
-    threshold involved at all. That is the whole of ADR 0012's argument
+    threshold involved at all. That is the whole of the protocol's argument
     for preferring determinations to thresholds, measured.
     """
     if name == "orca":
@@ -283,7 +283,7 @@ def test_rigid_body_residue_spans_frequencies_a_threshold_cannot_separate():
     """The residue modes are not all near zero, which is the point.
 
     In ``Orca_TS_test.hess`` the six rigid-body directions land between
-    -10.8 and +49.6 cm-1. ADR 0012's tau table would call the +49.6 one a
+    -10.8 and +49.6 cm-1. The tau table would call the +49.6 one a
     vibration under every protocol row; the projection calls it what it is
     without consulting its frequency.
     """
@@ -298,14 +298,14 @@ def test_rigid_body_residue_spans_frequencies_a_threshold_cannot_separate():
 
 
 # ---------------------------------------------------------------------------
-# Torsion -- ADR 0012's second projection
+# Torsion -- the second projection
 # ---------------------------------------------------------------------------
 
 
 def test_gaussian_lowest_real_mode_is_determined_to_be_a_torsion():
     """A real 110 cm-1 mode is 98.6% a rotation about a real C-C bond.
 
-    This is the fixture that can refute ADR 0012's 70%, and does not. The
+    This is the fixture that can refute the protocol's 70%, and does not. The
     molecule has three rotatable bonds; its lowest mode projects onto one
     of them at 0.986 and the next most torsional mode in the whole
     spectrum reaches only 0.47, so 0.70 sits between them with a factor of
@@ -351,7 +351,7 @@ def test_a_rigid_transition_state_has_no_torsion_to_find(name):
     coordinate comes back ``internal_vibration`` -- a positive statement
     that it is internal motion which is not a rotation about any bond,
     which is what a reaction coordinate should look like and is exactly
-    what ADR 0012 wants a depositor's ``torsion`` declaration checked
+    what the protocol wants a depositor's ``torsion`` declaration checked
     against.
     """
     if name == "orca":
@@ -541,7 +541,7 @@ def test_a_linear_molecule_has_five_rigid_body_degrees_of_freedom():
 
 # The extremes measured by sweeping every live record the projections apply
 # to -- 18 calculations with an imaginary mode and a stored Hessian, 6 to 27
-# atoms, 0 to 7 rotatable bonds, on 2026-08-11. All 18 carry a genuine
+# atoms, 0 to 7 rotatable bonds. All 18 carry a genuine
 # reaction coordinate, so they are the population most able to produce a
 # false torsion, and these are the two that came closest.
 CORPUS_HIGHEST_REACTION_COORDINATE_TORSION_OVERLAP = 0.344  # calculation 219
@@ -551,7 +551,7 @@ CORPUS_LARGEST_RIGID_BODY_CURVATURE_CM1 = 12.24  # calculation 453
 def test_the_thresholds_sit_inside_the_gaps_that_were_measured():
     """Changing a threshold should have to argue with the evidence for it.
 
-    Neither constant is free. ADR 0012 proposed both, and each is kept
+    Neither constant is free. The protocol fixes both, and each is kept
     because a measurement put empty space on either side of it -- so a
     future edit that moves one into the occupied region is a change of
     scientific claim, not of taste, and should fail here rather than
@@ -560,7 +560,7 @@ def test_the_thresholds_sit_inside_the_gaps_that_were_measured():
     The numbers below are the *closest approaches from real data*, not
     round figures: the stiffest non-torsion the live corpus produced, the
     one unambiguous torsion in the fixtures, and the noisiest correctly
-    framed record. See ADR 0013 §"The corpus, swept".
+    framed record.
     """
     # Torsion: measured gap [0.344, 0.986].
     assert (

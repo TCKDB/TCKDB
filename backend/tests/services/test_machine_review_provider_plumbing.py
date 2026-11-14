@@ -269,7 +269,7 @@ def _cloud_settings(**overrides) -> Settings:
 
 
 def test_cloud_mode_builds_a_real_provider(monkeypatch):
-    """Cloud mode returns the real provider (it raised NotImplementedError until 2026-09-14)."""
+    """Cloud mode returns the real provider."""
     from app.services.machine_review.providers.cloud import (
         CloudMachineReviewProvider,
     )
@@ -546,7 +546,7 @@ def test_the_three_statuses_the_prompt_asks_for_still_parse(screening):
 def test_a_key_pasted_into_the_env_var_name_setting_is_not_echoed(monkeypatch):
     """``LLM_PRECHECK_API_KEY_ENV`` holds a NAME; people will paste the key.
 
-    That slip reads as though it ought to work, and the error message used to
+    That slip reads as though it ought to work, and the error message must
     format the value straight in -- reaching a durable
     ``submission_audit_event`` and an HTTP response body.
 

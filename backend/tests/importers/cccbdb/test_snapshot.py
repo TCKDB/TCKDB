@@ -1,7 +1,7 @@
 """Offline tests for the CCCBDB snapshot archive runner.
 
 Tests inject a fake :class:`Fetcher` so no network is touched. The
-fake fetcher serves the Phase 1 hand-authored fixtures bundled at
+fake fetcher serves the hand-authored fixtures bundled at
 ``backend/app/importers/cccbdb/fixtures/``.
 """
 

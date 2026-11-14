@@ -1,4 +1,4 @@
-"""Persisting a program-run composite energy and its checks (ADR 0021, P3a).
+"""Persisting a program-run composite energy and its checks.
 
 The wire validators refuse most of what is tested here before a payload reaches
 the service, so every service-level refusal is provoked with a payload built by
@@ -117,7 +117,7 @@ def test_the_seam_refuses_a_composite_result_on_a_calculation_of_another_type_fi
 
 
 def test_an_assembled_composite_at_a_named_method_is_not_accepted(db_conn) -> None:
-    """Since P5 an assembled composite is accepted, but only at a user-built scheme sent inline.
+    """An assembled composite is accepted, but only at a user-built scheme sent inline.
 
     A named method is a program's own recipe: there is nothing to recompute it
     from. The block is built with ``model_construct`` so it reaches the service

@@ -56,7 +56,7 @@ def _name(call) -> str:
     """A callable by where it is defined, not by object identity.
 
     Some tests leave the process in a state where a route's endpoint is a
-    different function object on each build (measured on CI: the same
+    different function object on each build (on CI the same
     ``list_calculations``, defined once in the source, as two objects). The
     cache is keyed on identity so it can never serve one for the other; what
     this file must prove is that the *tree* is the same.

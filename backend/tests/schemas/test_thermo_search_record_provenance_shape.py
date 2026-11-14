@@ -1,7 +1,7 @@
 """``ThermoSearchRecord`` does not carry ``provenance``; ``ThermoRecord`` does.
 
 Recovers a guard lost when ``backend/app/api/landing.py`` and its test were
-deleted (dead-code removal, #283) — see issue #281.
+deleted.
 
 A thermo search result row is shaped ``{species, thermo}``
 (``ThermoSearchRecord`` in ``app/schemas/reads/scientific_thermo_search.py``);
@@ -10,7 +10,7 @@ the provenance block hangs off the ``thermo`` half
 never off the row itself. The landing page's JS once read
 ``record.provenance`` directly on a search result and got ``undefined`` on
 every card — the level of theory went blank and, downstream of that, the row
-was silently dropped. The bug was in a renderer that no longer exists, but
+was silently dropped. The bug was in a renderer that is gone, but
 the schema shape that made it possible is unchanged and un-guarded: nothing
 today fails if ``provenance`` ever migrated onto ``ThermoSearchRecord``
 itself (which would make the row ambiguous about which record's provenance

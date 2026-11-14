@@ -1,4 +1,4 @@
-"""The consistency context hash ignores a thermo's declared energy level (#619).
+"""The consistency context hash ignores a thermo's declared energy level.
 
 ``snapshot()`` hashes every ORM column, and ``thermo_inputs()`` feeds the D1-D6
 checks and the external Cp comparison. Adding ``thermo.energy_level_of_theory_id``
@@ -69,7 +69,7 @@ def test_only_depositor_declarations_are_excluded_and_everything_else_is_hashed(
 def test_a_target_or_protocol_does_not_restale_a_consistency_review_but_does_change_the_reproducibility_snapshot(
     db_session,
 ) -> None:
-    """No consistency check reads a declaration (#619/#633 precedent); the reproducibility snapshot does include it."""
+    """No consistency check reads a declaration; the reproducibility snapshot does include it."""
     entry = make_species_entry(db_session, make_species(db_session, smiles="[CH3]", charge=0, multiplicity=2))
     thermo = make_thermo_scalar(db_session, species_entry=entry)
     db_session.flush()

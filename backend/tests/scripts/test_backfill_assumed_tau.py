@@ -160,7 +160,7 @@ def scope(db_session):
         canonical_value="finite_difference_gradient",
     )
 
-    # E: already judged (a modern, post-ADR-0012 record) -- out of scope.
+    # E: already judged (a modern record) -- out of scope.
     calc_e = make_calculation(
         db_session,
         type=CalculationType.freq,

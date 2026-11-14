@@ -29,7 +29,7 @@ WHAT IS AND IS NOT FAKED
     so "two rows, one object" is *observed* rather than asserted.
 
     The two admin arms are faked, because they are HTTP against MinIO and
-    are measured in ``test_artifact_storage_admin.py``. What is tested here
+    are tested in ``test_artifact_storage_admin.py``. What is tested here
     is the arithmetic between them: which arm wins, what happens when one
     or both say nothing, and that "said nothing" never becomes "said zero".
 """
@@ -470,7 +470,7 @@ def test_the_ttl_is_configurable_and_a_bad_value_is_ignored(monkeypatch) -> None
 
 
 # ---------------------------------------------------------------------------
-# SeaweedFS (#545): its disk is the free-space arm, its slots a third arm
+# SeaweedFS: its disk is the free-space arm, its slots a third arm
 # ---------------------------------------------------------------------------
 
 _MIB = 1024**2
@@ -489,7 +489,7 @@ def _seaweed(disk: int, slots: int) -> seaweedfs.SeaweedCapacity:
 
 
 def test_seaweedfs_slots_are_an_arm_of_their_own(monkeypatch) -> None:
-    """Measured on 4.47: refused with 63.6 MiB of disk free and no slot room.
+    """On 4.47: refused with 63.6 MiB of disk free and no slot room.
     As one number, "free space" would have read 63.6 MiB and not warned."""
     _arms(monkeypatch)
     monkeypatch.setattr(
@@ -545,7 +545,7 @@ def test_seaweedfs_with_no_opinion_is_no_opinion(monkeypatch) -> None:
 
 
 def test_below_seaweedfs_minimum_free_the_warning_names_disk_not_slots(monkeypatch) -> None:
-    """Measured on 4.47 (fixture ``below_min_free``): at 0.77 % free every
+    """On 4.47 (fixture ``below_min_free``): at 0.77 % free every
     volume goes read-only and the master's slot count collapses to 0 free.
     The slot arm must not take the blame; "add slots" would do nothing."""
     _arms(monkeypatch)

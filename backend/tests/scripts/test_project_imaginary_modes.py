@@ -3,7 +3,7 @@
 The read API answers one calculation; this script answers "across the
 whole corpus, how many imaginary modes are rigid-body residue, how many
 are torsions, how many are neither, and where does a determination
-contradict a declaration". It is the tool ADR 0013 says a future
+contradict a declaration". It is the tool a future
 implementation should provide -- "if the projections are implemented in
 five years, every record in the corpus can be re-decided against them" --
 so the properties worth pinning are the same ones
@@ -143,8 +143,8 @@ def test_a_determination_contradicting_a_declaration_does_not_exit_zero(db_sessi
     """The finding an operator has to look at.
 
     A depositor declaring ``torsion`` on a reaction coordinate is what
-    ADR 0013 said TCKDB could not check. The sweep names the record, both
-    readings, and exits 1 -- and changes nothing, because under ADR 0008 a
+    TCKDB cannot check otherwise. The sweep names the record, both
+    readings, and exits 1 -- and changes nothing, because under the blocking-tier rule a
     projection is an expectation and a conflict is a curation question
     rather than a validation failure.
     """
@@ -183,7 +183,7 @@ def test_a_record_with_no_hessian_is_counted_as_not_determinable(db_session, swe
 def test_the_sweep_writes_nothing(db_session, sweep, monkeypatch):
     """It is a read of a computation, and there is nothing for it to store.
 
-    ADR 0013's objection is that a projection is an inference and TCKDB
+    The objection is that a projection is an inference and TCKDB
     records observations. Running the projections over the whole corpus
     must therefore leave the corpus exactly as it was.
     """

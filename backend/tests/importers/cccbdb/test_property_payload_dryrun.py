@@ -393,7 +393,7 @@ class TestPolarizabilityIsoSurface:
             archive_dir=archive, output_dir=out, use_cache_only=True
         )
         data = json.loads((out / "polarizability_iso.json").read_text())
-        # Live header is "alpha", not the previously-inferred "iso".
+        # Live header is "alpha", not an inferred "iso".
         assert "alpha" in data["detected_headers"]
         assert "Molecule" in data["detected_headers"]
         assert data["parsed_row_count"] > 0
@@ -526,7 +526,7 @@ class TestHealthGate:
 
 
 class TestHfZeroOutcome:
-    """Pin Part D's decision: hf_0 (hf0kx.asp) stays in the pilot as
+    """Pin: hf_0 (hf0kx.asp) stays in the pilot as
     a non-duplicate of hf_0_with_uncertainty (goodlistx.asp). Both
     pages produce ``enthalpy_of_formation`` payloads; goodlist is
     the curated subset with uncertainties."""

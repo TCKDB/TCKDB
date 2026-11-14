@@ -1,4 +1,4 @@
-"""Behaviour of the allene mark reader that the Centres table does not reach (#832, part 2; review round 1)."""
+"""Behaviour of the allene mark reader that the Centres table does not reach."""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ def test_reviewer_run_centres_labels(smiles: str, expected: str) -> None:
     ],
 )
 def test_a_standard_isotope_in_the_text_reads_like_the_plain_atom(smiles: str, twin: str) -> None:
-    """``[1H]`` is a plain hydrogen to the identity molecule; the raw parse used to keep it and misalign (KeyError)."""
+    """``[1H]`` is a plain hydrogen to the identity molecule; a raw parse would keep it and misalign (KeyError)."""
 
     assert _resolve(smiles).descriptor == _resolve(twin).descriptor in ("Ra", "Sa")
     assert stereo.descriptor_of_mol(identity_mol_from_smiles(smiles)) == _resolve(smiles).descriptor

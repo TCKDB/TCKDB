@@ -1,4 +1,4 @@
-"""Contract test: ``tckdb-client`` Phase-2 reaction builder payloads
+"""Contract test: ``tckdb-client`` reaction builder payloads
 must validate against ``ComputedReactionUploadRequest``.
 
 Lives in the backend test tree on purpose — it imports both the
@@ -16,7 +16,7 @@ import pytest
 
 from tests._ci_dependency import require_module
 
-# Skips locally without the client; fails on CI, which installs it (#575).
+# Skips locally without the client; fails on CI, which installs it.
 require_module("tckdb_client.builders", install="pip install -e clients/python")
 
 from tckdb_client.builders import (

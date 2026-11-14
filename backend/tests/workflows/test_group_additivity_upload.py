@@ -1,6 +1,6 @@
 """Workflow + read tests for group-additivity (Benson) estimation provenance.
 
-Exercises the vertical slice added in DR-0035: an estimated thermo upload
+Exercises the vertical slice: an estimated thermo upload
 can carry a GA breakdown (scheme + per-group components); the breakdown
 persists to ``group_additivity_scheme`` / ``applied_group_additivity`` /
 ``applied_group_additivity_component`` and is surfaced on the thermo read.
@@ -253,15 +253,14 @@ def test_service_guard_rejects_ga_on_non_estimated_thermo(db_session):
 def test_the_missing_thermo_guard_does_not_answer_with_its_own_name(db_session):
     """The refusal must not advertise the function it was raised in.
 
-    The message used to be written in the house style,
+    The message must not be written in the house style,
     ``f"{context}: <prose>"``, with the enclosing function as ``context`` --
-    so the token landed in the code position and the envelope published
+    the token would land in the code position and the envelope would publish
     ``code="create_applied_group_additivity"``: a function name presented to
-    a client as a branchable contract. It was in no register, in no generated
-    client constant, and it moved the day somebody renamed the function.
-    #164 stopped it being promoted; #178 reworded it, which is the actual
-    fix, and dropped its catalogue entry because a message with no leading
-    token is not a code by any spelling.
+    a client as a branchable contract. It would be in no register, in no generated
+    client constant, and it would move the day somebody renamed the function.
+    Not promoting it is not enough: the message has no leading
+    token, because a message with no leading token is not a code by any spelling.
 
     The envelope is built here by the *real* handler rather than asserted
     about in the abstract, because what a depositor receives is the thing

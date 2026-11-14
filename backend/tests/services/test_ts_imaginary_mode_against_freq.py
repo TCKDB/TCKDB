@@ -108,7 +108,7 @@ def test_a_pass_with_two_modes_needs_a_designated_reaction_coordinate(db_session
 
 
 def test_two_modes_with_a_designation_are_accepted_not_refused_as_not_one(db_session) -> None:
-    """ADR 0012 deliberately allows extra (torsional) imaginary modes.
+    """The protocol deliberately allows extra (torsional) imaginary modes.
 
     This is the test that goes red if someone "tightens" the rule to demand
     exactly one imaginary mode: the stored result designates mode 1, so a pass

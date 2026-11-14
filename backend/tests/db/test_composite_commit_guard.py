@@ -1,4 +1,4 @@
-"""The commit guard is installed on real sessions and refuses an unfinished composite (ADR 0021, P5).
+"""The commit guard is installed on real sessions and refuses an unfinished composite.
 
 A guard that is defined but never installed passes every test that calls it directly; this one commits
 through a real ``Session`` so removing the install call fails here.

@@ -1,4 +1,4 @@
-"""A cis-trans isomerisation is a reaction between two entries of one species (DR-0038).
+"""A cis-trans isomerisation is a reaction between two entries of one species.
 
 Since the species key is the constitution, ``Z-2-butene -> E-2-butene`` has the same species on
 both sides. The graph reaction (``chem_reaction``) must accept that, whether the two entries are

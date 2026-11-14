@@ -1,4 +1,4 @@
-"""Contract test for the Phase-4 ``ComputedSpeciesUpload.statmech`` field.
+"""Contract test for the ``ComputedSpeciesUpload.statmech`` field.
 
 Imports both the client builder layer and the backend schema; verifies
 the wire shape the builder emits for the statmech block validates
@@ -12,7 +12,7 @@ import pytest
 
 from tests._ci_dependency import require_module
 
-# Skips locally without the client; fails on CI, which installs it (#575).
+# Skips locally without the client; fails on CI, which installs it.
 require_module("tckdb_client.builders", install="pip install -e clients/python")
 
 from tckdb_client.builders import (

@@ -337,7 +337,7 @@ class TestGaussianElementTokenNormalization:
 
     @pytest.mark.parametrize("symbol", ["D", "T"])
     def test_deuterium_and_tritium_symbols_are_not_rejected(self, symbol):
-        # D/T are legitimate deposited symbols (ADR 0008), not something
+        # D/T are legitimate deposited symbols, not something
         # this module's element-token check may treat as unresolvable --
         # and not real elements RDKit's periodic table recognises, so
         # they must be allowlisted rather than validated through it.

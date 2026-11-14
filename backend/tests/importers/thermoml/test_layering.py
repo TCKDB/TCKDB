@@ -10,9 +10,9 @@ that test keeps DB-facing services from pulling in parser internals;
 this one keeps the importer package (which runs against arbitrary
 third-party bytes, no DB session available) from reaching into
 ``app.db`` session/engine machinery or ``app.services`` business logic.
-Persistence is Phase C-E3, a different package.
+Persistence is a different package.
 
-PINNED EXCEPTION, minimized 2026-09-20: ``mapping.py`` needs four
+PINNED EXCEPTION: ``mapping.py`` needs four
 enums -- ``MolecularPropertyKind`` (via the wire schema import above),
 ``ObservedStateBasis``, ``ObservedUncertaintyAssessor`` and
 ``ObservedUncertaintyKind``. Of those, only ``ScientificOriginKind``
@@ -98,7 +98,7 @@ def test_no_app_services_imports():
 
 def test_allowed_app_db_module_is_actually_used():
     """Guards against the allowlist silently going stale: if nothing
-    under the package imports ``app.db.models.common`` any more, the
+    under the package imports ``app.db.models.common`` any longer, the
     exception should be removed, not left as dead cover."""
 
     found = False

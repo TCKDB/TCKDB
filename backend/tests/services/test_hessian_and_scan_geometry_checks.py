@@ -1,4 +1,4 @@
-"""A Hessian's geometry and a scan point's geometry are held to the subject (#680).
+"""A Hessian's geometry and a scan point's geometry are held to the subject.
 
 ``calculation_geometry_composition_mismatch`` and
 ``calculation_geometry_isotope_mismatch`` ran only on the calculation's
@@ -500,7 +500,7 @@ def test_a_refusal_in_the_artifact_hook_does_not_fail_the_upload(
 def test_reanalysis_is_never_handed_a_wrong_isotope_hessian_geometry(db_conn) -> None:
     """The deposit is refused, so no ``calc_hessian`` row exists for reanalysis.
 
-    Before #680 this payload was accepted and ``reanalyse_calculation`` then took
+    This payload is refused; otherwise ``reanalyse_calculation`` then took
     deuterium masses from the Hessian's geometry. A calculation filed under the
     same protium species with no Hessian reads as ``hessian_not_stored``: there
     is nothing to mis-mass.
@@ -525,7 +525,7 @@ def test_reanalysis_is_never_handed_a_wrong_isotope_hessian_geometry(db_conn) ->
 
 
 # ---------------------------------------------------------------------------
-# Legacy species: isotope labels on species.smiles, NULL isotope_key (#680)
+# Legacy species: isotope labels on species.smiles, NULL isotope_key
 # ---------------------------------------------------------------------------
 
 
@@ -544,7 +544,7 @@ def _h2_geometry_row(session: Session, *, mass_numbers: tuple[int | None, int | 
 
 
 def _legacy_calc(session: Session, smiles: str) -> Calculation:
-    """A calculation under a species stored the way it was before #66.
+    """A calculation under a species stored the legacy way.
 
     ``species.smiles`` carries the label and ``species_entry.isotope_key`` is
     NULL: the migration that added the column deliberately did not backfill it.
@@ -586,7 +586,7 @@ def test_an_unlabelled_legacy_species_is_still_all_standard(db_session) -> None:
 
 
 def test_reanalysis_reads_a_legacy_entry_the_way_the_upload_check_does(db_session) -> None:
-    """Write and read agree (#680): upload accepts a deuterated Hessian under a
+    """Write and read agree: upload accepts a deuterated Hessian under a
     legacy ``[2H][2H]`` NULL-key species, so reanalysis must not then call that
     entry protium and refuse the same Hessian as an isotope conflict."""
 
@@ -604,7 +604,7 @@ def test_reanalysis_reads_a_legacy_entry_the_way_the_upload_check_does(db_sessio
 
 
 # ---------------------------------------------------------------------------
-# IRC points: every direction, not only forward/reverse (#680)
+# IRC points: every direction, not only forward/reverse
 # ---------------------------------------------------------------------------
 
 

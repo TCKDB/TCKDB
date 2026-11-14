@@ -249,7 +249,7 @@ def test_a_terminal_status_is_excluded_with_its_reason_and_is_never_an_unexplain
 
 
 def test_an_entrys_own_review_status_never_excludes_its_records(db_session):
-    """The entry is a scoping parent (owner decision 2026-10-24): only the candidate's own status counts."""
+    """The entry is a scoping parent: only the candidate's own status counts."""
     scene = build(db_session)
     restatus(db_session, SubmissionRecordType.species_entry, scene.world.entry.id, RecordReviewStatus.not_reviewed)
     result = scene.qualify(scene.request(min_review_status="approved"))

@@ -337,7 +337,7 @@ def test_monatomic_statmech_with_only_sp_stays_quiet() -> None:
 
 
 def test_subject_is_polyatomic_uses_evidence_before_the_heuristic() -> None:
-    """#608: geometry, then rigid_rotor_kind, then identity, then the heuristic."""
+    """geometry, then rigid_rotor_kind, then identity, then the heuristic."""
     from app.db.models.common import RigidRotorKind
     from app.services.monatomic import statmech_subject_is_polyatomic
 

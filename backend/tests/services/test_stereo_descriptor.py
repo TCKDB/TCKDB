@@ -203,7 +203,7 @@ def test_a_pseudo_asymmetric_double_bond_has_lower_case_tokens_and_four_isomers_
 def test_all_cis_trimethylcyclohexane_is_a_known_limit_of_the_labeller() -> None:
     """Pinned, not endorsed: RDKit's CIP labeller names only some ring centres of 1,3,5-trimethylcyclohexane. The two
     isomers stay distinct (injective); the all-cis one reads ``r,?,?`` although it is fully specified. Documented in
-    DR-0038 as a limitation."""
+    the identity rules as a limitation."""
     descriptors = {
         s: resolve(s)
         for s in ("C[C@H]1C[C@H](C)C[C@@H](C)C1", "C[C@H]1C[C@@H](C)C[C@@H](C)C1")

@@ -1,4 +1,4 @@
-"""Tests for the ADR 0012 2026-09-04 amendment's assumption table.
+"""Tests for the assumption table.
 
 :mod:`app.services.hessian_method_inference` is a pure, table-driven
 function: given a software name and a level-of-theory method, it either

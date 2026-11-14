@@ -385,7 +385,7 @@ def test_reusing_a_tagged_version_fails(tmp_path: Path) -> None:
     """A tag is a pin something downstream may hold. Reusing it is refused.
 
     This is the real ``tckdb-schemas-v0.8.0`` shape: the tag pins 0.8.0
-    "for tckdb-adapters/tckdb_arc (Phase 1)", and a later change shipped
+    "for tckdb-adapters/tckdb_arc ", and a later change shipped
     different contents under the same number. Constructed so that
     monotonicity *passes* -- otherwise this would be testing the bump check
     again rather than the tag check.

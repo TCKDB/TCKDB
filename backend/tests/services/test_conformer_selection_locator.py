@@ -149,7 +149,7 @@ def test_two_groups_are_separated_by_the_ref_and_not_by_the_label() -> None:
     ``conformer_group_ref`` one, so the ref is what the advice names.
     Ordering the label first would name the difference a depositor cannot
     express while a field that expresses it sits unused, which is the
-    defect ``conformer_group_ref`` was added to end.
+    defect ``conformer_group_ref`` exists to end.
     """
     found = discriminate(
         [
@@ -173,7 +173,7 @@ def test_every_locator_axis_is_a_field_the_payload_actually_has() -> None:
     ``ConformerSelectionContentRef``. Nothing else fails if it drifts: a
     forgotten entry would quietly tell depositors a settable field cannot
     be set, and a spurious one would tell them to set a field that does
-    not exist — the failure the ref was added to remove, reintroduced by a
+    not exist — the failure the ref exists to prevent, reintroduced by a
     constant.
     """
     fields = set(ConformerSelectionContentRef.model_fields)
@@ -244,8 +244,8 @@ def test_a_difference_only_in_the_label_is_reported_as_unactionable() -> None:
     below is — the classification has a branch for "the axis that
     separates these is one you cannot write down", and a ``false`` a
     client branches on means nothing if the branch producing it is never
-    executed. Since ``conformer_group_ref`` joined the locator this is the
-    only way in; before it, this was every refusal the route produced.
+    executed. With ``conformer_group_ref`` in the locator this is the
+    only way in.
     """
     candidates = [
         _candidate(1, label=None, group_ref="cgrp_a"),
@@ -320,7 +320,7 @@ def test_the_ambiguity_refusal_publishes_the_documented_context() -> None:
 def test_no_context_value_is_a_row_id() -> None:
     """The selection ids are the obvious discriminator and the banned one.
 
-    DR-0028 Requirement 2. ``SelectionCandidate`` carries the id because
+    The no-primary-key rule. ``SelectionCandidate`` carries the id because
     the success path needs it, so the guard that matters is that no axis
     names it.
     """
