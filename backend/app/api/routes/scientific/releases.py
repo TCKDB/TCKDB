@@ -198,7 +198,7 @@ def scientific_release_artifact(
             status_code=500,
             detail=(
                 "release_artifact_corrupt: the stored bytes for this artifact "
-                "no longer match their recorded digest. This is a storage "
+                "do not match their recorded digest. This is a storage "
                 "integrity failure, not ordinary corpus growth; restore from "
                 "backup before citing this release."
             ),

@@ -1071,7 +1071,7 @@ class TestAtomMapping:
             json=_bundle(_map(source="inferred")),
         )
         body = _assert_code(response, "atom_map_inferred_requires_note")
-        assert "ADR 0011" in str(body["detail"])
+        assert "labelled, separable" in str(body["detail"])
 
     def test_the_structured_facts_reach_the_envelope_context(self, client):
         """``context`` is the half of the contract that is not prose.

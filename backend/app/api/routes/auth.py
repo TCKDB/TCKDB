@@ -339,7 +339,7 @@ def me(
     tckdb_session: Optional[str] = Cookie(None, alias=SESSION_COOKIE_NAME),
     session: Session = Depends(get_db),
 ) -> MeResponse | JSONResponse:
-    """The signed-in user. A session cookie that no longer resolves is answered 401 *and cleared*, as logout clears it.
+    """The signed-in user. A session cookie that does not resolve is answered 401 *and cleared*, as logout clears it.
 
     The scientific detail reads answer 401 for a credential that is present and invalid, so a client that keeps a
     revoked or expired cookie would otherwise be refused on every read and never learn to drop it. This probe is where

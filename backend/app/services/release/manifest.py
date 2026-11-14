@@ -600,7 +600,7 @@ def verify_release(session: Session, release: DatasetRelease) -> VerificationRep
     rebuilt = render_manifest_document(snapshot_from_manifest(manifest))
     if canonical_json(rebuilt) != canonical_json(document):
         problems.append(
-            "manifest: the stored document no longer matches the manifest's "
+            "manifest: the stored document does not match the manifest's "
             "own snapshot columns"
         )
 
@@ -639,7 +639,7 @@ def live_divergence(session: Session, release: DatasetRelease) -> DivergenceRepo
     for row in sorted(manifest.artifacts, key=lambda a: a.path):
         fresh = rendered.get(row.path)
         if fresh is None:
-            differences.append(f"{row.path}: no longer renderable from live data")
+            differences.append(f"{row.path}: not renderable from live data")
             continue
         if fresh.sha256 != row.sha256:
             differences.append(

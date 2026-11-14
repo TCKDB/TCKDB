@@ -511,7 +511,7 @@ def test_a_reported_solve_reaches_chemkin_only_when_asked_for_and_then_with_its_
     text = out["files"]["chem.inp"]
     literature = out["provenance"]["origin"]["literature_ref"]
     assert literature and f"[reported; literature {literature}" in text and "kind=reported" in text.splitlines()[0]
-    assert "ADR 0010" in text and any("transcribed" in a for a in out["assumptions"])
+    assert "not derived by TCKDB" in text and any("transcribed" in a for a in out["assumptions"])
     native = export(client, world, manifest, det, [fit]).json()  # native carries the kind, so it is not gated
     assert native["members"][0]["solve_kind"] == "reported" and native["members"][0]["literature_ref"] == literature
 

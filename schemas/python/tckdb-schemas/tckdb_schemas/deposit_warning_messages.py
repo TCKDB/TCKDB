@@ -1208,14 +1208,14 @@ def _state_sources_partial(context: Mapping[str, Any]) -> str | None:
 
 
 _ATOM_MAP_REMEDY = {
-    "atom_map_field": " If you followed the intrinsic reaction coordinate, you already have this: supply it as 'atom_map' (ADR 0011).",
+    "atom_map_field": " If you followed the intrinsic reaction coordinate, you already have this: supply it as 'atom_map'.",
     "pdep_bundle": (
-        " The pressure-dependent network bundle cannot yet carry a map, so to record one for this micro reaction "
-        "deposit it through the computed-reaction upload, which accepts 'atom_map' (ADR 0011)."
+        " The pressure-dependent network bundle cannot carry a map, so to record one for this micro reaction "
+        "deposit it through the computed-reaction upload, which accepts 'atom_map'."
     ),
     "standalone_transition_state": (
         " To record one for this micro reaction, supply 'atom_map' together with 'geometry_key' (naming the "
-        "saddle-point geometry) and a 'key' and 'geometry' on each reaction participant it maps (ADR 0011); the "
+        "saddle-point geometry) and a 'key' and 'geometry' on each reaction participant it maps; the "
         "computed-reaction upload accepts the same map."
     ),
 }

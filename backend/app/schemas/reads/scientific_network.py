@@ -535,7 +535,7 @@ class NetworkSolveEnergyTransferSummary(BaseModel):
 class NetworkSolveStateEnergySourceSummary(BaseModel):
     """The calculation one participant of a state contributes to its energy.
 
-    ``species_entry_ref`` is the participant it is the source for; null only for a legacy single
+    ``species_entry_ref`` is the participant it is the source for; null only for a single
     source that belongs to no participant of the state (never inferred from another row).
     ``stoichiometry`` is that participant's coefficient in the state.
     """

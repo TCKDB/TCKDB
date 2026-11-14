@@ -126,7 +126,7 @@ _REVIEW = Vocabulary(
         Term(
             token="deprecated",
             means=(
-                "The record should no longer be used — superseded by a better "
+                "The record is not to be used — superseded by a better "
                 "one, or withdrawn. It is kept rather than deleted so an "
                 "existing citation still resolves. Absent from results unless "
                 "the request asks with `include_deprecated=true`."
@@ -183,8 +183,8 @@ _TRUST_BADGE = Vocabulary(
                 "A discrete structural failure was found, and the badge is set "
                 "by that finding rather than by the ratio. Always read "
                 "`trust.evidence.hard_fail_reason` beside it: the reason says "
-                "whether the record contradicts itself, or whether TCKDB can no "
-                "longer produce the evidence it rests on."
+                "whether the record contradicts itself, or whether TCKDB cannot "
+                "produce the evidence it rests on."
             ),
         ),
     ),
@@ -244,13 +244,9 @@ _TRUST_OUTCOME = Vocabulary(
     worked_example=(
         "Check names are written as assertions, so read the name and the value "
         "together: `\"ts_graph_or_smiles_present\": \"missing\"` means *there "
-        "is no SMILES or mol blob on this transition-state entry*. Until "
-        "2026-08-24 the same fact was reported as the string "
-        "`ts_graph_or_smiles_present` sitting inside an array named "
-        "`missing_checks`, which read as a double negative; the four arrays "
-        "`passed_checks` / `missing_checks` / `warning_checks` / "
-        "`not_applicable_checks` were replaced by this one map. If you are "
-        "reading a client written before then, that is what those arrays were."
+        "is no SMILES or mol blob on this transition-state entry*. Every check appears "
+        "once, in one map, with its state as the value, so a check is never listed by name "
+        "inside an array such as `missing_checks`, which would read as a double negative."
     ),
 )
 
@@ -340,19 +336,19 @@ _HARD_FAIL = Vocabulary(
         Term(
             token="geometry_validation_failed",
             means=(
-                "Historic: stored trust results under the version 1 rubrics carried this when an automated geometry "
-                "comparison failed. Version 2 rubrics no longer hard-fail on it; the failure is a warning on the "
+                "Carried only by stored trust results under the version 1 rubrics, when an automated geometry "
+                "comparison failed. Version 2 and later rubrics report that failure as a warning on the "
                 "geometry check."
             ),
         ),
         Term(
             token="artifact_integrity_failed",
             means=(
-                "The stored bytes behind one of this calculation's artifacts no "
-                "longer match their digest, or are gone. This one is a "
+                "The stored bytes behind one of this calculation's artifacts do "
+                "not match their digest, or are gone. This one is a "
                 "statement about **TCKDB's custody of the evidence**, not about "
                 "the depositor's science: the record may be perfectly good and "
-                "we can no longer show you what it rests on. It reflects the "
+                "we cannot show you what it rests on. It reflects the "
                 "latest observation per artifact, so a restored object clears "
                 "it."
             ),
@@ -403,15 +399,15 @@ _HARD_FAIL = Vocabulary(
         Term(
             token="geometry_validation_failed_for_source_calculation",
             means=(
-                "Historic: stored version 2 transition-state trust results carried this when a supporting calculation "
-                "failed the automated geometry comparison. Version 3 no longer hard-fails on it; it is a warning."
+                "Carried only by stored version 2 transition-state trust results, when a supporting calculation "
+                "failed the automated geometry comparison. Version 3 and later rubrics report it as a warning."
             ),
         ),
         Term(
             token="frequency_source_has_zero_imaginary_modes_for_validated_ts",
             means=(
-                "Historic: stored version 2 transition-state trust results carried this when the latest "
-                "frequency result reported no imaginary mode. Version 3 issues no frequency verdict; the same fact is "
+                "Carried only by stored version 2 transition-state trust results, when the latest "
+                "frequency result reported no imaginary mode. Version 3 and later issue no frequency verdict; the same fact is "
                 "the warning `no_frequency_result_lacks_an_imaginary_mode`, and the scoped judgement (does a usable "
                 "result on the evaluated geometry contradict the saddle claim) is the structure assessment's."
             ),
@@ -419,9 +415,9 @@ _HARD_FAIL = Vocabulary(
         Term(
             token="frequency_source_reaction_coordinate_not_designated_for_validated_ts",
             means=(
-                "Historic: stored version 2 transition-state trust results carried this when the latest "
+                "Carried only by stored version 2 transition-state trust results, when the latest "
                 "frequency result reported several imaginary modes without a designated reaction coordinate. Version 3 "
-                "issues no frequency verdict; the missing designation is the missing check "
+                "and later issue no frequency verdict; the missing designation is the missing check "
                 "`reaction_coordinate_designated_for_ts`, and the structure assessment reports it as the unresolved "
                 "`reaction_coordinate_not_established`."
             ),
@@ -507,7 +503,7 @@ _COMPOSITE_VERIFICATION = Vocabulary(
             token="recompute_mismatch",
             means=(
                 "The same recomputation disagrees. This can only happen after the fact, because a total that "
-                "disagreed was refused at upload: an input's stored energy is no longer what the total was "
+                "disagreed was refused at upload: an input's stored energy differs from what the total was "
                 "checked against (a single point whose energy a later log upload filled in, say; an "
                 "accepted input cannot change). "
                 "`difference_hartree` is the stated total minus the recomputed one."
@@ -546,9 +542,9 @@ _LEGACY_COMPOSITE_SHAPE = Vocabulary(
     enum=LegacyCompositeShape,
     carried_by="`levels.legacy_composite_shape` on a record, and the same field on a calculation",
     summary=(
-        "A way of depositing a composite energy from before TCKDB had a `composite` calculation type. "
+        "A way of depositing a composite energy without a `composite` calculation type. "
         "It is an annotation only: the record reads exactly as it was deposited, and its levels are "
-        "derived as they always were."
+        "derived from the stored links."
     ),
     terms=(
         Term(
@@ -633,8 +629,8 @@ _READ_PROFILE = Vocabulary(
                 "browse, select or export returns. A detail page serves any "
                 "record that is not `rejected` or `deprecated`, badged, and the "
                 "linked evidence of a returned record is shown (with its badge "
-                "where the response carries `review_status_by_ref`; a legacy "
-                "single-record read carries the record's own status in the "
+                "where the response carries `review_status_by_ref`; a "
+                "single-record read on the `/api/v1` entity routes carries the record's own status in the "
                 "`X-TCKDB-Review-Status` header); only `rejected` and "
                 "`deprecated` evidence is withheld, and a request cannot lift "
                 "that. Records are not annotated with any release selection that names them — "
@@ -828,8 +824,8 @@ _KINETICS_DIRECTION = Vocabulary(
         "It is stated relative to the reaction entry's stored "
         "reactant-to-product orientation, which is what makes it a different "
         "question from `matched_direction`: that one is about your query, this "
-        "one is about the numbers. A record may leave it unset — the historical "
-        "default — in which case the value comes back empty and all you know is "
+        "one is about the numbers. A record may leave it unset, "
+        "in which case the value comes back empty and all you know is "
         "that the producer did not say."
     ),
     terms=(

@@ -37,7 +37,7 @@ _DEFAULT_USER_AGENT = (
     "tckdb-cccbdb-resolver-diagnostics/0.1 "
     "(+https://github.com/TCKDB/TCKDB; "
     "mailto:calvin.p@campus.technion.ac.il) "
-    "phase=resolver-debug"
+    "mode=resolver-debug"
 )
 
 

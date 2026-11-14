@@ -416,6 +416,6 @@ def resolve_species_data_page_from_search(
     """
 
     raise NotImplementedError(
-        "Phase 3b ships catalog-only. The search/form resolver is "
-        "intentionally deferred."
+        "The catalog parser is catalog-only; there is no search/form "
+        "resolver."
     )

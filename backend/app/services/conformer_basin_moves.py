@@ -200,7 +200,7 @@ def reset_review(session: Session, group_id: int, report: ReassignmentReport, *,
         return
     reason = (
         "Conformer group membership changed (basins are recomputed as connected components of the optimised "
-        "structures); the review of the previous membership no longer applies."
+        "structures); the review of the previous membership does not carry over."
     )
     session.execute(
         text(

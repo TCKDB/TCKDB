@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.174.4 - 2026-11-14
+
+Refusal and warning messages in the package state the rule without design-record references, and the energy-correction frequency-level refusal drops "for now". The package README points to this changelog instead of repeating it. No code, field, payload shape or condition changes.
+
 ## 0.174.3 - 2026-11-12
 
 The contribution-bundle example in the contract shows `source_instance.schema_version` as the current Alembic revision. `schema_version` is a free-form non-empty string that no import reads. No refusal, warning, field or behaviour changes.
