@@ -1147,7 +1147,7 @@ def _load_workflow_tool_release_summaries(
 ) -> dict[int, WorkflowToolReleaseSummary]:
     """Bulk-project ``workflow_tool_release`` rows for the thermo's OWN FK.
 
-    Feeds ``ThermoProvenance.workflow_tool_release`` (e.g. ARC 1.1.0 or RMG-Py 3.2.0).
+    Feeds ``ThermoProvenance.workflow_tool_release`` (e.g. ARC 1.1.0, or the mechanism a CHEMKIN import names).
     """
     if not workflow_tool_release_ids:
         return {}

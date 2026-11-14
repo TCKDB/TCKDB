@@ -79,7 +79,7 @@ _KESHARWANI = (
 )
 _ZIPSE = "secondary: Zipse group teaching pages, zipse.cup.uni-muenchen.de, 'Overview of Gaussian theories'"
 _ARC_METHODS = (
-    "Source: ARC data/ess_methods.yml (d9f47ab9), gaussian list: the spelling written for this method."
+    "Source: ARC data/ess_methods.yml (d9f47ab9), gaussian list: the spelling ARC's Gaussian method list gives for this method."
 )
 
 

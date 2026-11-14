@@ -77,9 +77,9 @@ class ThermoSourceCalculationIn(SchemaBase):
     Exactly one of ``calculation_key`` (inline reference into the same
     upload's ``calculations`` list) or ``existing_calculation_id`` (FK
     reference to a row already persisted in the ``calculation`` table)
-    must be provided. A typical pipeline uploads opt/freq/sp during
-    conformer upload, so the thermo upload references those existing rows
-    rather than re-declaring duplicate calculations.
+    must be provided. A pipeline that has already uploaded opt/freq/sp in a conformer
+    upload references those rows here rather than re-declaring duplicate
+    calculations.
 
     Audience guidance:
 
@@ -245,11 +245,11 @@ class ThermoUploadRequest(SchemaBase):
     # Standard-state reference pressure (bar) and physical phase.
     #
     # ``reference_pressure_bar`` is left unset (``None``) at the field level
-    # and is NEVER defaulted, for any origin. Computed producers
-    # typically compute entropy with a translational partition function that
-    # hardcodes 1 atm (101325 Pa) and record no pressure anywhere in their
-    # output, so a default would stamp every computed thermo record from
-    # such a producer with a standard state its own numbers were not computed at -- an
+    # and is NEVER defaulted, for any origin. Many
+    # statistical-mechanics codes (ARC and RMG among them) compute entropy at
+    # 1 atm (101325 Pa), and an upload that does not state its pressure gives
+    # TCKDB nothing to tell 1 atm from 1 bar. A default would stamp such a
+    # record with a standard state its numbers were not computed at -- an
     # offset of R*ln(1.01325) on every gas-phase entropy, invisible and
     # systematic. A wrong default is a plausible-looking error nothing
     # detects, so omission stays omission. An explicit value (including an
@@ -262,7 +262,7 @@ class ThermoUploadRequest(SchemaBase):
     # choice a producer could plausibly have gotten wrong -- it is a direct
     # consequence of the ideal-gas rigid-rotor/harmonic-oscillator
     # statistical mechanics every computed-origin producer in this system
-    # uses (RMG's translational partition function, which workflow tools call, has no
+    # uses (RMG's translational partition function, which Arkane uses, has no
     # non-gas mode). ``level_of_theory.solvent``/``solvent_model``
     # characterize the electronic-energy calculation, not the thermo
     # standard state.

@@ -730,9 +730,10 @@ def record_software_reconciliation(
 
     **Software identity:** when the parsed banner names a *different program*
     than the declared ``name``, the observed program is what actually
-    ran — an artifact is real evidence; a declared name can be a stale
-    value that rode along from an unrelated job (a producer's per-job-type
-    version map, not this database's business to fix). In that case
+    ran — an artifact is real evidence; a producer can carry a stale
+    or inherited software name (from a per-job-type version map, for example)
+    into an unrelated job's release, which is not this database's business to
+    fix. In that case
     ``software_release_id`` is repointed at the observed release and the
     declared string is preserved on ``calculation.declared_software_banner``
     rather than discarded. Use :func:`software_reconciliation_warning` to

@@ -240,8 +240,8 @@ class SoftwareReleaseRef(SchemaBase):
 
         1. If ``version`` has no internal whitespace, it is not a banner
            shape at all -- return silently. This also deliberately leaves
-           the unrelated literal string ``"None"`` alone (86 rows on the
-           recorded fixtures; a different defect -- something serialised
+           the unrelated literal string ``"None"`` alone (86 rows in the
+           ``tests/fixtures/arc_runs/`` payloads; a different defect -- something serialised
            Python's ``None`` through ``str()`` upstream -- with no comma,
            space, or structure a version/revision split could act on).
 

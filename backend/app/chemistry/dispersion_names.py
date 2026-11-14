@@ -5,9 +5,10 @@ lower-cases it), and the method key joins D3(BJ) spellings inside the method
 string. This module adds two more joins:
 
 * the dispersion **column** joins ``d3bj``, ``gd3bj`` and
-  ``empiricaldispersion=gd3bj``: a producer that copies ``level.dispersion``
-  into a Gaussian route unchanged sends one correction in all three
-  spellings; and
+  ``empiricaldispersion=gd3bj``, which name one correction (D3 with
+  Becke-Johnson damping): a producer that copies the Gaussian route option
+  into ``level_of_theory.dispersion`` sends the second or third, one that
+  stores the name sends the first; and
 * ``b3lyp-d3bj`` (dispersion folded into the method) is the same level of
   theory as ``b3lyp`` with ``dispersion=d3bj``.
 
@@ -18,7 +19,7 @@ under the same rules as the method table (``method_names.py``): an entry is
 admitted only if every program checked means the same correction by the
 spelling. Scope is the same as there: the hash cannot see a program.
 
-The table, with the canonical spelling ORCA and workflow tools write:
+The table, with each key in ORCA's spelling (lower-cased):
 
 ==================  ===========  =========================================
 spelling            key          source of the claim
@@ -43,9 +44,8 @@ wrapped value whose inside is *not* in the table (``empiricaldispersion=pfd``)
 is left as written: only what the table recognises is joined.
 
 **Bare ``d3`` stays its own key.** ORCA's ``D3`` is BJ-damped while Psi4's
-``-d3`` is zero-damped, so neither ``d3bj`` nor ``d3zero`` can claim it. (Some
-producers fold ``gd3`` into ``d3``; this key deliberately does not: ``gd3``
-is zero damping and is keyed so.) ``pfd`` (Petersson-Frisch),
+``-d3`` is zero-damped, so neither ``d3bj`` nor ``d3zero`` can claim it. (``gd3`` is
+zero damping and is keyed ``d3zero``, never folded into bare ``d3``.) ``pfd`` (Petersson-Frisch),
 ``d4``, ``d3mbj`` and the rest are not in the table.
 
 Folded dispersion

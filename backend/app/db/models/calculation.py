@@ -1534,8 +1534,7 @@ class CalculationArtifact(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     checkpoints).
 
     Note: ``checkpoint`` and ``formatted_checkpoint`` are supported
-    artifact kinds, but they are opt-in and expensive. Producers (e.g.
-    ARC, AutoTST) should default to ``output_log`` only. Checkpoint-class
+    artifact kinds, but they are opt-in and expensive. Producers should default to ``output_log`` only. Checkpoint-class
     artifacts are mainly useful for curated reanalysis, restart/debug
     scenarios, or exact binary audit trails — not routine bulk upload.
 

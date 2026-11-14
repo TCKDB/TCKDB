@@ -1,9 +1,8 @@
 """Read the Hessian method an input deck states, before a deposit is judged.
 
 The imaginary-mode tolerance (tau) keys on how the frequency job built its second derivatives.
-A producer that ships raw decks does not send that as a
-``parameters`` entry: it attaches the input deck as an ``input`` artifact,
-and the backend parses ``freq.hessian_method`` out of the deck only after the
+A producer may attach the input deck as an ``input`` artifact without a
+``parameters`` entry for the Hessian method, and the backend parses ``freq.hessian_method`` out of the deck only after the
 upload has been validated. So a deck saying ``NumFreq`` was judged as if it
 had said nothing. This module is the **single owner** of what a deck says
 about the frequency job's Hessian, and both sides use it:

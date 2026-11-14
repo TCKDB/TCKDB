@@ -359,7 +359,7 @@ class FrequencyScaleFactor(Base, TimestampMixin, CreatedByMixin, PublicRefMixin)
         nullable=True,
     )
     # Set when the factor was sourced from a workflow tool's data file (e.g. ARC's
-    # freq_scale_factors.yml or an Arkane library) rather than directly from a literature paper.
+    # freq_scale_factors.yml or the RMG-database quantum-corrections table Arkane reads) rather than directly from a literature paper.
     workflow_tool_release_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey(

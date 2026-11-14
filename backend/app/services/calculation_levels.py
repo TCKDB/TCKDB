@@ -884,8 +884,7 @@ def collect_composite_link_warnings(links: list[RoleLink], *, subject: str) -> l
 
     * ``composite_role_on_non_composite_calculation`` -- a calculation whose type is
       not ``composite`` is linked under the role ``composite``. The legacy
-      shape: stored as sent; will be refused once producers send the
-      composite shape.
+      shape: stored as sent, with this warning.
     * ``composite_frequency_level_differs_from_recipe`` -- a linked ``freq``
       calculation is at a level other than the frequency level of the
       composite scheme the record's composite is bound to. The recipe's scaled

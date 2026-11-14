@@ -4,7 +4,7 @@
 reads them case-insensitively (``EmpiricalDispersion=GD3BJ`` and ``gd3bj``,
 ``SCRF=(SMD,Solvent=Water)`` and ``water``, ORCA ``! D3BJ`` and ``d3bj``).
 A producer that lower-cases them (ARC does: ``arc/level.py``, ``Level.lower``)
-uploads ``d3bj`` where a Gaussian user stored ``D3BJ``, so they were two
+uploads ``d3bj`` where another deposit stored ``D3BJ``, so they were two
 levels of theory, as were ``Water`` and
 ``water``.
 

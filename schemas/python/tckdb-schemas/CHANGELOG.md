@@ -285,7 +285,7 @@ An unrecorded `freq.hessian_method` now resolves `tau` through the producing pro
 - New refusal `hessian_method_contradicts_input_deck` (422): the recorded `freq.hessian_method` and the deck state different methods (analytic, `finite_difference_gradient` or `finite_difference_energy`; any two different parsed methods, because their tolerances differ). The message carries only TCKDB's words, the method tokens; `context` has `recorded`, `input_deck` and `calculation_key`.
 - Paths that cannot see a deck at validation keep their behaviour: the standalone calculation, conformer and transition-state payloads have no `artifacts` field, and a deck uploaded afterwards through the artifact route is read only by the workflow's parameter extraction.
 - ORCA release gate: before ORCA 5, meta-GGA functionals (M06 family, TPSS, SCAN and r2SCAN family, and similar) have no analytic Hessian and are assumed `assumed_finite_difference_gradient` (50); ORCA 5 and later, and plain GGA and hybrid functionals on any version, stay analytic (30). With no usable ORCA version a meta-GGA gets no assumption (50 / `protocol_not_recorded`). ORCA double-hybrid and VV10/non-local functionals (`-V`, `-NL`) are assumed `assumed_finite_difference_gradient` (50) on any version, known or not, because the ORCA 5.0.4 and 6.1 manuals document numerical frequencies for them. Source notes are in `hessian_method_assumption.py`.
-- ORCA `NumFreq` together with `NumGrad` on the deck's keyword lines is a Hessian built from numerical gradients, i.e. from energies: `finite_difference_energy` (80), the value ARC records. `NumFreq` alone stays `finite_difference_gradient`. The backend ORCA parser stores the same canonical value for its `freq.hessian_method` row. Source: ORCA 5.0.4 manual, 8.3.2 and 9.24.5 \"Numerical Gradients\" (`! NumGrad` requests numerical instead of analytic gradients).
+- ORCA `NumFreq` together with `NumGrad` on the deck's keyword lines is a Hessian built from numerical gradients, i.e. from energies: `finite_difference_energy` (80), the canonical value for a Hessian built from energies. `NumFreq` alone stays `finite_difference_gradient`. The backend ORCA parser stores the same canonical value for its `freq.hessian_method` row. Source: ORCA 5.0.4 manual, 8.3.2 and 9.24.5 \"Numerical Gradients\" (`! NumGrad` requests numerical instead of analytic gradients).
 - Gaussian double-hybrid functionals (B2PLYP, mPW2PLYP, DSD-*, revDSD, PWPB95, QIDH, PBE0-DH, B2GPPLYP, wB97X-2) get no assumption (50 / `protocol_not_recorded`): the Gaussian documentation available to us names analytic frequencies for HF, DFT, MP2, CIS and CASSCF and does not settle double hybrids. A recorded method still wins.
 - Deck reading, precisely: Gaussian `Freq`/`Frequency` in every spelling (`Freq=Numer`, `Freq=(..)`, `Freq(Numer)`, `Freq (Numer)`, `Freq = Numer`); `EnOnly` wins whenever present, otherwise `Numer`/`Numerical`; keywords that merely contain the letters (`FreqChk`) and other keywords' options (`SCF=(Numer)`, `Opt=CalcNumerFC`) are not read. ORCA `NumFreq` wins over `AnFreq`; a `#` comment runs to the next `#`, so keywords after the closing `#` count. The backend parsers store one `freq.hessian_method` row from this shared reading.
 - The family classifier now recognises DSD-*, revDSD, PWPB95, mPW2PLYP, B2GP-PLYP, PBE-QIDH, pr2SCAN50 and similar double hybrids, and mPW1B95, BB1K, mPW1KCIS and rSCAN, as DFT so they reach their rows: ORCA double hybrids are `assumed_finite_difference_gradient` (50) as decided; Gaussian double hybrids still get no assumption.
@@ -1195,7 +1195,7 @@ this release only adds three warnings to upload responses.
   precision, `max(1e-6, 5e-7 * n)` hartree) and `composite_log_method_mismatch`
   (the log is a different composite method from the calculation's level of
   theory; the energies are then not compared).
-- **What ARC (or any producer) must attach:** the Gaussian output log of the
+- **What a producer must attach:** the Gaussian output log of the
   composite run as an `output_log` artifact on the `composite` calculation.
   Logs of CBS-QB3, ROCBS-QB3, CBS-4M and G3 are read; other composite methods,
   G4 and G4MP2 included, are not compared (no warning either way). G4 and G4MP2
@@ -1335,7 +1335,7 @@ removed or changed, and every payload accepted before is accepted unchanged.
 payload that was accepted and meant one method is unchanged.
 
 - **`//` is refused in `method`.** `LevelOfTheoryRef.method` containing `//`
-  (ARC's `energy//geometry` shorthand, `"ccsd(t)-f12/cc-pvtz-f12//b3lyp/def2tzvp"`)
+  (an `energy//geometry` pair, `"ccsd(t)-f12/cc-pvtz-f12//b3lyp/def2tzvp"`)
   is refused with code `level_of_theory_method_is_compound` and `context`
   `{field: "method", value}`. It is two levels of theory, not one method: send
   the single-point and the optimization levels as separate calculations, each
@@ -1652,7 +1652,7 @@ and `POST /api/v1/uploads/computed-reaction`, could not say, all additive.
 rule as `/uploads/statmech` (`level_index` unique within a statmech). Additive
 and optional: it defaults to no levels, and both bundle roots keep the same
 field set. The network PDep upload's species and transition-state statmech blocks share the backend persist path, so they now accept and store `electronic_levels` too. Before this, either block refused it with 422
-`extra_forbidden`, so a single-atom bundle (ARC's O and Cl atoms) had no way to
+`extra_forbidden`, so a single-atom bundle (an O or Cl atom) had no way to
 carry its electronic partition function. The backend also gains upload
 warnings for a one-atom species whose ground term is not S:
 `missing_atomic_electronic_levels`, `missing_atomic_spin_orbit_correction`,
@@ -1668,7 +1668,7 @@ A single atom may be deposited with an `sp` primary, on both
 `POST /api/v1/uploads/computed-species` and
 `POST /api/v1/uploads/computed-reaction`. Both routes required the conformer's
 primary calculation to be an `opt`, and an atom has no geometry to optimise, so
-ARC's adapter relabelled the atom's single point as an "optimisation" (same log
+a producer had to relabel the atom's single point as an "optimisation" (same log
 and energy, `converged=false`, and a level of theory and program that were not
 the ones used). The rule is now: a conformer whose own XYZ has exactly one atom
 may send `type: "sp"` as its primary; a conformer of two or more atoms still
@@ -1810,10 +1810,10 @@ name, value or behaviour changes.
 
 ## 0.49.0 - 2026-09-24
 
-Stop defaulting `reference_pressure_bar` to 1 bar on computed thermo uploads. ARC computes entropy at 1 atm via a hardcoded translational
-partition function and records no pressure anywhere in its output, so the
-default was stamping every computed deposit with a standard state its own
-numbers were not computed at. An omitted pressure now stays unrecorded, for
+Stop defaulting `reference_pressure_bar` to 1 bar on computed thermo uploads. Many statistical-mechanics codes (ARC and RMG among them) compute
+entropy at 1 atm, and an upload that does not state its pressure gives TCKDB
+nothing to tell 1 atm from 1 bar, so the default was stamping such deposits
+with a standard state their numbers were not computed at. An omitted pressure now stays unrecorded, for
 every scientific origin. `phase` keeps defaulting to `gas` for computed
 uploads: unlike the pressure convention, gas is a direct consequence of the
 ideal-gas statistical mechanics every current computed producer uses, not

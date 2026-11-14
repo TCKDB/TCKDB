@@ -118,7 +118,7 @@ def parse_molpro_sp(text: str) -> ESSSPResult | None:
 
     Delegates to the DB-free
     :func:`app.services.molpro_parameter_parser.parse_sp_energy`, which
-    follows a fixed convention: MRCI (Davidson relaxed reference) takes
+    uses this precedence: MRCI (Davidson relaxed reference) takes
     precedence over CCSD(T)-F12a/F12b, and ``MRCI-F12`` is unsupported
     (returns ``None``).  The energy is stored in Hartree — Molpro's native
     unit, matching ``ESSSPResult.electronic_energy_hartree`` — with no

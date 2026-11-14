@@ -508,7 +508,7 @@ def parse_sp_energy(text: str) -> float | None:
     Precedence: MRCI (Davidson relaxed reference) wins over
     CCSD(T)-F12a/F12b.  ``MRCI-F12`` is an unsupported variant — it returns
     ``None`` rather than mis-reporting a wrong number.  Molpro's native unit
-    is Hartree, so no conversion is applied (no kJ/mol conversion).
+    is Hartree, so no conversion is applied.
     """
     family = _detect_method_family(_extract_deck_lines(text))
 

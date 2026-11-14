@@ -110,7 +110,7 @@ def species_browse(
     workflow_tool: str | None = Query(
         None,
         description=(
-            "Workflow tool name, e.g. 'ARC' or 'Arkane'. OR-across-calculation, same "
+            "Workflow tool name, e.g. 'ARC' or 'TorsionDrive'. OR-across-calculation, same "
             "as method=/basis=/software=."
         ),
     ),

@@ -101,8 +101,8 @@ def _resolve_software(
 
     Text-sniffed evidence wins when the banner unambiguously names a
     program; the declared ``software_release`` name is the fallback for
-    artifacts that carry no recognisable banner. A producer's per-job-type
-    version map can carry a stale/inherited software name into a
+    artifacts that carry no recognisable banner. A producer can carry a stale or inherited software name (from a
+    per-job-type version map, for example) into a
     ``software_release`` that never ran the job in question — a real
     banner is evidence; a declared label is not, when the two disagree.
     ``detect_software_from_text`` already follows "reject, don't guess":

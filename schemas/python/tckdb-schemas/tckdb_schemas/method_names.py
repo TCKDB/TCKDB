@@ -5,7 +5,7 @@ lower-case every method they emit (ARC does: ``arc/level.py``, ``Level.lower``);
 Gaussian, ORCA and Molpro inputs are written in mixed or upper case:
 
 ====================  =======================  =======================
-method                lower-casing producer    Gaussian / ORCA / Molpro
+method                lower-cased (e.g. ARC)   Gaussian / ORCA / Molpro
 ====================  =======================  =======================
 DLPNO-CCSD(T)-F12     ``dlpno-ccsd(t)-f12``    ``DLPNO-CCSD(T)-F12``
 CCSD(T)-F12a          ``ccsd(t)-f12a``         ``CCSD(T)-F12a``
@@ -71,7 +71,7 @@ The table is deliberately small and stays out of anything it cannot cite:
 member are separate keys. A split is recoverable, because the merge script
 joins it later; a false merge is not.
 
-The canonical key of each alias is the spelling lower-casing producers and Gaussian write.
+The canonical key of each alias is Gaussian's keyword spelling, lower-cased.
 
 Named composite methods
 ----------------------------------
