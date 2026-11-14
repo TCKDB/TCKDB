@@ -145,7 +145,7 @@ What a **human curator** has said about one scientific record. It is the only vo
 | `under_review` | A curator has this record open. It is entered deliberately by a curator, never by depositing, which is the whole difference from `not_reviewed`. **For example:** A freshly deposited record is `not_reviewed`. It becomes `under_review` only when a curator opens it, so a list of `under_review` records is a list of records someone is working on. |
 | `approved` | A curator reviewed the record and accepts it. This is the floor the `curated` read profile draws at for lists, searches, browses, selects and exports: they return approved records and nothing below them. A detail page can still serve a record below the floor, with its review badge. |
 | `rejected` | A curator reviewed the record and does not accept it. Absent from results unless the request asks for it with `include_rejected=true`. |
-| `deprecated` | The record should no longer be used — superseded by a better one, or withdrawn. It is kept rather than deleted so an existing citation still resolves. Absent from results unless the request asks with `include_deprecated=true`. |
+| `deprecated` | The record is not to be used — superseded by a better one, or withdrawn. It is kept rather than deleted so an existing citation still resolves. Absent from results unless the request asks with `include_deprecated=true`. |
 
 > A response lists records in a fixed display order, echoed in `request.sort`. The review part of it is defined once, in `docs/specs/browse_order.md`; it is not a scientific preference.
 
@@ -164,7 +164,7 @@ How much of the evidence TCKDB expects for this kind of record is actually attac
 | `partial` | Evidence completeness of 0.50 or better. |
 | `sparse` | Evidence completeness of 0.25 or better. |
 | `unsupported` | Evidence completeness below 0.25. Incomplete, which is not the same as wrong — this is the expected badge for an old record deposited before TCKDB asked for much. |
-| `hard_failed` | A discrete structural failure was found, and the badge is set by that finding rather than by the ratio. Always read `trust.evidence.hard_fail_reason` beside it: the reason says whether the record contradicts itself, or whether TCKDB can no longer produce the evidence it rests on. |
+| `hard_failed` | A discrete structural failure was found, and the badge is set by that finding rather than by the ratio. Always read `trust.evidence.hard_fail_reason` beside it: the reason says whether the record contradicts itself, or whether TCKDB cannot produce the evidence it rests on. |
 
 ### Check outcomes
 
@@ -179,7 +179,7 @@ What one deterministic check found. Four states and never a boolean: `missing` a
 | `warning` | The check applied, the underlying signal is tri-state, and the result is informational. Warning-kind checks carry zero weight, so this never moves the completeness ratio. |
 | `not_applicable` | The question could not be asked of this record, so the check is excluded from **both** the numerator and the denominator — it neither helps nor hurts. **For example:** When `geometry_validation_present_for_source_calculations` is `missing`, there is no validation verdict to inspect, so `geometry_validation_not_failed_for_source_calculations` is `not_applicable`: "did it fail?" has no answer. Rendering that as `false` would count the same absence twice. |
 
-> Check names are written as assertions, so read the name and the value together: `"ts_graph_or_smiles_present": "missing"` means *there is no SMILES or mol blob on this transition-state entry*. Until 2026-08-24 the same fact was reported as the string `ts_graph_or_smiles_present` sitting inside an array named `missing_checks`, which read as a double negative; the four arrays `passed_checks` / `missing_checks` / `warning_checks` / `not_applicable_checks` were replaced by this one map. If you are reading a client written before then, that is what those arrays were.
+> Check names are written as assertions, so read the name and the value together: `"ts_graph_or_smiles_present": "missing"` means *there is no SMILES or mol blob on this transition-state entry*. Every check appears once, in one map, with its state as the value, so a check is never listed by name inside an array such as `missing_checks`, which would read as a double negative.
 
 ### Hard-fail reasons
 
@@ -202,8 +202,8 @@ Why a record was hard-failed. Each names one discrete, evidenced structural fail
 | `invalid_temperature_range` | The record's validity range is definitionally impossible: a non-positive temperature, or a minimum above the maximum. Note that a single-temperature range (`tmin == tmax`) is legal and does **not** fire this, and there is no upper bound — shock-tube and plasma chemistry are not structurally broken. |
 | `invalid_external_symmetry` | The external symmetry number is below 1. A backstop — the upload path refuses this. |
 | `invalid_torsion_dimension` | A hindered-rotor torsion declares a dimension below 1. A backstop — the upload path refuses this. |
-| `geometry_validation_failed` | Historic: stored trust results under the version 1 rubrics carried this when an automated geometry comparison failed. Version 2 rubrics no longer hard-fail on it; the failure is a warning on the geometry check. |
-| `artifact_integrity_failed` | The stored bytes behind one of this calculation's artifacts no longer match their digest, or are gone. This one is a statement about **TCKDB's custody of the evidence**, not about the depositor's science: the record may be perfectly good and we can no longer show you what it rests on. It reflects the latest observation per artifact, so a restored object clears it. |
+| `geometry_validation_failed` | Not issued by any current rubric; kept so stored reviews made before rubric versioning (version 0) still parse. Current rubrics report a failed automated geometry comparison as a warning on the geometry check. |
+| `artifact_integrity_failed` | The stored bytes behind one of this calculation's artifacts do not match their digest, or are gone. This one is a statement about **TCKDB's custody of the evidence**, not about the depositor's science: the record may be perfectly good and we cannot show you what it rests on. It reflects the latest observation per artifact, so a restored object clears it. |
 | `missing_required_identity` | The kinetics record does not identify a complete reaction — no reaction entry, or a side with no participants on it. |
 | `source_calculation_hard_failed_for_required_role` | A calculation this record depends on for a role it cannot do without — a reactant or product energy, the TS energy, the frequencies — is itself hard-failed. The failure is inherited, so read that calculation's own reason. |
 | `transition_state_entry_missing` | The transition-state entry could not be loaded. |
@@ -212,9 +212,9 @@ Why a record was hard-failed. Each names one discrete, evidenced structural fail
 | `ts_entry_status_rejected` | The transition-state entry's own `status` is `rejected`. |
 | `multiplicity_invalid` | The spin multiplicity is below 1. A backstop — the upload path refuses this. |
 | `all_source_calculations_hard_failed` | Every calculation supporting this transition-state entry is itself hard-failed, so nothing is left to support it. |
-| `geometry_validation_failed_for_source_calculation` | Historic: stored version 2 transition-state trust results carried this when a supporting calculation failed the automated geometry comparison. Version 3 no longer hard-fails on it; it is a warning. |
-| `frequency_source_has_zero_imaginary_modes_for_validated_ts` | Historic: stored version 2 transition-state trust results carried this when the latest frequency result reported no imaginary mode. Version 3 issues no frequency verdict; the same fact is the warning `no_frequency_result_lacks_an_imaginary_mode`, and the scoped judgement (does a usable result on the evaluated geometry contradict the saddle claim) is the structure assessment's. |
-| `frequency_source_reaction_coordinate_not_designated_for_validated_ts` | Historic: stored version 2 transition-state trust results carried this when the latest frequency result reported several imaginary modes without a designated reaction coordinate. Version 3 issues no frequency verdict; the missing designation is the missing check `reaction_coordinate_designated_for_ts`, and the structure assessment reports it as the unresolved `reaction_coordinate_not_established`. |
+| `geometry_validation_failed_for_source_calculation` | Not issued by any current rubric; kept so stored reviews made before rubric versioning (version 0) still parse. Current rubrics report a supporting calculation that failed the automated geometry comparison as a warning on the geometry check. |
+| `frequency_source_has_zero_imaginary_modes_for_validated_ts` | Not issued by any current rubric; kept so stored reviews made before rubric versioning (version 0) still parse. Current rubrics issue no frequency verdict; the same fact is the warning `no_frequency_result_lacks_an_imaginary_mode`, and the scoped judgement (does a usable result on the evaluated geometry contradict the saddle claim) is the structure assessment's. |
+| `frequency_source_reaction_coordinate_not_designated_for_validated_ts` | Not issued by any current rubric; kept so stored reviews made before rubric versioning (version 0) still parse. Current rubrics issue no frequency verdict; a missing designation is the missing check `reaction_coordinate_designated_for_ts`, and the structure assessment reports it as the unresolved `reaction_coordinate_not_established`. |
 
 ### Transition-state structure assessment status
 
@@ -263,7 +263,7 @@ How far a composite energy (CBS-QB3, G4, a CCSD(T)/CBS extrapolation, a focal-po
 | Token | What it means |
 | --- | --- |
 | `recomputed` | An assembled composite whose stored inputs, run through its scheme just now, give the total it states, within a tolerance that scales with how many rounded numbers went into the sum. Because it is recomputed on every read, an input energy deposited later is picked up. |
-| `recompute_mismatch` | The same recomputation disagrees. This can only happen after the fact, because a total that disagreed was refused at upload: an input's stored energy is no longer what the total was checked against (a single point whose energy a later log upload filled in, say; an accepted input cannot change). `difference_hartree` is the stated total minus the recomputed one. |
+| `recompute_mismatch` | The same recomputation disagrees. This can only happen after the fact, because a total that disagreed was refused at upload: an input's stored energy differs from what the total was checked against (a single point whose energy a later log upload filled in, say; an accepted input cannot change). `difference_hartree` is the stated total minus the recomputed one. |
 | `log_reconciled` | A program run (one program printed the final number) whose attached output log was compared at upload and confirmed every number the deposit stated. |
 | `program_reported` | A program run with no confirming log: none was attached, or the one attached could not confirm it. The `reason` says which, and names a log that *disagreed* (`log_mismatch`, `log_method_mismatch`) rather than hiding it. |
 | `unverifiable` | The check cannot be made: an input or one of its energy components is not stated, the split of an input's correlation energy matches neither convention for (T), or no energy was stated at all. The `reason` names which; nothing is guessed. |
@@ -298,7 +298,7 @@ Which rubric applies is decided by the kind of record, and for a statmech record
 | `epsilon_present` | `computed_transport` | optional | 1 | Lennard-Jones transport should include epsilon/k. |
 | `external_symmetry_present` | `computed_statmech` | optional | 1 | External symmetry number should be recorded. |
 | `external_symmetry_present` | `computed_ts_statmech` | optional | 1 | External symmetry number should be recorded. |
-| `extra_imaginary_modes_not_flagged` | `computed_transition_state` | warning | 0 | Recorded ADR 0012 structural flag: an extra imaginary mode at or above the protocol's tau (advisory). |
+| `extra_imaginary_modes_not_flagged` | `computed_transition_state` | warning | 0 | Recorded structural flag: an extra imaginary mode at or above the protocol's tau (advisory). |
 | `freq_source_present` | `computed_statmech` | optional | 1 | Computed statmech should link a frequency source calculation when available. |
 | `freq_source_present` | `computed_thermo` | optional | 1 | Computed thermo should link a frequency source calculation when available. |
 | `freq_source_present` | `computed_ts_statmech` | optional | 1 | Computed statmech should link a frequency source calculation when available. |
@@ -351,7 +351,7 @@ Which rubric applies is decided by the kind of record, and for a statmech record
 | `product_energy_sources_present` | `computed_kinetics` | optional | 1 | Product energy source calculations should cover all loaded products. |
 | `quality_recorded` | `computed_calculation` | optional | 1 | An independent reviewer should have approved this calculation via record_review; self-declared CalculationQuality is not sufficient (decoupled from trust, see _check_quality_recorded). |
 | `reactant_energy_sources_present` | `computed_kinetics` | optional | 1 | Reactant energy source calculations should cover all loaded reactants. |
-| `reaction_coordinate_designated_for_ts` | `computed_transition_state` | required | 1 | Representative freq result (the one a declared saddle target pins, else the newest attached) must identify its reaction coordinate: one imaginary mode needs no designation, more than one does (ADR 0012). |
+| `reaction_coordinate_designated_for_ts` | `computed_transition_state` | required | 1 | Representative freq result (the one a declared saddle target pins, else the newest attached) must identify its reaction coordinate: one imaginary mode needs no designation, more than one does. |
 | `reaction_entry_present` | `computed_kinetics` | required | 1 | Kinetics must be attached to a reaction_entry. |
 | `reaction_entry_present` | `computed_transition_state` | required | 1 | Parent transition_state must resolve to a reaction_entry. |
 | `result_block_present` | `computed_calculation` | required | 1 | Calculation must have the result block matching its type (sp/opt/freq/irc/scan/path_search). |
@@ -466,7 +466,7 @@ Which contract the response answers under. Always echoed, never inferred: a cons
 | Token | What it means |
 | --- | --- |
 | `exploratory` | Every visible candidate, each with its own review and trust state, and **no recommendation from TCKDB** about which is right. This is the default on every read surface, deliberately: on a corpus that is mostly uncurated a curated default returns an empty page and reads as a broken database. |
-| `curated` | The `approved` review floor decides which records a list, search, browse, select or export returns. A detail page serves any record that is not `rejected` or `deprecated`, badged, and the linked evidence of a returned record is shown (with its badge where the response carries `review_status_by_ref`; a legacy single-record read carries the record's own status in the `X-TCKDB-Review-Status` header); only `rejected` and `deprecated` evidence is withheld, and a request cannot lift that. Records are not annotated with any release selection that names them — for an attributed endorsement use the `/api/v1/scientific/releases/*` endpoints. |
+| `curated` | The `approved` review floor decides which records a list, search, browse, select or export returns. A detail page serves any record that is not `rejected` or `deprecated`, badged, and the linked evidence of a returned record is shown (with its badge where the response carries `review_status_by_ref`; a single-record read on the `/api/v1` entity routes carries the record's own status in the `X-TCKDB-Review-Status` header); only `rejected` and `deprecated` evidence is withheld, and a request cannot lift that. Records are not annotated with any release selection that names them — for an attributed endorsement use the `/api/v1/scientific/releases/*` endpoints. |
 
 ### Profile recommendation
 
@@ -537,7 +537,7 @@ Which way round the stored equation had to be read for your query to match it. T
 
 *On the wire:* `direction` on a kinetics record, and the filter of the same name.
 
-Which direction of the stored equation a rate coefficient describes. It is stated relative to the reaction entry's stored reactant-to-product orientation, which is what makes it a different question from `matched_direction`: that one is about your query, this one is about the numbers. A record may leave it unset — the historical default — in which case the value comes back empty and all you know is that the producer did not say.
+Which direction of the stored equation a rate coefficient describes. It is stated relative to the reaction entry's stored reactant-to-product orientation, which is what makes it a different question from `matched_direction`: that one is about your query, this one is about the numbers. A record may leave it unset, in which case the value comes back empty and all you know is that the producer did not say.
 
 | Token | What it means |
 | --- | --- |
@@ -640,7 +640,7 @@ A curation flag on one calculation, separate from the review status of the recor
 
 *On the wire:* `levels.legacy_composite_shape` on a record, and the same field on a calculation.
 
-A way of depositing a composite energy from before TCKDB had a `composite` calculation type. It is an annotation only: the record reads exactly as it was deposited, and its levels are derived as they always were.
+A way of depositing a composite energy without a `composite` calculation type. It is an annotation only: the record reads exactly as it was deposited, and its levels are derived from the stored links.
 
 | Token | What it means |
 | --- | --- |

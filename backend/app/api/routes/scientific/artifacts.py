@@ -220,7 +220,7 @@ def artifact_integrity_search(
     """What TCKDB has observed about custody of its own stored objects.
 
     ``hard_fail_reason`` already tells a client that a calculation's
-    evidence can no longer be produced. This is where a curator finds out
+    evidence cannot be produced. This is where a curator finds out
     *what happened* -- expected against observed digest and size, the
     store's own metadata at the moment of detection, which read found it,
     when it started and whether it has recurred.
@@ -321,6 +321,7 @@ def content_disposition_for(filename: str) -> str:
 
 @router.get(
     "/{sha256}/download",
+    summary="Download Artifact",
     response_class=Response,
     responses={
         200: {"content": {"application/octet-stream": {}}},

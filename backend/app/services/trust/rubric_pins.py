@@ -961,7 +961,7 @@ def diagnose(fingerprints: dict[str, tuple[int, str]], pins: dict[str, dict[str,
         elif str(version) not in pinned:
             have = ", ".join(sorted(pinned))
             problems.append(
-                f"{name}: version is now {version} but the pin is for version {have}. The version was bumped "
+                f"{name}: version is {version} but the pin is for version {have}. The version was bumped "
                 "without re-pinning: run backend/scripts/generate_rubric_pins.py."
             )
         elif pinned[str(version)] != fp:
@@ -973,11 +973,11 @@ def diagnose(fingerprints: dict[str, tuple[int, str]], pins: dict[str, dict[str,
     for name in sorted(set(pins) - set(fingerprints)):
         if name in unguarded:
             problems.append(
-                f"{name}: now declares no checks, so it is no longer pinned (a pin of an empty rubric guards nothing). "
+                f"{name}: declares no checks, so it is not pinned (a pin of an empty rubric guards nothing). "
                 "Run backend/scripts/generate_rubric_pins.py to drop its pin."
             )
         else:
-            problems.append(f"{name}: pinned but no longer registered. Run backend/scripts/generate_rubric_pins.py.")
+            problems.append(f"{name}: pinned but not registered. Run backend/scripts/generate_rubric_pins.py.")
     return problems
 
 

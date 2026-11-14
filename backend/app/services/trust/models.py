@@ -406,7 +406,7 @@ class TrustFragment(BaseModel):
 
 
 class TransitionStateScopedAssessmentStatus(str, Enum):
-    """Whether, and how, the structure assessment was run for the transition-state badge (#723).
+    """Whether, and how, the structure assessment was run for the transition-state badge.
 
     * ``assessed`` -- the entry declares at least one saddle or geometry target and the assessment ran.
     * ``no_declared_target`` -- the entry declares none, so there is nothing to assess. Not a missing check.
@@ -489,7 +489,7 @@ class TransitionStateScopedAssessment(BaseModel):
 
 
 class TransitionStateTrustFragment(TrustFragment):
-    """:class:`TrustFragment` for a transition-state entry: the badge plus the scoped structure assessment (#723).
+    """:class:`TrustFragment` for a transition-state entry: the badge plus the scoped structure assessment.
 
     A subclass, not a field on :class:`TrustFragment`, so every other record type's fragment is unchanged.
     """

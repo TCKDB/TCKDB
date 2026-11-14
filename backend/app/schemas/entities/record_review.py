@@ -46,8 +46,8 @@ class RecordReviewRead(TimestampedCreatedByReadSchema):
         description=(
             "The public handle naming this record, resolved at read time. "
             "Null when the record cannot be named: its table has no "
-            "public_ref column (applied_energy_correction), or the row no "
-            "longer exists. Prefer this over record_id, which is an "
+            "public_ref column (applied_energy_correction), or the row "
+            "does not exist. Prefer this over record_id, which is an "
             "internal row id and resolves through no public route."
         ),
     )
@@ -86,10 +86,10 @@ class RecordReviewRead(TimestampedCreatedByReadSchema):
             "reaction_entry for a kinetics or transition state. Null for any "
             "of four reasons, all of them normal answers rather than errors: "
             "the record type has no owning parent (species, reaction and "
-            "network are roots of their own trees); the record itself no "
-            "longer exists; the record names no owner (not reachable for any "
-            "type today, since every owning key is NOT NULL or covered by an "
-            "exclusive-or constraint); or the owner no longer exists. Always "
+            "network are roots of their own trees); the record itself does "
+            "not exist; the record names no owner (not reachable for any "
+            "type, since every owning key is NOT NULL or covered by an "
+            "exclusive-or constraint); or the owner does not exist. Always "
             "null or non-null together with container_ref."
         ),
     )

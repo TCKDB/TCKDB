@@ -494,7 +494,7 @@ def require_auth_for_legacy_reads(
     raise HTTPException(
         status_code=401,
         detail=(
-            "Authentication required for legacy entity-read endpoints; "
+            "Authentication required for the entity-read endpoints; "
             "use /api/v1/scientific/* for the public read surface."
         ),
     )

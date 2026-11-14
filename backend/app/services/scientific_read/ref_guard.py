@@ -390,7 +390,7 @@ POINTER_FIELDS: frozenset[tuple[type[BaseModel], str]] = frozenset(
 
 #: Route templates the guard never touches, each with its reason. Matched as a prefix.
 EXEMPT_ROUTE_PREFIXES: Mapping[str, str] = {
-    "/api/v1/scientific/releases": "release and archive projections keep full provenance (owner decision)",
+    "/api/v1/scientific/releases": "release and archive projections keep full provenance",
     "/api/v1/scientific/meta": "vocabulary (software, methods, families) carries no gated refs",
     "/api/v1/scientific/artifacts/{sha256}/download": "opaque bytes, not a JSON document",
 }
@@ -894,7 +894,7 @@ SUBJECT_IDENTITY: dict[str, tuple[str, ...]] = {
 UNGATED_SUBJECTS: dict[str, str] = {
     **dict.fromkeys(
         ("SpeciesScientificRecord", "ReactionScientificRecord", "ScientificSpeciesStructureSearchRecord"),
-        "species and reaction identity rows are scoping parents and never gate (ADR 0023)",
+        "species and reaction identity rows are scoping parents and never gate",
     ),
     **dict.fromkeys(
         (
@@ -908,7 +908,7 @@ UNGATED_SUBJECTS: dict[str, str] = {
     ),
     **dict.fromkeys(
         ("DatasetReleaseSummary", "ReleaseSelectionRecord"),
-        "dataset releases are exempt from the record floor and the evidence rule (ADR 0023, Q7)",
+        "dataset releases are exempt from the record floor and the evidence rule",
     ),
     "ArtifactIntegrityDigestSummary": "an integrity digest of a stored file; not a reviewed record",
 }

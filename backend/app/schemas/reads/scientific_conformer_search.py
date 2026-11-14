@@ -58,7 +58,7 @@ class ConformerEvidenceMatch(str, Enum):
     makes the caller pick one at the call site instead of hiding the
     choice inside a bare boolean.
 
-    ``any_observation`` (default, and the historical behaviour)
+    ``any_observation`` (default)
         The group matches ``has_freq=true`` when **at least one** of its
         observations has a ``freq`` calculation. ``has_freq=false`` is
         the negation: **no** observation has one.
