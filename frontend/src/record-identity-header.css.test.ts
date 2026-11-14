@@ -36,12 +36,12 @@ describe(".record-identity-known owns the gap between its children", () => {
  * next `describe` block.
  */
 describe(".record-identity-fact-copyable lays a value and its copy button out side by side", () => {
-    it("is a flex row, baseline-aligned, that can shrink (min-width: 0) rather than force its column wide", () => {
+    it("is a flex row, centred, that can shrink (min-width: 0) rather than force its column wide", () => {
         const rule = /\.record-identity-fact-copyable\s*\{([^}]*)\}/.exec(css)
         expect(rule, ".record-identity-fact-copyable rule not found").not.toBeNull()
         expect(rule![1]).toMatch(/display:\s*flex/)
-        expect(rule![1]).toMatch(/align-items:\s*baseline/)
-        expect(rule![1]).toMatch(/gap:\s*\.5rem/)
+        expect(rule![1]).toMatch(/align-items:\s*center/)
+        expect(rule![1]).toMatch(/gap:\s*\.25rem \.5rem/)
         expect(rule![1]).toMatch(/min-width:\s*0/)
     })
 })

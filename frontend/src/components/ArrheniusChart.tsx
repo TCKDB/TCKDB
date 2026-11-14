@@ -19,9 +19,11 @@ import {
 } from "../domain/arrheniusChartLayout"
 import { arrheniusUnitConversionFactor, FAMILY_NAME } from "../domain/arrheniusUnits"
 import { formatTicks, linearScale } from "../domain/chartScale"
-import { computeKineticsTable, convertKineticsTableRows, log10Text, scientificText } from "../domain/kineticsTable"
+import { computeKineticsTable, convertKineticsTableRows, log10Text } from "../domain/kineticsTable"
 import { niceTicks, seriesColor } from "../domain/thermoCpChartLayout"
 import { Disclosure } from "./Disclosure"
+import { QuantityValue, EVALUATED_NOTE } from "./QuantityValue"
+import { evaluated } from "../domain/quantityFormat"
 
 // ---------------------------------------------------------------------------
 // Hand-rolled SVG, no charting library -- same precedent `ThermoCpChart.tsx`
@@ -270,13 +272,14 @@ export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[
                                             {displayRows.map((row) => (
                                                 <tr key={row.temperatureK}>
                                                     <td className="num" data-label="T (K)">{row.temperatureK.toFixed(2)}</td>
-                                                    <td className="num" data-label="k">{scientificText(row.k)}</td>
+                                                    <td className="num" data-label="k"><QuantityValue value={evaluated(row.k)} /></td>
                                                     <td className="num" data-label="log10 k">{log10Text(row.k)}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
                                     </table>
                                 </div>
+                                <p className="note">{EVALUATED_NOTE}</p>
                             </Disclosure>
                         )
                     })}

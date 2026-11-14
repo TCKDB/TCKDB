@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Screenshots routes at true viewport widths through the DevTools protocol (a plain --window-size is clamped to 500 px).
-// Usage: node scripts/a11y/shoot.mjs --base http://127.0.0.1:4173 --out DIR [--prefix before_] [--chrome PATH] /route ...
+// Usage: node scripts/a11y/shoot.mjs --base http://127.0.0.1:4173 --out DIR [--prefix before_] [--zoom 1] [--chrome PATH] /route ...
 // Each shot waits for a non-loading `main h1`; a route that never gets one fails the run.
-// Pass: scrollWidth <= viewport width at 390 and 320, and no element sticks out of its scroll container.
+// Pass: exactly one h1, and scrollWidth <= viewport width at 720 and below with no element sticking out of its scroll container.
 import { spawn } from "node:child_process"
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -14,6 +14,8 @@ const VIEWPORTS = [
     { name: "390", width: 390, height: 844, scheme: "light" },
     { name: "320", width: 320, height: 640, scheme: "light" },
 ]
+// 200% browser zoom at 1440 leaves a 720 px layout viewport; `--zoom 1` adds it.
+const ZOOM_VIEWPORT = { name: "1440-zoom200", width: 720, height: 450, scheme: "light" }
 const MAX_SHOT_HEIGHT = 6000
 const SETTLE_MS = 400
 const READY_PROBE = `(() => !!document.querySelector("main h1") && !document.querySelector("main [aria-busy='true']"))()`
@@ -26,6 +28,7 @@ for (let i = 0; i < args.length; i++) {
     if (a.startsWith("--")) options[a.slice(2)] = args[++i]
     else routes.push(a)
 }
+const viewports = options.zoom === "1" ? [...VIEWPORTS, ZOOM_VIEWPORT] : VIEWPORTS
 if (routes.length === 0) {
     console.error("Give at least one route, e.g. /species")
     process.exit(2)
@@ -50,7 +53,7 @@ const OVERFLOW_PROBE = `(() => {
         offenders.push((el.tagName.toLowerCase() + (el.className && typeof el.className === "string" ? "." + el.className.trim().split(/\\s+/).join(".") : "")) + " right=" + Math.round(r.right))
         if (offenders.length >= 20) break
     }
-    return { scrollWidth: document.documentElement.scrollWidth, clientWidth: vw, offenders }
+    return { scrollWidth: document.documentElement.scrollWidth, clientWidth: vw, h1Count: document.querySelectorAll("h1").length, offenders }
 })()`
 
 const profile = mkdtempSync(join(tmpdir(), "shoot-"))
@@ -113,7 +116,7 @@ try {
     const call = (method, params) => cdp.send(method, params, sessionId)
     await call("Page.enable")
     for (const route of routes) {
-        for (const vp of VIEWPORTS) {
+        for (const vp of viewports) {
             await call("Emulation.setDeviceMetricsOverride", { width: vp.width, height: vp.height, deviceScaleFactor: 1, mobile: vp.width < 500 })
             await call("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: vp.scheme }] })
             await call("Page.navigate", { url: options.base + route })
@@ -134,11 +137,11 @@ try {
             })
             const file = join(options.out, `${options.prefix}${slug(route)}_${vp.name}.png`)
             writeFileSync(file, Buffer.from(shot.data, "base64"))
-            const narrow = vp.width <= 390
-            const ok = !narrow || (probe.scrollWidth <= vp.width && probe.offenders.length === 0)
+            const narrow = vp.width <= 720
+            const ok = probe.h1Count === 1 && (!narrow || (probe.scrollWidth <= vp.width && probe.offenders.length === 0))
             if (!ok) failed = true
             report.push({ route, viewport: vp.name, file, ...probe, pass: ok })
-            console.log(`${ok ? "ok  " : "FAIL"} ${route} @${vp.name} scrollWidth=${probe.scrollWidth} offenders=${probe.offenders.length}`)
+            console.log(`${ok ? "ok  " : "FAIL"} ${route} @${vp.name} scrollWidth=${probe.scrollWidth} offenders=${probe.offenders.length} h1=${probe.h1Count}`)
         }
     }
     cdp.close()

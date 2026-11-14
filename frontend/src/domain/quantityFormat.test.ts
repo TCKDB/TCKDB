@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { ABSENT, DEPOSITED_SPEC_KEYS, fillValue, fixed, formatQuantity, QUANTITY_SPECS, scientific, type QuantitySpec } from "./quantityFormat"
+import { ABSENT, DEPOSITED_SPEC_KEYS, evaluated, fillValue, fixed, formatQuantity, QUANTITY_SPECS, scientific, type QuantitySpec } from "./quantityFormat"
 
 describe("fixed", () => {
     it("rounds to the requested number of digits", () => {
@@ -223,5 +223,44 @@ describe("formatQuantity / QUANTITY_SPECS", () => {
         // Plain digits only while they stay exact and short: this would round to 0, so it keeps its exponent.
         expect(formatQuantity("transport_rotational_relaxation", 1e-25)).toEqual({ value: "1", exponent: "−25", unit: null })
         expect(formatQuantity("transport_rotational_relaxation", null)).toBeNull()
+    })
+})
+
+describe("evaluated", () => {
+    it("rounds a whole-number rate to 6 figures and keeps the served value", () => {
+        expect(evaluated(24254345, "s")).toEqual({ value: "2.42543", exponent: "7", unit: "s", full: "24254345" })
+    })
+
+    it("shows a mid-range value in plain digits and a short one unchanged", () => {
+        expect(evaluated(12.3456789)).toEqual({ value: "12.3457", unit: null, full: "12.3456789" })
+        expect(evaluated(0.5)).toEqual({ value: "0.5", unit: null })
+    })
+
+    it("keeps an exact six-figure value without a served-value copy", () => {
+        expect(evaluated(123456)).toEqual({ value: "1.23456", exponent: "5", unit: null })
+        expect(evaluated(1.23456)).toEqual({ value: "1.23456", unit: null })
+    })
+
+    it("writes a small value with a minus exponent", () => {
+        expect(evaluated(0.000123456789)).toEqual({ value: "1.23457", exponent: "−4", unit: null, full: "0.000123456789" })
+    })
+
+    it("treats zero, an absent value and a non-number plainly", () => {
+        expect(evaluated(0)).toEqual({ value: "0", unit: null })
+        expect(evaluated(null)).toBeNull()
+        expect(evaluated(undefined)).toBeNull()
+        expect(evaluated(Number.NaN)).toBeNull()
+        expect(evaluated(Number.POSITIVE_INFINITY)).toBeNull()
+    })
+
+    it("uses the true minus sign for a negative value", () => {
+        expect(evaluated(-12.3456789)).toEqual({ value: "−12.3457", unit: null, full: "-12.3456789" })
+        expect(evaluated(-24254345)?.value).toBe("−2.42543")
+    })
+
+    it("gives a value that rounds up to 10000 the same form as 10000", () => {
+        const rounded = evaluated(9999.995)
+        const exact = evaluated(10000)
+        expect(rounded).toMatchObject({ value: exact!.value, exponent: exact!.exponent })
     })
 })

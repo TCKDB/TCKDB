@@ -4,7 +4,7 @@ import { lotLabel, type LevelOfTheory } from "../api/scientificSchemas"
 import { programText } from "./energyProfile"
 import { aUnitsWord, degeneracyWord, directionWord, modelKindWord, originWord, pressureContextWord, tunnellingWord } from "./kineticsWords"
 import { kineticsAt } from "./kineticsTable"
-import { deposited, formatQuantity, type QuantitySpecKey } from "./quantityFormat"
+import { deposited, evaluated, formatQuantity, type QuantitySpecKey } from "./quantityFormat"
 import { NOT_RECORDED, type CompareCell, type CompareRow } from "./speciesCompare"
 
 /** Columns shown per group; the list below the table keeps every record. */
@@ -113,6 +113,13 @@ function numberCell(label: string, spec: QuantitySpecKey, value: number | null |
     return value == null ? absent() : withFull(label, formatQuantity(spec, value, unit), value)
 }
 
+/** A computed k at 6 significant figures; the served value rides along when the shown one is shorter. */
+function evaluatedCell(label: string, value: number, unit: string | null): CompareCell {
+    const quantity = evaluated(value, unit)
+    if (!quantity) return absent()
+    return { kind: "value", value: { label, kind: "number", value: quantity.value, unit: quantity.unit, exponent: quantity.exponent, ...(quantity.full !== undefined && { full: quantity.full }) } }
+}
+
 type Form = "simple" | "multi" | "pressure" | "other"
 
 function formOf(record: Record_): Form {
@@ -146,7 +153,7 @@ function kCell(column: KineticsColumn, temperature: number, label: string): Comp
     if (k === null) return absent(formOf(column.record) === "pressure" ? NEEDS_PRESSURE : NOT_COMPUTED)
     const units = aUnits(column)
     if (!units) return absent(NO_UNITS)
-    const cell = numberCell(label, "kinetics_k", k, aUnitsWord(units))
+    const cell = evaluatedCell(label, k, aUnitsWord(units))
     const degeneracy = column.record.reaction_path_degeneracy
     if (cell.kind === "value" && degeneracy) {
         const g = deposited(degeneracy.value)?.value ?? degeneracy.value

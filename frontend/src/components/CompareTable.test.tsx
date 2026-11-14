@@ -104,7 +104,7 @@ describe("CompareTable", () => {
         expect(shown.tagName).toBe("DATA")
         expect(shown).toHaveAttribute("value", "38.92638673392166")
         expect(screen.getByText("31")).not.toHaveAttribute("title")
-        expect(screen.getAllByText("6 significant figures; hover for the stored value.")).toHaveLength(1)
+        expect(screen.getAllByText("6 significant figures; hover for the full value.")).toHaveLength(1)
     })
 
     it("has no rounding note when nothing is rounded", () => {
