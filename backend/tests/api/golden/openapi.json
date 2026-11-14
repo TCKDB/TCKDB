@@ -57016,6 +57016,32 @@
         "title": "SpeciesEntryTarget",
         "type": "object"
       },
+      "SpeciesNameCreate": {
+        "additionalProperties": false,
+        "description": "Curator request to give a species a name. The species is named by its public ref.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/SpeciesNameKind"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "species_ref": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Species Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "species_ref",
+          "name",
+          "kind"
+        ],
+        "title": "SpeciesNameCreate",
+        "type": "object"
+      },
       "SpeciesNameKind": {
         "description": "What sort of name a ``species_name`` row holds.",
         "enum": [
@@ -57068,6 +57094,77 @@
           "source_kind"
         ],
         "title": "SpeciesNameMatch",
+        "type": "object"
+      },
+      "SpeciesNameRead": {
+        "additionalProperties": false,
+        "description": "One name of one species.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CuratorSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SpeciesNameKind"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "name_ref": {
+            "title": "Name Ref",
+            "type": "string"
+          },
+          "retired_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retired At"
+          },
+          "retired_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CuratorSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_kind": {
+            "$ref": "#/components/schemas/SpeciesNameSourceKind"
+          },
+          "species_ref": {
+            "title": "Species Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name_ref",
+          "species_ref",
+          "name",
+          "kind",
+          "source_kind",
+          "created_at"
+        ],
+        "title": "SpeciesNameRead",
         "type": "object"
       },
       "SpeciesNameSearchRequestEcho": {
@@ -84143,6 +84240,221 @@
           }
         },
         "summary": "Create Scientific Record Supersession",
+        "tags": [
+          "curation"
+        ]
+      }
+    },
+    "/api/v1/curation/species-names": {
+      "post": {
+        "description": "Give a species a searchable name. The caller is recorded as the author.",
+        "operationId": "create_species_name_api_v1_curation_species_names_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpeciesNameCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpeciesNameRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Species Name",
+        "tags": [
+          "curation"
+        ]
+      }
+    },
+    "/api/v1/curation/species-names/{name_ref}/retire": {
+      "post": {
+        "description": "Retire a name so it is no longer searched. Retiring a retired name changes nothing.",
+        "operationId": "retire_species_name_route_api_v1_curation_species_names__name_ref__retire_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name_ref",
+            "required": true,
+            "schema": {
+              "title": "Name Ref",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpeciesNameRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retire Species Name Route",
         "tags": [
           "curation"
         ]

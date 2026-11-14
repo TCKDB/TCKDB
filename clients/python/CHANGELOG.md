@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.208.0 - 2026-11-14
+
+`RejectionCode` gains `SPECIES_NAME_DUPLICATE` and `SPECIES_NAME_INVALID`. The parity ledger lists `POST /api/v1/curation/species-names` and `POST /api/v1/curation/species-names/{name_ref}/retire` as curator workflow routes (reachable with `post_json()`). The `tckdb-schemas` requirement is widened to `>=0.158,<0.176`.
+
 ## 0.207.0 - 2026-11-14
 
 No client behaviour changed. The `--base-url` help text and the dataset-release parity note describe current behaviour without issue or design-record references.

@@ -49,6 +49,10 @@ class SpeciesName(Base, TimestampMixin, PublicRefMixin):
     )
     #: Set when the name is retired; a retired name is not searched.
     retired_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=False), nullable=True)
+    #: The curator or admin who retired the name; null when the name is live or when no retirer is recorded.
+    retired_by_user_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger, ForeignKey("app_user.id", deferrable=True, initially="IMMEDIATE"), nullable=True
+    )
 
     __table_args__ = (
         CheckConstraint("char_length(name) BETWEEN 1 AND 128", name="name_length"),
@@ -62,6 +66,7 @@ class SpeciesName(Base, TimestampMixin, PublicRefMixin):
             "source_kind <> 'curated' OR (external_record_key IS NULL AND retrieved_at IS NULL)",
             name="curated_has_no_record",
         ),
+        CheckConstraint("retired_by_user_id IS NULL OR retired_at IS NOT NULL", name="retired_by_needs_retired_at"),
         Index(
             "uq_species_name_species_id_name_key_live",
             "species_id",

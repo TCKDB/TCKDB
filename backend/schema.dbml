@@ -3842,6 +3842,7 @@ Table species_name {
   retrieved_at timestamp
   created_by_user_id bigint [ref: > app_user.id]
   retired_at timestamp
+  retired_by_user_id bigint [ref: > app_user.id]
   created_at timestamp [not null, default: 'now']
   public_ref string [not null]
 
@@ -3857,6 +3858,7 @@ Table species_name {
     `char_length(name_key) BETWEEN 1 AND 128` [name: 'ck_species_name_name_key_length']
     `char_length(name) BETWEEN 1 AND 128` [name: 'ck_species_name_name_length']
     `source_kind <> 'offline_import' OR (external_source_id IS NOT NULL AND external_record_key IS NOT NULL AND retrieved_at IS NOT NULL)` [name: 'ck_species_name_offline_import_has_source']
+    `retired_by_user_id IS NULL OR retired_at IS NOT NULL` [name: 'ck_species_name_retired_by_needs_retired_at']
   }
 
   Note: 'One name of one species. The same name may belong to several species.'

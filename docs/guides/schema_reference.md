@@ -2961,6 +2961,7 @@ the gap.
 | `retrieved_at` | TIMESTAMP WITHOUT TIME ZONE | yes | — | — | — | not documented |
 | `created_by_user_id` | BIGINT | yes | — | app_user.id | — | not documented |
 | `retired_at` | TIMESTAMP WITHOUT TIME ZONE | yes | — | — | — | not documented |
+| `retired_by_user_id` | BIGINT | yes | — | app_user.id | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
 
@@ -2970,6 +2971,7 @@ the gap.
 - `ck_species_name_name_key_length`: `char_length(name_key) BETWEEN 1 AND 128`
 - `ck_species_name_name_length`: `char_length(name) BETWEEN 1 AND 128`
 - `ck_species_name_offline_import_has_source`: `source_kind <> 'offline_import' OR (external_source_id IS NOT NULL AND external_record_key IS NOT NULL AND retrieved_at IS NOT NULL)`
+- `ck_species_name_retired_by_needs_retired_at`: `retired_by_user_id IS NULL OR retired_at IS NOT NULL`
 
 ### `statmech`
 

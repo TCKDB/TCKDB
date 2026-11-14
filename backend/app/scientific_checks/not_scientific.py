@@ -290,6 +290,8 @@ NOT_SCIENTIFIC: dict[str, str] = {
     'software_release_version_filled_from_artifact': _R16,
     'software_release_version_is_composite': _R16,
     'source_pin_missing': _R05,
+    'species_name_duplicate': 'Curation input uniqueness: the species already holds a live name with the same normalised form; not about chemistry.',
+    'species_name_invalid': 'Curation input shape: the name is empty, too long, or has characters or no letter or digit a name search could not use; not about chemistry.',
     'species_name_query_invalid': _R06,
     'sp_energy_component_derived': 'Payload shape of the single-point components (a derived component is not stored); the arithmetic is registered.',
     'sp_energy_component_not_on_sp': 'Payload shape of the single-point components (components belong to a single point); the arithmetic is registered.',

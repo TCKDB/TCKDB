@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Curators name species, and an operator loads reviewed names (Unreleased)
+
+- **Behaviour:** `POST /api/v1/curation/species-names` (curator or admin) gives a species a searchable name from `{species_ref, name, kind}`, and `POST /api/v1/curation/species-names/{name_ref}/retire` retires one, recording who created and who retired it (`created_by`, `retired_by`: username, full name, ORCID, affiliation). Both take public refs only. A name is 1 to 128 characters from the same set the name search accepts (`species_name_invalid`, 422); a live name with the same normalised form on the same species is refused (`species_name_duplicate`, 409). A retired name stays retired, and adding the same name again creates a new live row. Retiring twice returns the first retirement. An unknown or malformed ref is a plain 404; a name added through a merged species' ref lands on the surviving species. `backend/scripts/names/import_species_names.py` reads the PubChem review JSON or a reviewed CSV (InChIKey, or SMILES with charge and multiplicity; name; kind; record key; retrieval time) and shares one write core between them. It reports and writes nothing unless `--commit` is given, writes a row only when exactly one live species matches (reporting `identity_conflict`, `species_ambiguous`, `provenance_missing` and the like otherwise), resolves SMILES the way an upload does, and makes no network connection. A CSV load names its external source with `--source` and `--source-release`. `--propose-from-cccbdb` lists names held in stored CCCBDB observations as CSV and writes nothing.
+- **Schema and migration:** revision `a7c3e1f5b942` adds `species_name.retired_by_user_id` (nullable, references `app_user`) and a check that a retirer is set only on a retired name; the column is null when the name is live or no retirer is recorded. No new environment variable.
+- **Versions:** `tckdb-client` 0.208.0 (two rejection codes, two parity-ledger rows, schemas requirement widened); `tckdb-schemas` 0.175.0.
+
 ## Code comments, docstrings and test text describe behaviour only (Unreleased)
 
 - **Behaviour:** none. Comments, docstrings, fixture notes and the rubric pin ledger in `backend/app`, `backend/tests` and `frontend/src` state current behaviour without issue, pull-request, design-record or phase references; frontend test accounts use a neutral name.
