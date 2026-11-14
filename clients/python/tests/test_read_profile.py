@@ -227,7 +227,7 @@ def test_exploratory_is_forwarded_verbatim_rather_than_normalised_away(
 
 @pytest.mark.parametrize("method_name", PROFILE_METHODS)
 def test_omitting_profile_sends_no_profile_parameter(method_name):
-    """The default request must stay byte-identical to a request made before the parameter existed."""
+    """The default request is byte-identical to a request with no ``profile`` parameter."""
 
     seen: list[httpx.Request] = []
     client, _ = make_client(_handler_recording(seen))

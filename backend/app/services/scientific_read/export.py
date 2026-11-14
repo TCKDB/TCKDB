@@ -1242,7 +1242,7 @@ def build_export_record_set(
 
     Resolves the seed, computes the species closure, and runs read-time
     selection per record. Used by the CHEMKIN serializer (which needs the
-    whole mechanism) and directly by the M1 unit tests.
+    whole mechanism) and directly by unit tests.
 
     :raises ValueError: 422 for an empty/unresolvable seed or an ``all``
         request over the cap.

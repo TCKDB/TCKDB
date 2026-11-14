@@ -10,7 +10,8 @@ Lowercase usernames and email addresses are not part of this guard; ``\bCalvin\b
 matched case-sensitively.
 
 The file list is ``git ls-files`` over the six trees, so untracked and ignored files
-never reach the scan; the test fails with a clear message when git or the repository
+never reach the scan (a new file is scanned once it is ``git add``-ed, and CI always
+sees it); the test fails with a clear message when git or the repository
 is unavailable. Nothing else is read from outside the working tree. The module uses
 only the standard library, so it also runs as
 ``python -m pytest --noconftest backend/tests/invariants/test_no_decision_narrative.py``
@@ -76,7 +77,7 @@ PATTERNS: dict[str, re.Pattern[str]] = {
     "issue or pull-request id": re.compile(
         r"\(#\d+(?![\da-fA-F])|\b(?:issue|PR|review|task) #\d+|\bfinding \d+\b|\bguard PR-\d"
         r"|(?:pre-|since |after |before |until )#\d+"
-        r"|\b[Rr]eview finding F?\d|\bfinding F\d+\b",
+        r"|\bfinding F\d+\b",
         re.IGNORECASE,
     ),
     "phase or work-package label": re.compile(

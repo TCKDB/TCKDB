@@ -650,7 +650,8 @@ def _build_atomic(record: QCRecord, report: MappingReport) -> tuple[dict, str | 
         raise QCSchemaAdapterError(
             "unsupported_driver",
             f"driver={driver!r} is not one of energy, gradient, hessian; "
-            f"scans, IRC, and other driver kinds are not supported.",
+            f"other atomic drivers are not supported (a scan is imported as a "
+            f"TorsionDriveResult via tckdb_qcschema.scan.build_scan_bundle_payload).",
         )
 
     calc = ConformerCalculationIn(**{k: v for k, v in calc_kwargs.items() if v is not None or k == "type"})
