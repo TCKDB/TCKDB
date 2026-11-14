@@ -294,7 +294,7 @@ def test_the_two_halves_no_longer_share_a_status_or_a_code(
 ) -> None:
     """One assertion over both, so collapsing them cannot pass.
 
-    Before this change both bodies were byte-identical:
+    Collapsed into one answer, both bodies would be byte-identical:
     ``422 {"code": "validation_error", "detail": "conformer_selection
     content locator must resolve exactly one selection.", "context": {}}``.
     Asserting each half separately would still pass if a later edit gave
@@ -403,7 +403,7 @@ def test_a_group_ref_naming_a_group_of_another_species_entry_is_refused(
     assert body["code"] == _GROUP_OWNER_MISMATCH, body
     assert body["context"]["field"] == _GROUP_FIELD, body
     assert body["context"]["owner_kind"] == "species_entry", body
-    # the entry that does own it is not disclosed.
+    # The entry that does own it is not disclosed.
     rendered = str(body)
     for row_id in (entries["oh"].id, foreign.id):
         assert not id_in_text(row_id, rendered), (row_id, rendered)

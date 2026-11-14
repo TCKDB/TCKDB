@@ -55,8 +55,8 @@ T = CalculationType
 APPROVED = RecordReviewStatus.approved
 BASE = "/api/v1/scientific"
 
-EXPECTED_THERMO_LIST_STATEMENTS = 22  # 20, plus the two warning lookups a thermo read makes (record_warnings, deposit_warnings)
-EXPECTED_STATMECH_SEARCH_CONFORMERS_STATEMENTS = 60  # n=8
+EXPECTED_THERMO_LIST_STATEMENTS = 22  # a thermo list read: 20 statements plus the two warning lookups (record_warnings, deposit_warnings)
+EXPECTED_STATMECH_SEARCH_CONFORMERS_STATEMENTS = 60  # the statmech search conformers read, over n=8 records
 EXPECTED_CURATED_EXTRA_STATEMENTS = 0
 #: The central ref guard resolves every ref of a response in one batched statement (independent of the page size), on
 #: the route families it is enabled for.

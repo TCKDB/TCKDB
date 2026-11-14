@@ -21,7 +21,7 @@ def test_get_returns_200_with_envelope(client, db_session):
     body = resp.json()
     assert "request" in body and "review_summary" in body and "records" in body
     assert "pagination" in body
-    # default responses identify records by public ref.
+    # Default responses identify records by public ref.
     matching = [
         r for r in body["records"] if r["species_ref"] == species.public_ref
     ]

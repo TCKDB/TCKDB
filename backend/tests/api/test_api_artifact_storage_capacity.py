@@ -314,7 +314,7 @@ def test_a_full_store_is_507_and_says_an_operator_must_act(
     assert "retrying will not clear it" in detail, detail
     assert "operator" in detail, detail
 
-    # a subsystem is named and nothing else. No row ids,
+    # A subsystem is named and nothing else. No row ids,
     # no digest, no bucket, no endpoint, and no S3 error code: the store's
     # code is for the log and for /status, not for a public body.
     assert body["context"] == {}, body

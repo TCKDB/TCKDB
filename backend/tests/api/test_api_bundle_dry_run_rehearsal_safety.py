@@ -1,21 +1,20 @@
 """A dry run's rehearsal must not hurt real writers, and must keep nothing.
 
 ``/bundles/dry-run`` rehearses ``/bundles/submit`` inside a rolled-back
-savepoint. The rehearsal could reach outside itself in four ways,
-each reproduced here:
+savepoint. Four ways a rehearsal could reach outside itself, each pinned here:
 
-* its inserts take the locks a submit's do. A dry run and a real
-  submit inserting the same species in opposite orders deadlocked, and the
-  *submit* was the victim (503 ``database_unavailable``).
-* ``authenticate_api_key`` leaves ``api_key.last_used_at``
-  unflushed in the dry run's session; the first query flushed it, and the
-  row lock it took was held for the whole rehearsal, so two dry runs on one
-  key ran one after the other.
-* the commit guard watched only ``Session.commit``;
+* its inserts take the locks a submit's do; otherwise a dry run and a real
+  submit inserting the same species in opposite orders could deadlock with
+  the *submit* as the victim (503 ``database_unavailable``).
+* ``authenticate_api_key`` leaves ``api_key.last_used_at`` unflushed in the
+  dry run's session; if the first query flushed it, the row lock would be
+  held for the whole rehearsal and two dry runs on one key would run one
+  after the other.
+* the commit guard must cover more than ``Session.commit``:
   ``session.connection().commit()`` and ``session.execute(text("COMMIT"))``
-  both persisted the whole rehearsed import.
-* every dry run of a bundle citing a new DOI refetched it from
-  Crossref, while holding the rehearsal's locks.
+  would otherwise persist the whole rehearsed import.
+* a dry run of a bundle citing a new DOI must not refetch it from Crossref
+  while holding the rehearsal's locks.
 
 These tests run in the production topology -- a fresh session per request
 on its own pooled connection, never committed -- because the shared

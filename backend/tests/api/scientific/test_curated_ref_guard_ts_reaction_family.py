@@ -341,7 +341,7 @@ def test_a_determination_aimed_at_a_hidden_record_is_not_served(client, db_sessi
 
 
 # ---------------------------------------------------------------------------
-# Counts follow the floor: counts and flags follow the floor
+# Counts and flags follow the floor
 # ---------------------------------------------------------------------------
 
 

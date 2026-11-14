@@ -761,7 +761,7 @@ def test_under_curated_an_unreviewed_pinned_result_is_the_one_the_box_describes(
     """The box describes the declared (pinned) frequency result when it is merely unreviewed, as the
     entry's calculation list names it, instead of falling back to the newest other result.
 
-    the trust check's own population reads the same pin (the assessment and the checklist follow the
+    The trust check's own population reads the same pin (the assessment and the checklist follow the
     evidence rule too), so the box and the check agree for an unreviewed pin: both read the pin, not the newest other result.
     Kills: the box keeping the record floor and describing the newest other result (``latest_direct_frequency``); the
     checklist or the scoped assessment keeping the record floor and reading the other (undesignated) result.

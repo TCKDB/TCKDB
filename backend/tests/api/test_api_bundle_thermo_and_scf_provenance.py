@@ -300,7 +300,7 @@ def test_reaction_bundle_thermo_source_must_belong_to_its_own_species(client):
     resp = client.post("/api/v1/uploads/computed-reaction", json=bundle)
     assert resp.status_code == 422, resp.text[:800]
     body = resp.json()
-    # the same rule the standalone thermo route enforces, reported
+    # The same rule the standalone thermo route enforces, reported
     # under the same code -- the reaction bundle is not a second contract.
     assert body["code"] == "thermo_source_calculation_owner_mismatch", body
     assert "another species entry" in body["detail"]
@@ -540,8 +540,8 @@ class TestSpeciesBundleLevelWorkflowTool:
         ``note`` is the species root's other unread field. It is left
         unwired deliberately: unlike ``workflow_tool_release`` it has no
         row to go to — the bundle owns no record of its own — so giving
-        it one is a decision about what a bundle-level note *is*, not the
-        wiring omission this change fixes. The field says so in its
+        it one is a decision about what a bundle-level note *is*, not a
+        wiring omission. The field says so in its
         own description, and this test pins that the claim is true.
         """
         bundle = _species_bundle(

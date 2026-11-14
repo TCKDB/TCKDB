@@ -209,7 +209,7 @@ def test_widening_the_owner_field_alone_still_fails_closed(client, db_session, l
 
 
 # ---------------------------------------------------------------------------
-# Counts follow the floor: availability flags, counts and summary ids follow the floor
+# Availability flags, counts and summary ids follow the floor
 # ---------------------------------------------------------------------------
 
 

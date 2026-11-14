@@ -3,8 +3,8 @@
 The checklist of a kinetics record ("is a source calculation linked?") and of a transition-state entry ("is there a
 frequency result that designates the reaction coordinate?") is a presence check over the calculations the record rests on.
 Under ``curated`` those calculations are linked evidence: an unreviewed one is read (the exploratory answer), a rejected or
-deprecated one is withheld. Before this step the checklists applied the record floor, so a record whose only source
-calculation was unreviewed read as having none.
+deprecated one is withheld. A checklist that applied the record floor would read a record whose only source
+calculation is unreviewed as having none.
 
 Every test states the review rows it builds and names the mutation it kills.
 """

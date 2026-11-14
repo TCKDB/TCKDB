@@ -243,7 +243,7 @@ def test_get_geometry_provenance_lists_producers_and_consumers(
         prov["used_as_input_by"][0]["calculation_ref"] == sp_calc.public_ref
     )
     assert prov["used_as_input_by"][0]["role"] is None
-    # integer calculation_id stripped by default in the
+    # Integer calculation_id stripped by default in the
     # provenance sub-block too.
     assert "calculation_id" not in prov["produced_by"][0]
     assert "calculation_id" not in prov["used_as_input_by"][0]

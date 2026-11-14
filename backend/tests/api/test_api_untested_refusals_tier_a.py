@@ -623,9 +623,9 @@ def test_selecting_a_statmech_owned_by_a_transition_state_is_accepted(
 
     ``statmech`` has exactly one subject and it may be either a species
     entry or a transition-state entry (``statmech_exactly_one_subject``).
-    The release layer must map statmech to both owners, not ``species_entry_id`` alone, so
-    a TS-owned record would resolve to a real row with no subject and be refused
-    ``record_has_no_subject``. The subject
+    The release layer must map statmech to both owners, not ``species_entry_id``
+    alone; otherwise a TS-owned record would resolve to a real row with no
+    subject and be refused ``record_has_no_subject``. The subject
     is derived from whichever owner key is set. ``record_has_no_subject``
     remains as an unreachable backstop (unit-tested on a transient row in
     ``tests/services/release/test_release_statmech_ts_owner.py``).

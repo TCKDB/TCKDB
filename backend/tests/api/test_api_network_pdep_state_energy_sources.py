@@ -222,7 +222,7 @@ _ROUNDED_OR_CONVERTED = {
 
 @pytest.mark.parametrize("name", sorted(_ROUNDED_OR_CONVERTED))
 def test_a_correctly_rounded_or_converted_energy_is_not_refused(client, db_session, name: str) -> None:
-    """The reviewer's five: each is a right number written with less precision than the sum."""
+    """Each is a right number written with less precision than the sum."""
     stated = _ROUNDED_OR_CONVERTED[name](_entrance_kj())
     payload = _payload()
     payload["solve"]["state_energies"][0]["energy_kj_mol"] = stated

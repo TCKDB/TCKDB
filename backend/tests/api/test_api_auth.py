@@ -285,7 +285,7 @@ class TestAdminUserListEndpoint:
         assert body["skip"] == 0
 
     def test_the_list_never_serves_email_addresses(self, raw_client, db_session):
-        """Decided with the owner: no emails on this surface.
+        """The list must not serve email addresses.
 
         Registered WITH an email on purpose. Asserting the key is absent
         from a payload whose subject never had one would pass no matter

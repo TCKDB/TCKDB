@@ -1,6 +1,6 @@
 """What happens to a reaction deposited before its atom map existed.
 
-the atom-map rule says an absent map warns rather than blocks, so a depositor who has
+The atom-map rule says an absent map warns rather than blocks, so a depositor who has
 no map is told to deposit anyway. This file pins what that depositor can and
 cannot do afterwards, because the answer is not obvious and every part of it
 is a deliberate rule working as designed:

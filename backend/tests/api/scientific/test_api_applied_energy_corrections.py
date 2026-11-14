@@ -1,11 +1,10 @@
 """API tests for the applied energy correction on the public read surface.
 
-Before this shipped, TCKDB served an energy-correction scheme's *recipe*
-— all 45 per-bond parameters of a Petersson BAC, addressable at
-``/scientific/energy-correction-schemes/{ref}?include=corrections`` — and
-served an index saying which species the scheme had been applied to, and
-never served **the number that was added**. These tests pin the two
-surfaces that carry it and the facts that make it readable:
+The read surface serves an energy-correction scheme's *recipe* (all 45
+per-bond parameters of a Petersson BAC, addressable at
+``/scientific/energy-correction-schemes/{ref}?include=corrections``), an
+index of which species the scheme was applied to, and also **the number
+that was added**. These tests pin the two surfaces that carry it and the facts that make it readable:
 
 * the energy the correction accompanies is the **uncorrected** one, so
   the correction is an addend and not an adjustment already folded in;

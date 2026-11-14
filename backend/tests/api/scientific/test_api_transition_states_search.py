@@ -51,9 +51,9 @@ def _search_url(**params) -> str:
 
 
 def test_family_alone_satisfies_the_meaningful_filter_check(client, db_session):
-    """``family`` alone must not 422
-    with ``missing_filter`` because the route drops the query
-    param before it reaches ``TransitionStatesSearchRequest``.
+    """``family`` alone satisfies the check; a route that dropped the query
+    param before it reached ``TransitionStatesSearchRequest`` would 422 with
+    ``missing_filter``.
     """
     _make_reaction_with_species(
         db_session,

@@ -176,8 +176,8 @@ def _register(base_url: str) -> str:
 def test_the_fixture_points_every_ambient_factory_at_the_scratch_database(
     commit_delay, scratch_engine
 ) -> None:
-    """``commit_delay`` must rebind more than ``SessionLocal``: the module
-    ``engine`` and the stamp factory belong on the pytest database."""
+    """``commit_delay`` must point the module ``engine`` and the stamp factory
+    at the scratch database too, not only ``SessionLocal``."""
 
     def _database(bind) -> str:
         with bind.connect() as connection:

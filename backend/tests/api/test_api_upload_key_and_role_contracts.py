@@ -3,13 +3,11 @@
 Two contracts, both about the same failure mode: an upload naming
 provenance it does not have, and getting away with it.
 
-* **A declared role must match the calculation's type.** Thermo has
-  enforced this since the no-row-ids rule
-  (``app.workflows.thermo.assert_thermo_role_matches_calculation_type``).
-  Statmech did not, on any of its three write paths, so
-  ``{"calculation_key": "my_sp_job", "role": "freq"}`` persisted happily
-  and the statmech record then claimed a frequency calculation it never
-  had.
+* **A declared role must match the calculation's type.** Thermo enforces
+  this (``app.workflows.thermo.assert_thermo_role_matches_calculation_type``)
+  and statmech must too, on all three of its write paths: otherwise
+  ``{"calculation_key": "my_sp_job", "role": "freq"}`` would persist and the
+  statmech record would claim a frequency calculation it never had.
 
 * **With exactly one exception: an ``opt`` may serve the ``sp`` role.**
   A depositor who ran no separate single point has not lost the number —
@@ -1350,12 +1348,12 @@ class TestALayerBoundaryIsNotAContract:
       and reaches ``resolve_applied_correction_source_key``, a *workflow
       seam*.
 
-    Before this change the first answered ``request_validation_error``
-    with ``context == {}`` and the second answered a specific code with
-    the field, the key and the declared alternatives. Same route, same
-    repair, two contracts -- decided by which layer happened to run
-    first, which is a published contract nobody declared and a refactor
-    can move.
+    If the first answered ``request_validation_error`` with
+    ``context == {}`` while the second answered a specific code with the
+    field, the key and the declared alternatives, the same route and the
+    same repair would have two contracts -- decided by which layer
+    happened to run first, which is a published contract nobody declared
+    and a refactor can move.
 
     These tests do not assert the two codes are *equal*. They are not,
     and should not be: an applied correction's source key spans
@@ -1591,8 +1589,7 @@ class TestTwoUndeclaredKeysInOnePayload:
     def test_ts_evidence_naming_a_foreign_calculation_says_so(self, client):
         """The nested TS model's own namespace: its *own* calculations.
 
-        Same reason as the test above — the sweep found this branch
-        unreached. The key here is refused even though it is spelled
+        Same reason as the test above: this branch needs a test of its own. The key here is refused even though it is spelled
         correctly somewhere else in the bundle, because a transition
         state's IRC evidence must come from that transition state's own
         job.

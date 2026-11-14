@@ -184,7 +184,7 @@ def test_every_reachable_ownership_code_is_asserted_by_a_route_test() -> None:
     # A floor, not a non-empty check: the assertion below is an
     # *absence* -- it passes perfectly against an empty ``reachable``, so
     # a catalogue edit marking every code ``Reach.guard`` would silence
-    # it rather than fail it. (8 codes, 1 guard.)
+    # it rather than fail it.
     assert len(reachable) >= 9, (
         f"only {len(reachable)} ownership codes are reachable by a request; "
         "9 were when this floor was measured. If a code genuinely became "

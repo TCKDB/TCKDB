@@ -3,9 +3,9 @@
 Covers ``method`` / ``basis`` / ``software`` / ``software_version`` /
 ``workflow_tool`` / ``workflow_tool_version``.
 
-Before this endpoint gained these six declared query parameters, FastAPI
-silently dropped them: ``?method=TOTAL_NONSENSE`` returned every species
-in the corpus with HTTP 200, indistinguishable from "everything matches".
+Were these six query parameters not declared, FastAPI would silently drop
+them: ``?method=TOTAL_NONSENSE`` would return every species in the corpus
+with HTTP 200, indistinguishable from "everything matches".
 Every test below therefore pairs a *matching* value (must return a
 strict subset) with a *non-matching* value (must return zero) — the
 non-matching case is the one that would silently return everything if the filter were ignored,

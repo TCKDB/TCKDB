@@ -535,9 +535,8 @@ def test_a_non_selectable_record_ref_is_refused(
 # Licensing: what a release carries when the curator did not say
 # ---------------------------------------------------------------------------
 #
-# ``data_license`` is required and non-blank at the column, so a caller has
-# always had to send *something*; what it should be was never decided, because
-# no release had been cut. It is CC BY 4.0 for the corpus and MIT for the
+# ``data_license`` is required and non-blank at the column, so a caller must
+# send *something*. It is CC BY 4.0 for the corpus and MIT for the
 # code (``LICENSE-DATA`` and ``LICENSE``), and both are request-body defaults.
 # The tests below hold the two halves that have to be true at once: omitting
 # the field yields the house license, and supplying one yields *that* license.
@@ -672,10 +671,10 @@ def _download_all(client, manifest) -> dict[str, bytes]:
 def test_ordinary_upload_after_publication_does_not_break_the_citation(
     client, login_as, _api_curator_user, corpus, db_session
 ):
-    """The blocking finding, reproduced over HTTP.
+    """One ordinary write must not break a published release, over HTTP.
 
     Publish, verify clean, then perform ONE ordinary write — a third thermo for
-    a released species — and nothing else. Previously:
+    a released species — and nothing else. Without the fix:
     ``candidate_records.ndjson`` → 409 ``release_artifact_drift``,
     ``review_history.ndjson`` → 409, manifest → ``verified: false``. The citable
     window was the interval between publishing and the next write anywhere near

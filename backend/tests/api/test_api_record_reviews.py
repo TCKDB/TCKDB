@@ -793,7 +793,7 @@ class TestReviewRowSaysWhereItsRecordCanBeSeen:
             f"/api/v1/record-reviews/applied_energy_correction/{correction.id}"
         ).json()
 
-        # Still unnameable -- this change does not invent a ref for it.
+        # Still unnameable -- no ref is invented for it.
         assert body["record_public_ref"] is None
         # But reachable.
         assert body["container_type"] == "species_entry"

@@ -124,7 +124,7 @@ def test_reaction_kinetics_path_accepts_public_ref(client, db_session):
     )
     assert resp.status_code == 200
     body = resp.json()
-    # integer reaction_entry_id is hidden in the default
+    # Integer reaction_entry_id is hidden in the default
     # response. The ref handle round-trips into reaction_entry_ref.
     assert body["reaction_entry_ref"] == re.public_ref
 

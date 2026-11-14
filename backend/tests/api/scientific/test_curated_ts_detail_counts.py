@@ -1,4 +1,4 @@
-"""B1: the transition-state detail counts the entries it lists.
+"""The transition-state detail counts the entries it lists.
 
 Under ``curated`` a served transition state lists every entry that is not rejected or deprecated, badged. Its
 ``entries_summary``, ``evidence_summary`` and ``available_sections`` count the entries it lists, not only the approved record floor:

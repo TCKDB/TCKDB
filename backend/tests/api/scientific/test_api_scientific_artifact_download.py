@@ -1,12 +1,10 @@
 """API tests for integrity-verified artifact downloads.
 
-Two ways in, and they are tested as two: *approved* (a curator published
-it, any authenticated caller may pull it) and *owned* (the caller
-deposited it). Without the second, an approval-only gate stays shut for
-artifacts that hang off ``not_reviewed`` calculations, and the depositor
-cannot retrieve their own upload. The auth gate is separate:
-ownership is a reason to serve an authenticated caller, never a reason to
-serve an anonymous one.
+Downloads are gated on authentication only: any authenticated caller may
+pull any stored artifact, whatever its review status and whoever deposited
+it, and an anonymous caller is refused. Review status and ownership do not
+narrow the result; the tests below pin that for approved, unreviewed,
+other-owned and retired-submission cases.
 """
 
 from __future__ import annotations
@@ -260,9 +258,9 @@ def test_submission_owner_downloads_a_deposit_they_did_not_write(
     "owner", and it is not hypothetical: a submission made on someone's
     behalf — an agent, a group account, a pipeline running under a service
     identity — writes ``calculation.created_by`` as itself while the
-    accountable principal is the one who owns the submission.
-    puts ownership on ``submission.created_by`` for exactly this reason,
-    and the upload route already authorizes attachment the same way.
+    accountable principal is the one who owns the submission. Ownership
+    sits on ``submission.created_by`` for exactly this reason, and the
+    upload route authorizes attachment the same way. The owner is served.
     """
     artifact, content = _downloadable_artifact(
         db_session,
@@ -290,12 +288,11 @@ def test_submission_owner_downloads_a_deposit_they_did_not_write(
 def test_a_retired_submission_no_longer_changes_a_download(
     client, db_session, monkeypatch, _api_test_user, _api_other_user
 ) -> None:
-    """A retired (rejected) submission does not change a download.
+    """A rejected submission does not change a download.
 
-    Authority held only via a REJECTED submission does not extend to
-    downloads. The rejected submission changes nothing here: this caller's
-    only possible claim to the file is a retired one, so the download is
-    served exactly as for any other authenticated caller.
+    Downloads are not gated on review status or ownership: the auth gate is
+    the only gate. A caller whose only claim to the file is a REJECTED
+    submission is therefore served exactly as any other authenticated caller.
 
     The retired-submission judgement itself is unaffected on the path
     where it still bites: the UPLOAD route still refuses to let a

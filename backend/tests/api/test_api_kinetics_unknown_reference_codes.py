@@ -10,14 +10,14 @@ one of those lookups must not raise a bare ``ValueError``, or a depositor
 receives **422 ``validation_error`` with an empty ``context``** and has to
 read English prose to find out which of five refs was wrong.
 
-Both halves of that are wrong:
+Both halves of that would be wrong:
 
 * **422 says "your message is malformed, fix it and resend".** Nothing a
   depositor can retype makes a missing statmech exist. The honest answer
   is 404 — the thing you named is not there — and it is what a client
   needs in order to retry differently (deposit the dependency, *then*
   resend) instead of resending forever.
-* **A generic code with no context** left the client string-matching a
+* **A generic code with no context** would leave the client string-matching a
   sentence. Each refusal carries its own code and a ``context``
   naming the field, the kind of row and the ref that failed.
 

@@ -93,7 +93,7 @@ def test_default_omits_non_default_sections(client, db_session):
         "species",
         "transition_states",
     ]
-    # networks is in the default set, so it is present-and-empty for a
+    # Networks is in the default set, so it is present-and-empty for a
     # TS-only entry (requested, nothing there), not absent.
     assert body["networks"] == []
 
@@ -112,7 +112,7 @@ def test_non_ts_backed_kinetics_no_fabricated_ts_links(client, db_session):
     body = resp.json()
     assert len(body["kinetics"]) == 1
     p = body["kinetics"][0]["provenance"]
-    # ref siblings are null for non-TS-backed records.
+    # Ref siblings are null for non-TS-backed records.
     assert p["transition_state_entry_ref"] is None
     assert body["transition_states"] == []  # not fabricated
 

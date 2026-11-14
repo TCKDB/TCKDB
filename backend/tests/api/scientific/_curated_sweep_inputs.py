@@ -72,7 +72,7 @@ ROUTE_PATH_PARAM_PROVIDERS: dict[tuple[str, str], dict[str, Callable[[SweepWorld
     ("GET", f"{BASE}/calculations/{{calculation_ref_or_id}}/path-search"): {
         "calculation_ref_or_id": lambda w: _refs(w, "calc_ps", "calc_ps_v")
     },
-    # reaction entries whose scoping parents are unreviewed (never hidden, never 404), crawled beside the
+    # Reaction entries whose scoping parents are unreviewed (never hidden, never 404), crawled beside the
     # reviewed one on the two reads that list a reaction entry's participants and records.
     **{
         ("GET", f"{BASE}/reaction-entries/{{reaction_entry_id}}/{suffix}"): {
@@ -132,7 +132,7 @@ _SEARCHES: dict[str, list[Callable[[SweepWorld], dict[str, Any]]]] = {
     ],
     "kinetics": [
         lambda w: {"reaction_entry_ref": _rxe(w)},
-        # every include token (``trust`` and ``assessments`` are not part of ``all``) and the superseded records.
+        # Every include token (``trust`` and ``assessments`` are not part of ``all``) and the superseded records.
         lambda w: {
             "reaction_entry_ref": _rxe(w),
             "include": ["all", "trust", "assessments"],
@@ -144,7 +144,7 @@ _SEARCHES: dict[str, list[Callable[[SweepWorld], dict[str, Any]]]] = {
         lambda w: {"method": "wb97xd", "include": ["all"]},
         lambda w: {"method": "hiddenonly", "include": ["all"]},
     ],
-    # the PLOG filters match only the hidden solve's fit; the Chebyshev ones match visible and hidden fits.
+    # The PLOG filters match only the hidden solve's fit; the Chebyshev ones match visible and hidden fits.
     "network-kinetics": [
         lambda w: {"has_chebyshev": True, "include": ["all"]},
         lambda w: {"has_plog": True, "include": ["all"]},
@@ -337,7 +337,7 @@ ROUTE_INPUTS: dict[tuple[str, str], Callable[[SweepWorld], list[dict[str, Any]]]
         for m in ("GET", "POST")
     },
     ("GET", f"{BASE}/species/name-search"): _variants({"q": "water", "limit": 20}, {"q": "wat", "match": "prefix", "limit": 20}),
-    # the family's detail reads with every include token, the opt-in ones (``trust``, ``assessments``) included.
+    # The family's detail reads with every include token, the opt-in ones (``trust``, ``assessments``) included.
     ("GET", f"{BASE}/reaction-entries/{{reaction_entry_id}}/full"): _variants(
         {},
         {"include": ["all", "trust"]},

@@ -116,9 +116,9 @@ class TestOnlyTheCodePositionDeclaresACode:
 
     The house style for a workflow refusal is
     ``raise ValueError(f"{context}: <prose>")`` with ``context`` a field
-    path. Before this rule, a path ending in ``existing_calculation_id``
-    put that field name in front of a colon and the envelope advertised it
-    as ``code`` — a string in no register, in no generated client
+    path. Without this rule, a path ending in ``existing_calculation_id``
+    would put that field name in front of a colon and the envelope would
+    advertise it as ``code`` — a string in no register, in no generated client
     constant, that changes when somebody renames a field. That is worse
     than an uncoded error: ``validation_error`` is honestly generic, a
     fabricated code looks real.

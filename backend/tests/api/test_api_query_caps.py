@@ -408,8 +408,8 @@ def test_query_too_expensive_publishes_the_cap_but_not_the_row_count(
     countable refusal leaks it per query, forever.
 
     The absence is asserted over the **whole serialized body**, not just
-    ``context``. ``detail`` is published too, and it carries the count
-    so an omission from one and not the other would be
+    ``context``. ``detail`` is published too, so it must not carry the count
+    either: an omission from one and not the other would be
     decorative.
     """
     entry = _seed_reaction_entry_with_n_calculations(db_session, label="Q", n=7)

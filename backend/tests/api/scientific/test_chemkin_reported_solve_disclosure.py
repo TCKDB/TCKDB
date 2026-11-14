@@ -1,6 +1,6 @@
 """CHEMKIN export must not silently publish transcribed rates as its own.
 
-the reported-solve rule gave ``network_solve`` a ``kind`` token so a consumer can tell rates
+The reported-solve rule gave ``network_solve`` a ``kind`` token so a consumer can tell rates
 this database derived (``computed``) from rates read out of a publication
 (``reported``). Every JSON read surface carries it.
 

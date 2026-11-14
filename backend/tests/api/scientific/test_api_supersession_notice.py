@@ -48,7 +48,7 @@ from tests.services.scientific_read._factories import (
 )
 
 #: The public-ref shape every pointer in a notice must have: a registered
-#: prefix plus a 26-char base32 body. A bare integer must never appear
+#: prefix plus a 26-char base32 body. A bare integer must never appear in its place.
 _PUBLIC_REF = re.compile(r"^[a-z]+_[a-z2-7]{26}$")
 
 
@@ -78,7 +78,7 @@ def _approve(db_session, *, record_type: SubmissionRecordType, record_id: int, a
 def _snapshot(db_session, model, row_id: int) -> dict:
     """Every stored column of one row, as raw values.
 
-    Mirrors the helper the selection rule's selection test uses
+    Mirrors the helper the release selection test uses
     (``tests/services/release/test_release_selection.py``) so "the superseded
     record was not touched" is a whole-row claim, not a spot check on the two
     columns the author happened to think of.
@@ -257,7 +257,7 @@ def test_reading_a_superseded_record_leaves_it_byte_identical(client, db_session
     """Nothing about the notice writes to the record it is attached to.
 
     Whole-row snapshots before and after both the supersession *and* the read,
-    the way the selection rule's selection test asserts it — the notice is computed at
+    the way the release selection test asserts it — the notice is computed at
     read time precisely so no earlier row has to be updated when a correction
     lands.
     """
@@ -299,7 +299,7 @@ def test_reading_a_superseded_record_leaves_it_byte_identical(client, db_session
 def test_the_head_is_computed_not_stored(db_session):
     """No column anywhere on ``thermo`` caches "is this the current one".
 
-    the selection rule rejected exactly this as a stored flag: a second source of truth
+    A stored "is current" flag would be a second source of truth
     able to disagree with the ledger it summarises. If someone later adds one,
     this fails and the change has to be justified.
     """

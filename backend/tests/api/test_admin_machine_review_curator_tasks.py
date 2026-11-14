@@ -3,7 +3,7 @@
 Routes under ``/api/v1/admin/machine-review/curator-tasks`` are an admin
 workflow surface over ``machine_review_curator_task``: list, get, explicit
 build-for-submission, assign, start-review, resolve, reopen. They are
-**admin-only** (curators get 403 in this slice) and must never expose public
+**admin-only** (curators get 403) and must never expose public
 ``trust.machine_review`` or mutate ``submission.status`` / ``RecordReviewStatus``
 / scientific state.
 
@@ -259,7 +259,7 @@ def test_get_task_404(client, login_as, _api_admin_user):
     assert resp.status_code == 404, resp.text
     body = resp.json()
     assert body["code"] == "curator_task_not_found", body
-    # the looked-up row id goes to the operator's log, never
+    # The looked-up row id goes to the operator's log, never
     # into the body. 999999 is the caller's own path parameter.
     assert body["context"] == {}, body
 
@@ -746,12 +746,12 @@ def test_the_write_routes_carry_the_ref_too(
 # --------------------------------------------------------------------------- #
 #
 # Six of the eighteen ``SubmissionRecordType`` members name a table with no
-# page of its own -- ``thermo`` is one. Before this slice a task against a
-# thermo row carried nothing that let a client find it: ``record_public_ref``
-# addresses no route (thermo has no page), and the response had no
+# page of its own -- ``thermo`` is one. Without a container ref, a task against a
+# thermo row would carry nothing that lets a client find it: ``record_public_ref``
+# addresses no route (thermo has no page), and the response would have no
 # ``container_type`` / ``container_ref`` field at all. That is the same
-# defect as on ``/api/v1/record-reviews``; these tests pin its
-# repair on this route, resolved by the same
+# gap as on ``/api/v1/record-reviews``; these tests pin the container
+# fields on this route, resolved by the same
 # ``app.services.record_containers`` this route reuses rather than a
 # second mapping.
 

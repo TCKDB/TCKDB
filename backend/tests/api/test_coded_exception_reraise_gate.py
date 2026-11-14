@@ -9,8 +9,7 @@ in :mod:`app.api.errors` never runs, so the ``code`` a client branches on
 is replaced by ``http_<status>``. The condition did not change; only the
 route that noticed it did.
 
-Two instances were filed and, measured, they were not the
-only two. The sweep behind them found four:
+A sweep found four sites with this defect:
 
 * ``GET /admin/machine-review/curator-tasks/{id}`` answered ``http_404``
   where the four write routes on the same row answered
@@ -545,8 +544,8 @@ class TestTheSweepIsComplete:
         * ``tests/api/scientific/test_api_scientific_artifact_integrity.py``
           ``::test_client_sort_is_rejected_like_every_other_scientific_read``.
 
-        ``routes/admin.py`` is deliberately **not** listed. Its case is not
-        a catch-and-replace at all -- it is a private
+        ``routes/admin.py`` is deliberately **not** listed. Its defect was not
+        a catch-and-replace at all -- it was a private
         ``_get_curator_task_or_404`` duplicating a coded service helper,
         which this scan cannot see and should not pretend to. Asserting
         it here would be a guard covering a shape its target never had.

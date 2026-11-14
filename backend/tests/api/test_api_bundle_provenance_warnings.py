@@ -8,7 +8,7 @@ uses — omitting ``workflow_tool_release``, ``software_release``,
 ``literature`` or a frequency scale factor produced no warning of any
 kind, while the identical omission field-by-field was reported.
 
-the atom-map rule and the blocking-tier rule both rest on the same principle: absence is
+The atom-map rule and the blocking-tier rule both rest on the same principle: absence is
 incompleteness, and incompleteness is *annotated* rather than refused. A
 bundle depositor got neither the refusal nor the annotation, so their
 record was silently less complete than a field-by-field one and nothing

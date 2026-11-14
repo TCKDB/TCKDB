@@ -4,7 +4,7 @@
 profile. The statmech source-calculations block (ref, role, type, review status) and the frequency pointer
 (``source_freq_calculation_refs`` / ``_ids``) must not list such calculations.
 
-only a calculation the profile WITHHOLDS (rejected or deprecated) is left out of those blocks. One that is
+Only a calculation the profile WITHHOLDS (rejected or deprecated) is left out of those blocks. One that is
 merely below the floor (not reviewed, under review) is linked evidence of the approved statmech and is listed with its
 review badge; each hiding test below runs over a rejected calculation and has an unreviewed twin.
 

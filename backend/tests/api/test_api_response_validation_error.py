@@ -254,7 +254,7 @@ def test_a_name_that_is_also_a_response_model_stays_a_422_through_caller_input()
 
 
 # ---------------------------------------------------------------------------
-# Caller input that must stay a 422 (it was a 422 before this change)
+# Caller input that must stay a 422
 # ---------------------------------------------------------------------------
 
 _LOOKUP_CASES = [

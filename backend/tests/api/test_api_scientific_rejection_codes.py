@@ -46,8 +46,8 @@ def _assert_code(response, expected: str) -> dict:
     """The response names *expected* in its ``code`` field, not in its prose.
 
     A helper rather than a bare assert so the failure message can say what
-    was actually reported — which, before this branch, was
-    ``validation_error`` for every single one of these.
+    was actually reported — which, for an unpromoted refusal, would be
+    ``validation_error``.
     """
     body = _envelope(response)
     assert body["code"] == expected, (
@@ -478,7 +478,7 @@ class TestStationaryPoints:
 # potential energy surface. It says only that the scalar the ESS printed
 # and the mode rows deposited beside it must answer the same question the
 # same way -- a contract between two fields of one record, which is the
-# narrow thing the blocking-tier rule reserves the blocking tier for.
+# narrow thing the blocking tier is reserved for.
 
 
 class TestAFrequencyResultAgainstItsOwnModes:
@@ -552,7 +552,7 @@ class TestAFrequencyResultAgainstItsOwnModes:
     def test_a_frequency_list_that_agrees_is_deposited(self, client):
         """The same three imaginary modes, declared, are accepted.
 
-        the imaginary-mode protocol's own motivating record -- a reaction coordinate at
+        The imaginary-mode protocol's own motivating record -- a reaction coordinate at
         -1300 with -42 and -13 beside it -- with the scalar agreeing with
         the list, the barrier designated and the two extras declared. The
         blocking tier above has to let this through or it is the
@@ -645,7 +645,7 @@ class TestAFrequencyListAgainstItsGeometry:
     ):
         """Nine modes on water: the whole mass-weighted Hessian spectrum.
 
-        the imaginary-mode protocol §"What a record must carry" asks for the six
+        The imaginary-mode protocol §"What a record must carry" asks for the six
         translation/rotation eigenvalues *as well as* the spectrum, "so
         contamination is directly assessable". That record sits exactly on
         the ceiling, so a strict comparison would refuse the most complete

@@ -136,7 +136,7 @@ def test_a_legacy_list_echoes_its_administrative_id_order(case, client, db_sessi
 
 @pytest.mark.parametrize("case", sorted(CASES))
 def test_the_curated_profile_shows_approved_records_only_and_counts_nothing_else(case, client, db_session):
-    """Kills: a legacy list that ignores ``profile`` (before this change it returned all five rows), and a count of
+    """Kills: a legacy list that ignores ``profile``, and a count of
     the records below the floor in the total or the disclosure block."""
     seeded, url = _seed(case, db_session)
     body = client.get(
@@ -265,7 +265,7 @@ def _count_statements(db_session, call):
 
 
 def test_the_disclosure_costs_one_statement_per_list_and_none_under_curated(client, db_session):
-    """Before this change a legacy list issued 2 statements (count, page). The visibility joins go into those two; the
+    """A legacy list issues 2 statements (count, page); the visibility joins go into those two, and the
     disclosure is the one added aggregate. Curated issues no aggregate: it must not count what it withholds."""
     seeded, url = _seed("thermo", db_session)
     client.get(url)  # warm one-time lookups

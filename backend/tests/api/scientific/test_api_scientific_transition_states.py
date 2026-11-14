@@ -2159,11 +2159,9 @@ def test_ts_search_accepts_trust_token_and_keeps_it_out_of_all(
 ):
     """Search accepts ``trust``; ``include=all`` still does not reach it.
 
-    Accepting ``trust`` here is deliberate, not a relaxation:
-    the search response carries a
-    ``trust`` field at the record root on every record while refusing the
-    only token that could fill it, so the field would be permanently ``null``:
-    a slot advertised and never fillable.
+    Refusing ``trust`` here would leave the ``trust`` field at the record
+    root on every record permanently ``null``: a slot advertised and never
+    fillable. So search accepts the token.
 
     What survives unchanged is the half that costs. The evaluator walks a
     23-entry eager-load chain here — the largest of the five search

@@ -1,4 +1,4 @@
-"""Three legal include tokens that must not be accepted and produce nothing.
+"""Three legal include tokens that must each change the response when requested.
 
 A no-op token would be a `200` that changes no key
 in the response:
@@ -330,8 +330,8 @@ def test_observations_on_an_observation_returns_the_basins_observations(
         o["conformer_observation"]["conformer_observation_ref"] for o in block
     )
     assert refs == expected_refs
-    # Each sibling is a lean ref+review projection,
-    # not a nested
+    # Each sibling is a lean ref+review projection
+    # (``ConformerObservationSiblingSummary``), not a nested
     # copy of the full record -- so there is no ``observations`` key on a
     # sibling to recurse into at all. That is what terminates the
     # recursion here (the TS entries block's own guard, by contrast, is

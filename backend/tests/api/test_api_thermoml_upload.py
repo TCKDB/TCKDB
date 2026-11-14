@@ -383,8 +383,7 @@ class TestCodedRefusals:
         # makes the content -- and its SHA-256 -- unique to this test run,
         # so "no object exists yet" is a real precondition rather than one
         # that could spuriously hold or fail depending on what an earlier
-        # run (including a reviewer's own manual repro of this exact
-        # finding) already wrote to the shared local object store.
+        # run (including a manual repro) already wrote to the shared local object store.
         import uuid
 
         xml_text = LIQUID_XML.read_text(encoding="utf-8")

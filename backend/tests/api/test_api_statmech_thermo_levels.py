@@ -445,7 +445,7 @@ def test_statmech_energy_level_requires_sp(client, db_session):
     )
     resp = client.post("/api/v1/uploads/statmech", json=payload)
     body = _assert_code(resp, _REQUIRES_SP_STATMECH)
-    # The owner's exact phrasing: "energy level of theory X differs from
+    # The message names both levels: "energy level of theory X differs from
     # the optimisation level Y but no single-point calculation at X is
     # linked" -- both LoT strings must be present.
     assert "wB97X-D/def2-TZVP" in body["detail"]
@@ -516,7 +516,7 @@ def test_statmech_opt_only_valid_with_no_declared_level(client):
 
 def test_statmech_opt_sp_different_levels_valid(client):
     """Opt and sp at two different levels of theory is exactly the shape
-    the owner asked TCKDB to display honestly: ``energy_source == 'sp'``,
+    TCKDB must display honestly: ``energy_source == 'sp'``,
     and the energy level differs from the geometry level."""
     payload = _standalone_statmech_payload(
         species_entry={"smiles": "CCCCCCCCCCCCC", "charge": 0, "multiplicity": 1},
@@ -1125,7 +1125,7 @@ def _computed_species_bundle_payload(
 def test_computed_species_statmech_forgot_sp_is_refused(client):
     """Two conformers; only one has a covering sp. Coverage fires with no
     declared energy level at all -- this is the 'forgot the SP for one
-    conformer' shape the owner named directly."""
+    conformer' shape."""
     payload = _computed_species_bundle_payload(
         conformers=[
             _bundle_conformer(0, opt_lot=_LOT_A, xyz_z=0.0, sp_lot=_LOT_A),

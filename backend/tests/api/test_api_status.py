@@ -663,8 +663,8 @@ def test_status_reads_a_refusal_no_code_in_this_process_ever_saw(
     This is the discriminator, and the restart test below is *not*. A module
     global survives ``create_app()`` perfectly well — it lives in the module,
     not in the application object — so "a freshly built app still reports it"
-    would have passed against the very implementation this change replaces.
-    That test would have been green for a reason unrelated to what it claims.
+    would pass against an implementation that keeps the observation in a
+    module global. That test would be green for a reason unrelated to what it claims.
 
     So the refusal is inserted **straight into the table**, by a plain ORM
     add, with no TCKDB code path notified: no recorder called, nothing
@@ -700,7 +700,7 @@ def test_status_reads_a_refusal_no_code_in_this_process_ever_saw(
 def test_a_full_store_is_still_reported_after_a_restart(
     client, storage_probe, capacity_db
 ) -> None:
-    """The defect this change exists to fix, end to end.
+    """A restart must not forget the observation, end to end.
 
     The observation is stored, not held in memory: a restart that forgot it
     would let the API come back up reporting ``artifact_storage`` healthy while

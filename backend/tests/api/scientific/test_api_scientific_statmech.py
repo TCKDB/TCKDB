@@ -1173,7 +1173,7 @@ def test_search_include_all_does_not_restore_internal_ids(client, db_session):
 def test_search_accepts_trust_and_keeps_it_out_of_all(client, db_session):
     """Statmech search accepts ``include=trust``; ``include=all`` does not.
 
-    A 422 here would leave the field it guards
+    Without the token the field it guards would be
     unreachable. ``ScientificStatmechRecord`` declares ``trust`` and this
     route strips it — correctly, at the right scope — so the
     key would be **permanently absent** and nothing in the sixteen top-level

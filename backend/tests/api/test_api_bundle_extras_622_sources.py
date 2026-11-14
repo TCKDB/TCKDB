@@ -218,7 +218,7 @@ def test_stability_source_at_another_level_of_theory_is_kept_with_a_warning(
 ):
     """A different level is worth saying, not worth losing the record over.
 
-    definitions block, expectations warn. The verdict is stored and
+    Definitions block, expectations warn. The verdict is stored and
     the response carries ``scf_stability_source_level_mismatch``; the same
     bundle at one level carries none.
 

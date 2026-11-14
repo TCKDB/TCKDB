@@ -94,7 +94,7 @@ def test_ts_statmech_source_key_naming_nothing_is_a_coded_422(client) -> None:
     # The alternatives are the point: a refusal that names them turns a
     # typo into a mechanical fix rather than a guess.
     assert "ts_elim_freq" in body["context"]["declared_keys"], body
-    # the map's *values* are row ids and they
+    # The map's *values* are row ids and they
     # stay there.
     assert set(body["context"]) == {"field", "key", "declared_keys"}, body
 

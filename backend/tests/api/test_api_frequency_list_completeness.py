@@ -162,11 +162,11 @@ class TestACompleteListIsAccepted:
     def test_water_depositing_all_nine_eigenvalues_is_also_complete(self, client):
         """The imaginary-mode protocol asks for the six translation/rotation eigenvalues too.
 
-        "the six translation/rotation eigenvalues must be present so
-        contamination is directly assessable". A record carrying all
-        ``3N`` is the most complete record the rule describes, so the
+        The protocol says "the six translation/rotation eigenvalues must be
+        present so contamination is directly assessable". A record carrying all
+        ``3N`` is the most complete record the protocol describes, so the
         upper bound is ``3N`` and not ``3N - 6`` — a rule that refused
-        this would refuse exactly what the rule asks for.
+        this would refuse exactly what the protocol asks for.
         """
         body = _post(
             client,
@@ -481,7 +481,7 @@ class TestTheTransitionStateADR0012WasWrittenAbout:
         assert resp.status_code == 201, resp.text
         body = resp.json()
         assert _completeness_warnings(body) == []
-        # The the imaginary-mode protocol judgement is unchanged and still present.
+        # The imaginary-mode protocol judgement is still present.
         assert any(
             w["code"] == "transition_state_extra_imaginary_mode_above_tau"
             for w in body["warnings"]
@@ -516,8 +516,8 @@ class TestSpeciesWithNoAtomsAndSpeciesWithUnknownAtoms:
         """``ATOMLESS_MOLECULE_KINDS`` closes the door before this rule.
 
         ``raise_for_atomless_structure`` refuses a geometry deposited
-        against ``molecule_kind: electron`` — definitional, blocking, and
-        older than this branch. So an electron reaches the completeness
+        against ``molecule_kind: electron`` — definitional and
+        blocking. So an electron reaches the completeness
         check with no geometry to count, and the check is unreachable for
         it rather than wrong about it. Asserted on the status and the
         code rather than on prose, because the word "electron" appears in

@@ -241,7 +241,7 @@ def test_curated_hidden_basin_is_indistinguishable_from_an_unknown_ref(client, d
 def test_curated_approved_statmech_under_a_not_approved_ts_entry_is_returned(client, db_session):
     """Kills: gating the filter subject (the TS entry's review) instead of the returned record's own floor.
 
-    the statmech is the record; the transition-state entry it hangs on is context, shown with its badge while it
+    The statmech is the record; the transition-state entry it hangs on is context, shown with its badge while it
     is merely not reviewed."""
     ts = _ts_entry(db_session)
     sm = _ts_statmech(db_session, ts)

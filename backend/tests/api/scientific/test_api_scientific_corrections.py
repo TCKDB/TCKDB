@@ -726,8 +726,7 @@ def test_ecs_search_by_version_is_refused_not_ignored(client, db_session):
     leaving it: FastAPI does not reject an unknown query parameter, so
     ``?version=v2`` came back **200 with the filter silently dropped** --
     a client filtering by version received unfiltered results and no
-    indication anything had been ignored. Measured, not assumed, while
-    building this change.
+    indication anything had been ignored.
 
     *Mutation*: remove ``version`` from the rejected-filter dict in
     ``energy_correction_schemes_search.py`` -- this must then fail,

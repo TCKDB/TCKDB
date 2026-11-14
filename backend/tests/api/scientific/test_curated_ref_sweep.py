@@ -147,7 +147,7 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
         f"{BASE}/level-of-theories/{{level_of_theory_ref_or_id}}",
     },
     "calc_h_ts": {f"{BASE}/statmech/{{statmech_ref_or_id}}", _TSE, _TS, _FULL, _KIN, _KSEARCH},
-    # hidden calculations of every kind a visible TS entry holds, named by the entry's reads and by the visible
+    # Hidden calculations of every kind a visible TS entry holds, named by the entry's reads and by the visible
     # kinetics that cite them.
     "calc_h_tssp": {_TSE, _TS, _TSBROWSE, _FULL, _KIN, _KSEARCH},
     "calc_h_irc": {_TSE, _TS, _TSBROWSE, _FULL, _KIN, _KSEARCH},
@@ -167,7 +167,7 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
     "calc_h_psw": {_TSBROWSE},
     "kin_hw": {_KIN, _X_ND, _X_MLR},
     "calc_h_psp": {_TSE, _TS, _TSBROWSE, _FULL},
-    # hidden records in every position the four export streams can name one.
+    # Hidden records in every position the four export streams can name one.
     "calc_h_xlin": {_X_ND, _X_CK, _X_MLS, f"{BASE}/transport/search"},
     "calc_h_xsp": {_X_MLS},
     "sm_h_y": {_X_ND, _X_CK},
@@ -205,7 +205,7 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
     "kin_h_new": {f"{BASE}/analytics/kinetics", f"{BASE}/kinetics/search"},
     "calc_h_p2": {f"{BASE}/network-solves/{{network_solve_ref_or_id}}"},
     "sm_h2": {f"{BASE}/frequency-scale-factors/{{frequency_scale_factor_ref_or_id}}"},
-    # a hidden solve's PLOG fit (the only one of its kind), and the hidden calculations of a level of theory,
+    # A hidden solve's PLOG fit (the only one of its kind), and the hidden calculations of a level of theory,
     # a composite-scheme binding and a literature record that nothing visible uses.
     "nkin_h_plog": {f"{_NET}/kinetics/evaluate", f"{BASE}/network-kinetics/search"},
     "calc_h_lot": {

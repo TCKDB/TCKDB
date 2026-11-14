@@ -56,7 +56,7 @@ def test_returns_200_for_valid_reaction_entry_id(client, db_session):
     )
     assert resp.status_code == 200
     body = resp.json()
-    # default response identifies the reaction entry by ref.
+    # Default response identifies the reaction entry by ref.
     assert body["reaction_entry_ref"] == entry.public_ref
     assert len(body["records"]) == 1
 
@@ -116,7 +116,7 @@ def test_non_ts_backed_provenance_returns_nulls(client, db_session):
     assert resp.status_code == 200
     record = resp.json()["records"][0]
     p = record["provenance"]
-    # integer TS-chain ids are hidden in the default response.
+    # Integer TS-chain ids are hidden in the default response.
     # The corresponding ref siblings remain visible and are null for
     # non-TS-backed kinetics.
     assert p["transition_state_entry_ref"] is None

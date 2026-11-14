@@ -128,8 +128,8 @@ def _irc_evidence(**overrides) -> dict:
     return record
 
 
-#: The energies ``_energy_ordering`` states, as the cited calculations store them
-#:: an ordering is held against the stored values, so the fixture's
+#: The energies ``_energy_ordering`` states, as the cited calculations store them:
+#: an ordering is held against the stored values, so the fixture's
 #: calculations must store what its record says. Each E0 is that participant's
 #: electronic energy plus the ZPE below, which every freq and sp of one
 #: participant share a geometry key for.

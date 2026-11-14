@@ -55,13 +55,11 @@ telling a client to resend something that could never be accepted.
 
 The assertion is *strong*, not weak: the pair is
 still exact, and the same tests still require the neighbouring valid
-request to be accepted. ``release_tag_taken`` and
-``curation_policy_version_conflict`` had already been settled at 409 in
-so this removed an inconsistency inside one router rather than
-creating one.
+``release_tag_taken`` and ``curation_policy_version_conflict`` are likewise
+at 409, so the router is consistent.
 
 Fixtures live in this file rather than in a conftest deliberately: they are
-one round old and shared by nothing else yet.
+shared by nothing else.
 """
 
 from __future__ import annotations

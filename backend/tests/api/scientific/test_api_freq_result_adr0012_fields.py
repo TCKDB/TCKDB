@@ -125,8 +125,8 @@ def test_a_flagged_first_order_saddle_says_so_without_an_opt_in(
     believes are clean first-order saddles. A record can report
     ``n_imag == 1`` *and* carry the structural flag -- the imaginary-mode protocol's whole
     argument is that the count is a property of the protocol, not of the
-    structure -- and before this change the ordinary read gave that
-    consumer no way to tell the two apart.
+    structure -- so the ordinary read must give that
+    consumer a way to tell the two apart.
     """
     calc = _freq_calc(db_session)
     attach_freq_result(

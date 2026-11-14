@@ -1156,8 +1156,8 @@ _BENT_XYZ = "3\n\nO 0.0 0.0 0.0\nH 0.76 0.59 0.0\nH -0.76 0.59 0.0\n"
 def _extend_for_export_family(session, w: SweepWorld, *, lot, rxe, r1, r2, tse_v2) -> None:
     """A hidden record in every position the four export streams can name one.
 
-    Before this the exports met the hidden records of the older families only, and the one hidden transition state
-    they named came from a reaction whose every record was hidden. Now:
+    The exports must meet more than the hidden records of the older families, and the hidden transition state
+    they name must not come only from a reaction whose every record is hidden. So the world holds:
 
     * ``sx``: a hidden calculation that is the only linearity witness of a visible transport (its input geometry is
       collinear), that carries an energy, a frequency block and a Hessian beside a visible calculation of the same
@@ -1278,8 +1278,8 @@ def _extend_for_export_family(session, w: SweepWorld, *, lot, rxe, r1, r2, tse_v
 def _extend_for_network_and_provenance_family(session, w: SweepWorld, *, lot, lit, sa, rxe) -> None:
     """Every response shape of the network, literature, level-of-theory, correction and analytics routes.
 
-    Before this the world held one hidden solve under a visible network, one visible solve under a hidden network and
-    one fit on each, and every one of the family's routes "answered 200" without ever meeting the shapes the guard has
+    A world with only one hidden solve under a visible network, one visible solve under a hidden network and
+    one fit on each would let every one of the family's routes "answer 200" without ever meeting the shapes the guard has
     to place. So the world holds, for this family:
 
     * a hidden solve on a visible network, a visible solve on a hidden network, and a hidden solve whose fits are the

@@ -237,7 +237,7 @@ class TestTheGateIsTheCatalogue:
     def test_it_is_exactly_the_catalogue_message_prefix_codes(self):
         """Both sides are read from ``CATALOGUE``, so both empty is equal.
 
-        an equality between two derivations of one source is
+        An equality between two derivations of one source is
         satisfied when that source is empty, and this is the assertion
         that says the gate *is* the catalogue. The floor is repeated here
         rather than left to ``test_it_is_large_enough_to_be_the_read_api``
@@ -399,21 +399,20 @@ class TestAFunctionNameIsNotACode:
 
 
 class TestTheShapeTheRaiseSiteScanCannotRead:
-    """The net this change would otherwise have removed.
+    """The net the gated promotion would otherwise remove.
 
-    Before this change, an uncatalogued code in the code position was
-    *promoted*, so the runtime observer saw it in the body and failed the
-    test that produced it. That was the only net covering a code
+    Without the gate, an uncatalogued code in the code position is
+    *promoted*, so the runtime observer sees it in the body and fails the
+    test that produced it. That is the only net covering a code
     interpolated into the code position from a parameter, because the
     catalogue's static scan reads literals at ``raise`` sites and this shape
     has no literal there.
 
     Gating promotion closes that net: the token degrades to
     ``validation_error``, the body carries no unknown code, and the observer
-    has nothing to see. Measured, not reasoned about -- renaming
+    has nothing to see. Renaming
     ``conflict_code="level_of_theory_handle_conflict"`` to ``..._clash``
-    leaves both the raise-site scan and the observer green, where before
-    this change the observer failed the test that emitted it.
+    would leave both the raise-site scan and the observer green.
 
     So the net is restored here, statically and in the same shape: find the
     helpers that raise a *parameter* as the code, then require every literal
@@ -596,7 +595,7 @@ class TestOneMessageDeclaresOneCode:
     def test_no_coded_message_names_a_second_code(self):
         """The floor is repeated here, not borrowed from the test above.
 
-        this is an absence asserted over a scan, and the scan's own
+        This is an absence asserted over a scan, and the scan's own
         floor lives in a different test. Carrying it here too costs a line
         and means the assertion cannot be made vacuous by an edit that
         leaves its neighbour untouched.

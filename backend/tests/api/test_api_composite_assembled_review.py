@@ -1,6 +1,6 @@
 """Review fixes on assembled composites, through the real routes.
 
-Each section names the reviewer's defect and would fail on the code that had it:
+Each section names a defect it guards against and would fail on code that had it:
 
 * the textbook CCSD + (T) scheme, in both programs' conventions (it double counted (T));
 * terms listed in any order are one level, and the total check still runs for them
@@ -109,7 +109,7 @@ def test_the_textbook_scheme_counts_triples_once_end_to_end(client, sps):
 
 
 def test_the_textbook_scheme_with_a_total_that_double_counts_triples_is_refused(client):
-    """A total that double counts (T) is refused: it differs from the plain-``correlation`` recipe by more than a milli-Hartree."""
+    """A total that double counts (T) is refused: it differs from the recomputed total by more than a milli-Hartree."""
     double_counted = TEXTBOOK_TOTAL + T_Q  # an extra (T) in the total
     payload = f.bundle([*_orca_sps(), f.assembled(TEXTBOOK, TEXTBOOK_INPUTS, double_counted)])
     body = _refused(client, payload, "composite_total_mismatch")

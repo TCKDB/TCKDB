@@ -122,8 +122,8 @@ def _assert_number_absent_from_body(
     leaks it once per query rather than once.
 
     Asserted over the **whole serialized body**, not just ``context``.
-    ``detail`` is published too and carries these counts
-    so an omission from one and not the other would be
+    ``detail`` is published too and must not carry these counts either;
+    an omission from one and not the other would be
     decorative.
 
     Integers are extracted as literals rather than substring-matched, so
@@ -481,7 +481,7 @@ def test_a_composed_search_refuses_a_candidate_set_it_cannot_traverse(
     # ``docs/specs/public_identifier_policy.md`` rejects integer primary
     # keys for. Two pentanes are seeded, so 2 is the measured value; the
     # assertion is over the whole serialized body because ``detail`` is
-    # published too and carries the count.
+    # published too and must not carry the count either.
     _assert_number_absent_from_body(body, 2, "how many records matched")
 
 
@@ -932,12 +932,12 @@ def test_the_download_route_publishes_the_same_code_for_the_same_break(
         "artifact_integrity_failed",
         status=502,
     )
-    # a subsystem is named and nothing else. No digest,
+    # A subsystem is named and nothing else. No digest,
     # no artifact id, nothing a caller could use to probe stored content.
     assert body["context"] == {}, body
     assert not id_in_text(artifact.id, str(body.get("detail"))), body
 
-    # the break outlives the request that discovered it. This is
+    # The break outlives the request that discovered it. This is
     # the half that must survive the code change.
     events = db_session.scalars(
         select(ArtifactIntegrityEvent).where(

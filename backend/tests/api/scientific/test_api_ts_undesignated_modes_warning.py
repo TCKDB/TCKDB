@@ -95,7 +95,7 @@ def test_full_and_detail_carry_the_same_warning(client, db_session):
 
 
 def test_curated_reads_an_unreviewed_result_with_several_modes(client, db_session):
-    """The evidence rule: the checklist reads the entry's linked calculations by the evidence rule, so an unreviewed
+    """The checklist reads the entry's linked calculations by the evidence rule, so an unreviewed
     result is read and its undesignated modes warn, as they do under exploratory.
 
     Kills: the checklist keeping the record floor (the warning absent, as for a result that does not exist).

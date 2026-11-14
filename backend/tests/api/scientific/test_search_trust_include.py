@@ -2,7 +2,7 @@
 
 Five surfaces published a ``trust`` field that no request could fill,
 because ``?include=trust`` answered ``422 unknown_include_token`` on all
-five. **They fail in two shapes, and a fix for one is a no-op on the
+five. **The field can break in two shapes, and a fix for one is a no-op on the
 other** — which is the whole reason this file tests them as two families
 rather than as one repair repeated five times.
 
@@ -29,8 +29,8 @@ path**, never over the absence of an error. "``trust`` is not at the record
 root" passes on ``/thermo/search`` whether or not the field works,
 and proves nothing.
 
-Three further properties are pinned here because each is a way this change
-could ship looking correct:
+Three further properties are pinned here because each is a way this
+feature could look correct while being wrong:
 
 - ``include=all`` must not produce ``trust`` on any of the five. The
   evaluator's eager-load chain runs from 9 entries on transport to 23 on
@@ -537,7 +537,7 @@ def test_nested_entries_carry_trust_on_the_same_terms_as_their_parent(
 
     The alternative, leaving the nested ones unpopulated, would have put a
     permanently-null ``trust`` back into the payload at depth: the very
-    shape this change removed from the record root.
+    shape the record root must not have.
     """
     sp_a = make_species(db_session, inchi_key=next_inchi_key("TRNA"))
     sp_b = make_species(db_session, inchi_key=next_inchi_key("TRNB"))

@@ -1,6 +1,6 @@
 """Shared fixtures for scientific API tests.
 
-scientific read responses hide internal integer IDs by default.
+Scientific read responses hide internal integer IDs by default.
 Tests that need the legacy id-bearing shape can opt in via the
 ``allow_internal_ids`` fixture, which both flips the
 ``ALLOW_PUBLIC_INTERNAL_IDS`` setting **and** signals callers to add

@@ -46,7 +46,7 @@ def test_returns_200_for_valid_species_entry_id(client, db_session):
     )
     assert resp.status_code == 200
     body = resp.json()
-    # default response identifies the species entry by ref.
+    # Default response identifies the species entry by ref.
     assert body["species_entry_ref"] == entry.public_ref
     assert len(body["records"]) == 1
     assert body["records"][0]["model_kind"] == "scalar"

@@ -80,8 +80,8 @@ from tests.services.scientific_read._factories import (
 # no consumer knows how to read.
 LEGAL_OUTCOMES = {"passed", "missing", "warning", "not_applicable"}
 
-# All heavy include tokens have a summary loader. The only include token
-# rejected is ``all`` (see the ``include=all`` tests below).
+# All heavy include tokens have a summary loader, and ``include=all`` expands to
+# every public heavy include (see the ``include=all`` tests below).
 
 
 # ---------------------------------------------------------------------------
@@ -2278,7 +2278,7 @@ def test_detail_include_freq_modes_reports_the_declared_disposition(
 ):
     """The verdict comes back beside the evidence it was passed on.
 
-    the imaginary-mode protocol accepts a transition state with several imaginary modes only
+    The imaginary-mode protocol accepts a transition state with several imaginary modes only
     because the depositor said which one is the reaction coordinate and
     what each of the others *is*. The declarations were stored from the
     day the column existed and this projection dropped them, so a
@@ -2412,7 +2412,7 @@ def test_detail_imaginary_mode_projections_no_hessian_still_carries_the_tau_judg
 ):
     """Not determinable, and not a shrug.
 
-    the imaginary-mode protocol judged this record's imaginary modes by magnitude at upload,
+    The imaginary-mode protocol judged this record's imaginary modes by magnitude at upload,
     against a tau resolved from the protocol that produced them, and
     persisted the tau, its basis and the structural flag on
     ``calc_freq_result``. Where the projection cannot run, that judgement
@@ -2483,7 +2483,7 @@ def test_detail_imaginary_mode_projections_with_a_hessian_carries_no_tau_context
 ):
     """A determined projection is unchanged by the tau block.
 
-    the imaginary-mode protocol says a determination beats a threshold wherever one is
+    The imaginary-mode protocol says a determination beats a threshold wherever one is
     available, so where the projection ran, the threshold stands down
     rather than sitting beside it inviting a reader to average the two.
     """

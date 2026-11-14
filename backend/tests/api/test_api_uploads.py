@@ -116,7 +116,7 @@ def _transition_state_payload(
     return payload
 
 
-#: the imaginary-mode protocol's motivating record, in the shape a producer deposits it: the
+#: The imaginary-mode protocol's motivating record, in the shape a producer deposits it: the
 #: complete signed frequency list, the designated reaction coordinate, and
 #: a declared disposition for each other imaginary mode.
 _MOTIVATING_FREQUENCIES = [-1300.0, -42.0, -13.0, 800.0, 1400.0]

@@ -1,9 +1,9 @@
 """Counts, flags and derived levels of a returned record follow the evidence rule under ``curated``.
 
 The record floor decides which records come back; the linked evidence of a returned record is shown with its badge, and
-only ``rejected`` and ``deprecated`` evidence is withheld. Before this step a count, a flag or a level beside a named
-unreviewed calculation left that calculation out (transition states, networks, levels of theory) or counted a rejected
-one (conformers, statmech, thermo).
+only ``rejected`` and ``deprecated`` evidence is withheld. A count, a flag or a level beside a named
+unreviewed calculation must not leave that calculation out (transition states, networks, levels of theory) or count a
+rejected one (conformers, statmech, thermo).
 
 Every family has two kinds of test:
 

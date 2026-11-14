@@ -82,7 +82,7 @@ POPULATION_KEYS = frozenset(
         "distinct_software_count",
         "partial_sources",
         "has_channel_barriers",
-        # the evidence rule: the counts and flags of a returned record's linked evidence follow the evidence rule, so a
+        # The counts and flags of a returned record's linked evidence follow the evidence rule, so a
         # rejected or deprecated calculation is not counted. Each is pinned against the withheld calculation in
         # test_curated_evidence_counts_and_levels.py, because this comparator cannot hold a count to "equal or null".
         "geometry_count",
