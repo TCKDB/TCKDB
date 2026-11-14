@@ -241,15 +241,15 @@ describe("molecule page: numbers for this entry", () => {
     })
 
     it("states the order the archive served once, naming only lists that have rows, and says so when it stated none", async () => {
+        const orderNote = () => document.querySelector(".entry-numbers .order-note")
         await open()
-        const note = document.querySelector(".entry-numbers .order-note") as HTMLElement
-        expect(note).toHaveTextContent("Thermochemistry, then statistical mechanics; approved first, then newest deposited first.")
-        expect(note).not.toHaveTextContent("Transport")
+        await waitFor(() => expect(orderNote()).toHaveTextContent("Thermochemistry, then statistical mechanics; approved first, then newest deposited first."))
+        expect(orderNote()).not.toHaveTextContent("Transport")
         cleanup()
         server.resetHandlers()
         resetAllRequestCaches()
         await open({ echo: false })
-        expect(document.querySelector(".entry-numbers .order-note")).toHaveTextContent("Thermochemistry: the archive did not state an order.")
+        await waitFor(() => expect(orderNote()).toHaveTextContent("Thermochemistry: the archive did not state an order."))
     })
 
     it("lays each record out as a record column and a values column, with review under the ref", async () => {

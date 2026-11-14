@@ -1,4 +1,4 @@
-import { ROUNDED_NOTE } from "./QuantityValue"
+import { MIXED_ROUNDED_NOTE } from "./QuantityValue"
 import type { ReactNode } from "react"
 import "../data-table.css"
 import { displayLabel, rowDiffers, type CompareCell, type CompareRow } from "../domain/speciesCompare"
@@ -110,7 +110,7 @@ export function CompareTable({ caption, label, groups, rows, groupNoun = "versio
                     </tbody>
                 </table>
             </div>
-            {rows.some((row) => row.cells.some((cell) => cell.kind === "value" && cell.value.full !== undefined)) && <p className="note">{ROUNDED_NOTE}</p>}
+            {rows.some((row) => row.cells.some((cell) => cell.kind === "value" && cell.value.full !== undefined)) && <p className="note">{MIXED_ROUNDED_NOTE}</p>}
             {hasSettings && <p className="compare-legend"><span aria-hidden="true">≠</span> a setting that is not the same within one {groupNoun}; not a verdict.</p>}
         </>
     )

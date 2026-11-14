@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import type { ReactionKineticsRecord } from "../api/reactionEntryApi"
 import { ARRHENIUS_CHART_HEIGHT, ARRHENIUS_CHART_WIDTH } from "../domain/arrheniusChartLayout"
-import { arrheniusTermK, scientificText } from "../domain/kineticsTable"
+import { arrheniusTermK } from "../domain/kineticsTable"
 import { ArrheniusChart } from "./ArrheniusChart"
 
 afterEach(() => cleanup())
@@ -601,7 +601,7 @@ describe("ArrheniusChart -- the per-panel unit selector", () => {
     // MUTATION TARGET (e): the k(T) table left in the deposited unit while
     // the chart converts. Same pinned m3_mol_s value as the chart test
     // above -- if the table's own conversion were skipped, its k column
-    // would still read `scientificText(17028.619287800688)` ("1.7029×10⁴"),
+    // would still read 1.70286 × 10⁴,
     // not the converted value.
     it("switching the panel's unit also converts the k(T) table -- caption, header, AND values", () => {
         render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
@@ -611,8 +611,9 @@ describe("ArrheniusChart -- the per-panel unit selector", () => {
         expect(table.querySelector("caption")?.textContent).toMatch(/, in m³ mol⁻¹ s⁻¹$/)
         expect(table.querySelector("thead th:nth-child(2)")?.textContent).toBe("k (m³ mol⁻¹ s⁻¹)")
         const firstRowK = table.querySelector("tbody tr td[data-label='k']")?.textContent
-        expect(firstRowK).toBe(scientificText(0.017028619287800688))
-        expect(firstRowK).not.toBe(scientificText(17028.619287800688))
+        expect(firstRowK).toBe("0.0170286")
+        expect(firstRowK).not.toBe("17028.6")
+        expect(screen.getByText("6 significant figures; hover for the value as computed.")).toBeInTheDocument()
     })
 })
 

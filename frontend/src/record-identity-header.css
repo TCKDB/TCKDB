@@ -73,8 +73,8 @@
 .record-identity-fact-copyable {
     display: flex;
     flex-wrap: wrap;
-    align-items: baseline;
-    gap: .5rem;
+    align-items: center;
+    gap: .25rem .5rem;
     min-width: 0;
 }
 

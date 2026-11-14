@@ -46,6 +46,11 @@
     stroke-width: 14;
 }
 
+.net-map-link:focus-visible .net-map-hit {
+    stroke: var(--focus-ring);
+    stroke-opacity: .35;
+}
+
 .net-map-link:hover .net-map-edge,
 .net-map-link:focus-visible .net-map-edge {
     stroke: var(--accent);
