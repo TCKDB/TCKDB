@@ -1,8 +1,12 @@
 # Changelog
 
-## 0.207.1 - 2026-11-14
+## 0.208.1 - 2026-11-14
 
 No client behaviour changed. The changelog describes each change by its behaviour, without issue, pull-request or design-record references, and lists each version once. Comments, docstrings, docs and test names state the rule without history; two messages are reworded without a change to when they fire: the builder's dependency-role error says `supported shapes are freq->opt, sp->opt, opt-><any>` (it carried a phase label), and the QCSchema adapter's scan-coordinate refusal states what is wrong with the series without citing a design record or a migration.
+
+## 0.208.0 - 2026-11-14
+
+`RejectionCode` gains `SPECIES_NAME_DUPLICATE` and `SPECIES_NAME_INVALID`. The parity ledger lists `POST /api/v1/curation/species-names` and `POST /api/v1/curation/species-names/{name_ref}/retire` as curator workflow routes (reachable with `post_json()`). The `tckdb-schemas` requirement is widened to `>=0.158,<0.176`.
 
 ## 0.207.0 - 2026-11-14
 

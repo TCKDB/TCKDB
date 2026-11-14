@@ -15,14 +15,17 @@ from app.schemas.entities.scientific_record_supersession import (
     ScientificRecordSupersessionRead,
     ScientificRecordSupersessionRequest,
 )
+from app.schemas.entities.species_name import SpeciesNameCreate, SpeciesNameRead
 from app.schemas.entities.structure_evidence_finding import (
     StructureEvidenceFindingCreate,
     StructureEvidenceFindingPageRead,
     StructureEvidenceFindingRead,
 )
+from app.schemas.reads.scientific_release import CuratorSummary
 from app.services.reproducibility_assessment import get_latest_reproducibility_assessment
 from app.services.reproducibility_rubric import evaluate_and_append_reproducibility
 from app.services.scientific_record_supersession import supersede_scientific_record
+from app.services.species_name_curation import SpeciesNameDuplicate, add_species_name, retire_species_name
 from app.services.structure_evidence_finding import (
     append_structure_evidence_finding,
     list_findings_for_subject,
@@ -151,3 +154,62 @@ def list_structure_evidence_findings(
         offset=pagination.skip,
         limit=pagination.limit,
     )
+
+
+def _actor(session: Session, user_id: int | None) -> CuratorSummary | None:
+    user = session.get(AppUser, user_id) if user_id is not None else None
+    if user is None:
+        return None
+    return CuratorSummary(
+        username=user.username, full_name=user.full_name, orcid=user.orcid, affiliation=user.affiliation
+    )
+
+
+def _name_read(session: Session, row, species) -> SpeciesNameRead:
+    return SpeciesNameRead(
+        name_ref=row.public_ref,
+        species_ref=species.public_ref,
+        name=row.name,
+        kind=row.kind,
+        source_kind=row.source_kind,
+        created_at=row.created_at,
+        created_by=_actor(session, row.created_by_user_id),
+        retired_at=row.retired_at,
+        retired_by=_actor(session, row.retired_by_user_id),
+    )
+
+
+@router.post(
+    "/species-names",
+    response_model=SpeciesNameRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_supported_tckdb_client)],
+)
+def create_species_name(
+    body: SpeciesNameCreate,
+    session: Session = Depends(get_write_db, scope="function"),
+    actor: AppUser = Depends(require_curator_or_admin),
+) -> SpeciesNameRead:
+    """Give a species a searchable name. The caller is recorded as the author."""
+    try:
+        row, species = add_species_name(
+            session, actor=actor, species_ref=body.species_ref, name=body.name, kind=body.kind
+        )
+    except SpeciesNameDuplicate as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return _name_read(session, row, species)
+
+
+@router.post(
+    "/species-names/{name_ref}/retire",
+    response_model=SpeciesNameRead,
+    dependencies=[Depends(require_supported_tckdb_client)],
+)
+def retire_species_name_route(
+    name_ref: str,
+    session: Session = Depends(get_write_db, scope="function"),
+    actor: AppUser = Depends(require_curator_or_admin),
+) -> SpeciesNameRead:
+    """Retire a name so it is no longer searched. Retiring a retired name changes nothing."""
+    row, species = retire_species_name(session, actor=actor, name_ref=name_ref)
+    return _name_read(session, row, species)

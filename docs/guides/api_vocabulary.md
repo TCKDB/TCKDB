@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 123 | 28 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 44 | `backend/app/services/public_refs.py` |
 | Trust check names | 174 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 372 | `backend/app/api/code_catalogue.py` |
-| **total** | **713** | |
+| Refusal codes a caller can receive | 374 | `backend/app/api/code_catalogue.py` |
+| **total** | **715** | |
 
 ## How a record is named
 
@@ -772,7 +772,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unknown_structure_member_ref` | a thing |
 | `unknown_transition_state_entry_ref` | a thing |
 
-### HTTP 409 (27 codes)
+### HTTP 409 (28 codes)
 
 | Code | Names |
 | --- | --- |
@@ -797,6 +797,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `release_tag_taken` | a thing |
 | `selection_already_stands` | a relationship — read `context` |
 | `selection_already_superseded` | a relationship — read `context` |
+| `species_name_duplicate` | a thing |
 | `state_conflict` | a relationship — read `context` |
 | `statmech_subject_not_exactly_one` | a thing |
 | `superseded_record_not_approvable` | a relationship — read `context` |
@@ -813,7 +814,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `network_export_body_too_large` | a relationship — read `context` |
 | `request_body_too_large` | a relationship — read `context` |
 
-### HTTP 422 (302 codes)
+### HTTP 422 (303 codes)
 
 | Code | Names |
 | --- | --- |
@@ -1027,6 +1028,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `species_handle_conflict` | a relationship — read `context` |
 | `species_key_undeclared` | a thing |
 | `species_kind_conflict` | a relationship — read `context` |
+| `species_name_invalid` | a thing |
 | `species_name_query_invalid` | a thing |
 | `species_smiles_charge_mismatch` | a relationship — read `context` |
 | `species_stereo_contradiction` | a relationship — read `context` |

@@ -1,8 +1,12 @@
 # Changelog
 
-## 0.174.6 - 2026-11-14
+## 0.175.1 - 2026-11-14
 
 No schema, payload or code change. The package changelog describes each change by its behaviour, without issue, pull-request or design-record references, and lists each version once. Comments, docstrings and messages in the package state the rule without history. The generated producer contract carries the same changelog.
+
+## 0.175.0 - 2026-11-14
+
+Two refusal codes are added: `species_name_duplicate` (409) and `species_name_invalid` (422), returned by `POST /api/v1/curation/species-names` (curator or admin). The producer contract lists both curation routes among the role-gated write routes. No model or payload shape changed.
 
 ## 0.174.5 - 2026-11-14
 
