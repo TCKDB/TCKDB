@@ -1,27 +1,6 @@
-/*
- * Layout only for the methods surface (`/methods`, `/methods/:lotRef`,
- * `/methods/schemes/:ecsRef`, `/methods/frequency-scale-factors/:fsfRef`).
- * Everything else these pages render -- `.ledger-section`, `.basin-header`,
- * `.basin-context`, `.kv-list`, `.data-table`, `.value-pill`, `.disclosure`,
- * `.empty-projection`, `.note` -- is the shared design-system/record-page
- * vocabulary (`design-system.css`, `conformer-group.css`,
- * `record-identity-header.css`), reused rather than reinvented, per this
- * app's own "one canonical primitive per pattern" convention. No
- * `text-transform` rule is declared in this file -- see
- * `text-transform-scientific-guard.test.ts`'s own docstring for why that
- * matters on a page whose table cells carry raw atom symbols and bond
- * keys (case-sensitive: an uppercased `S`/`Cl` reads as a different
- * element).
- */
+/* Layout for the methods pages. Shared primitives come from design-system.css and the record stylesheets. */
 
-/* Each correction scheme is now its own collapsible `Disclosure` box
-   rather than a plain div
-   separated from its neighbour by a top border -- the box chrome (border
-   on all four sides, radius, background) comes from `.disclosure`
-   itself (design-system.css); this file only adds the vertical rhythm
-   between one scheme's box and the next, and the internal stacking
-   (identity facts / parameter table / footer note) `.disclosure-body`
-   does not itself provide (it is a plain padded box, no `gap`). */
+/* Vertical rhythm between one scheme box and the next, and the stacking inside a box. */
 .correction-scheme-block {
     margin: var(--s-4) 0;
 }
@@ -30,8 +9,13 @@
     margin-top: 0;
 }
 
-.correction-scheme-block > summary {
+/* The title, software and roll-up wrap together after the marker, so the marker stays on the title's line. */
+.correction-scheme-summary {
+    display: flex;
     flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--s-1) var(--s-2);
+    min-width: 0;
 }
 
 .correction-scheme-block .disclosure-body {
@@ -39,31 +23,17 @@
     gap: var(--s-3);
 }
 
-/* The collapsed-summary roll-up on each scheme box -- same intent and
-   same measured sizing fix as `evidence-checklist.css`'s own
-   `.coverage-checklist-summary` (quieter than the heading beside it, so
-   the roll-up reads as supporting detail, not a second heading), kept as
-   its own rule rather than importing that file: `evidence-checklist.css`
-   is `EvidenceChecklist.tsx`'s own component stylesheet, not something
-   this page's boxes are instances of. */
+/* Quieter than the heading beside it. */
 .correction-scheme-summary-rollup {
     color: var(--muted);
     font: 400 .72rem/1.3 var(--sans);
-}
-
-.correction-scheme-absence-list {
-    display: grid;
-    gap: var(--s-2);
 }
 
 .correction-component-group {
     margin-top: var(--s-4);
 }
 
-/* One kind's worth of deposited schemes (`CorrectionSchemeKindGroup`,
-   LevelOfTheoryPage.tsx, correction-scheme-provenance plan v2 §8) -- the
-   select control (when there is more than one scheme to choose between)
-   plus the single box it governs. */
+/* One kind of scheme: the select, when there are several, and the box it governs. */
 .correction-scheme-kind-group {
     margin: var(--s-4) 0;
 }
@@ -76,18 +46,7 @@
     margin-top: var(--s-2);
 }
 
-/* The scheme-picking control itself -- same rounded-chip shape as
-   `arrhenius-chart.css`'s own `.arrhenius-chart-control` (label + native
-   `<select>` inside one bordered pill), duplicated locally rather than
-   imported: that file is `ArrheniusChart.tsx`'s own component
-   stylesheet, not something this record page is an instance of (a
-   small, separate duplicate). The label
-   deliberately does NOT use `--type-label-transform` the way the chart
-   control's label does: this file's own header comment already commits
-   to declaring no `text-transform` anywhere in it (case-sensitive atom
-   symbols and bond keys sit in the table cells one section below), and a
-   scoped exception here would need the same review this file was written
-   to avoid needing. */
+/* A label and a native select inside one bordered chip. */
 .correction-scheme-select {
     display: inline-flex;
     align-items: center;
@@ -141,14 +100,6 @@
 
 .lot-hash-disclosure .ref-item {
     margin-top: var(--s-2);
-}
-
-/* The index (`MethodsIndexPage`) reuses `.ledger-section`/`.data-table`
-   for its three tables; this is the one piece those don't already give
-   it -- the intro paragraph beneath the h1, before the first table. */
-.methods-index-intro {
-    max-width: var(--measure-prose);
-    color: var(--ink-2);
 }
 
 /* `CompositeSchemePage` -- one block per recipe term: a heading, its facts,

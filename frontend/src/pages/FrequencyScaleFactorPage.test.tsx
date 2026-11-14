@@ -59,7 +59,7 @@ describe("FrequencyScaleFactorPage: the standalone scale-factor page", () => {
     it("renders the value, its owning level of theory (linked), workflow tool, and usage", async () => {
         server.use(http.get("/api/v1/scientific/frequency-scale-factors/fsf_one", () => HttpResponse.json(mockResponse())))
         page()
-        await screen.findByText("fundamental")
+        expect(await screen.findByRole("heading", { level: 1, name: "Fundamental scale factor 0.999" })).toBeVisible()
         expect(screen.getByText("0.999")).toBeVisible()
         await waitFor(() => expect(titleHasKind(document.title, "/methods/frequency-scale-factors/:ref")).toBe(true))
         const lotLink = screen.getByRole("link", { name: "b3lyp/def2tzvp" })
@@ -79,9 +79,34 @@ describe("FrequencyScaleFactorPage -- no depositor-typed text", () => {
         const { value } = planted
         server.use(http.get("/api/v1/scientific/frequency-scale-factors/fsf_one", () => HttpResponse.json(value)))
         page()
-        await screen.findByText("fundamental")
+        expect(await screen.findByRole("heading", { level: 1, name: "Fundamental scale factor 0.999" })).toBeVisible()
         expect(screen.getByText("0.999")).toBeVisible()
 
         expectNoDepositorText()
+    })
+})
+
+describe("FrequencyScaleFactorPage: wording and links", () => {
+    it("writes a ZPE scale kind as ZPE, never Zpe", async () => {
+        server.use(http.get("/api/v1/scientific/frequency-scale-factors/fsf_one", () => HttpResponse.json(mockResponse({
+            frequency_scale_factor: { ...mockResponse().record.frequency_scale_factor, scale_kind: "zpe", value: 0.98712345 },
+        }))))
+        page()
+        expect(await screen.findByRole("heading", { level: 1, name: "ZPE scale factor 0.987123" })).toBeVisible()
+        expect(screen.queryByText(/Zpe/)).not.toBeInTheDocument()
+    })
+
+    it("links a record that has a page and leaves a statmech record as plain text", async () => {
+        server.use(http.get("/api/v1/scientific/frequency-scale-factors/fsf_one", () => HttpResponse.json(mockResponse({
+            used_by: [
+                { record_type: "species_entry", record_ref: "spe_one", record_id: null, endpoint: "/x" },
+                { record_type: "statmech", record_ref: "sm_one", record_id: null, endpoint: "/y" },
+            ],
+        }))))
+        page()
+        await screen.findByRole("heading", { level: 1 })
+        expect(screen.getByRole("link", { name: "spe_one" })).toHaveAttribute("href", "/species-entries/spe_one")
+        expect(screen.queryByRole("link", { name: "sm_one" })).not.toBeInTheDocument()
+        expect(screen.getByText("sm_one")).toBeVisible()
     })
 })

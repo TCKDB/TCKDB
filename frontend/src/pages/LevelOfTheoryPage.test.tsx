@@ -231,7 +231,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         })))))
         page()
         await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })
-        expect(screen.getByText(/^Not deposited: atom-energy.*petersson bond-additivity/)).toBeVisible()
+        expect(screen.getByText(/^Not deposited: Atom-energy correction, Petersson bond-additivity correction, Melius/)).toBeVisible()
         expect(screen.queryByText(/not applicable/i)).not.toBeInTheDocument()
     })
 
@@ -291,13 +291,9 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
      * releases must render as ONE section with a control, not two boxes of
      * the same kind side by side -- and picking the second option must
      * swap which scheme's parameter table is shown. The lone `bac_petersson`
-     * scheme in the same fixture must stay control-free (RED-FIRST
-     * CRITERION 2), proving the control appears only where there is an
-     * actual choice.
-     *
-     * MUTATION: render every scheme in a kind as its own always-visible
-     * box (drop the grouping) -- the "exactly one 'Atom-energy correction'
-     * heading" assertion fails because there would be two.
+     * scheme in the same fixture must stay control-free, so the control
+     * appears only where there is a choice. Rendering every scheme as its own
+     * box would fail the "exactly one 'Atom-energy correction' heading" check.
      */
     it("groups two schemes of the same kind into one section with a software control that swaps the rendered parameter table", async () => {
         const base = baseRecord()
@@ -323,7 +319,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         expect(screen.getAllByText("Atom-energy correction")).toHaveLength(1)
 
         // The atom_energy kind gets a control; the single-scheme
-        // bac_petersson kind does not (RED-FIRST CRITERION 2).
+        // bac_petersson kind does not.
         const combos = screen.getAllByRole("combobox")
         expect(combos).toHaveLength(1)
         const select = combos[0] as HTMLSelectElement
@@ -350,12 +346,41 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         expect(within(screen.getByRole("table", { name: "Element correction parameters" })).getAllByRole("row")).toHaveLength(1 + 3)
     })
 
+    it("opens a correction scheme and switches between schemes of one kind with the keyboard alone", async () => {
+        const base = baseRecord()
+        const gaussianScheme = {
+            ...base.correction_schemes[0],
+            software_release: { software_release_ref: "swr_g16", software: "Gaussian", version: "16" },
+        }
+        const orcaScheme = {
+            ...base.correction_schemes[0],
+            energy_correction_scheme: { ...base.correction_schemes[0].energy_correction_scheme, energy_correction_scheme_ref: "ecs_atom_orca" },
+            software_release: { software_release_ref: "swr_orca6", software: "ORCA", version: "6" },
+            corrections: atomCorrections().slice(0, 3),
+        }
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord({
+            correction_schemes: [gaussianScheme, orcaScheme],
+        })))))
+        const user = userEvent.setup()
+        page()
+        await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })
+
+        const select = screen.getByRole("combobox", { name: "Software" })
+        let guard = 0
+        while (document.activeElement !== select && guard++ < 60) await user.tab()
+        expect(select).toHaveFocus()
+        await user.selectOptions(select, "ecs_atom_orca")
+        expect(screen.getByText("ORCA 6", { selector: ".value-pill" })).toBeVisible()
+        const summary = screen.getByText("Atom-energy correction").closest("summary") as HTMLElement
+        guard = 0
+        while (document.activeElement !== summary && guard++ < 20) await user.tab()
+        expect(summary).toHaveFocus()
+        await user.keyboard("{Enter}")
+        expect(within(screen.getByRole("table", { name: "Element correction parameters" })).getAllByRole("row")).toHaveLength(1 + 3)
+    })
+
     /**
-     * RED-FIRST CRITERION 3. `softwareLabel` already renders `{name}
-     * {version}` (no new formatting code needed here) -- this pins that a
-     * versioned release's version actually reaches the box title.
-     * MUTATION: revert `software_release` to `{ software: "Gaussian" }`
-     * (drop `version`) -- the "16" assertion fails.
+     * A versioned release's version reaches the box title.
      */
     it("shows a versioned release's version in the correction-scheme box title", async () => {
         const base = baseRecord()
@@ -371,9 +396,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
     })
 
     /**
-     * RED-FIRST CRITERION 5. A release with NO version renders the program
-     * name alone -- never a separate "version not recorded" string, which
-     * would make an honest partial deposit look deficient.
+     * A release with no version renders the program name alone, never a separate "version not recorded" string.
      */
     it("renders a version-less release as the program name alone, with no 'version not recorded' text", async () => {
         server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord()))))
@@ -384,9 +407,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
     })
 
     /**
-     * RED-FIRST CRITERION 7 -- the legibility fix (§8). Must be true
-     * regardless of whether a scheme's release is recorded, phrased as a
-     * distinction between two questions, never as an absence.
+     * The note holds whether or not a scheme's release is recorded, and is phrased as a distinction, never as an absence.
      */
     it("states the distinction between observed software and a correction scheme's own software", async () => {
         server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord()))))
@@ -480,5 +501,35 @@ describe("LevelOfTheoryPage -- no depositor-typed text", () => {
         expect(within(screen.getByRole("table", { name: "Element correction parameters" })).getAllByRole("row")).toHaveLength(9)
 
         expectNoDepositorText()
+    })
+})
+
+describe("LevelOfTheoryPage: wording, links and counts", () => {
+    it("writes a ZPE scale kind as ZPE and links a multi-record value to its provenance", async () => {
+        const base = baseRecord()
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord({
+            frequency_scale_factors: [{ ...base.frequency_scale_factors[0], scale_kind: "zpe" }],
+        })))))
+        page()
+        await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })
+        expect(screen.getByText("ZPE", { selector: ".value-pill" })).toBeVisible()
+        expect(screen.getByRole("link", { name: "0.999" })).toHaveAttribute("href", expect.stringContaining("#fsf-provenance-0"))
+    })
+
+    it("links a calculation's owner when its type has a page, and states the 50-row cap only for a long list", async () => {
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord()))))
+        page()
+        await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })
+        expect(screen.getByRole("link", { name: "spe_one" })).toHaveAttribute("href", "/species-entries/spe_one")
+        expect(screen.getByText(/calculations; first 50 listed\./)).toBeVisible()
+    })
+
+    it("links the applied-to count of a scheme to its applications", async () => {
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord()))))
+        const user = userEvent.setup()
+        page()
+        await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })
+        await user.click(screen.getByText("Atom-energy correction").closest("summary") as HTMLElement)
+        expect(screen.getAllByRole("link", { name: "82 entries" })[0]).toHaveAttribute("href", expect.stringContaining("#ecs-usage-heading"))
     })
 })
