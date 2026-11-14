@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.api.app import create_app
 from app.api.deps import get_db, get_write_db
-from app.db.models.common import SpeciesNameKind, SpeciesNameSourceKind
+from app.db.models.common import SpeciesNameSourceKind
 from app.db.models.species_name import SpeciesName
-from app.services.species_merge import merge_species
-from app.services.species_name_curation import forward_species_names
 from tests.id_leak import id_in_text
 from tests.services.scientific_read._factories import make_species, make_species_entry, next_inchi_key
 
@@ -107,6 +106,13 @@ def test_invalid_names_are_refused(client, db_session, curator, name):
     assert _live(db_session, sp) == []
 
 
+def test_the_problem_is_in_the_context_not_the_message(client, db_session, curator):
+    sp = _species(db_session)
+    body = _post(client, sp, name="bad%name").json()
+    assert body["context"]["problem"] == "name_characters"
+    assert "name_characters" not in body["detail"] and "bad%name" not in body["detail"]
+
+
 def test_the_longest_name_is_accepted(client, db_session, curator):
     sp = _species(db_session)
     assert _post(client, sp, name="a" * 128).status_code == 201
@@ -154,9 +160,38 @@ def test_retire_then_retire_again(client, db_session, curator):
     first = client.post(f"{URL}/{ref}/retire")
     assert first.status_code == 200 and first.json()["retired_at"] is not None
     stamp = first.json()["retired_at"]
+    assert first.json()["retired_by"] == curator.username
     second = client.post(f"{URL}/{ref}/retire")
     assert second.status_code == 200 and second.json()["retired_at"] == stamp
+    assert second.json()["retired_by"] == curator.username
     assert _live(db_session, sp) == []
+
+
+def test_a_second_retirer_does_not_replace_the_first(client, db_session, curator, login_as, _api_admin_user):
+    sp = _species(db_session)
+    ref = _post(client, sp).json()["name_ref"]
+    client.post(f"{URL}/{ref}/retire")
+    admin = login_as(_api_admin_user)
+    again = client.post(f"{URL}/{ref}/retire")
+    assert again.json()["retired_by"] == curator.username != admin.username
+    row = db_session.scalar(select(SpeciesName).where(SpeciesName.public_ref == ref))
+    assert row.retired_by_user_id == curator.id
+
+
+def test_a_live_name_has_no_retirer(client, db_session, curator):
+    sp = _species(db_session)
+    body = _post(client, sp).json()
+    assert body["retired_by"] is None and body["retired_at"] is None
+
+
+def test_a_retirer_needs_a_retirement(client, db_session, curator):
+    sp = _species(db_session)
+    ref = _post(client, sp).json()["name_ref"]
+    row = db_session.scalar(select(SpeciesName).where(SpeciesName.public_ref == ref))
+    row.retired_by_user_id = curator.id
+    with pytest.raises(IntegrityError):
+        db_session.flush()
+    db_session.rollback()
 
 
 def test_retire_needs_a_curator(client, db_session, login_as, _api_curator_user, _api_other_user):
@@ -221,7 +256,16 @@ def test_no_response_carries_an_internal_id(client, db_session, curator):
         for value in (sp.id, row.id, curator.id):
             assert not id_in_text(value, resp.text)
     body = responses[0].json()
-    assert set(body) == {"name_ref", "species_ref", "name", "kind", "source_kind", "created_at", "retired_at"}
+    assert set(body) == {
+        "name_ref",
+        "species_ref",
+        "name",
+        "kind",
+        "source_kind",
+        "created_at",
+        "retired_at",
+        "retired_by",
+    }
 
 
 # --- the search read ------------------------------------------------------------------------------------------------
@@ -236,68 +280,12 @@ def test_a_curated_name_is_found_and_a_retired_one_is_not(client, db_session, cu
     assert _found(client, "isobutylene") == []
 
 
-# --- merge forwarding -----------------------------------------------------------------------------------------------
-
-
-def test_merge_moves_live_names_to_the_survivor(client, db_session, curator):
-    loser, survivor = _species(db_session, "ML"), _species(db_session, "MS")
-    _post(client, loser, name="moving name")
-    retired = _post(client, loser, name="old name").json()["name_ref"]
-    client.post(f"{URL}/{retired}/retire")
-    merge_species(db_session, loser=loser, survivor=survivor)
-    assert [r.name for r in _live(db_session, survivor)] == ["moving name"]
-    assert _live(db_session, loser) == []
-    kept = db_session.scalar(select(SpeciesName).where(SpeciesName.public_ref == retired))
-    assert kept.species_id == loser.id and kept.retired_at is not None
-    assert loser.merged_into_species_id == survivor.id
-    assert _found(client, "moving name") == [survivor.public_ref]
-
-
-def test_merge_retires_a_losing_name_the_survivor_already_holds(client, db_session, curator):
-    loser, survivor = _species(db_session, "CL"), _species(db_session, "CS")
-    _post(client, survivor, name="Butene")
-    clash = _post(client, loser, name="butene ").json()["name_ref"]
-    _post(client, loser, name="only on loser")
-    merge_species(db_session, loser=loser, survivor=survivor)
-    assert sorted(r.name_key for r in _live(db_session, survivor)) == ["butene", "only on loser"]
-    row = db_session.scalar(select(SpeciesName).where(SpeciesName.public_ref == clash))
-    assert row.retired_at is not None and row.species_id == loser.id
-    live_count = db_session.scalar(
-        select(func.count())
-        .select_from(SpeciesName)
-        .where(SpeciesName.name_key == "butene", SpeciesName.retired_at.is_(None))
-    )
-    assert live_count == 1
-    assert _found(client, "butene") == [survivor.public_ref]
-
-
-def test_forwarding_alone_leaves_the_species_live(db_session):
-    loser, survivor = _species(db_session, "FL"), _species(db_session, "FS")
-    db_session.add(
-        SpeciesName(
-            species_id=loser.id,
-            name="abc",
-            name_key="abc",
-            kind=SpeciesNameKind.common,
-            source_kind=SpeciesNameSourceKind.curated,
-        )
-    )
-    db_session.flush()
-    forward_species_names(db_session, loser=loser, survivor=survivor)
-    assert loser.merged_into_species_id is None and len(_live(db_session, survivor)) == 1
-
-
-def test_merge_refuses_a_species_into_itself_or_a_merged_one(db_session):
-    a, b, c = _species(db_session, "RA"), _species(db_session, "RB"), _species(db_session, "RC")
-    with pytest.raises(ValueError):
-        merge_species(db_session, loser=a, survivor=a)
-    merge_species(db_session, loser=a, survivor=b)
-    with pytest.raises(ValueError):
-        merge_species(db_session, loser=c, survivor=a)
+# --- merged species ------------------------------------------------------------------------------------------------
 
 
 def test_a_name_added_to_a_merged_species_lands_on_the_survivor(client, db_session, curator):
     loser, survivor = _species(db_session, "AL"), _species(db_session, "AS")
-    merge_species(db_session, loser=loser, survivor=survivor)
+    loser.merged_into_species_id = survivor.id
+    db_session.flush()
     resp = _post(client, loser, name="after merge")
     assert resp.status_code == 201 and resp.json()["species_ref"] == survivor.public_ref

@@ -2393,7 +2393,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("species_name_duplicate", 409, Surface.message_prefix,
             "backend/app/services/species_name_curation.py",
             note="The species already has a live name with the same normalised form; a retired name does not count."),
-    ApiCode("species_name_invalid", 422, Surface.message_prefix,
+    ApiCode("species_name_invalid", 422, Surface.coded_exception,
             "backend/app/services/species_name_curation.py",
             note=(
                 "The name is empty, over 128 characters, holds a character a name search could not send, or has no "

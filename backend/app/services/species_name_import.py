@@ -1,9 +1,10 @@
-"""Load a reviewed species-name file (see ``app.importers.pubchem_names``) into ``species_name``.
+"""Load reviewed species names into ``species_name``: a PubChem review file (see ``app.importers.pubchem_names``) or
+a reviewed CSV (``app.services.species_name_csv_import``). Both readers resolve a species and hand it to one write
+core, :func:`write_name`.
 
-Each row names a species by public ref and InChIKey; the row is written only when both still agree with the
-stored species. Rows are written with ``source_kind=offline_import`` and an ``external_source`` row per PubChem CID.
-A name already stored for the species (live or retired, curated or imported) is left alone, so a re-run writes
-nothing new. A dry run does the same work inside a savepoint and rolls it back.
+Rows are written with ``source_kind=offline_import`` and an ``external_source`` row. A name already stored for the
+species (live or retired, curated or imported) is left alone, so a re-run writes nothing new. A dry run does the same
+work inside a savepoint and rolls it back, so it creates no source either.
 """
 
 from __future__ import annotations
@@ -61,18 +62,87 @@ class ImportReport:
         return {"dry_run": self.dry_run, "counts": self.counts, "rows": [r.to_json() for r in self.rows]}
 
 
-def _get_or_create_source(session: Session) -> ExternalSource:
+@dataclass(frozen=True)
+class SourceSpec:
+    """The ``external_source`` a load cites: name and release identify it, the rest fills a new row."""
+
+    name: str
+    release: str
+    terms_url: str | None = None
+    citation: str | None = None
+
+
+PUBCHEM_SOURCE = SourceSpec(SOURCE_NAME, SOURCE_RELEASE, SOURCE_TERMS_URL)
+
+
+def get_or_create_source(session: Session, spec: SourceSpec) -> ExternalSource:
     existing = session.scalar(
         select(ExternalSource).where(
-            ExternalSource.source_name == SOURCE_NAME, ExternalSource.source_release == SOURCE_RELEASE
+            ExternalSource.source_name == spec.name, ExternalSource.source_release == spec.release
         )
     )
     if existing is not None:
         return existing
-    row = ExternalSource(source_name=SOURCE_NAME, source_release=SOURCE_RELEASE, terms_url=SOURCE_TERMS_URL)
+    row = ExternalSource(
+        source_name=spec.name, source_release=spec.release, terms_url=spec.terms_url, citation_text=spec.citation
+    )
     session.add(row)
     session.flush()
     return row
+
+
+def write_name(
+    session: Session,
+    species: Species,
+    out: RowOutcome,
+    *,
+    name: str,
+    kind: SpeciesNameKind,
+    source: SourceSpec,
+    record_key: str,
+    retrieved_at: datetime,
+    dry_run: bool,
+) -> RowOutcome:
+    """Store ``name`` (as given) on ``species`` as an offline import, or say why not on ``out``.
+
+    Skips a merged species and a name the species already holds, live or retired. The insert runs in a savepoint, so
+    a species merged since it was read is reported as ``species_merged``.
+    """
+    if _is_merged(species):
+        out.reason = "species_merged"
+        return out
+    name_key = normalise_name(name)
+    stored = session.execute(
+        select(SpeciesName.retired_at).where(SpeciesName.species_id == species.id, SpeciesName.name_key == name_key)
+    ).all()
+    if any(retired_at is None for (retired_at,) in stored):
+        out.reason = "already_present"
+        return out
+    if stored:
+        out.reason = "retired_name_not_restored"
+        return out
+    try:
+        with session.begin_nested():
+            external = get_or_create_source(session, source)
+            session.add(
+                SpeciesName(
+                    species_id=species.id,
+                    name=name,
+                    name_key=name_key,
+                    kind=kind,
+                    source_kind=SpeciesNameSourceKind.offline_import,
+                    external_source_id=external.id,
+                    external_record_key=record_key,
+                    retrieved_at=retrieved_at,
+                )
+            )
+            session.flush()
+    except DBAPIError:
+        session.refresh(species)
+        out.reason = "species_merged" if species.merged_into_species_id is not None else "insert_refused"
+        return out
+    out.outcome = "would_insert" if dry_run else "inserted"
+    return out
 
 
 def _parse_retrieved_at(value: Any) -> datetime | None:
@@ -138,40 +208,17 @@ def _import_row(session: Session, raw: Any, *, dry_run: bool) -> RowOutcome:
     if sharing is not None and sharing > 1:
         out.reason = "inchikey_shared_by_species"
         return out
-    name_key = normalise_name(name)
-    stored = session.execute(
-        select(SpeciesName.retired_at, SpeciesName.source_kind).where(
-            SpeciesName.species_id == species.id, SpeciesName.name_key == name_key
-        )
-    ).all()
-    if any(retired_at is None for retired_at, _ in stored):
-        out.reason = "already_present"
-        return out
-    if stored:
-        out.reason = "retired_name_not_restored"
-        return out
-    try:
-        with session.begin_nested():
-            source = _get_or_create_source(session)
-            session.add(
-                SpeciesName(
-                    species_id=species.id,
-                    name=name,
-                    name_key=name_key,
-                    kind=SpeciesNameKind(kind),
-                    source_kind=SpeciesNameSourceKind.offline_import,
-                    external_source_id=source.id,
-                    external_record_key=str(cid),
-                    retrieved_at=retrieved_at,
-                )
-            )
-            session.flush()
-    except DBAPIError:
-        session.refresh(species)
-        out.reason = "species_merged" if species.merged_into_species_id is not None else "insert_refused"
-        return out
-    out.outcome = "would_insert" if dry_run else "inserted"
-    return out
+    return write_name(
+        session,
+        species,
+        out,
+        name=name,
+        kind=SpeciesNameKind(kind),
+        source=PUBCHEM_SOURCE,
+        record_key=str(cid),
+        retrieved_at=retrieved_at,
+        dry_run=dry_run,
+    )
 
 
 def import_species_names(session: Session, document: Any, *, dry_run: bool) -> ImportReport:

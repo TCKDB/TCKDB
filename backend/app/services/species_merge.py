@@ -36,22 +36,6 @@ def live(model: type) -> ColumnElement[bool]:
     return getattr(model, MERGE_COLUMNS[model]).is_(None)
 
 
-def merge_species(session: Session, *, loser: Species, survivor: Species) -> None:
-    """Merge ``loser`` into ``survivor``: its live names move first, then the merge marker is set. Never commits.
-
-    Both rows must be live and distinct. The loser is kept and forwards to the survivor.
-    """
-    from app.services.species_name_curation import forward_species_names
-
-    if loser.id == survivor.id:
-        raise ValueError("a species cannot be merged into itself")
-    if loser.merged_into_species_id is not None or survivor.merged_into_species_id is not None:
-        raise ValueError("both species must be live to be merged")
-    forward_species_names(session, loser=loser, survivor=survivor)
-    loser.merged_into_species_id = survivor.id
-    session.flush()
-
-
 def canonical_id(session: Session, model: type, row_id: int) -> int:
     """The row a row stands for: itself, or the row it was merged into (one hop)."""
 

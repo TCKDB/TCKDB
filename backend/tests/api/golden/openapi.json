@@ -57128,6 +57128,17 @@
             ],
             "title": "Retired At"
           },
+          "retired_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retired By"
+          },
           "source_kind": {
             "$ref": "#/components/schemas/SpeciesNameSourceKind"
           },

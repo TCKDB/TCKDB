@@ -11,12 +11,12 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.errors import NotFoundError, not_found
+from app.api.error_contract import CodedValueError
+from app.api.errors import DomainError, NotFoundError, not_found
 from app.db.models.app_user import AppUser
 from app.db.models.common import SpeciesNameKind, SpeciesNameSourceKind
 from app.db.models.species import Species
@@ -32,14 +32,21 @@ logger = logging.getLogger(__name__)
 _MAX_RAW_LENGTH = 256
 
 INVALID_MESSAGE = (
-    "species_name_invalid: a name is 1 to 128 characters of letters, digits, spaces and - , ' ( ) [ ] + . : "
-    "with at least one letter or digit"
+    "a name is 1 to 128 characters of letters, digits, spaces and - , ' ( ) [ ] + . : with at least one letter or digit"
 )
 DUPLICATE_MESSAGE = "species_name_duplicate: this species already has a live name with the same normalised form"
+LIVE_UNIQUE_INDEX = "uq_species_name_species_id_name_key_live"
 
 
-def _invalid(problem: str) -> HTTPException:
-    return HTTPException(status_code=422, detail=f"{INVALID_MESSAGE} ({problem})")
+class SpeciesNameDuplicate(DomainError):
+    """The species already holds a live name with the same normalised form (409 ``species_name_duplicate``)."""
+
+    def __init__(self) -> None:
+        super().__init__(DUPLICATE_MESSAGE)
+
+
+def _invalid(problem: str) -> CodedValueError:
+    return CodedValueError("species_name_invalid", INVALID_MESSAGE, context={"problem": problem}, message_prefix=False)
 
 
 def _is_ref_of(model: type, ref: str) -> bool:
@@ -78,7 +85,7 @@ def add_species_name(
         .where(SpeciesName.species_id == species.id, SpeciesName.name_key == key, SpeciesName.retired_at.is_(None))
     )
     if live:
-        raise HTTPException(status_code=409, detail=DUPLICATE_MESSAGE)
+        raise SpeciesNameDuplicate()
     row = SpeciesName(
         species_id=species.id,
         name=shown,
@@ -91,14 +98,17 @@ def add_species_name(
         with session.begin_nested():
             session.add(row)
             session.flush()
-    except IntegrityError as exc:  # a concurrent add of the same live name
-        raise HTTPException(status_code=409, detail=DUPLICATE_MESSAGE) from exc
+    except IntegrityError as exc:
+        orig = exc.orig
+        if getattr(orig, "sqlstate", None) == "23505" or LIVE_UNIQUE_INDEX in str(orig):  # a concurrent add
+            raise SpeciesNameDuplicate() from exc
+        raise
     session.refresh(row)
     return row, species
 
 
-def retire_species_name(session: Session, *, name_ref: str) -> tuple[SpeciesName, Species]:
-    """Retire the name ``name_ref`` names. A name that is already retired is returned unchanged.
+def retire_species_name(session: Session, *, actor: AppUser, name_ref: str) -> tuple[SpeciesName, Species]:
+    """Retire the name ``name_ref`` names. A name that is already retired is returned unchanged, with its original retirer.
 
     Never commits. Raises 404 for an unknown or malformed ref.
     """
@@ -110,33 +120,9 @@ def retire_species_name(session: Session, *, name_ref: str) -> tuple[SpeciesName
         raise NotFoundError(f"species_name not found (name_ref={name_ref!r})")
     if row.retired_at is None:
         row.retired_at = func.now()
+        row.retired_by_user_id = actor.id
         session.flush()
         session.refresh(row)
     species = session.get(Species, row.species_id)
     assert species is not None
     return row, species
-
-
-def forward_species_names(session: Session, *, loser: Species, survivor: Species) -> None:
-    """Move the live names of ``loser`` to ``survivor``, ahead of the merge marker being set.
-
-    A live name whose normalised form the survivor already holds live is retired instead of moved, so the unique
-    index on live ``(species, name_key)`` is never broken. Retired names stay on the loser. Never commits.
-    """
-    held = set(
-        session.scalars(
-            select(SpeciesName.name_key).where(SpeciesName.species_id == survivor.id, SpeciesName.retired_at.is_(None))
-        )
-    )
-    moving = session.scalars(
-        select(SpeciesName)
-        .where(SpeciesName.species_id == loser.id, SpeciesName.retired_at.is_(None))
-        .order_by(SpeciesName.id)
-    ).all()
-    for row in moving:
-        if row.name_key in held:
-            row.retired_at = func.now()
-        else:
-            row.species_id = survivor.id
-            held.add(row.name_key)
-    session.flush()

@@ -26,3 +26,5 @@ class SpeciesNameRead(SchemaBase):
     source_kind: SpeciesNameSourceKind
     created_at: datetime
     retired_at: datetime | None = None
+    #: Username of the curator or admin who retired the name; null when live or not recorded.
+    retired_by: str | None = None
