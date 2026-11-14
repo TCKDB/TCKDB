@@ -22,7 +22,7 @@ import { formatTicks, linearScale } from "../domain/chartScale"
 import { computeKineticsTable, convertKineticsTableRows, log10Text } from "../domain/kineticsTable"
 import { niceTicks, seriesColor } from "../domain/thermoCpChartLayout"
 import { Disclosure } from "./Disclosure"
-import { QuantityValue, ROUNDED_NOTE } from "./QuantityValue"
+import { QuantityValue, EVALUATED_NOTE } from "./QuantityValue"
 import { evaluated } from "../domain/quantityFormat"
 
 // ---------------------------------------------------------------------------
@@ -279,7 +279,7 @@ export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[
                                         </tbody>
                                     </table>
                                 </div>
-                                <p className="note">{ROUNDED_NOTE}</p>
+                                <p className="note">{EVALUATED_NOTE}</p>
                             </Disclosure>
                         )
                     })}

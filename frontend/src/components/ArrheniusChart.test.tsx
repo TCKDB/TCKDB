@@ -613,6 +613,7 @@ describe("ArrheniusChart -- the per-panel unit selector", () => {
         const firstRowK = table.querySelector("tbody tr td[data-label='k']")?.textContent
         expect(firstRowK).toBe("0.0170286")
         expect(firstRowK).not.toBe("17028.6")
+        expect(screen.getByText("6 significant figures; hover for the value as computed.")).toBeInTheDocument()
     })
 })
 
