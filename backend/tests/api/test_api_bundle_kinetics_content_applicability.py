@@ -141,7 +141,7 @@ def test_a_bundle_declaring_tunneling_is_not_told_to_fill_a_missing_field(
     )
 
 
-def test_the_bundle_route_now_validates_a_tunneling_application_block(
+def test_the_bundle_route_validates_a_tunneling_application_block(
     client: TestClient,
 ):
     """``tunneling_application`` is a real bundle field.

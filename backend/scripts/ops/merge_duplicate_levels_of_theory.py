@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Plan, and optionally merge, levels of theory split by spelling (#574, #585, #618, #602).
+"""Plan, and optionally merge, levels of theory split by spelling.
 
 The same script joins every split the identity keys close: basis spelling,
 method case, curated method aliases such as ``wb97x-d`` / ``wb97xd``, and

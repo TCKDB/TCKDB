@@ -678,7 +678,7 @@ describe("EntryThermoSection", () => {
     })
 
 
-    it("renders the thermo's OWN software/workflow-tool provenance when populated — never 'not recorded' for a served value (issue #284)", async () => {
+    it("renders the thermo's OWN software/workflow-tool provenance when populated — never 'not recorded' for a served value", async () => {
         // Every other fixture in this file carries `software_release: null` /
         // `workflow_tool_release: null`, which would render "not recorded"
         // whether the API served the keys correctly or a regression dropped
@@ -702,7 +702,7 @@ describe("EntryThermoSection", () => {
         expect(ddFor(deltaCard, "Workflow tool")).toBe("ARC 1.1.0")
     })
 
-    it("never falls back to the calculation's software when the thermo's own is absent (issue #284, population A)", async () => {
+    it("never falls back to the calculation's software when the thermo's own is absent", async () => {
         // thm_alpha IS population A: primary_calculation.software is a real
         // Gaussian summary, but provenance.software_release is null. A
         // fixture where BOTH are null (as every other one in this file is)
@@ -1007,13 +1007,13 @@ describe("EntryThermoSection: the reproducibility assessment states what it was 
         expect(screen.getByText(/The current version is 2\. It has not been re-assessed under the current version\./)).toBeVisible()
     })
 
-    it("version 0: stale, worded as stamped before the versioning reset", async () => {
+    it("version 0: stale, worded as having no recorded version", async () => {
         renderWithAssessments({
             state: "stale", grade: "described",
             made_under: { ...rubric, assessed_version: 0, current_version: 1, state: "stale", stale_reason: "rubric_version" },
         })
         await screen.findByRole("heading", { name: "Reproducibility assessment: described" })
-        expect(screen.getByText(/stamped before the 2026-10 versioning reset/)).toBeVisible()
+        expect(screen.getByText(/no version recorded/)).toBeVisible()
     })
 
     it("unassessed: Not assessed, with no grade and no Stale badge", async () => {
@@ -1048,7 +1048,7 @@ describe("EntryThermoSection: provenance refs render as .data, like every other 
         expect(statmechDd.querySelector(".data")).not.toBeNull()
     })
 
-    it("shows 'none' for the statmech and every calculation ref of an UNLINKED record, in the card and in the table (#645)", async () => {
+    it("shows 'none' for the statmech and every calculation ref of an UNLINKED record, in the card and in the table", async () => {
         const [alpha] = mockRecords()
         const unlinked = {
             ...alpha,
@@ -1075,7 +1075,7 @@ describe("EntryThermoSection: provenance refs render as .data, like every other 
         expect(card.textContent).not.toContain("sm_alpha")
     })
 
-    it("renders plain 'none' text (no empty .data span) when either ref is absent and nothing is linked (#645)", async () => {
+    it("renders plain 'none' text (no empty .data span) when either ref is absent and nothing is linked", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
         await screen.findByText("thm_beta")
@@ -1105,7 +1105,7 @@ describe("EntryThermoSection: provenance refs render as .data, like every other 
         expect(ddFor(card, "Conformer")).toBe("not recorded")
     })
 
-    it("reads 'none' in the identical-group table's Statmech ref cell for unlinked records (#645)", async () => {
+    it("reads 'none' in the identical-group table's Statmech ref cell for unlinked records", async () => {
         const [alpha] = mockRecords()
         const unlinked = (ref: string) => ({
             ...alpha,
@@ -1441,7 +1441,7 @@ describe("EntryThermoSection: identical-value records group under one card", () 
         expect(within(row).getByRole("link", { name: "calc_distinct_sp" })).toHaveAttribute("href", "/calculations/calc_distinct_sp")
 
         // The sibling row's null Freq ref hits the cell's third branch --
-        // "none" (#645: an absent link reads "none", never a borrowed ref),
+        // "none" (an absent link reads "none", never a borrowed ref),
         // plain text, never a link and never confused with the "same as
         // primary" collapse (a null ref is not a match).
         const plainRow = within(refsTable).getByText("thm_plain").closest("tr") as HTMLElement

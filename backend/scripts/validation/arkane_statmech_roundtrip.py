@@ -17,7 +17,7 @@ Everything comes from a SQLAlchemy session over the configured database
 (the ``DB_*`` environment variables ``Settings.database_url`` reads, via
 ``app.api.deps.SessionLocal``). No HTTP, no SSH. That is what makes it
 runnable against a restored deposit database, and it is why the review
-status of a record no longer matters to the replay: the database is read
+status of a record does not matter to the replay: the database is read
 directly, so nothing is hidden behind ``min_review_status``.
 
 How it runs Arkane

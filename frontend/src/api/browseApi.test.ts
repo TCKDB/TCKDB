@@ -478,8 +478,7 @@ describe("buildReactionBrowseQuery: only the params the live endpoint accepts ar
         // MUTATION CHECK: a build that silently
         // drops `direction` even when set would leave the form and the
         // outgoing request disagreeing about which orientation was asked
-        // for -- exactly the defect #418's own PR body warns a frontend
-        // follow-up must not reintroduce.
+        // for.
         it("a value other than \"either\" (e.g. a URL-seeded \"reverse\") is still passed through, unvalidated", () => {
             const query = buildReactionBrowseQuery({ ...EMPTY_BROWSE_FILTERS, direction: "reverse" }, 0, 20)
             expect(query.get("direction")).toBe("reverse")

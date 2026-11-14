@@ -78,7 +78,7 @@ ALLOWED_ASYMMETRIES: dict[tuple[str, str], str] = {
         "thermo",
         "applied_energy_corrections",
     ): (
-        "Species-root only, by #151's deliberate choice. The reaction "
+        "Species-root only, by deliberate choice. The reaction "
         "bundle already declares applied corrections one level up, on "
         "BundleSpeciesIn, against the same resolved species entry. Adding "
         "a second place to say it would let one deposit make the claim "
@@ -338,7 +338,7 @@ def test_the_statmech_pair_needs_no_exemptions():
         "rotational_constant_c_cm1",
     ):
         assert field in reaction_fields, (
-            f"BundleStatmechIn lost '{field}', which #142 added"
+            f"BundleStatmechIn lost '{field}', which its species-root counterpart also declares"
         )
 
 

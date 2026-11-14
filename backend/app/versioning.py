@@ -55,8 +55,8 @@ class StoredVersionRef:
     """A ``(name, version)`` read back from a stored row, where version ``0`` is allowed.
 
     ``VersionRef`` and every registry refuse version 0: nothing TCKDB runs is version 0, so 0 is never current. But a
-    row stored before the 2026-10 versioning reset can carry 0 -- the migration maps every older rubric and prompt
-    version to 0 -- and a stored review has to be readable to be called stale. This is the type for that: it compares
+    stored row can carry 0 when no rubric or prompt version was recorded, and a stored review has to be readable to
+    be called stale. This is the type for that: it compares
     equal to a ``VersionRef`` with the same name and version (and never to a 0, since a ``VersionRef`` cannot hold one),
     so ``stored != active`` is the mismatch test it always was.
     """

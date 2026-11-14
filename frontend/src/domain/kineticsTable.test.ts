@@ -32,7 +32,7 @@ describe("arrheniusTermK", () => {
     })
 })
 
-describe("arrheniusTermK with a reference temperature T0 (#620)", () => {
+describe("arrheniusTermK with a reference temperature T0", () => {
     // A=1e10, n=2, Ea=0 (the exponential is exactly 1, so the ratio is pure
     // algebra): k(T0=298) / k(T0=1) at 1000 K is [A (T/298)^2] / [A T^2] = 1/298^2.
     // The expected value is derived here, not read back from the function.

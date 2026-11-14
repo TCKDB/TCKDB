@@ -137,9 +137,9 @@ def _check_error_bodies(item) -> None:
     if observed.client_errors and not observed.bodies:
         raise AssertionError(
             f"{item.nodeid} received {observed.client_errors} JSON error "
-            "response(s) and the DR-0028 body sweep examined none of them. "
+            "response(s) and the error-body sweep examined none of them. "
             "The observer patches JSONResponse.__init__ and "
-            "TestClient.request; one of them is no longer in place, which "
+            "TestClient.request; one of them is not in place, which "
             "makes the sweep silent rather than clean. See "
             "backend/tests/error_body_observer.py."
         )
@@ -183,7 +183,7 @@ def _no_warning_breaks_the_message_rule():
     warning_context_observer.drain()
     yield
     broken = warning_context_observer.drain()
-    assert not broken, "warnings that broke the message rule (#838): " + " | ".join(broken)
+    assert not broken, "warnings that broke the message rule: " + " | ".join(broken)
 
 
 @pytest.fixture(autouse=True)
@@ -1091,7 +1091,7 @@ def pytest_sessionfinish(session, exitstatus) -> None:
             print(line)
 
     tally = (
-        f"tckdb: DR-0028 body sweep examined {bodies} error body/bodies, "
+        f"tckdb: error-body sweep examined {bodies} error body/bodies, "
         f"{fields} fields within them; {client_errors} JSON error responses "
         "reached a client."
     )
@@ -1117,7 +1117,7 @@ def pytest_sessionfinish(session, exitstatus) -> None:
     if bodies >= floor[0] and fields >= floor[1]:
         return
     say(
-        f"ERROR: the DR-0028 body sweep fell below its floor for {selection}. "
+        f"ERROR: the error-body sweep fell below its floor for {selection}. "
         f"Expected at least {floor[0]} bodies and {floor[1]} fields; saw "
         f"{bodies} and {fields}. Either the sweep in "
         "backend/tests/error_body_observer.py stopped examining what it "

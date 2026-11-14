@@ -38,7 +38,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
 //   `has_frequencies=any(r.role == freq for r in source_rows)`,
 //   `has_conformers=<live EXISTS query>`,
 //   `has_review=_exists_review_for(...)`). This is NOT the conformer
-//   surface's hardcoded-false `has_selections` (issue #268) — do not
+//   surface's hardcoded-false `has_selections` — do not
 //   generalise that defect onto this surface.
 //
 // - Live-measured against `spe_bcbdjwkip75yoziblpntwzblzu` ([CH3]): the

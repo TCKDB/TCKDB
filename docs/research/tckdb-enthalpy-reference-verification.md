@@ -202,15 +202,15 @@ Each entry lists the first line of every changed hunk relative to integrated `or
 | `backend/tests/schemas/test_frequency_list_completeness.py` | `backend/tests/schemas/test_frequency_list_completeness.py:656` |
 | `backend/tests/schemas/test_stationary_point_validation_tiers.py` | `backend/tests/schemas/test_stationary_point_validation_tiers.py:591` |
 | `backend/tests/schemas/test_tckdb_schemas_enum_drift.py` | `backend/tests/schemas/test_tckdb_schemas_enum_drift.py:22` |
-| `backend/tests/schemas/test_thermo_phase_a_contract.py` | `backend/tests/schemas/test_thermo_phase_a_contract.py:45`, `backend/tests/schemas/test_thermo_phase_a_contract.py:98`, `backend/tests/schemas/test_thermo_phase_a_contract.py:102` |
+| `backend/tests/schemas/test_thermo_creation_strictness.py` | `backend/tests/schemas/test_thermo_creation_strictness.py:45`, `backend/tests/schemas/test_thermo_creation_strictness.py:98`, `backend/tests/schemas/test_thermo_creation_strictness.py:102` |
 | `backend/tests/schemas/test_thermo_schema.py` | `backend/tests/schemas/test_thermo_schema.py:125`, `backend/tests/schemas/test_thermo_schema.py:196` |
 | `backend/tests/scripts/test_arc_enthalpy_reference.py` | `backend/tests/scripts/test_arc_enthalpy_reference.py:1` |
 | `backend/tests/scripts/test_sdf_enthalpy_reference.py` | `backend/tests/scripts/test_sdf_enthalpy_reference.py:1` |
 | `backend/tests/services/release/test_release_manifest.py` | `backend/tests/services/release/test_release_manifest.py:800` |
-| `backend/tests/services/release/test_thermo_phase_a_release.py` | `backend/tests/services/release/test_thermo_phase_a_release.py:32` |
+| `backend/tests/services/release/test_thermo_release.py` | `backend/tests/services/release/test_thermo_release.py:32` |
 | `backend/tests/services/scientific_read/_factories.py` | `backend/tests/services/scientific_read/_factories.py:760` |
-| `backend/tests/services/scientific_read/test_thermo_phase_a.py` | `backend/tests/services/scientific_read/test_thermo_phase_a.py:39`, `backend/tests/services/scientific_read/test_thermo_phase_a.py:54`, `backend/tests/services/scientific_read/test_thermo_phase_a.py:111` |
-| `backend/tests/services/scientific_read/test_thermo_phase_a_numerical.py` | `backend/tests/services/scientific_read/test_thermo_phase_a_numerical.py:54`, `backend/tests/services/scientific_read/test_thermo_phase_a_numerical.py:90`, `backend/tests/services/scientific_read/test_thermo_phase_a_numerical.py:124` |
+| `backend/tests/services/scientific_read/test_thermo_custody_chemkin_applicability.py` | `backend/tests/services/scientific_read/test_thermo_custody_chemkin_applicability.py:39`, `backend/tests/services/scientific_read/test_thermo_custody_chemkin_applicability.py:54`, `backend/tests/services/scientific_read/test_thermo_custody_chemkin_applicability.py:111` |
+| `backend/tests/services/scientific_read/test_thermo_numerical_custody.py` | `backend/tests/services/scientific_read/test_thermo_numerical_custody.py:54`, `backend/tests/services/scientific_read/test_thermo_numerical_custody.py:90`, `backend/tests/services/scientific_read/test_thermo_numerical_custody.py:124` |
 | `backend/tests/services/test_contribution_bundle_dry_run.py` | `backend/tests/services/test_contribution_bundle_dry_run.py:148` |
 | `backend/tests/services/test_contribution_bundle_export.py` | `backend/tests/services/test_contribution_bundle_export.py:73`, `backend/tests/services/test_contribution_bundle_export.py:91`, `backend/tests/services/test_contribution_bundle_export.py:234` |
 | `backend/tests/services/test_provenance_warnings.py` | `backend/tests/services/test_provenance_warnings.py:55` |

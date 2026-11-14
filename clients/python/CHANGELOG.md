@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.207.0 - 2026-11-14
+
+No client behaviour changed. The `--base-url` help text and the dataset-release parity note describe current behaviour without issue or design-record references.
+
 ## 0.206.0 - 2026-11-11
 
 The `tckdb-schemas` requirement is widened to `>=0.158,<0.175`. No client code changed.

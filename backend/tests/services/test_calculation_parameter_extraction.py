@@ -271,7 +271,7 @@ def test_seeded_vocab_keys_link_through_fk(db_conn) -> None:
         ).all()
         assert linked, (
             "expected at least one row to link through the vocab FK after "
-            "Phase 1 seeding"
+            "seeding"
         )
 
 

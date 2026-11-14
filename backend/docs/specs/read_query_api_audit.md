@@ -900,24 +900,24 @@ Tests column lists representative test files (not exhaustive).
 
 | Table | R | L | S | Response schema | Tests | Notes / gaps |
 |---|---|---|---|---|---|---|
-| `calculation` | ✓ | ✓ | (only via `species-calculations/search`) | `CalculationRead` | `test_api_reads.py`, `test_calculation_phase2_reads.py` | List has no science filters; **no `/scientific/calculations/search`** |
-| `calculation_input_geometry` | (via calc) | (via calc) | — | detail read | `test_calculation_phase2_reads.py` | — |
-| `calculation_output_geometry` | (via calc) | (via calc) | — | detail read | `test_calculation_phase2_reads.py` | — |
-| `calculation_dependency` | (via calc) | (via calc) | (in `/full`) | `CalculationDependencyDirectionalRead` | `test_calculation_phase2_reads.py` | — |
-| `calculation_parameter` | (via calc) | (via calc) | — | `CalculationParameterRead` | `test_calculation_phase2_reads.py` | **No filter by parameter key/value across calcs** |
+| `calculation` | ✓ | ✓ | (only via `species-calculations/search`) | `CalculationRead` | `test_api_reads.py`, `test_calculation_subresource_reads.py` | List has no science filters; **no `/scientific/calculations/search`** |
+| `calculation_input_geometry` | (via calc) | (via calc) | — | detail read | `test_calculation_subresource_reads.py` | — |
+| `calculation_output_geometry` | (via calc) | (via calc) | — | detail read | `test_calculation_subresource_reads.py` | — |
+| `calculation_dependency` | (via calc) | (via calc) | (in `/full`) | `CalculationDependencyDirectionalRead` | `test_calculation_subresource_reads.py` | — |
+| `calculation_parameter` | (via calc) | (via calc) | — | `CalculationParameterRead` | `test_calculation_subresource_reads.py` | **No filter by parameter key/value across calcs** |
 | `calculation_parameter_vocab` | — | — | — | — | — | Internal vocab, not exposed |
-| `calculation_constraint` | (via calc) | (via calc) | — | `CalculationConstraintRead` | `test_calculation_phase2_reads.py` | — |
+| `calculation_constraint` | (via calc) | (via calc) | — | `CalculationConstraintRead` | `test_calculation_subresource_reads.py` | — |
 | `calculation_artifact` | (via calc) | (via calc) | (flag in includes) | `CalculationArtifactRead` | `test_api_calculation_artifacts.py` | Metadata only; download path not in scientific surface |
 | `calc_sp_result` | ✓ | — | (via species-calc) | `CalculationSPResultRead` | `test_api_reads.py` | — |
 | `calc_opt_result` | ✓ | — | — | `CalculationOptResultRead` | `test_api_reads.py` | — |
 | `calc_freq_result` | ✓ | — | — | `CalculationFreqResultRead` | `test_api_reads.py` | — |
 | `calc_freq_mode` | E | — | — | embedded | — | — |
-| `calc_geometry_validation` | (via calc) | (via calc) | (via species-calc include) | `CalculationGeometryValidationRead` | `test_calculation_phase2_reads.py` | — |
-| `calc_scan_result` | ✓ | — | — | `CalculationScanResultRead` | `test_calculation_phase2_reads.py` | — |
+| `calc_geometry_validation` | (via calc) | (via calc) | (via species-calc include) | `CalculationGeometryValidationRead` | `test_calculation_subresource_reads.py` | — |
+| `calc_scan_result` | ✓ | — | — | `CalculationScanResultRead` | `test_calculation_subresource_reads.py` | — |
 | `calc_scan_*` (children) | E | — | — | embedded | — | — |
-| `calc_irc_result` | ✓ | — | (in kinetics include) | `CalculationIRCResultRead` | `test_calculation_phase2_reads.py` | — |
+| `calc_irc_result` | ✓ | — | (in kinetics include) | `CalculationIRCResultRead` | `test_calculation_subresource_reads.py` | — |
 | `calc_irc_point` | E | — | — | embedded | — | — |
-| `calc_path_search_result` | ✓ | (via calc) | (in kinetics include) | `CalculationPathSearchResultRead` | `test_calculation_phase2_reads.py` | — |
+| `calc_path_search_result` | ✓ | (via calc) | (in kinetics include) | `CalculationPathSearchResultRead` | `test_calculation_subresource_reads.py` | — |
 | `calc_path_search_point` | E | — | — | embedded | — | — |
 | `calc_scf_stability` | (via calc) | (via calc) | (in species-calc include) | `CalculationSCFStabilityRead` | `test_scf_stability.py` | — |
 | `calc_neb_image_result` | — | — | — | — | — | **Not in ORM** |

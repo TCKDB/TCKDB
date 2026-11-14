@@ -161,7 +161,7 @@ describe("the record summaries table", () => {
 })
 
 /* ------------------------------------------------------------------ *
- * Building curator tasks (task #256)
+ * Building curator tasks
  *
  * Until this button existed nothing in the product could create a curator
  * task: the backend route is explicit-only and runs on no upload, so the
@@ -710,7 +710,7 @@ describe("building curator tasks for a submission", () => {
 })
 
 /* ------------------------------------------------------------------ *
- * Running machine review (task #482)
+ * Running machine review
  *
  * The other half of the same hole. The builder above turns machine-review
  * findings into work for a person, and until this control existed nothing

@@ -106,7 +106,7 @@ _SUBMISSION_READ = (
     "an occasional operator action via get_json()."
 )
 _RELEASE_READ = (
-    "Dataset-release surface is still stabilising (DR-0026); binding it "
+    "Dataset-release surface is still stabilising; binding it "
     "typed now would lock in a shape that is expected to change. "
     "Reachable via get_json()."
 )

@@ -154,7 +154,7 @@ SANCTIONED_CHAINING: dict[str, str] = {
         "A statmech record may be built from calculations deposited by an "
         "earlier request. Those rows exist and are the client's own, but no "
         "local key survives across the request boundary, so the id it was "
-        "handed back is the only way to name them. Sanctioned in #129."
+        "handed back is the only way to name them. Sanctioned for programmatic chaining."
     ),
     "ThermoSourceCalculationIn.existing_calculation_id": (
         "Same case as the statmech spelling: thermo cites the calculations "

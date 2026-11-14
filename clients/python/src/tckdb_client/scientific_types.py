@@ -18,7 +18,7 @@ class MadeUnder(TypedDict):
     ``state`` is ``current`` (the version in force, and the inputs were compared with today's), ``inputs_unchecked``
     (the version in force, but this route does not compare the inputs: a list or search read never says ``current``),
     ``stale`` (another version, or the same version over inputs that have changed) or ``unassessed`` (nothing to name).
-    ``assessed_version`` 0 means "stamped before the 2026-10 versioning reset" and is never current.
+    ``assessed_version`` 0 means no version was recorded (pages show "(no version recorded)") and is never current.
     ``stale_reason`` is ``rubric_version``, ``prompt_version`` (a stored machine review) or ``inputs_changed`` when
     ``state`` is ``stale``. ``inputs_checked`` is true only on a route that compares the inputs, ``None`` when
     there is nothing to compare. The comparison is the same under the ``curated`` and ``exploratory`` profiles: whether

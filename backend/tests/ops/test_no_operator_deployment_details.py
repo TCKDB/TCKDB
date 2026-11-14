@@ -86,7 +86,7 @@ def test_no_tracked_file_names_the_operators_hostname() -> None:
     hits = _grep(_BANNED_HOSTNAME)
     assert not hits, (
         "one operator's private deployment hostname was reintroduced into "
-        f"the public repository (issue #521): {hits}. Use a generic "
+        f"the public repository: {hits}. Use a generic "
         "example host (tckdb.example.com / api.tckdb.example.org, matching "
         "docs/deployment/self_hosted_single_node.md's convention), or "
         "require the caller to configure it -- never a hardcoded default."
@@ -97,7 +97,7 @@ def test_no_tracked_file_names_the_operators_private_network_address() -> None:
     hits = _grep(_BANNED_ADDRESS)
     assert not hits, (
         "one operator's private (Tailscale) network address was "
-        f"reintroduced into the public repository (issue #521): {hits}."
+        f"reintroduced into the public repository: {hits}."
     )
 
 

@@ -47,7 +47,7 @@ trigger, preferred-record selection, trust or certification mutation exists.
 ## Independent review and actual mutations (D0–D3)
 
 An independent review read the initial contracts, authored
-`test_phase_d_numerical.py` and performed temporary mutations with restoration
+`test_advisory_numerical.py` and performed temporary mutations with restoration
 in `try/finally`, checking production bytes after restoration. Expectations
 use independent analytical formulas and SI constants, not the production
 Cantera wrapper. All suites assert nonempty evaluated rows.
@@ -136,7 +136,7 @@ This record covers a separate pass that chose its own mutations, mostly
 ones the pull requests did not list, and ran each one.
 
 Each mutation is one textual change to production code. The change was
-applied alone, the nine Phase D modules (`backend/tests/services/test_phase_d_*.py`)
+applied alone, the nine Phase D modules (`backend/tests/services/test_advisory_*.py`)
 were run, and the file was restored and its SHA-256 compared with the
 original. A mutation is killed when at least one test fails. At `15079bbc`
 the suite had 333 tests before the additions below and 343 after. After
@@ -286,7 +286,7 @@ and environment, so the live-store tests ran rather than skipped:
 | `conda run -n tckdb_env bash backend/scripts/test-rest.sh` | 6652 passed, 31 skipped |
 | `conda run -n tckdb_env bash backend/scripts/test-api.sh` | 4021 passed |
 | `conda run -n tckdb_env bash backend/scripts/test-scientific.sh` | 2936 passed |
-| Phase D modules (`tests/services/test_phase_d_*.py`) | 344 passed |
+| Phase D modules (`tests/services/test_advisory_*.py`) | 344 passed |
 | `ruff check app tests scripts`, `check_runtime_ascii.py`, scoped `mypy` (196 files) | clean |
 | `generate_scientific_check_register.py --check`, `test_gate_coverage.py` (31) | up to date, passed |
 | `mkdocs build --strict` | built without warnings |

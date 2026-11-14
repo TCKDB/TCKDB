@@ -27,7 +27,7 @@ import pytest
 from app.db.models.kinetics import Kinetics
 from app.db.models.reaction import ReactionEntry, ReactionEntryStructureParticipant
 from app.services.consistency.kinetics import compare_kinetics
-from tests.services.test_phase_d_numerical import AVOGADRO, R, _reaction, _thermo
+from tests.services.test_advisory_numerical import AVOGADRO, R, _reaction, _thermo
 
 
 def _set(record, **values):

@@ -158,7 +158,7 @@ def test_several_declared_product_sets_are_distinct_competing_nodes(db_session, 
     assert len({n.id_rank for n in nodes}) == 2
 
 
-def test_a_product_set_whose_pinned_content_no_longer_matches_is_not_certified(db_session, world):
+def test_a_product_set_whose_pinned_content_does_not_match_is_not_certified(db_session, world):
     solve = two_channel_solve(db_session, world, review=None)
     body = dict(solve.target_declaration)
     sets = [dict(s) for s in body["product_sets"]]

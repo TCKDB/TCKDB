@@ -191,7 +191,7 @@ def test_persisted_reviews_survive_an_unrelated_rubric(db_session, monkeypatch):
     the recipe as it stands, then an unrelated rubric is registered and each is
     re-classified with its consumer's own live currency call.
     """
-    from tests.services.test_phase_d_persistence import request, setup_records
+    from tests.services.test_advisory_persistence import request, setup_records
 
     thermo, _, _ = setup_records(db_session)
     create_record_machine_review_row(

@@ -148,8 +148,7 @@ describe("every authenticated call sends the session cookie", () => {
      * one, so `fetchMe` reports nobody is signed in and every returning
      * visitor is anonymous after a reload.
      *
-     * Only `login` and `logout` were pinned. Review of #467 landed the
-     * omission on `fetchMe`, `listApiKeys` and `revokeApiKey` and all 58
+     * Only `login` and `logout` were pinned once, so an omission on `fetchMe`, `listApiKeys` and `revokeApiKey` and all 58
      * tests still passed. This table covers the whole surface so the next
      * call added is covered too.
      */
@@ -191,8 +190,7 @@ describe("a request-validation failure names the field", () => {
      * characters was reported as "Request failed (422)".
      *
      * That is the most common registration failure, and it collapsed to
-     * exactly the generic message this client exists to avoid. Found in
-     * review of #467.
+     * exactly the generic message this client exists to avoid.
      */
     it("turns a list-shaped detail into a message naming the field", async () => {
         server.use(

@@ -394,7 +394,7 @@ _GIBBS_HIGH = (3.4, 1.1e-3, -2e-7, 1e-11, -3e-16, -8800.0, 5.0)
 
 
 def gibbs_records(session):
-    from tests.services.test_phase_d_gibbs import nasa7_payload, upload_thermo
+    from tests.services.test_advisory_gibbs import nasa7_payload, upload_thermo
     return upload_thermo(
         session, smiles="CCO", enthalpy_reference_kind="formation_298k", reference_pressure_bar=1.0,
         nasa=nasa7_payload(_GIBBS_LOW, _GIBBS_HIGH),
@@ -551,14 +551,14 @@ def test_gibbs_service_refuses_neighbours_and_grids_and_the_cli_dry_runs(db_sess
 
 # --------------------------------------------------------------------------- #
 # D5 Kirchhoff: dry run, one append, no restale, material-input currency.
-# Rows come from the thermo upload workflow (tests/services/test_phase_d_kirchhoff.py).
+# Rows come from the thermo upload workflow (tests/services/test_advisory_kirchhoff.py).
 # --------------------------------------------------------------------------- #
 
 
 
 def _kirchhoff_record(session):
-    from tests.services.test_phase_d_foundation import LOW, _h_nasa7_kj
-    from tests.services.test_phase_d_kirchhoff import nasa7_block, upload
+    from tests.services.test_advisory_foundation import LOW, _h_nasa7_kj
+    from tests.services.test_advisory_kirchhoff import nasa7_block, upload
     return upload(session, nasa=nasa7_block(), h298_kj_mol=_h_nasa7_kj(LOW, 298.15) - 1.5,
                   points=[{"temperature_k": 600.0, "h_kj_mol": _h_nasa7_kj(LOW, 600.0) + 5.0}])
 

@@ -159,7 +159,7 @@ class StatementRecorder:
     ``after_cursor_execute`` events. The statement *count* is as important as
     the total time: it is what distinguishes "this query needs an index" from
     "this endpoint issues one query per candidate row", and only the second
-    explains why a shape that is fine on 55 species collapses on 50,000.
+    explains why a shape that is fine on a small database collapses on 50,000.
     """
 
     def __init__(self) -> None:

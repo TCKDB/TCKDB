@@ -66,7 +66,7 @@ describe("AuthProvider seeding", () => {
          * bounced off /account while their cookie is still valid. They then
          * retype a password to replace a session they never lost.
          *
-         * Found in review of #467, where leaving the state `loading` forever
+         * Leaving the state `loading` forever
          * on rejection passed all 58 tests.
          */
         server.use(http.get("/api/v1/auth/me", () => HttpResponse.json({ detail: "boom" }, { status: 500 })))

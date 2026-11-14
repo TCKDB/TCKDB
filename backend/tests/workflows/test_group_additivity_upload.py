@@ -287,7 +287,7 @@ def test_the_missing_thermo_guard_does_not_answer_with_its_own_name(db_session):
     assert not re.match(r"^[a-z][a-z0-9_]*_[a-z0-9_]+: ", str(raised.value)), (
         f"the refusal opens with a token in the code position: "
         f"{str(raised.value)!r}. Asserting only that the body falls back to "
-        "validation_error would not have caught this: the gate added in #164 "
+        "validation_error would not have caught this: the catalogue gate "
         "degrades an uncatalogued token anyway, so the wording needs its own "
         "assertion or nothing holds it."
     )

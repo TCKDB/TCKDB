@@ -409,7 +409,7 @@ def test_alias_spellings_of_the_same_level_agree(db_conn, software, method, basi
         ("ROCCSD(T)", "#P rohf/6-31g(d) sp\n"),
     ],
 )
-def test_the_methods_the_old_pattern_could_not_read_are_now_compared(db_conn, method, route):
+def test_the_methods_a_name_pattern_could_not_read_are_compared(db_conn, method, route):
     with Session(db_conn) as session, session.begin():
         calc = _calc(session, method=method)
         _, warnings = _read(session, calc, route)
