@@ -308,14 +308,12 @@ describe("RecordIdentityHeader", () => {
             expect(link.querySelector("code.data")?.textContent).toBe("[CH3]")
         })
 
-        it("falls back to the entry ref, as a data code run, when the identity carries no SMILES, no formula, and no label", () => {
+        it("falls back to the words 'Species entry', never the ref, when the identity carries no SMILES, no formula, and no label", () => {
             renderHeader({ identity: { ...speciesIdentity, canonicalSmiles: "", formula: null } })
-            const link = screen.getByRole("link", { name: "spe_demo" })
-            expect(link).toHaveAttribute("href", "/species-entries/spe_demo")
-            const code = link.querySelector("code")
-            expect(code).not.toBeNull()
-            expect(code).toHaveClass("data")
-            expect(link.textContent).not.toContain("Species entry")
+            const link = document.querySelector('a[href="/species-entries/spe_demo"]') as HTMLElement
+            expect(link).not.toBeNull()
+            expect(link.textContent).toBe("Species entry")
+            expect(link.querySelector("code")).toBeNull()
         })
     })
 })

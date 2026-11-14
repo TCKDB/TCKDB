@@ -1289,11 +1289,11 @@ describe("browse page: the 'reaction' kind, end to end", () => {
         expect(rows).toHaveLength(2)
 
         const [first, second] = [...rows] as HTMLElement[]
-        // The footer shows the REACTION (identity) ref now, not the entry
-        // ref -- the entry ref is still reachable, as the "View this
+        // No ref is printed; the entry is still reachable as the "View this
         // deposit" link's href (see the dedicated link-target test below).
-        expect(within(first).getByText("rxn_one")).toBeVisible()
-        expect(within(first).getByRole("link", { name: "View this deposit" })).toHaveAttribute("href", "/reaction-entries/rxe_one")
+        expect(within(first).queryByText("rxn_one")).not.toBeInTheDocument()
+        expect(first.textContent).not.toMatch(/rxn_one|rxe_one/)
+        expect(within(first).getByRole("link", { name: /^View this deposit, / })).toHaveAttribute("href", "/reaction-entries/rxe_one")
         // The row renders its OWN served `family` string, token-formatted
         // (the same naive underscore-to-space convention
         // `TransitionStateBrowseRow` already uses) -- not the vocab
@@ -1303,8 +1303,9 @@ describe("browse page: the 'reaction' kind, end to end", () => {
         expect(within(first).getByText("has kinetics")).toBeVisible()
         expect(within(first).getByText("has transition state")).toBeVisible()
 
-        expect(within(second).getByText("rxn_two")).toBeVisible()
-        expect(within(second).getByRole("link", { name: "View this deposit" })).toHaveAttribute("href", "/reaction-entries/rxe_two")
+        expect(within(second).queryByText("rxn_two")).not.toBeInTheDocument()
+        expect(second.textContent).not.toMatch(/rxn_two|rxe_two/)
+        expect(within(second).getByRole("link", { name: /^View this deposit, / })).toHaveAttribute("href", "/reaction-entries/rxe_two")
         expect(within(second).getByText("family not recorded")).toBeVisible()
         expect(within(second).getByText("approved")).toBeVisible()
         expect(within(second).getByText("no kinetics deposited")).toBeVisible()

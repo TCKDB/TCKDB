@@ -182,24 +182,24 @@ function occurrencesOutsideRefs(container: HTMLElement, value: string): number {
 }
 
 describe("ReactionEntryPage -- DOM-vs-payload identity", () => {
-    it("every spe_/net_ ref in the fixture appears exactly once outside References", async () => {
+    it("no spe_ ref in the fixture is printed outside References", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         await waitFor(() => expect(titleHasKind(document.title, "/reaction-entries/:ref")).toBe(true))
 
         for (const ref of ["spe_water", "spe_ch3", "spe_ch4", "spe_oh"]) {
-            expect(occurrencesOutsideRefs(container, ref), `${ref} should appear exactly once outside References`).toBe(1)
+            expect(occurrencesOutsideRefs(container, ref), `${ref} should not be printed outside References`).toBe(0)
         }
     })
 
-    it("every tse_/calc_ ref in the fixture appears at least once outside References", async () => {
+    it("no tse_ or calc_ ref in the fixture is printed outside References", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
 
         for (const ref of ["tse_test1", "calc_opt1", "calc_freq1", "calc_sp1", "calc_irc1", "calc_freqlink", "calc_splink"]) {
-            expect(occurrencesOutsideRefs(container, ref)).toBeGreaterThanOrEqual(1)
+            expect(occurrencesOutsideRefs(container, ref)).toBe(0)
         }
     })
 
@@ -211,17 +211,18 @@ describe("ReactionEntryPage -- DOM-vs-payload identity", () => {
     // "Kinetics ref" fact, the Arrhenius chart's legend chip
     // ("series 1 — kin_test1"), and the k(T) table's Disclosure heading
     // ("k(T) table — kin_test1") -- three sites, never more, never fewer.
-    it("kin_test1 appears exactly 3 times outside References: the card fact, the chart legend chip, and the k(T) table heading", async () => {
+    it("kin_test1 is not printed outside References: the chart legend and the k(T) table read as Record 1", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
-        expect(occurrencesOutsideRefs(container, "kin_test1")).toBe(3)
+        await screen.findAllByText("Model kind")
+        expect(occurrencesOutsideRefs(container, "kin_test1")).toBe(0)
+        expect(container.textContent).toContain("Record 1")
     })
 
     it("every A/n/Ea/T value from the kinetics record is present, string-equal to the payload", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const text = container.textContent ?? ""
         for (const value of ["3025.44", "3.11242", "39.9711", "300", "3000"]) {
             expect(text).toContain(value)
@@ -242,7 +243,7 @@ describe("ReactionEntryPage -- DOM-vs-payload identity", () => {
     it("computed text-transform is none on the A/n/Ea parameter-name dt's, textContent stays lower-case 'n'", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const kineticsSection = container.querySelector('section[aria-labelledby="kinetics-heading"]')!
         const dts = Array.from(kineticsSection.querySelectorAll("dt")).filter((dt) =>
             ["A", "n", "Ea"].includes(dt.textContent ?? ""),
@@ -262,7 +263,7 @@ describe("ReactionEntryPage -- the Arrhenius chart actually renders on the page"
     it("the kinetics section contains an Arrhenius plot SVG for a plottable record", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const kineticsSection = container.querySelector('section[aria-labelledby="kinetics-heading"]')!
         const svg = within(kineticsSection as HTMLElement).getByRole("img", { name: /Arrhenius plot/ })
         expect(svg).toBeInTheDocument()
@@ -291,23 +292,14 @@ describe("ReactionEntryPage -- three-state network wording", () => {
             }],
         }))
         const { container } = page()
-        expect(await screen.findByText("net_test1")).toBeVisible()
+        expect(await screen.findByRole("link", { name: "Network: Pressure-dependent network" })).toBeVisible()
         expect(screen.getAllByText("Pressure-dependent network").length).toBeGreaterThan(0)
         expect(document.body.innerHTML).not.toContain("hydrazine")
         expect(screen.getByText("21")).toBeVisible()
-        // `net_` refs are never cited in this page's References disclosure
-        // (a network is a plain row, not a related-ref citation) -- exactly
-        // one mention.
-        expect(occurrencesOutsideRefs(container, "net_test1")).toBe(1)
-
-        // `/networks/:ref` is the network record page -- the ref
-        // renders as a link to it, in the data face, alongside its own copy
-        // button (both, not one instead of the other -- matching every
-        // other `Ref` column on this page).
-        const refLink = screen.getByRole("link", { name: "net_test1" })
-        expect(refLink).toHaveAttribute("href", "/networks/net_test1")
-        const refCell = screen.getByText("net_test1").closest("td")!
-        expect(refCell.querySelector(".copy-button")).not.toBeNull()
+        // The network is a link to its page, read as words; its ref is not printed.
+        expect(occurrencesOutsideRefs(container, "net_test1")).toBe(0)
+        expect(screen.getByRole("link", { name: "Network: Pressure-dependent network" })).toHaveAttribute("href", "/networks/net_test1")
+        expect(container.querySelector('td[data-label="Network"] .copy-button')).toBeNull()
     })
 
     it("key absent (pre-deployment API) -- section renders nothing until the fallback resolves", async () => {
@@ -321,9 +313,9 @@ describe("ReactionEntryPage -- three-state network wording", () => {
             }],
         })))
         page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         // The fallback fetch resolves, populating the section.
-        expect(await screen.findByText("net_fallback")).toBeVisible()
+        expect(await screen.findByRole("link", { name: "Network: Pressure-dependent network" })).toHaveAttribute("href", "/networks/net_fallback")
     })
 })
 
@@ -426,7 +418,7 @@ describe("ReactionEntryPage -- fallback levels derivation", () => {
 
         handleFull(mockFull({ kinetics: [kineticsRecordFixture(servedLevels)] }))
         const served = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const servedText = productLevelsBlockText(served.container)
         expect(servedText).toContain("b3lyp/def2tzvp")
         served.unmount()
@@ -434,7 +426,7 @@ describe("ReactionEntryPage -- fallback levels derivation", () => {
 
         handleFull(mockFull({ kinetics: [kineticsRecordFixture(undefined)] }))
         const derived = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const derivedText = productLevelsBlockText(derived.container)
 
         expect(derivedText).toBe(servedText)
@@ -457,7 +449,7 @@ describe("ReactionEntryPage -- fallback levels derivation", () => {
         }
         handleFull(mockFull({ kinetics: [kineticsRecordFixture(servedLevels)] }))
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const text = productLevelsBlockText(container)
         expect(text).toContain("ccsd(t)/cc-pvtz")
         expect(text).not.toContain("b3lyp/def2tzvp")
@@ -466,7 +458,7 @@ describe("ReactionEntryPage -- fallback levels derivation", () => {
     it("derives geometry via the freq_on dependency-edge parent-opt walk when levels is absent (mirrors the backend's own resolver)", async () => {
         handleFull(mockFull({ kinetics: [kineticsRecordFixture(undefined)] }))
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const geometryRow = Array.from(container.querySelectorAll('section[aria-labelledby="kinetics-heading"] .reaction-product-levels dt'))
             .find((dt) => dt.textContent === "Geometry")
         expect(geometryRow?.nextElementSibling?.textContent).toContain("b3lyp/def2tzvp")
@@ -477,7 +469,7 @@ describe("ReactionEntryPage -- transition-state dependency graph", () => {
     it("renders the calculation dependency graph (role=img) when this TS entry's dependencies are non-empty", async () => {
         handleFull(mockFull())
         page()
-        expect(await screen.findByRole("img", { name: /Dependency graph for calc_opt1/ })).toBeInTheDocument()
+        expect(await screen.findByRole("img", { name: /Dependency graph for this calculation/ })).toBeInTheDocument()
     })
 
     it("renders a transition state whose owner is withheld (profile=curated): no owner ref, the entry still there", async () => {
@@ -485,7 +477,7 @@ describe("ReactionEntryPage -- transition-state dependency graph", () => {
         full.transition_states[0].transition_state_ref = null
         handleFull(full)
         page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         expect(screen.queryByText("ts_test1")).not.toBeInTheDocument()
         const strip = screen.getByTestId("ts-status-strip")
         expect(strip.querySelector("[aria-current=step]")?.textContent).toContain("Optimized")
@@ -494,7 +486,7 @@ describe("ReactionEntryPage -- transition-state dependency graph", () => {
     it("renders the guess/optimized/validated status strip with the served status selected", async () => {
         handleFull(mockFull())
         page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const strip = screen.getByTestId("ts-status-strip")
         const selected = strip.querySelector("[aria-current=step]")
         expect(selected?.textContent).toContain("Optimized")
@@ -504,7 +496,7 @@ describe("ReactionEntryPage -- transition-state dependency graph", () => {
     it("renders Geometry/Frequencies/Energy facts for the TS block (ProductLevelsFact is not silently dropped)", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const tsSection = container.querySelector('section[aria-labelledby="ts-heading"]')!
         const dts = Array.from(tsSection.querySelectorAll(".reaction-product-levels dt")).map((el) => el.textContent)
         expect(dts).toEqual(["Geometry", "Frequencies", "Energy"])
@@ -518,7 +510,7 @@ describe("ReactionEntryPage -- transition-state dependency graph", () => {
     it("never restates the reaction equation above the TS dependency graph -- the page's own h1 already states it", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const tsSection = container.querySelector('section[aria-labelledby="ts-heading"]')!
         expect(tsSection.querySelector('[data-testid="dep-graph-equation-caption"]')).toBeNull()
         expect(tsSection.textContent).not.toMatch(/⇌/)
@@ -531,7 +523,7 @@ describe("ReactionEntryPage -- transition-state dependency graph", () => {
     it("names the dependency graph centre node's own subject as a link inside the node, from the page's own served TS ref", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const tsSection = container.querySelector('section[aria-labelledby="ts-heading"]') as HTMLElement
         const centreNode = within(tsSection).getByTestId("dep-node-centre-calc_opt1")
         const subjectLink = within(centreNode).getByTestId("dep-node-subject-calc_opt1")
@@ -551,7 +543,7 @@ describe("ReactionEntryPage -- individual facts are wired, not hard-coded (mutat
     it("the header review pill reflects the entry's OWN served status, not a fixed 'approved'/'not reviewed'", async () => {
         handleFull(mockFull({ reaction_entry: { ...mockFull().reaction_entry, review: { status: "under_review" } } }))
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const header = container.querySelector(".record-identity-kicker-row")!
         expect(header.textContent).toContain("under review")
         expect(header.textContent).not.toContain("approved")
@@ -563,7 +555,7 @@ describe("ReactionEntryPage -- individual facts are wired, not hard-coded (mutat
             review_summary: { approved: 3, under_review: 5, not_reviewed: 7, deprecated: 11, rejected: 13, total: 39 },
         }))
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const reviewSection = container.querySelector('section[aria-labelledby="review-heading"]')!
         const rows = Array.from(reviewSection.querySelectorAll(".coverage-checklist > div")).map((row) => ({
             label: row.querySelector("dt")?.textContent,
@@ -589,7 +581,7 @@ describe("ReactionEntryPage -- individual facts are wired, not hard-coded (mutat
             review_summary: { approved: 3, under_review: 5, not_reviewed: 7, deprecated: 11, rejected: 13, total: 39 },
         }))
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const reviewSection = container.querySelector('section[aria-labelledby="review-heading"]')!
         const card = reviewSection.querySelector(".card.card--derived.coverage-card") as HTMLElement
         const rollup = card.querySelector(".coverage-checklist-summary") as HTMLElement
@@ -613,7 +605,7 @@ describe("ReactionEntryPage -- individual facts are wired, not hard-coded (mutat
     it("the Participants table's Species column renders each participant's own served SMILES, never blank", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const speciesCells = Array.from(container.querySelectorAll('td[data-label="Species"] code.data')).map((code) => code.textContent)
         expect(speciesCells).toEqual(["O", "[CH3]", "C", "[OH]"])
         expect(speciesCells.every((text) => text && text.length > 0)).toBe(true)
@@ -633,8 +625,8 @@ describe("ReactionEntryPage -- individual facts are wired, not hard-coded (mutat
             }],
         }))
         const { container } = page()
-        await screen.findByText("net_distinct1")
-        const row = Array.from(container.querySelectorAll("tr")).find((tr) => tr.textContent?.includes("net_distinct1"))!
+        await screen.findByRole("link", { name: "Network: Pressure-dependent network" })
+        const row = container.querySelector('td[data-label="Solve T range"]')!.closest("tr")!
         expect(row.querySelector('td[data-label="Solve T range"]')?.textContent).toBe("111–222 K")
         expect(row.querySelector('td[data-label="Solve P range"]')?.textContent).toBe("0.5–333 bar")
         expect(row.querySelector('td[data-label="Channels"]')?.textContent).toBe("17")
@@ -653,8 +645,8 @@ describe("ReactionEntryPage -- rounded temperature ranges", () => {
             }],
         }))
         const { container } = page()
-        await screen.findByText("net_rounded1")
-        const row = Array.from(container.querySelectorAll("tr")).find((tr) => tr.textContent?.includes("net_rounded1"))!
+        await screen.findByRole("link", { name: "Network: Pressure-dependent network" })
+        const row = container.querySelector('td[data-label="Solve T range"]')!.closest("tr")!
         expect(row.querySelector('td[data-label="Solve T range"]')?.textContent).toBe("111–222 K")
         expect(container.textContent).toContain("300–3000 K")
         expect(container.textContent).not.toContain("300.0000001")
@@ -669,7 +661,7 @@ describe("ReactionEntryPage -- kinetics card evidence prose and k(T) table forma
         record.parameters = { A: 9444750000, A_units: "per_s", n: 0, Ea_kj_mol: 0 }
         handleFull(mockFull({ kinetics: [record] }))
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const aRow = Array.from(container.querySelectorAll('section[aria-labelledby="kinetics-heading"] dt')).find((dt) => dt.textContent === "A")
         expect(aRow?.nextElementSibling?.textContent).toContain("9.4448×10⁹")
         expect(aRow?.nextElementSibling?.textContent).not.toContain("9444750000")
@@ -680,7 +672,7 @@ describe("ReactionEntryPage -- kinetics card evidence prose and k(T) table forma
         record.parameters = { A: 0.00234, A_units: "cm3_mol_s", n: 0, Ea_kj_mol: 0 }
         handleFull(mockFull({ kinetics: [record] }))
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const aRow = Array.from(container.querySelectorAll('section[aria-labelledby="kinetics-heading"] dt')).find((dt) => dt.textContent === "A")
         expect(aRow?.nextElementSibling?.textContent).toContain("2.3400×10⁻³")
     })
@@ -694,7 +686,7 @@ describe("ReactionEntryPage -- kinetics card evidence prose and k(T) table forma
         record.parameters = { A: 1e10, A_units: "cm3_mol_s", n: 2, Ea_kj_mol: 0, T0_k: 298.15 } as never
         handleFull(mockFull({ kinetics: [record] }))
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         expect(kineticsLabels(container)).toContain("T0")
         const t0 = Array.from(container.querySelectorAll('section[aria-labelledby="kinetics-heading"] dt')).find((dt) => dt.textContent === "T0")
         expect(t0?.nextElementSibling?.textContent).toContain("298.15")
@@ -706,7 +698,7 @@ describe("ReactionEntryPage -- kinetics card evidence prose and k(T) table forma
         record.parameters = { A: 1e10, A_units: "cm3_mol_s", n: 2, Ea_kj_mol: 0, T0_k: 1 } as never
         handleFull(mockFull({ kinetics: [record] }))
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         expect(kineticsLabels(container)).toContain("Ea")
         expect(kineticsLabels(container)).not.toContain("T0")
     })
@@ -714,7 +706,7 @@ describe("ReactionEntryPage -- kinetics card evidence prose and k(T) table forma
     it("evidence completeness rows render prose labels, not raw API keys", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const labels = Array.from(container.querySelectorAll('section[aria-labelledby="kinetics-heading"] .coverage-checklist dt')).map((dt) => dt.textContent)
         expect(labels).toEqual([
             "Source calculations",
@@ -735,7 +727,7 @@ describe("ReactionEntryPage -- kinetics card evidence prose and k(T) table forma
     it("the k(T) table header names the unit next to k, distinct from the T (K) column", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const headers = Array.from(container.querySelectorAll(".kinetics-k-table thead th")).map((th) => th.textContent)
         expect(headers).toEqual(["T (K)", "k (cm³ mol⁻¹ s⁻¹)", "log₁₀ k"])
     })
@@ -752,7 +744,7 @@ describe("ReactionEntryPage -- kinetics card evidence prose and k(T) table forma
     it("the k(T) table header is NOT uppercased -- 'k' must render lowercase, not as 'K'", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const headers = Array.from(container.querySelectorAll(".kinetics-k-table thead th"))
         expect(headers).toHaveLength(3)
         for (const th of headers) {
@@ -763,7 +755,7 @@ describe("ReactionEntryPage -- kinetics card evidence prose and k(T) table forma
     it("Fit software with no recorded version says so explicitly, matching the mock's own wording", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const fitSoftwareRow = Array.from(container.querySelectorAll('section[aria-labelledby="kinetics-heading"] dt'))
             .find((dt) => dt.textContent === "Fit software")
         expect(fitSoftwareRow?.nextElementSibling?.textContent).toBe("Arkane (version not recorded)")
@@ -779,10 +771,10 @@ describe("ReactionEntryPage -- kinetics card evidence prose and k(T) table forma
         // NOT added to `calculations[]` -- the live resolver-disagreement shape.
         handleFull(payload)
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const link = container.querySelector('a[href="/calculations/calc_unlinked_sp"]')
         expect(link).not.toBeNull()
-        expect(link!.textContent).toBe("calc_unlinked_sp")
+        expect(link!.textContent).toBe("Single-point energy")
         expect(container.textContent).toContain("not among the calculations this reaction entry's transition-state graph itself lists")
     })
 })
@@ -794,7 +786,7 @@ describe("ReactionEntryPage -- Participants table: the reference has its own col
     it("the Species cell carries only the linked SMILES/formula -- no ref, no copy button", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const speciesCells = Array.from(container.querySelectorAll('td[data-label="Species"]'))
         expect(speciesCells.length).toBeGreaterThan(0)
         for (const cell of speciesCells) {
@@ -810,7 +802,7 @@ describe("ReactionEntryPage -- Participants table: the reference has its own col
     it("MUTATION GUARD: the participant's own species_entry_ref never appears inside a Species cell", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const speciesCells = Array.from(container.querySelectorAll('td[data-label="Species"]'))
         for (const ref of ["spe_water", "spe_ch3", "spe_ch4", "spe_oh"]) {
             for (const cell of speciesCells) {
@@ -819,18 +811,15 @@ describe("ReactionEntryPage -- Participants table: the reference has its own col
         }
     })
 
-    it("carries a Ref column header, between Species and Review, carrying the ref and its copy button", async () => {
+    it("carries no Ref column: the headers are Species and Review, and no ref or copy button is in the table", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const table = container.querySelector('table[aria-label="Reactant participants"]') as HTMLElement
         const headers = Array.from(table.querySelectorAll("thead th")).map((th) => th.textContent)
-        expect(headers).toEqual(["Species", "Ref", "Review"])
-
-        const refCell = table.querySelector('td[data-label="Ref"]') as HTMLElement
-        expect(refCell).not.toBeNull()
-        expect(refCell.querySelector("code.data")?.textContent).toBe("spe_water")
-        expect(refCell.querySelector(".copy-button")).not.toBeNull()
+        expect(headers).toEqual(["Species", "Review"])
+        expect(table.querySelector(".copy-button")).toBeNull()
+        expect(table.textContent).not.toContain("spe_water")
     })
 
     // SMILES-leads-formula-in-brackets:
@@ -839,7 +828,7 @@ describe("ReactionEntryPage -- Participants table: the reference has its own col
     it("the Species cell leads with SMILES and brackets the formula after it", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const link = container.querySelector('td[data-label="Species"] a[href="/species-entries/spe_water"]')
         expect(link?.textContent).toBe("O (H2O)")
     })
@@ -862,7 +851,7 @@ describe("ReactionEntryPage -- Participants table: the reference has its own col
             },
         })
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const fact = Array.from(container.querySelectorAll(".record-identity-header dt")).find((el) => el.textContent === "Equation (as deposited)")
         expect(fact?.nextElementSibling?.textContent).toBe("CC=CC [Z isomer] -> CC=CC [E isomer]")
         const reactantCell = container.querySelector('table[aria-label="Reactant participants"] td[data-label="Species"]')
@@ -885,7 +874,7 @@ describe("ReactionEntryPage -- Participants table: the reference has its own col
             },
         })
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         expect(container.textContent).not.toContain("enantiomer")
     })
 
@@ -907,7 +896,7 @@ describe("ReactionEntryPage -- Participants table: the reference has its own col
             },
         })
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         expect(factText(container)).toBe("2 [H] -> [H][H]")
         const hero = container.querySelector("h1")?.textContent ?? ""
         expect(hero).toMatch(/^2 /)
@@ -917,16 +906,16 @@ describe("ReactionEntryPage -- Participants table: the reference has its own col
     it("a coefficient-one reaction shows no coefficients", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         expect(factText(container)).toBe("O + [CH3] <=> C + [OH]")
     })
 
-    it("every participant ref still appears exactly once outside References -- moved column, not a new/lost mention", async () => {
+    it("no participant ref is printed outside References", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         for (const ref of ["spe_water", "spe_ch3", "spe_ch4", "spe_oh"]) {
-            expect(occurrencesOutsideRefs(container, ref)).toBe(1)
+            expect(occurrencesOutsideRefs(container, ref)).toBe(0)
         }
     })
 })
@@ -943,7 +932,7 @@ describe("ReactionEntryPage -- evidence checklist: collapsible, and presence-onl
     it("the evidence card is collapsed by default", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const card = evidenceCard(container)
         const details = card.querySelector("details") as HTMLDetailsElement
         expect(details).not.toBeNull()
@@ -959,7 +948,7 @@ describe("ReactionEntryPage -- evidence checklist: collapsible, and presence-onl
     it("opening it shows every row", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const card = evidenceCard(container)
         fireEvent.click(card.querySelector("summary")!)
         const checklist = card.querySelector(".coverage-checklist") as HTMLElement
@@ -971,7 +960,7 @@ describe("ReactionEntryPage -- evidence checklist: collapsible, and presence-onl
     it("a present row with a real section on this page (Kinetics/TS entries) links to it", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const card = evidenceCard(container)
         fireEvent.click(card.querySelector("summary")!)
         const checklist = card.querySelector(".coverage-checklist") as HTMLElement
@@ -1002,7 +991,7 @@ describe("ReactionEntryPage -- evidence checklist: collapsible, and presence-onl
     it("MUTATION GUARD: 'none deposited' rows (Atom map with no atom maps) are never links", async () => {
         handleFull(mockFull({ reaction_entry: { ...mockFull().reaction_entry, atom_maps: [] } }))
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const card = evidenceCard(container)
         fireEvent.click(card.querySelector("summary")!)
         const checklist = card.querySelector(".coverage-checklist") as HTMLElement
@@ -1021,7 +1010,7 @@ describe("ReactionEntryPage -- evidence checklist: collapsible, and presence-onl
     it("a present row with no section on this page (Atom map, Path search, IRC evidence) stays plain -- never invents a target", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const card = evidenceCard(container)
         fireEvent.click(card.querySelector("summary")!)
         const checklist = card.querySelector(".coverage-checklist") as HTMLElement
@@ -1049,7 +1038,7 @@ describe("ReactionEntryPage -- evidence checklist: collapsible, and presence-onl
             }],
         }))
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const card = evidenceCard(container)
         fireEvent.click(card.querySelector("summary")!)
         const checklist = card.querySelector(".coverage-checklist") as HTMLElement
@@ -1080,7 +1069,7 @@ describe("ReactionEntryPage -- the References disclosure names every kinetics re
     it("lists the level, software and workflow-tool refs of every record, not only the first", async () => {
         handleFull(mockFull({ kinetics: [kineticsWithRefs(1), kineticsWithRefs(2)] }))
         const { container } = page()
-        await screen.findByText("kin_multi1")
+        await screen.findAllByText("Model kind")
 
         const refs = container.querySelector(".refs-disclosure")?.textContent ?? ""
         for (const n of [1, 2]) {
@@ -1095,7 +1084,7 @@ describe("ReactionEntryPage -- the References disclosure names every kinetics re
         const second = { ...kineticsWithRefs(2), provenance: { ...kineticsWithRefs(2).provenance, primary_level_of_theory: first.provenance.primary_level_of_theory } }
         handleFull(mockFull({ kinetics: [first, second] }))
         const { container } = page()
-        await screen.findByText("kin_multi1")
+        await screen.findAllByText("Model kind")
 
         const refs = container.querySelector(".refs-disclosure")?.textContent ?? ""
         expect(refs.split("lot_multi1").length - 1).toBe(1)
@@ -1122,9 +1111,9 @@ describe("ReactionEntryPage -- no depositor-typed text", () => {
         handleFull(value)
         page()
         // The fixture reached the page: the kinetics record, a participant ref and the network row rendered.
-        await screen.findByText("kin_test1")
-        expect(await screen.findByText("net_test1")).toBeVisible()
-        expect(screen.getAllByText("spe_water").length).toBeGreaterThan(0)
+        await screen.findAllByText("Model kind")
+        expect(await screen.findByRole("link", { name: "Network: Pressure-dependent network" })).toBeVisible()
+        expect(document.querySelector('a[href="/species-entries/spe_water"]')).not.toBeNull()
 
         expectNoDepositorText()
         expectNoAdversarialText()
@@ -1137,7 +1126,7 @@ describe("ReactionEntryPage -- kinetics literature (depositor text guard)", () =
         ;(payload.kinetics as Array<{ provenance: Record<string, unknown> }>)[0].provenance.literature = literature
         handleFull(payload)
         page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         // The fixture reached the page: the Literature row rendered.
         return screen.getByText("Literature", { selector: "dt" }).nextElementSibling?.textContent
     }
@@ -1173,8 +1162,8 @@ describe("ReactionEntryPage -- electronic-state labels and term symbols", () => 
     it("shows a grammar-valid state label and term symbol beside the participant (T1, X ²Π)", async () => {
         handleFull(withState({ electronic_state_label: "T1", term_symbol: "X ²Π" }))
         page()
-        await screen.findByText("kin_test1")
-        const row = screen.getAllByText("spe_water").map((node) => node.closest("tr")).find(Boolean) as HTMLElement
+        await screen.findAllByText("Model kind")
+        const row = document.querySelector('td[data-label="Species"] a[href="/species-entries/spe_water"]')!.closest("tr") as HTMLElement
         expect(row).toHaveTextContent("excited state, state T1, X ²Π")
         // The word `state` keeps a bare state letter from reading as a stereo descriptor.
         expect(document.body.textContent).not.toMatch(/\bT1 (isomer|enantiomer)/)
@@ -1183,8 +1172,8 @@ describe("ReactionEntryPage -- electronic-state labels and term symbols", () => 
     it("hides a label or term symbol outside the grammar, including a typed stereo letter (the hide-invalid path)", async () => {
         handleFull(withState({ electronic_state_label: "R", term_symbol: "DEPOSITOR_SENTINEL_term" }))
         page()
-        await screen.findByText("kin_test1")
-        const row = screen.getAllByText("spe_water").map((node) => node.closest("tr")).find(Boolean) as HTMLElement
+        await screen.findAllByText("Model kind")
+        const row = document.querySelector('td[data-label="Species"] a[href="/species-entries/spe_water"]')!.closest("tr") as HTMLElement
         expect(row).toHaveTextContent("excited state")
         expect(row.textContent).not.toMatch(/state R|enantiomer/)
         expectNoDepositorText()
@@ -1226,7 +1215,7 @@ describe("ReactionEntryPage -- the energy hill, the scheme and the numbers", () 
         handleFull(mockFull())
         handleSideReads(profileRead)
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const section = await waitFor(() => {
             const found = container.querySelector('section[aria-labelledby="energy-heading"]') as HTMLElement
             expect(within(found).getByRole("group", { name: /Energy relative to the reactants/ })).toBeInTheDocument()
@@ -1241,19 +1230,19 @@ describe("ReactionEntryPage -- the energy hill, the scheme and the numbers", () 
     it("states the numbers' order, words the record codes and gives each record a source line", async () => {
         handleFull(mockFull())
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const section = container.querySelector('section[aria-labelledby="kinetics-heading"]') as HTMLElement
         expect(within(section).getByRole("heading", { name: "Numbers for this entry" })).toBeInTheDocument()
         expect(section).toHaveTextContent("Listed approved first, then newest deposited first. This order is not a recommendation.")
         expect(within(section).getAllByRole("link").filter((anchor) => /3025\.44|3\.11242|39\.9711/.test(anchor.textContent ?? ""))).toHaveLength(0)
-        expect(section.querySelector(".value-source")).toHaveTextContent("Source kin_test1")
+        expect(section.querySelector(".value-source")).toHaveTextContent("Source Rate record")
         expect(section.querySelector(".value-source")).toHaveTextContent("Review of this record: not reviewed")
     })
 
     it("spells the equation out for a screen reader and links each molecule of the scheme", async () => {
         handleFull(mockFull())
         page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const scheme = screen.getByRole("group", { name: "H2O plus CH3 reacts reversibly with CH4 plus HO" })
         expect(within(scheme).getAllByRole("link")).toHaveLength(4)
     })
@@ -1261,7 +1250,7 @@ describe("ReactionEntryPage -- the energy hill, the scheme and the numbers", () 
     it("has breadcrumbs through the reaction, a review word and a lede built from codes", async () => {
         handleFull(mockFull())
         page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" })
         expect(within(crumbs).getByRole("link", { name: "Reactions" })).toHaveAttribute("href", "/reactions")
         expect(crumbs.querySelector('a[href="/reactions/rxn_test1"]')).not.toBeNull()
@@ -1274,7 +1263,7 @@ describe("ReactionEntryPage -- the energy hill, the scheme and the numbers", () 
         handleFull(mockFull())
         handleSideReads(profileRead)
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         await waitFor(() => expect(container.querySelector(".energy-profile-definition")).not.toBeNull())
         const clone = container.cloneNode(true) as HTMLElement
         expect(rankingWords(textOf(clone))).toEqual(["lowest"])
@@ -1319,8 +1308,8 @@ describe("ReactionEntryPage -- the energy hill, the scheme and the numbers", () 
             http.get("/api/v1/scientific/geometries/geom_ts1", () => HttpResponse.json(geometry)),
         )
         const { container } = page()
-        await screen.findByText("kin_test1")
-        const link = await screen.findByRole("link", { name: "Picture and 3D view of tse_test1" })
+        await screen.findAllByText("Model kind")
+        const link = await screen.findByRole("link", { name: "Picture and 3D view of transition state" })
         expect(link).toHaveAttribute("href", "/transition-state-entries/tse_test1")
         expect(container.querySelector("svg.mol-poster")).toBeNull()
         expect(requested).toEqual([])
@@ -1333,7 +1322,7 @@ describe("ReactionEntryPage -- the energy hill, the scheme and the numbers", () 
         const base = mockFull()
         handleFull(mockFull({ kinetics: [{ ...base.kinetics[0], model_kind: "troe", scientific_origin: "estimated", tunneling_model: "sct" }, { ...base.kinetics[0], kinetics_ref: "kin_test2", model_kind: "new_kind" }] }))
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const section = container.querySelector('section[aria-labelledby="kinetics-heading"]') as HTMLElement
         const dd = (label: string) => Array.from(section.querySelectorAll("dt")).filter((dt) => dt.textContent === label).map((dt) => dt.nextElementSibling)
         expect(dd("Model kind")[0]).toHaveTextContent("Troe falloff")
@@ -1347,7 +1336,7 @@ describe("ReactionEntryPage -- the energy hill, the scheme and the numbers", () 
         handleFull(mockFull())
         page()
         const h1 = await screen.findByRole("heading", { level: 1 })
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         expect(h1.textContent).not.toMatch(/\[CH3\]|\[OH\]/)
     })
 
@@ -1358,7 +1347,7 @@ describe("ReactionEntryPage -- the energy hill, the scheme and the numbers", () 
             products: [{ ...base.species.products[0], species_entry_ref: "spe_e", smiles: "C/C=C/C", formula: "C4H8" }],
         } }))
         page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const ambiguous = screen.getByRole("heading", { level: 1 })
         expect(ambiguous.textContent).toContain("C/C=C\\C")
         expect(ambiguous.textContent).toContain("C/C=C/C")
@@ -1368,7 +1357,7 @@ describe("ReactionEntryPage -- the energy hill, the scheme and the numbers", () 
         const base = mockFull()
         handleFull(mockFull({ transition_states: [{ ...base.transition_states[0], status: "rejected" }] }))
         const { container } = page()
-        await screen.findByText("kin_test1")
+        await screen.findAllByText("Model kind")
         const stages = container.querySelector(".reaction-ts-stages") as HTMLElement
         expect(stages).toHaveTextContent("rejected")
         expect(stages.querySelectorAll("li")).toHaveLength(0)

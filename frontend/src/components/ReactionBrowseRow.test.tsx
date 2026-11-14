@@ -212,13 +212,12 @@ describe("ReactionBrowseRow: has-kinetics / has-transition-state pills, read fro
 // (`reaction_ref`) sits in the data face, outside any anchor, so a
 // drag-select over it does not start a link drag.
 describe("ReactionBrowseRow: ref, link targets, and the stretched-link/selectable-ref split", () => {
-    it("renders the reaction (identity) ref in a code.data element", () => {
-        renderRow(record({ reaction_ref: "rxn_specific" }))
+    it("prints neither the reaction ref nor the entry ref, and has no .browse-ref element", () => {
+        renderRow(record({ reaction_ref: "rxn_specific", reaction_entry_ref: "rxe_specific" }))
         const row = document.querySelector(".reaction-browse-row") as HTMLElement
-        const ref = within(row).getByText("rxn_specific")
-        expect(ref.tagName).toBe("CODE")
-        expect(ref).toHaveClass("browse-ref")
-        expect(ref).toHaveClass("data")
+        expect(within(row).queryByText("rxn_specific")).toBeNull()
+        expect(row.textContent).not.toMatch(/rxn_specific|rxe_specific/)
+        expect(row.querySelector(".browse-ref")).toBeNull()
     })
 
     // MUTATION CHECK: pointing the title back at
@@ -235,7 +234,7 @@ describe("ReactionBrowseRow: ref, link targets, and the stretched-link/selectabl
     it("a second link still reaches the one deposit this row represents, at /reaction-entries/:reaction_entry_ref", () => {
         renderRow(record({ reaction_entry_ref: "rxe_specific", reaction_ref: "rxn_other" }))
         const row = document.querySelector(".reaction-browse-row") as HTMLElement
-        const entryLink = within(row).getByRole("link", { name: "View this deposit" })
+        const entryLink = within(row).getByRole("link", { name: /^View this deposit, / })
         expect(entryLink).toHaveAttribute("href", "/reaction-entries/rxe_specific")
     })
 
@@ -246,16 +245,18 @@ describe("ReactionBrowseRow: ref, link targets, and the stretched-link/selectabl
         renderRow(record())
         const row = document.querySelector(".reaction-browse-row") as HTMLElement
         const title = within(row).getByRole("link", { name: /reacts reversibly with/ })
-        const entryLink = within(row).getByRole("link", { name: "View this deposit" })
+        const entryLink = within(row).getByRole("link", { name: /^View this deposit, / })
         expect(title.contains(entryLink)).toBe(false)
         expect(entryLink.contains(title)).toBe(false)
     })
 
-    it("the reaction ref text does NOT sit inside any anchor -- a drag-select over it cannot start a link drag", () => {
-        renderRow(record({ reaction_ref: "rxn_specific" }))
+    it("the entry link's accessible name carries the equation in words, so two rows are told apart without a ref", () => {
+        renderRow(record({ reaction_entry_ref: "rxe_specific" }))
         const row = document.querySelector(".reaction-browse-row") as HTMLElement
-        const ref = within(row).getByText("rxn_specific")
-        expect(ref.closest("a")).toBeNull()
+        const entryLink = within(row).getByRole("link", { name: /^View this deposit, / })
+        expect(entryLink.textContent).toBe("View this deposit")
+        expect(entryLink.getAttribute("aria-label")).toContain("CH3")
+        expect(entryLink.getAttribute("aria-label")).not.toContain("rxe_specific")
     })
 
     // `aria-label={record.equation ?? undefined}` on the link would be

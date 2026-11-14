@@ -337,9 +337,7 @@ function SiblingRow({ sibling, currentStatus }: { sibling: SiblingObservation; c
     const statusDiffers = core.review.status !== currentStatus
     return (
         <li>
-            <Link to={`/conformer-observations/${core.conformer_observation_ref}`}>
-                {core.conformer_observation_ref}
-            </Link>
+            <RecordLink kind="conformer-observation" to={`/conformer-observations/${core.conformer_observation_ref}`} label="Another observation" />
             {statusDiffers && <>{" "}<ReviewChip status={core.review.status} explain={false} /></>}
         </li>
     )

@@ -204,32 +204,38 @@ function mockResponse(records = mockRecords()) {
     }
 }
 
+/** The card of a record, found by the id of its own heading. */
+function cardOf(ref: string): HTMLElement {
+    const heading = document.getElementById(`statmech-heading-${ref}`)
+    if (!heading) throw new Error(`No card heading for ${ref}`)
+    return heading.closest("article") as HTMLElement
+}
+
+/** The record row of a group table, found by its number. */
+function groupRow(table: HTMLElement, position: number): HTMLElement {
+    const cell = Array.from(table.querySelectorAll('td[data-label="Record"]')).find((candidate) => candidate.textContent === `Record ${position}`)
+    if (!cell) throw new Error(`No row for Record ${position}`)
+    return cell.closest("tr") as HTMLElement
+}
+
 describe("EntryStatmechSection", () => {
     it("renders every deposited record independently, without merging or picking one", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
         await screen.findByText("sm_one")
-        // Scoped to `code` (the primary card's own ref, in its heading):
-        // once the eager `source_calculations` include resolves, the
-        // "Source calculations" disclosure -- native `<details>`, present
-        // in the DOM whether expanded or not -- ALSO renders each record's
-        // own ref (`StatmechLazySection`'s row heading, a `<span
-        // class="data">`, not `<code>`). An unscoped `getByText("sm_one")`
-        // is timing-dependent on whether that fetch has resolved yet; this
-        // selector is not.
-        expect(screen.getByText("sm_one", { selector: "code" })).toBeVisible()
-        expect(screen.getByText("sm_two", { selector: "code" })).toBeVisible()
+        // Each record is its own card, found by its heading id; the ref itself
+        // is in the card's collapsed references.
+        expect(cardOf("sm_one")).toBeVisible()
+        expect(cardOf("sm_two")).toBeVisible()
+        expect(within(cardOf("sm_one")).getByText("sm_one")).toBeInTheDocument()
+        expect(within(cardOf("sm_one")).getByText("sm_one")).not.toBeVisible()
     })
 
     it("never hides a superseded record, and never swaps the direction of the correction pointer", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
         await screen.findByText("sm_two")
-        // See the `{ selector: "code" }` note above -- the eager
-        // `source_calculations` fetch can add a second "sm_two"/"sm_one"
-        // match (inside the hidden-but-present "Source calculations"
-        // disclosure) before this runs.
-        const twoCard = screen.getByText("sm_two", { selector: "code" }).closest("article") as HTMLElement
+        const twoCard = cardOf("sm_two")
         expect(within(twoCard).getByText("Superseded")).toBeVisible()
         // Position-bound: superseded_by must be the ref in the "replaced
         // by" sentence, current must be the ref in the "current record in
@@ -239,7 +245,7 @@ describe("EntryStatmechSection", () => {
         expect(codeAfter(twoCard, "replaced by")).toBe("sm_two_v2")
         expect(codeAfter(twoCard, "current record in this chain is")).toBe("sm_two_v3")
 
-        const oneCard = screen.getByText("sm_one", { selector: "code" }).closest("article") as HTMLElement
+        const oneCard = cardOf("sm_one")
         expect(within(oneCard).queryByText("Superseded")).not.toBeInTheDocument()
     })
 
@@ -349,7 +355,7 @@ describe("EntryStatmechSection", () => {
         expect(within(card).queryByText("Scale factor software")).not.toBeInTheDocument()
     })
 
-    it("renders a categorical value (scale kind) as a pill, and an identifier (the scale factor's own ref) as plain text, never the reverse", async () => {
+    it("renders a categorical value (scale kind) as a pill, and the scale factor's page as a words-only link, never the reverse", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
             baseRecord({
                 frequency_scale_factor: {
@@ -369,16 +375,13 @@ describe("EntryStatmechSection", () => {
         const scaleKindPill = within(card).getByText("fundamental")
         expect(scaleKindPill).toHaveClass("value-pill")
 
-        // The identifier (the scale factor's own ref) renders as plain
-        // monospace text, inside a `<code>` element (now a link into its
-        // own `/methods/frequency-scale-factors/:fsfRef` page)
-        // -- never inside a `.value-pill`.
-        const refDd = ddFor(card, "Frequency scale factor ref")
-        expect(refDd).toBe("fsf_pill_check")
-        const refLink = within(card).getByRole("link", { name: "fsf_pill_check" })
+        // The scale factor's own page is a link named in words; its ref is not printed.
+        expect(Array.from(card.querySelectorAll("dt")).some((el) => el.textContent === "Frequency scale factor ref")).toBe(false)
+        expect(ddFor(card, "Frequency scale factor page")).toBe("Frequency scale factor")
+        const refLink = within(card).getByRole("link", { name: "Scheme: Frequency scale factor" })
         expect(refLink).toHaveAttribute("href", "/methods/frequency-scale-factors/fsf_pill_check")
-        expect(refLink.closest("code")).not.toBeNull()
         expect(refLink).not.toHaveClass("value-pill")
+        expect(card.textContent).not.toContain("fsf_pill_check")
     })
 
     it("renders an available on-demand section as idle until opened, and fetches exactly its own token once -- unlike source_calculations and frequencies, which now load eagerly", async () => {
@@ -434,13 +437,13 @@ describe("EntryStatmechSection", () => {
         // sm_one's own row within the Torsions section reports "not
         // present" (its own available_sections.has_torsions is false),
         // never sm_two's torsion row.
-        const oneRow = within(section).getByText("sm_one").closest("div.science-record") as HTMLElement
+        const [oneRow, twoRow] = Array.from(section.querySelectorAll("div.science-record")) as HTMLElement[]
         expect(within(oneRow).getByText("Not present for this record.")).toBeVisible()
         expect(within(oneRow).queryByText("hindered rotor")).not.toBeInTheDocument()
 
-        const twoRow = within(section).getByText("sm_two").closest("div.science-record") as HTMLElement
         expect(within(twoRow).getByText("hindered rotor")).toBeVisible()
-        expect(within(twoRow).getByText("calc_scan_1")).toBeVisible()
+        expect(twoRow.querySelector('a[href="/calculations/calc_scan_1"]')).not.toBeNull()
+        expect(twoRow.textContent).not.toContain("calc_scan_1")
     })
 
     it("renders invalidated_reason as its own column, never silently dropped — a torsion the archive marked invalid must not look identical to a sound one", async () => {
@@ -483,8 +486,8 @@ describe("EntryStatmechSection", () => {
 
         const table = within(section).getByRole("table", { name: "Torsions" })
         const rows = within(table).getAllByRole("row").slice(1)
-        const soundRow = rows.find((row) => within(row).queryByText("calc_scan_sound"))!
-        const invalidRow = rows.find((row) => within(row).queryByText("calc_scan_bad"))!
+        const soundRow = rows.find((row) => row.querySelector('a[href="/calculations/calc_scan_sound"]'))!
+        const invalidRow = rows.find((row) => row.querySelector('a[href="/calculations/calc_scan_bad"]'))!
         // Column-scoped, not row-scoped: binds each value to its OWN
         // column via `data-label`, so a Top<->Invalidated column swap
         // (values transposed, headers untouched) is caught, not just a
@@ -539,12 +542,13 @@ describe("EntryStatmechSection", () => {
         }))
         page()
         await screen.findByText("sm_one")
-        const links = await screen.findAllByRole("link", { name: /calc_for_/ })
-        expect(links.map((link) => link.textContent).sort()).toEqual(["calc_for_one", "calc_for_two"])
-        const cards = screen.getAllByRole("article")
-        const first = cards.find((card) => within(card).queryByText("sm_one", { selector: "code" }))!
-        expect(within(first).getByRole("link", { name: "calc_for_one" })).toBeInTheDocument()
-        expect(within(first).queryByRole("link", { name: "calc_for_two" })).toBeNull()
+        await waitFor(() => expect(document.querySelectorAll('a[href^="/calculations/calc_for_"]')).toHaveLength(2))
+        const links = Array.from(document.querySelectorAll('a[href^="/calculations/calc_for_"]'))
+        expect(links.map((link) => link.getAttribute("href")).sort()).toEqual(["/calculations/calc_for_one", "/calculations/calc_for_two"])
+        for (const link of links) expect(link.textContent).toBe("Optimisation")
+        const first = cardOf("sm_one")
+        expect(first.querySelector('a[href="/calculations/calc_for_one"]')).not.toBeNull()
+        expect(first.querySelector('a[href="/calculations/calc_for_two"]')).toBeNull()
         expect(within(first).getByText("Assumed default")).toBeInTheDocument()
         expect(within(first).getAllByText("No calculation linked")).toHaveLength(2)
     })
@@ -730,7 +734,7 @@ describe("EntryStatmechSection conformer-scoped attribution", () => {
         // as a plain (ungrouped) card -- never the "N records with
         // identical values" wrapper a same-bucket duplicate would get.
         const primaryGroup = screen.getByRole("heading", { name: "From Conformer Group 1" }).closest(".conformer-evidence-group") as HTMLElement
-        expect(within(primaryGroup).getByText("sm_g1")).toBeVisible()
+        expect(within(primaryGroup).getByText("sm_g1")).toBeInTheDocument()
         expect(within(primaryGroup).queryByText("sm_g2")).not.toBeInTheDocument()
         expect(within(primaryGroup).queryByText(/records with identical values/)).not.toBeInTheDocument()
 
@@ -858,8 +862,9 @@ describe("EntryStatmechSection: frequencies render on the card by default", () =
         page()
         const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
         // No click, no expand -- present as soon as the card renders.
-        const link = await within(card).findByRole("link", { name: "calc_freq_1" })
+        const link = await within(card).findByRole("link", { name: "Calculation: Frequency calculation" })
         expect(link).toHaveAttribute("href", "/calculations/calc_freq_1")
+        expect(card.textContent).not.toContain("calc_freq_1")
         // The "Frequencies" heading lives on the CARD now (inside the
         // `<article>`), not behind a global "Expand to load this section"
         // `<details>` disclosure the way the other five lazy sections are.
@@ -896,7 +901,7 @@ describe("EntryStatmechSection: frequencies render on the card by default", () =
         const oneCard = (await screen.findByText("sm_one")).closest("article") as HTMLElement
         const twoCard = (await screen.findByText("sm_two")).closest("article") as HTMLElement
         // Positive wait: proves the shared frequencies fetch has resolved.
-        await within(twoCard).findByRole("link", { name: "calc_freq_2" })
+        await within(twoCard).findByRole("link", { name: "Calculation: Frequency calculation" })
         // Only now is sm_one's absence a real assertion about the gate,
         // not an accident of timing.
         expect(within(oneCard).queryByText("Source frequency calculations")).not.toBeInTheDocument()
@@ -920,7 +925,7 @@ describe("EntryStatmechSection: frequencies render on the card by default", () =
         }))
         page()
         const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
-        await within(card).findByRole("link", { name: "calc_freq_1" })
+        await within(card).findByRole("link", { name: "Calculation: Frequency calculation" })
         expect(screen.queryByText(/\/api\/v1\//)).not.toBeInTheDocument()
         expect(screen.queryByText(/include=freq_modes/)).not.toBeInTheDocument()
         expect(screen.queryByText(/fetch the full array/)).not.toBeInTheDocument()
@@ -952,7 +957,7 @@ describe("EntryStatmechSection: identical-value records group under one card", (
         ]
     }
 
-    it("groups records reporting identical point group, symmetry, and scale factor under one card, listing every ref", async () => {
+    it("groups records reporting identical point group, symmetry, and scale factor under one card, listing every record by number", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse(identicalClones()))))
         page()
         await screen.findByText("3 records with identical values")
@@ -963,9 +968,11 @@ describe("EntryStatmechSection: identical-value records group under one card", (
         expect(ownHeadingRow.querySelector("h3")?.textContent).toBe("computed statmech record")
 
         const refsTable = within(groupCard).getByRole("table", { name: "Records sharing these identical values" })
-        expect(within(refsTable).getByText("sm_g1")).toBeVisible()
-        expect(within(refsTable).getByText("sm_g2")).toBeVisible()
-        expect(within(refsTable).getByText("sm_g3")).toBeVisible()
+        expect(within(refsTable).getAllByRole("columnheader")[0]).toHaveTextContent("Record")
+        expect(within(refsTable).getByText("Record 1")).toBeVisible()
+        expect(within(refsTable).getByText("Record 2")).toBeVisible()
+        expect(within(refsTable).getByText("Record 3")).toBeVisible()
+        expect(refsTable.textContent).not.toMatch(/sm_g/)
     })
 
     // An eighth column ("Workflow tool") would clip at
@@ -1019,8 +1026,9 @@ describe("EntryStatmechSection: identical-value records group under one card", (
         await screen.findByText("3 records with identical values")
         const refsTable = screen.getByRole("table", { name: "Records sharing these identical values" })
         const rows = within(refsTable).getAllByRole("row").slice(1)
-        const g1Row = rows.find((row) => within(row).queryByText("sm_g1"))!
-        const g3Row = rows.find((row) => within(row).queryByText("sm_g3"))!
+        expect(rows.length).toBeGreaterThan(0)
+        const g1Row = groupRow(refsTable, 1)
+        const g3Row = groupRow(refsTable, 3)
         expect(provenanceRowFor(g1Row).textContent).toContain("Software: not recorded")
         expect(provenanceRowFor(g3Row).textContent).toContain("Software: Arkane")
     })
@@ -1033,8 +1041,8 @@ describe("EntryStatmechSection: identical-value records group under one card", (
         expect(detail.open).toBe(false)
         const memberCards = within(detail).getAllByRole("article") as HTMLElement[]
         expect(memberCards).toHaveLength(3)
-        const memberRefs = memberCards.map((card) => card.querySelector("code")?.textContent)
-        expect(memberRefs.sort()).toEqual(["sm_g1", "sm_g2", "sm_g3"])
+        const memberIds = memberCards.map((card) => card.querySelector("h3")?.id)
+        expect(memberIds.sort()).toEqual(["statmech-heading-sm_g1", "statmech-heading-sm_g2", "statmech-heading-sm_g3"])
         fireEvent.click(screen.getByText("Show all 3 records individually"))
         expect(detail.open).toBe(true)
     })
@@ -1057,16 +1065,8 @@ describe("EntryStatmechSection: identical-value records group under one card", (
         page()
         await screen.findByText("sm_one")
         expect(screen.queryByText(/records with identical values/)).not.toBeInTheDocument()
-        // Scoped to `code.data` (the primary card's own ref, in its
-        // heading): once the eager `source_calculations` include resolves,
-        // the "Source calculations" disclosure -- native `<details>`,
-        // present in the DOM whether expanded or not -- also renders each
-        // record's own ref (`StatmechLazySection`'s row heading, a `<span
-        // class="data">`, not `<code>`). An unscoped `getByText("sm_one")`
-        // is timing-dependent on whether that fetch has resolved yet; this
-        // selector is not.
-        expect(screen.getByText("sm_one", { selector: "code" })).toBeVisible()
-        expect(screen.getByText("sm_two", { selector: "code" })).toBeVisible()
+        expect(cardOf("sm_one")).toBeVisible()
+        expect(cardOf("sm_two")).toBeVisible()
     })
 
     /**
@@ -1112,13 +1112,17 @@ describe("EntryStatmechSection: identical-value records group under one card", (
         // Reachable WITHOUT expanding "Show all".
         expect(detail.contains(refsTable)).toBe(false)
 
-        for (const suffix of ["g1", "g2", "g3"]) {
+        await waitFor(() => expect(refsTable.querySelectorAll('td[data-label="Opt calc"] a')).toHaveLength(3))
+        for (const [index, suffix] of ["g1", "g2", "g3"].entries()) {
             const ref = `sm_${suffix}`
-            const row = (await within(refsTable).findAllByRole("row")).find((r) => within(r).queryByText(ref))!
-            expect(cellAt(row, "Opt calc")).toBe(`calc_${ref}_opt`)
-            expect(cellAt(row, "Freq calc")).toBe(`calc_${ref}_freq`)
-            expect(cellAt(row, "SP calc")).toBe(`calc_${ref}_sp`)
-            expect(cellAt(row, "Source freq calcs")).toBe(`calc_${ref}_freqcalc`)
+            const row = groupRow(refsTable, index + 1)
+            expect(cellAt(row, "Opt calc")).toBe("Optimisation")
+            expect(cellAt(row, "Freq calc")).toBe("Frequency calculation")
+            expect(cellAt(row, "SP calc")).toBe("Single-point energy")
+            expect(cellAt(row, "Source freq calcs")).toBe("Frequency calculation")
+            const hrefs = Array.from(row.querySelectorAll("a")).map((link) => link.getAttribute("href"))
+            expect(hrefs).toEqual([`/calculations/calc_${ref}_opt`, `/calculations/calc_${ref}_freq`, `/calculations/calc_${ref}_sp`, `/calculations/calc_${ref}_freqcalc`])
+            expect(row.textContent).not.toMatch(/calc_|sm_/)
         }
 
         // The shared body (outside the table, outside "Show all") never
@@ -1284,16 +1288,18 @@ describe("EntryStatmechSection: conformer context & review history fold into one
 
         fireEvent.click(summary)
         const table = await screen.findByRole("table", { name: "Conformer context and review history" })
-        for (const ref of ["sm_one", "sm_two"]) {
-            const matches = within(table).getAllByText(ref)
+        for (const label of ["Record 1", "Record 2"]) {
+            const matches = within(table).getAllByText(label)
             expect(matches).toHaveLength(1)
         }
+        expect(table.textContent).not.toMatch(/sm_/)
         const rows = within(table).getAllByRole("row").slice(1)
         expect(rows).toHaveLength(2)
-        // The cell shows the conformer group's own ref, never the
-        // depositor's own `label` (e.g. "conformer_1") -- no depositor-typed
-        // labels on public pages.
-        expect(cellAt(rows[0], "Conformer")).toContain("cg_one")
+        // The cell names the conformer group in words, never the ref and
+        // never the depositor's own `label` (e.g. "conformer_1") -- no
+        // depositor-typed labels on public pages.
+        expect(cellAt(rows[0], "Conformer")).toContain("Conformer group 1")
+        expect(cellAt(rows[0], "Conformer")).not.toContain("cg_one")
         expect(cellAt(rows[0], "Conformer")).not.toContain("conformer_1")
         expect(cellAt(rows[0], "Review")).toBe("not reviewed")
     })
@@ -1327,8 +1333,9 @@ describe("EntryStatmechSection: conformer context & review history fold into one
         const table = await screen.findByRole("table", { name: "Conformer context and review history" })
         const rows = within(table).getAllByRole("row").slice(1)
         expect(rows).toHaveLength(1)
-        expect(cellAt(rows[0], "Conformer")).toContain("cg_one")
-        expect(cellAt(rows[0], "Conformer")).toContain("cg_two")
+        expect(cellAt(rows[0], "Conformer")).toContain("Conformer group 1")
+        expect(cellAt(rows[0], "Conformer")).toContain("Conformer group 2")
+        expect(cellAt(rows[0], "Conformer")).not.toMatch(/cg_/)
         expect(cellAt(rows[0], "Conformer")).not.toContain("conformer_1")
         expect(cellAt(rows[0], "Conformer")).not.toContain("conformer_2")
         expect(cellAt(rows[0], "Review")).toContain("not reviewed")
@@ -1519,14 +1526,14 @@ describe("EntryStatmechSection -- geometry/frequency/energy levels of theory", (
             // eager fetch to land (an opt-calc ref this table's "Opt calc"
             // column only shows once `sourceCalcsState` is ready) before
             // reading which level-of-theory column layout it settled on.
-            await within(refsTable).findByText("calc_opt_g3")
+            await waitFor(() => expect(groupRow(refsTable, 3).querySelector('a[href="/calculations/calc_opt_g3"]')).not.toBeNull())
 
             const headers = within(refsTable).getAllByRole("columnheader").map((cell) => cell.textContent)
             expect(headers).toEqual(expect.arrayContaining(["Geometry", "Frequencies", "Energy"]))
             expect(headers).not.toContain("Level of theory")
-            const g3Row = within(refsTable).getByText("sm_g3").closest("tr") as HTMLElement
+            const g3Row = groupRow(refsTable, 3)
             expect(cellAt(g3Row, "Energy")).toContain("ccsd(t)/cc-pvtz")
-            const g1Row = within(refsTable).getByText("sm_g1").closest("tr") as HTMLElement
+            const g1Row = groupRow(refsTable, 1)
             expect(cellAt(g1Row, "Energy")).toContain("b3lyp/def2tzvp")
 
             // The group's own shared body (everything above "Records in this
@@ -1571,9 +1578,9 @@ describe("EntryStatmechSection -- geometry/frequency/energy levels of theory", (
             const headers = within(refsTable).getAllByRole("columnheader").map((cell) => cell.textContent)
             expect(headers).toEqual(expect.arrayContaining(["Geometry", "Frequencies", "Energy"]))
 
-            const g1Row = within(refsTable).getByText("sm_g1").closest("tr") as HTMLElement
-            const g2Row = within(refsTable).getByText("sm_g2").closest("tr") as HTMLElement
-            const g3Row = within(refsTable).getByText("sm_g3").closest("tr") as HTMLElement
+            const g1Row = groupRow(refsTable, 1)
+            const g2Row = groupRow(refsTable, 2)
+            const g3Row = groupRow(refsTable, 3)
             expect(cellAt(g1Row, "Energy")).toContain("single point on the optimised geometry")
             expect(cellAt(g2Row, "Energy")).toContain("single point on the optimised geometry")
             expect(cellAt(g3Row, "Energy")).toContain("single point on the optimised geometry")
@@ -1603,7 +1610,7 @@ describe("EntryStatmechSection -- geometry/frequency/energy levels of theory", (
             // own note on this).
             await within(refsTable).findAllByText("ccsd(t)/cc-pvtz")
 
-            const g1Row = within(refsTable).getByText("sm_g1").closest("tr") as HTMLElement
+            const g1Row = groupRow(refsTable, 1)
             const energyCell = g1Row.querySelector('td[data-label="Energy"]') as HTMLElement
             expect(within(energyCell).getByText("ambiguous")).toHaveClass("value-pill", "value-pill--muted")
             expect(energyCell).not.toHaveTextContent("not recorded")
@@ -1662,7 +1669,7 @@ describe("EntryStatmechSection -- no depositor-typed text", () => {
         await within(section).findByText("Torsions loaded.")
         // The fixture reached the page: the torsion rows and both records rendered, the typed point group as "not shown".
         expect(within(section).getAllByRole("row").length).toBeGreaterThan(1)
-        expect(screen.getAllByText("sm_two").length).toBeGreaterThan(0)
+        expect(cardOf("sm_two")).toBeInTheDocument()
         expect(screen.getAllByText("not shown").length).toBeGreaterThan(0)
 
         expectNoDepositorText()

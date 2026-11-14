@@ -31,8 +31,11 @@ function page(observations: ConformerProjection["observations"], spEnergies: Spe
 
 // A cell's own DOM row -- lets an assertion bind a value to the OBSERVATION
 // it belongs to, not just assert the value appears somewhere on the page.
+const OBSERVATION_LINK = "Conformer observation: Observation"
+
 function rowFor(observationRef: string): HTMLElement {
-    const cell = screen.getByRole("link", { name: observationRef })
+    const cell = document.querySelector(`a[href="/conformer-observations/${observationRef}"]`)
+    if (!cell) throw new Error(`no observation link for ${observationRef}`)
     return cell.closest("tr") as HTMLElement
 }
 
@@ -50,7 +53,10 @@ describe("ConformerSinglePointTab", () => {
         expect(headers).toEqual(["Observation", "Calculation", "Energy", "Level of theory", "Software"])
 
         const row = rowFor("co_1")
-        expect(within(row).getByRole("link", { name: "calc_sp_1" })).toBeVisible()
+        const calculationLink = within(row).getByRole("link", { name: "Calculation" })
+        expect(calculationLink).toBeVisible()
+        expect(calculationLink).toHaveAttribute("href", "/calculations/calc_sp_1")
+        expect(row.textContent).not.toMatch(/co_1|calc_sp_1/)
         expect(within(row).getByText(/-78\.623756 hartree/)).toBeVisible()
         expect(within(row).getByText("b3lyp/def2tzvp")).toBeVisible()
         expect(within(row).getByText("Gaussian")).toBeVisible()
@@ -68,10 +74,10 @@ describe("ConformerSinglePointTab", () => {
             },
         ] as unknown as ConformerProjection["observations"])
 
-        await screen.findByRole("link", { name: "co_1" })
+        expect(await screen.findAllByRole("link", { name: OBSERVATION_LINK })).toHaveLength(2)
         const emptyRow = rowFor("co_2")
         expect(within(emptyRow).getByText("no single-point calculation recorded")).toBeVisible()
-        expect(within(emptyRow).queryByRole("link", { name: /calc_/ })).not.toBeInTheDocument()
+        expect(within(emptyRow).queryByRole("link", { name: "Calculation" })).not.toBeInTheDocument()
     })
 
     it("gives an observation with TWO single-point calculations two rows, never merging them", async () => {
@@ -83,10 +89,10 @@ describe("ConformerSinglePointTab", () => {
             ],
         }] as unknown as ConformerProjection["observations"])
 
-        const rows = (await screen.findAllByRole("link", { name: "co_1" })).map((link) => link.closest("tr"))
+        const rows = (await screen.findAllByRole("link", { name: OBSERVATION_LINK })).map((link) => link.closest("tr"))
         expect(rows).toHaveLength(2)
-        expect(screen.getByRole("link", { name: "calc_sp_1" })).toBeVisible()
-        expect(screen.getByRole("link", { name: "calc_sp_2" })).toBeVisible()
+        const calculationLinks = screen.getAllByRole("link", { name: "Calculation" })
+        expect(calculationLinks.map((link) => link.getAttribute("href"))).toEqual(["/calculations/calc_sp_1", "/calculations/calc_sp_2"])
     })
 
     it("shows 'not recorded' for a calculation ref with no matching energy record, without dropping the row", async () => {
@@ -96,7 +102,7 @@ describe("ConformerSinglePointTab", () => {
         }] as unknown as ConformerProjection["observations"], [])
 
         const row = rowFor("co_1")
-        expect(await within(row).findByRole("link", { name: "calc_sp_missing" })).toBeVisible()
+        expect(await within(row).findByRole("link", { name: "Calculation" })).toBeVisible()
         // Scoped to the Energy cell specifically -- the level-of-theory and
         // software cells ALSO say "not recorded" for this bare fixture, so
         // a bare `getByText` here would match three cells, not one.
@@ -120,7 +126,7 @@ describe("ConformerSinglePointTab", () => {
             { calculation: { calculation_ref: "calc_sp_2", calculation_type: "sp" }, energy: { energy_hartree: -2, energy_kind: "electronic_energy" } },
         ])
 
-        await screen.findByRole("link", { name: "co_1" })
+        await screen.findAllByRole("link", { name: OBSERVATION_LINK })
         // Exactly one fieldset of unit buttons on the page, not one per row.
         expect(screen.getAllByRole("group", { name: /Energy display unit/ })).toHaveLength(1)
 
@@ -141,7 +147,7 @@ describe("ConformerSinglePointTab", () => {
         }] as unknown as ConformerProjection["observations"], [
             { calculation: { calculation_ref: "calc_sp_1", calculation_type: "sp" }, energy: { energy_hartree: -76.5, energy_kind: "electronic_energy" } },
         ])
-        await screen.findByRole("link", { name: "calc_sp_1" })
+        await screen.findByRole("link", { name: "Calculation" })
         expect(screen.queryByText(/Always stored in hartree/)).not.toBeInTheDocument()
         // The unit still carries on the displayed value regardless.
         expect(screen.getByText(/-76\.500000 hartree/)).toBeVisible()

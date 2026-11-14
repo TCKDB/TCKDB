@@ -27,7 +27,7 @@ function point(calc: string, hartree: number, extra: Record<string, unknown> = {
     return { calculation_ref: calc, energy_type: "single_point", electronic_energy_hartree: hartree, software: software("16"), review_status: "not_reviewed", convergence_unrecorded: false, ...extra }
 }
 
-function profile(tse: string, level: ReturnType<typeof lot>, program: string, kj: [number, number, number], extra: Record<string, unknown> = {}) {
+function profile(tse: string, level: ReturnType<typeof lot> & Record<string, unknown>, program: string, kj: [number, number, number], extra: Record<string, unknown> = {}) {
     return {
         transition_state_entry_ref: tse,
         transition_state_entry_review_status: "not_reviewed",
@@ -134,12 +134,12 @@ describe("EnergyProfile", () => {
         expect(screen.getByText(/By TS entry, then level and program\./)).toBeInTheDocument()
     })
 
-    it("adds the level ref to picker options that would otherwise read the same", async () => {
-        const twin = profile("tse_one", { level_of_theory_ref: "lot_other", method: "wb97xd", basis: "def2tzvp" }, "Gaussian", [0, 10, -5])
+    it("adds the differing qualifier, never a ref, to picker options that would otherwise read the same", async () => {
+        const twin = profile("tse_one", { level_of_theory_ref: "lot_other", method: "wb97xd", basis: "def2tzvp", dispersion: "d3bj" }, "Gaussian", [0, 10, -5])
         mount(read({ profiles: [FIRST, twin] }))
         await loaded()
         const options = within(screen.getByLabelText("Profile")).getAllByRole("option").map((option) => option.textContent)
-        expect(options).toEqual(["wb97xd/def2tzvp, Gaussian [lot_a]", "wb97xd/def2tzvp, Gaussian [lot_other]"])
+        expect(options).toEqual(["wb97xd/def2tzvp, Gaussian", "wb97xd/def2tzvp · dispersion d3bj, Gaussian"])
     })
 
     it("marks sum members as part of the sum above, and has no scroll region while nothing overflows", async () => {
@@ -196,8 +196,8 @@ describe("EnergyProfile", () => {
         mount(read())
         await loaded()
         const options = within(screen.getByLabelText("Profile")).getAllByRole("option").map((option) => option.textContent)
-        expect(options[0]).toBe("tse_one, wb97xd/def2tzvp, Gaussian")
-        expect(options[2]).toBe("tse_two, wb97xd/def2tzvp, Gaussian")
+        expect(options[0]).toBe("Transition state 1, wb97xd/def2tzvp, Gaussian")
+        expect(options[2]).toBe("Transition state 2, wb97xd/def2tzvp, Gaussian")
     })
 
     it("shows no picker for a single profile", async () => {
@@ -243,10 +243,11 @@ describe("EnergyProfile", () => {
         await loaded()
         const cited = screen.getByRole("table", { name: /Calculations cited by each rate record/ })
         expect(screen.getByText("Energies a rate record cites")).toBeInTheDocument()
-        expect(cited).toHaveTextContent("kin_x")
+        expect(cited).toHaveTextContent("Rate record 1")
+        expect(cited).not.toHaveTextContent("kin_x")
         expect(cited).toHaveTextContent("Transition-state energy")
         expect(within(cited).getByText("Level of theory", { selector: "th" })).toBeInTheDocument()
-        expect(within(cited).getByRole("link", { name: "lot_c" })).toHaveAttribute("href", "/methods/lot_c")
+        expect(within(cited).getByRole("link", { name: "Level of theory" })).toHaveAttribute("href", "/methods/lot_c")
         expect(cited).toHaveTextContent("not recorded")
         const profileTable = screen.getByRole("table", { name: /Every point of the selected profile/ })
         expect(profileTable).not.toHaveTextContent("calc_cited")

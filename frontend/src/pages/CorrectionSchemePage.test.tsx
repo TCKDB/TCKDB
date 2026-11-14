@@ -85,7 +85,7 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
 
         const appTable = screen.getByRole("table", { name: "Applications of this correction scheme" })
         expect(within(appTable).getByText("spe_one")).toBeVisible()
-        const calcLink = within(appTable).getByRole("link", { name: "calc_one" })
+        const calcLink = within(appTable).getByRole("link", { name: "Calculation" })
         expect(calcLink).toHaveAttribute("href", "/calculations/calc_one")
     })
 

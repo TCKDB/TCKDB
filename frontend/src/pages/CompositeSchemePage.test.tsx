@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { cleanup, render, screen, within, waitFor } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import CompositeSchemePage from "./CompositeSchemePage"
+import { LevelLabelScope } from "../components/LevelLabel"
 import { resetAllRequestCaches } from "../api/requestCache"
 import { expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 import "../design-system.css"
@@ -20,9 +21,11 @@ const ENDPOINT = "/api/v1/scientific/composite-schemes/csch_x"
 function page() {
     return render(
         <MemoryRouter initialEntries={["/methods/composite-schemes/csch_x"]}>
-            <Routes>
-                <Route path="/methods/composite-schemes/:schemeRef" element={<CompositeSchemePage />} />
-            </Routes>
+            <LevelLabelScope>
+                <Routes>
+                    <Route path="/methods/composite-schemes/:schemeRef" element={<CompositeSchemePage />} />
+                </Routes>
+            </LevelLabelScope>
         </MemoryRouter>,
     )
 }
@@ -32,6 +35,7 @@ const lot = (basis: string, core?: string) => ({
     method: "CCSD(T)",
     basis,
     display: `CCSD(T)/${basis}`,
+    core_treatment: core ?? null,
     label: core ? `CCSD(T)/${basis} (core=${core})` : `CCSD(T)/${basis}`,
 })
 
@@ -144,8 +148,8 @@ describe("CompositeSchemePage", () => {
         const sum = screen.getByText(/^E\(CCSD\(T\)\/cc-pCVTZ/)
         expect(sum.textContent).toBe("E(CCSD(T)/cc-pCVTZ (core=all_electron)) − E(CCSD(T)/cc-pCVTZ (core=frozen_core))")
         const inputs = screen.getByRole("table", { name: "Inputs of term 1" })
-        expect(within(inputs).getByRole("link", { name: "CCSD(T)/cc-pCVTZ (core=all_electron)" })).toBeInTheDocument()
-        expect(within(inputs).getByRole("link", { name: "CCSD(T)/cc-pCVTZ (core=frozen_core)" })).toBeInTheDocument()
+        expect(await within(inputs).findByRole("link", { name: "CCSD(T)/cc-pCVTZ · all electron" })).toBeInTheDocument()
+        expect(within(inputs).getByRole("link", { name: "CCSD(T)/cc-pCVTZ · frozen core" })).toBeInTheDocument()
         expect(within(inputs).getByText("high side")).toBeInTheDocument()
         expect(within(inputs).getByText("low side")).toBeInTheDocument()
         expect(within(inputs).queryByText(/larger basis|smaller basis/)).not.toBeInTheDocument()

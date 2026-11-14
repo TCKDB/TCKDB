@@ -1,4 +1,4 @@
-import { typeLabel } from "./calculationTypeFormat"
+import { CALC_TYPE_LABELS } from "./calculationTypeFormat"
 
 /** The record kinds a link can name, and the noun each is announced as. */
 export const RECORD_KIND_NOUN = {
@@ -39,11 +39,13 @@ const CALCULATION_WORDS: Readonly<Record<string, string>> = {
     sp: "Single-point energy",
     opt: "Optimisation",
     freq: "Frequency calculation",
+    composite: "Composite calculation",
 }
 
 export function calculationWords(type: string | null | undefined): string {
     if (!type) return "Calculation"
-    return CALCULATION_WORDS[type] ?? `${typeLabel(type)} calculation`
+    if (Object.hasOwn(CALCULATION_WORDS, type)) return CALCULATION_WORDS[type]
+    return Object.hasOwn(CALC_TYPE_LABELS, type) ? `${CALC_TYPE_LABELS[type]} calculation` : "Calculation"
 }
 
 /** "Geometry, 12 atoms". */

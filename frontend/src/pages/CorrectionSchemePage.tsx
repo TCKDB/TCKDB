@@ -182,5 +182,5 @@ function unitText(unit: string | null | undefined): string | null {
 
 function UsageRecord({ type, recordRef }: { type: string; recordRef: string }) {
     const to = recordRoute(type, recordRef)
-    return to ? <Link className="data" to={to}>{recordRef}</Link> : <span className="data">{recordRef}</span>
+    return to ? <Link to={to} aria-label={`${words(type) ?? "Record"}`}>{words(type) ?? "Record"}</Link> : <span>{words(type) ?? "Record"}</span>
 }

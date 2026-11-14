@@ -128,7 +128,7 @@ describe("Species mode is the default and is labelled/placeholder-ed for species
 })
 
 describe("IdentifierSearch chemistry-first results (species mode)", () => {
-    it("renders each match's own formula, SMILES, charge, spin, entry count, and ref -- not a neighbour's", async () => {
+    it("renders each match's own formula, SMILES, charge, spin, entry count, and no ref -- not a neighbour's", async () => {
         server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json({
             records: [methylRadical, hydroxideIon],
         })))
@@ -143,28 +143,30 @@ describe("IdentifierSearch chemistry-first results (species mode)", () => {
             "href", `/species/${methylRadical.species_ref}`,
         )
         expect(methylRow.getByText("charge 0 · spin doublet (2) · 1 entry", { exact: false })).toBeVisible()
-        expect(methylRow.getByText(methylRadical.species_ref)).toBeVisible()
+        expect(methylRow.queryByText(methylRadical.species_ref)).not.toBeInTheDocument()
 
         const hydroxideRow = within(rows[1])
         expect(hydroxideRow.getByRole("link", { name: /^\[OH-\] \(HO\)/ })).toHaveAttribute(
             "href", `/species/${hydroxideIon.species_ref}`,
         )
         expect(hydroxideRow.getByText("charge −1 · spin singlet (1) · 3 entries", { exact: false })).toBeVisible()
-        expect(hydroxideRow.getByText(hydroxideIon.species_ref)).toBeVisible()
+        expect(hydroxideRow.queryByText(hydroxideIon.species_ref)).not.toBeInTheDocument()
 
         expect(methylRow.queryByText("[OH-]")).not.toBeInTheDocument()
         expect(hydroxideRow.queryByText("[CH3]")).not.toBeInTheDocument()
     })
 
-    it("keeps the ref visible and copyable even though it is demoted below the chemistry", async () => {
+    it("prints no ref beside the chemistry: the row is a link named by the molecule, with no code run", async () => {
         server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json({ records: [methylRadical] })))
         const user = userEvent.setup(); page()
         await searchSpecies(user, "CH3")
 
-        const ref = await screen.findByText(methylRadical.species_ref)
-        expect(ref).toBeVisible()
-        expect(ref.tagName).toBe("CODE")
-        expect(screen.queryByRole("link", { name: methylRadical.species_ref })).not.toBeInTheDocument()
+        const link = await screen.findByRole("link", { name: /^\[CH3\] \(CH3\)/ })
+        const row = link.closest("li") as HTMLElement
+        expect(row.textContent).not.toContain(methylRadical.species_ref)
+        expect(row.querySelector(".search-result-ref")).toBeNull()
+        expect([...row.querySelectorAll("code")].map((code) => code.textContent)).not.toContain(methylRadical.species_ref)
+        expect(screen.queryByText(methylRadical.species_ref)).not.toBeInTheDocument()
     })
 
     it("leads with SMILES and says so honestly when the archive has no formula for a match", async () => {
@@ -185,7 +187,7 @@ describe("IdentifierSearch chemistry-first results (species mode)", () => {
         expect(row.getByRole("link", { name: /^CCO formula not available/ })).toHaveAttribute(
             "href", "/species-entries/spe_ethanol0000000000000000000",
         )
-        expect(row.getByText("spe_ethanol0000000000000000000")).toBeVisible()
+        expect(row.queryByText("spe_ethanol0000000000000000000")).not.toBeInTheDocument()
     })
 })
 
@@ -210,7 +212,8 @@ describe("SMILES/InChI search routes through structure-search (chemical identity
         const user = userEvent.setup(); page()
         await searchSpecies(user, nonCanonical)
 
-        expect(await screen.findByText(propanoicAcid.species_entry_ref)).toBeVisible()
+        expect(await screen.findByRole("link", { name: /^CCC\(=O\)O/ })).toBeVisible()
+        expect(screen.queryByText(propanoicAcid.species_entry_ref)).not.toBeInTheDocument()
         expect(screen.queryByText(/No exact/)).not.toBeInTheDocument()
         expect(capturedUrl?.pathname).toBe("/api/v1/scientific/species/structure-search")
         expect(capturedUrl?.searchParams.get("query_smiles")).toBe(nonCanonical)
@@ -227,7 +230,8 @@ describe("SMILES/InChI search routes through structure-search (chemical identity
         const inchi = "InChI=1S/C3H6O2/c1-2-3(4)5/h2H2,1H3,(H,4,5)"
         await searchSpecies(user, inchi)
 
-        expect(await screen.findByText(propanoicAcid.species_entry_ref)).toBeVisible()
+        expect(await screen.findByRole("link", { name: /^CCC\(=O\)O/ })).toBeVisible()
+        expect(screen.queryByText(propanoicAcid.species_entry_ref)).not.toBeInTheDocument()
         expect(capturedUrl?.searchParams.get("query_inchi")).toBe(inchi)
         expect(capturedUrl?.searchParams.get("mode")).toBe("exact")
     })
@@ -241,7 +245,8 @@ describe("SMILES/InChI search routes through structure-search (chemical identity
         const user = userEvent.setup(); page()
         await searchSpecies(user, "CH3")
 
-        expect(await screen.findByText(methylRadical.species_ref)).toBeVisible()
+        expect(await screen.findByRole("link", { name: /^\[CH3\] \(CH3\)/ })).toBeVisible()
+        expect(screen.queryByText(methylRadical.species_ref)).not.toBeInTheDocument()
         expect(capturedUrl?.pathname).toBe("/api/v1/scientific/species/search")
         expect(capturedUrl?.searchParams.get("formula")).toBe("CH3")
         expect(capturedUrl?.searchParams.has("query_smiles")).toBe(false)
@@ -350,7 +355,7 @@ describe("species mode no longer auto-searches reactions -- a cross-link replace
         const user = userEvent.setup(); page()
         await searchSpecies(user, "smiles:NN")
 
-        await screen.findByText(nn.species_entry_ref)
+        await screen.findByRole("link", { name: /^NN/ })
         expect(screen.queryByRole("region", { name: "Reactions found" })).not.toBeInTheDocument()
     })
 
@@ -361,7 +366,7 @@ describe("species mode no longer auto-searches reactions -- a cross-link replace
         )
         const user = userEvent.setup(); page()
         await searchSpecies(user, "smiles:NN")
-        await screen.findByText(nn.species_entry_ref)
+        await screen.findByRole("link", { name: /^NN/ })
 
         const link = screen.getByRole("button", { name: /Also search reactions involving/ })
         await user.click(link)
@@ -370,7 +375,7 @@ describe("species mode no longer auto-searches reactions -- a cross-link replace
         expect(await screen.findByLabelText("Reaction: exact equation, SMILES or TCKDB ref")).toBeInTheDocument()
         expect(screen.getByRole("radio", { name: "Reactions" })).toHaveAttribute("aria-checked", "true")
         const region = await screen.findByRole("region", { name: "Reactions found" })
-        expect(within(region).getByText("rxe_a0000000000000000000000001")).toBeVisible()
+        expect(within(region).queryByText("rxe_a0000000000000000000000001")).not.toBeInTheDocument()
         expect(within(within(region).getByRole("listitem")).getByRole("link")).toHaveAttribute(
             "href", "/reaction-entries/rxe_a0000000000000000000000001",
         )
@@ -381,7 +386,7 @@ describe("species mode no longer auto-searches reactions -- a cross-link replace
         const user = userEvent.setup(); page()
         await searchSpecies(user, "CH3")
 
-        await screen.findByText(methylRadical.species_ref)
+        await screen.findByRole("link", { name: /^\[CH3\] \(CH3\)/ })
         expect(screen.queryByRole("button", { name: /Also search reactions/ })).not.toBeInTheDocument()
     })
 })

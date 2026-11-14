@@ -41,7 +41,9 @@ describe("RelationshipMap", () => {
         const { container } = renderMap([make(first), make(second)])
         const lines = [...container.querySelectorAll("svg.rel-map-figure tspan")].map((el) => el.textContent ?? "")
         for (const line of lines) expect(line.length).toBeLessThanOrEqual(LINE_CHARS)
-        expect(container.textContent).not.toMatch(/spe_/)
+        const drawn = container.cloneNode(true) as HTMLElement
+        drawn.querySelector('[data-testid="where"]')?.remove()
+        expect(drawn.textContent).not.toMatch(/spe_/)
         expect(container.querySelector("svg.rel-map-figure title")?.textContent).not.toContain("spe_")
         expect(screen.getAllByRole("link", { name: /A version of this molecule/, hidden: true })[0]).toHaveAttribute("href", `/species-entries/${first}`)
     })

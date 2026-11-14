@@ -271,16 +271,18 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         // The 10 distinct underlying refs are still all present in the
         // document (inside the disclosure body) -- never collapsed away,
         // only demoted behind the closed `<details>`.
-        const refLinks = within(disclosure).getAllByRole("link", { name: /^fsf_/ })
+        const refLinks = within(disclosure).getAllByRole("link", { name: /^Scheme: Frequency scale factor \d+$/ })
         expect(refLinks).toHaveLength(10)
+        expect(refLinks[0]).toHaveAccessibleName("Scheme: Frequency scale factor 1")
         expect(refLinks[0]).toHaveAttribute("href", "/methods/frequency-scale-factors/fsf_0")
+        expect(disclosure.textContent).not.toContain("fsf_")
     })
 
-    it("links each correction scheme's own ref into its standalone /methods/schemes/:ecsRef page", async () => {
+    it("links each correction scheme, by words, into its standalone /methods/schemes/:ecsRef page", async () => {
         server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord()))))
         page()
         await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })
-        const links = screen.getAllByRole("link", { name: "ecs_atom" })
+        const links = screen.getAllByRole("link", { name: "Scheme: Energy-correction scheme" })
         expect(links.length).toBeGreaterThan(0)
         expect(links[0]).toHaveAttribute("href", "/methods/schemes/ecs_atom")
     })

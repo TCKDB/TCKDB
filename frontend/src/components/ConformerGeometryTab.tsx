@@ -111,8 +111,8 @@ export function ConformerGeometryTab({ conformer }: { conformer: ConformerProjec
                                             {group.calcRefs.map((calculation, index) => (
                                                 <Fragment key={calculation.calculation_ref}>
                                                     {index > 0 && ", "}
-                                                    <Link className="data" to={`/calculations/${calculation.calculation_ref}`} style={linkStyle}>
-                                                        {calculation.calculation_ref}
+                                                    <Link to={`/calculations/${calculation.calculation_ref}`} style={linkStyle} aria-label={`Calculation ${index + 1}`}>
+                                                        {`Calculation ${index + 1}`}
                                                     </Link>
                                                     {calculation.level_of_theory ? <> (<LevelLabel levelOfTheory={calculation.level_of_theory} />)</> : " (level of theory not recorded)"}
                                                 </Fragment>

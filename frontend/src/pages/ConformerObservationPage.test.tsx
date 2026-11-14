@@ -220,9 +220,11 @@ describe("ConformerObservationPage", () => {
         const energy = await within(section).findByText("−40.123457")
         expect(energy.closest("a")).toHaveAttribute("href", "/calculations/calc_sp")
         expect(energy).toHaveAttribute("title", "-40.123456789")
-        expect(energy.closest("li")).toHaveTextContent(/Source calc_sp · single-point · at ccsd\(t\)\/cc-pvtz · Molpro 2024 · Review of this record: approved/)
-        expect(within(section).getAllByText("b3lyp/def2tzvp").length).toBeGreaterThan(0)
-        expect(within(section).getByRole("link", { name: "calc_freq" })).toHaveAttribute("href", "/calculations/calc_freq")
+        expect(energy.closest("li")).toHaveTextContent(/Source Single-point energy · single-point · at ccsd\(t\)\/cc-pvtz · Molpro 2024 · Review of this record: approved/)
+        expect(within(section).getAllByText(/^b3lyp\/def2tzvp/).length).toBeGreaterThan(0)
+        const freqLink = section.querySelector('a[href="/calculations/calc_freq"]') as HTMLElement
+        expect(freqLink).toHaveAccessibleName("Calculation")
+        expect(section.textContent).not.toMatch(/calc_/)
     })
 
     it("shows only the source link under an optimisation energy whose calculation is under Found by, which carries its level and review", async () => {
@@ -238,13 +240,13 @@ describe("ConformerObservationPage", () => {
         await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
         const section = screen.getByRole("heading", { name: "Calculations and energies" }).closest("section") as HTMLElement
         const optEnergy = await within(section).findByText("−40.200000")
-        expect(optEnergy.closest("li")).toHaveTextContent(/^−40\.200000 hartree \(final energy of the optimisation\)\s*Source calc_opt$/)
+        expect(optEnergy.closest("li")).toHaveTextContent(/^−40\.200000 hartree \(final energy of the optimisation\)\s*Source Calculation$/)
         const foundBy = within(section).getByText("Found by").closest("div") as HTMLElement
-        const foundRow = within(foundBy).getByRole("link", { name: "calc_opt" }).closest("li") as HTMLElement
+        const foundRow = foundBy.querySelector('a[href="/calculations/calc_opt"]')!.closest("li") as HTMLElement
         expect(foundRow).toHaveTextContent(/at b3lyp\/def2tzvp/)
         expect(within(foundRow).getByText("reviewed")).toBeVisible()
         // The single point is not under Found by, so its source line stays whole.
-        expect(within(section).getByText("−40.123457").closest("li")).toHaveTextContent(/Source calc_sp · single-point · at ccsd\(t\)\/cc-pvtz · Molpro 2024 · Review of this record: approved/)
+        expect(within(section).getByText("−40.123457").closest("li")).toHaveTextContent(/Source Single-point energy · single-point · at ccsd\(t\)\/cc-pvtz · Molpro 2024 · Review of this record: approved/)
     })
 
     it("keeps an energy's level when its Found by row has none of its own", async () => {
@@ -262,7 +264,7 @@ describe("ConformerObservationPage", () => {
         await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
         const section = screen.getByRole("heading", { name: "Calculations and energies" }).closest("section") as HTMLElement
         const optEnergy = await within(section).findByText("−40.200000")
-        expect(optEnergy.closest("li")).toHaveTextContent(/Source calc_opt · at b3lyp\/def2tzvp$/)
+        expect(optEnergy.closest("li")).toHaveTextContent(/Source Calculation · at b3lyp\/def2tzvp$/)
     })
 
     it("lists no energy that the read attributes to another observation", async () => {
@@ -272,7 +274,7 @@ describe("ConformerObservationPage", () => {
         await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
         await screen.findByText("−40.123457")
         expect(screen.queryByText("−41.500000")).toBeNull()
-        expect(screen.queryByRole("link", { name: "calc_sp_other" })).toBeNull()
+        expect(document.querySelector('a[href="/calculations/calc_sp_other"]')).toBeNull()
     })
 
     it("says an energy is not recorded when its read came back without it", async () => {
@@ -301,7 +303,7 @@ describe("ConformerObservationPage", () => {
         expect(screen.queryByRole("link", { name: "co_one" })).not.toBeInTheDocument()
         expect(screen.getByRole("heading", { name: "Review history" })).toBeVisible()
         expect(screen.getByText("Looks consistent")).toBeVisible()
-        expect(screen.getAllByRole("link", { name: "geo_one" })[0]).toHaveAttribute("href", "/geometries/geo_one")
+        expect(screen.getAllByRole("link", { name: "Geometry: Geometry, 4 atoms" })[0]).toHaveAttribute("href", "/geometries/geo_one")
     })
 
     it("shows the observation's own ref first in the identity block, with the data face and a copy button", async () => {
@@ -316,16 +318,16 @@ describe("ConformerObservationPage", () => {
         expect(within(identityFacts).getByRole("button", { name: /copy observation ref/i })).toBeVisible()
     })
 
-    it("falls back to the entry ref, as a data code run, when the species context carries no SMILES and no formula", async () => {
+    it("falls back to the words 'Species entry', never the ref, when the species context carries no SMILES and no formula", async () => {
         serve(mockRecord({
             species: { species_ref: "spc_demo", species_entry_ref: "spe_demo", species_entry_label: "ground state", formula: null, canonical_smiles: null },
         }))
         page()
         await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1/ })
         const identityHeader = document.querySelector(".record-identity-header") as HTMLElement
-        const link = within(identityHeader).getByRole("link", { name: "spe_demo" })
+        const link = within(identityHeader).getByRole("link", { name: "Species entry" })
         expect(link).toHaveAttribute("href", "/species-entries/spe_demo")
-        expect(within(link).getByText("spe_demo")).toHaveClass("data")
+        expect(link.textContent).toBe("Species entry")
     })
 
     it("collapses review history to one line when its only entry carries no real event", async () => {
@@ -339,7 +341,7 @@ describe("ConformerObservationPage", () => {
         page()
         await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
         expect(screen.getByRole("heading", { name: "Review history" })).toBeVisible()
-        expect(screen.queryByRole("table", { name: /Review history for/ })).not.toBeInTheDocument()
+        expect(screen.queryByRole("table", { name: "Review history" })).not.toBeInTheDocument()
         expect(screen.getByText("No review events are recorded for this observation.")).toBeVisible()
         expect(screen.queryByText(/The current status is/)).not.toBeInTheDocument()
     })
@@ -348,7 +350,7 @@ describe("ConformerObservationPage", () => {
         serve()
         page()
         await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
-        expect(screen.getByRole("table", { name: "Review history for co_one" })).toBeVisible()
+        expect(screen.getByRole("table", { name: "Review history" })).toBeVisible()
         expect(screen.getByRole("region", { name: "Table of review history" })).toBeVisible()
         expect(screen.getByText("Looks consistent")).toBeVisible()
     })

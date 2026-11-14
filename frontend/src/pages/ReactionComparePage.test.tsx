@@ -170,10 +170,11 @@ describe("reaction compare page", () => {
         const deltas = heads.filter((head) => head.textContent?.startsWith("Δ"))
         expect(deltas).toHaveLength(1)
         const at = heads.indexOf(deltas[0])
-        expect(deltas[0]).toHaveTextContent("kin_two − kin_one")
-        expect(heads[at - 1]).toHaveTextContent("kin_two")
-        expect(heads[at - 2]).toHaveTextContent("kin_one")
-        expect(heads[at + 1]).toHaveTextContent("kin_three")
+        expect(deltas[0]).toHaveTextContent("Record 2 − Record 1")
+        expect(heads[at - 1]).toHaveTextContent("Record 2")
+        expect(heads[at - 2]).toHaveTextContent("Record 1")
+        expect(heads[at + 1]).toHaveTextContent("Record 3")
+        expect(grid.textContent).not.toMatch(/kin_/)
         expect(heads[at + 1].className).toContain("compare-group-start")
         const ea = rowCells(grid, /Activation energy Ea/)
         expect(ea).toHaveLength(5)
@@ -215,10 +216,11 @@ describe("reaction compare page", () => {
     it("states origin and review in each record's header and links each record", async () => {
         await open()
         const grid = await table()
-        const head = within(grid).getAllByRole("columnheader").find((cell) => cell.textContent?.includes("kin_one")) as HTMLElement
+        const head = within(grid).getAllByRole("columnheader").find((cell) => cell.textContent?.startsWith("Record 1")) as HTMLElement
         expect(head).toHaveTextContent("Origin: computed")
         expect(head).toHaveTextContent(/approved/i)
-        expect(within(head).getByRole("link", { name: "kin_one" })).toHaveAttribute("href", "/reaction-entries/rxe_one#kinetics-kin_one")
+        expect(within(head).getByRole("link", { name: "Rate record: Record 1" })).toHaveAttribute("href", "/reaction-entries/rxe_one#kinetics-kin_one")
+        expect(within(head).getByRole("link", { name: "Reaction entry: Version 1" })).toHaveAttribute("href", "/reaction-entries/rxe_one")
         expect(within(rowCells(grid, /Tunnelling model/)[0]).getByText("Wigner")).toBeInTheDocument()
         expect(within(grid).getByRole("row", { name: /Tunnelling model/ })).toHaveTextContent("Not the same within a group")
     })
@@ -229,9 +231,9 @@ describe("reaction compare page", () => {
         await waitFor(() => expect(document.querySelectorAll("svg.energy-profile-svg").length).toBe(2))
         const sections = screen.getAllByRole("heading", { level: 3 })
         expect(sections.map((heading) => heading.textContent)).toEqual([
-            "wb97xd/def2tzvp, Gaussian 16",
-            "ccsdt/ccpvtz, Orca 6.0",
-            "Energy level of theory not recorded, Program not recorded",
+            "wb97xd/def2tzvp · Gaussian 16",
+            "ccsdt/ccpvtz · Orca 6.0",
+            "Energy level of theory not recorded",
         ])
         expect(document.querySelectorAll(".energy-profile-view")).toHaveLength(2)
         expect(document.querySelectorAll(".energy-profile-picker")).toHaveLength(0)
@@ -264,7 +266,7 @@ describe("reaction compare page", () => {
         await open()
         const grid = await table()
         const groupLinks = within(grid).getAllByRole("columnheader").filter((head) => head.getAttribute("scope") === "colgroup").flatMap((head) => within(head).queryAllByRole("link"))
-        expect(groupLinks.map((link) => link.textContent)).toEqual(["wb97xd/def2tzvp", "ccsdt/ccpvtz"])
+        expect(groupLinks.map((link) => link.textContent)).toEqual(["wb97xd/def2tzvp · Gaussian 16", "ccsdt/ccpvtz · Orca 6.0"])
         const user = userEvent.setup()
         groupLinks[0].focus()
         const seen: Element[] = [document.activeElement as Element]

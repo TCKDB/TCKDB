@@ -100,11 +100,13 @@ describe("EntryThermoSection -- settings behind each value", () => {
         const alpha = (await screen.findByText("thm_alpha")).closest("article") as HTMLElement
         expect(includes[0]).toContain("calculation_settings")
         const block = within(alpha).getByRole("region", { name: "Settings behind this value" })
-        expect(within(block).getByRole("link", { name: "calc_alpha_geometry" })).toHaveAttribute("href", "/calculations/calc_alpha_geometry")
+        const calculationLink = block.querySelector('a[href="/calculations/calc_alpha_geometry"]') as HTMLElement
+        expect(calculationLink).not.toBeNull()
+        expect(calculationLink.textContent).not.toContain("calc_alpha_geometry")
         expect(within(block).getByText("Assumed default (no log)")).toBeInTheDocument()
         expect(within(block).getByText("Reported")).toBeInTheDocument()
         const beta = (await screen.findByText("thm_beta")).closest("article") as HTMLElement
-        expect(within(beta).queryByRole("link", { name: "calc_alpha_geometry" })).toBeNull()
+        expect(beta.querySelector('a[href="/calculations/calc_alpha_geometry"]')).toBeNull()
         expect(within(beta).getAllByText("No calculation linked")).toHaveLength(3)
     })
 

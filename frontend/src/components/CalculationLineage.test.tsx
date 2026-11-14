@@ -29,10 +29,14 @@ describe("dependency strip", () => {
         )
         await user.tab()
         expect(screen.getByRole("link", { name: "before" })).toHaveFocus()
-        // By ref, with no sequence implied.
+        // One link per parent, each named in words (never the ref), with no sequence implied.
         for (const ref of ["calc_first", "calc_second", "calc_third"]) {
             await user.tab()
-            expect(screen.getByRole("link", { name: ref })).toHaveFocus()
+            const focused = document.activeElement as HTMLElement
+            expect(focused).toHaveAttribute("href", `/calculations/${ref}`)
+            expect(focused.textContent).toBe("Calculation")
+            expect(focused.getAttribute("aria-label")).toMatch(/^Calculation, /)
+            expect(focused.getAttribute("aria-label")).not.toContain(ref)
         }
         await user.tab()
         expect(screen.getByRole("link", { name: "after" })).toHaveFocus()

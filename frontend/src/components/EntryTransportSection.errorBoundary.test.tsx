@@ -111,18 +111,17 @@ describe("EntryTransportSection — a broken Source calculations row", () => {
 
         page()
         await screen.findByText("trn_bad")
-        expect(screen.getByText("trn_good")).toBeVisible()
+        expect(document.getElementById("transport-heading-trn_good")).toBeVisible()
 
         fireEvent.click(screen.getByText("Source calculations", { selector: "summary" }))
         const section = screen.getByText("Source calculations", { selector: "summary" }).closest("details") as HTMLElement
         await within(section).findByText("Source calculations loaded.")
 
-        const badRow = within(section).getByText("trn_bad").closest("div.science-record") as HTMLElement
+        const [badRow, goodRow] = Array.from(section.querySelectorAll("div.science-record")) as HTMLElement[]
         expect(within(badRow).getByRole("alert")).toHaveTextContent(/This row could not be displayed/)
         expect(within(badRow).queryByText(/rendered fine/)).not.toBeInTheDocument()
 
         // Sibling row, same lazy section, unaffected.
-        const goodRow = within(section).getByText("trn_good").closest("div.science-record") as HTMLElement
         expect(within(goodRow).getByText("source calculations rendered fine (1 row)")).toBeVisible()
         expect(within(goodRow).queryByRole("alert")).not.toBeInTheDocument()
 
@@ -131,8 +130,8 @@ describe("EntryTransportSection — a broken Source calculations row", () => {
         // also appear as row headings inside the opened disclosure, so an
         // unscoped query would be ambiguous.
         const recordsSection = screen.getByRole("heading", { name: "Transport" }).closest("section") as HTMLElement
-        expect(within(recordsSection).getByText("trn_bad")).toBeVisible()
-        expect(within(recordsSection).getByText("trn_good")).toBeVisible()
+        expect(recordsSection.querySelector("#transport-heading-trn_bad")).toBeVisible()
+        expect(recordsSection.querySelector("#transport-heading-trn_good")).toBeVisible()
         expect(screen.getByText("2 records · review: 2 not reviewed")).toBeVisible()
         expect(screen.getByText("Review history", { selector: "summary" })).toBeVisible()
 

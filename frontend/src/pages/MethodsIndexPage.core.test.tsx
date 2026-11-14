@@ -5,6 +5,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import MethodsIndexPage from "./MethodsIndexPage"
+import { LevelLabelScope } from "../components/LevelLabel"
 
 // The core-treatment filter is the API's own `core_treatment` parameter: choosing a value must
 // re-query the server, not only narrow what is already on the page.
@@ -46,6 +47,10 @@ function serve(requests: string[]) {
 
 function page() {
     return render(<MemoryRouter><MethodsIndexPage /></MemoryRouter>)
+}
+
+function pageInScope() {
+    return render(<MemoryRouter><LevelLabelScope><MethodsIndexPage /></LevelLabelScope></MemoryRouter>)
 }
 
 describe("MethodsIndexPage core-treatment filter", () => {
@@ -98,16 +103,17 @@ describe("MethodsIndexPage core-treatment filter", () => {
         expect(cells("Spin treatment")).toEqual(["not recorded", "not recorded", "restricted"])
     })
 
-    it("prints the server's full label, so all-electron and frozen-core levels do not read alike", async () => {
+    it("prints method/basis from the structured fields, with the differing qualifier inline so all-electron and frozen-core levels do not read alike", async () => {
         serve([])
-        page()
+        pageInScope()
         const table = await screen.findByRole("table", { name: "Levels of theory" })
-        const links = Array.from(table.querySelectorAll('td[data-label="Level of theory"] a')).map((a) => a.textContent)
-        expect(links).toEqual([
-            "CCSD(T)/cc-pCVTZ (core=frozen_core)",
-            "CCSD(T)/cc-pCVTZ (core=all_electron)",
-            "CCSD(T)/cc-pCVTZ",
-        ])
+        const links = () => Array.from(table.querySelectorAll('td[data-label="Level of theory"] a')).map((a) => a.textContent)
+        await waitFor(() => expect(links()).toEqual([
+            "CCSD(T)/cc-pCVTZ · frozen core",
+            "CCSD(T)/cc-pCVTZ · all electron",
+            "CCSD(T)/cc-pCVTZ · restricted",
+        ]))
+        expect(table.textContent).not.toContain("core=")
     })
 
     it("puts the key columns before dispersion and solvent", async () => {

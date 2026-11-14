@@ -143,18 +143,19 @@ describe("ReactionOverviewPage", () => {
         expect(await screen.findByText("reaction entry page for rxe_ed66mj3ohtyien5rm2x3sb3rdu")).toBeVisible()
     })
 
-    it("lists every deposited entry with its own ref, review pill, and has-kinetics/has-TS/kinetics-count flags", async () => {
+    it("lists every deposited entry as a numbered version, with review pill, and has-kinetics/has-TS/kinetics-count flags", async () => {
         server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(searchResponse())))
         page(REACTION_REF)
 
-        expect(await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" }))
+        expect(await screen.findByRole("link", { name: "Reaction entry: Version 1" }))
             .toHaveAttribute("href", "/reaction-entries/rxe_tku6xu2lt3girf2rsiwl5uds4e")
         await waitFor(() => expect(titleHasKind(document.title, "/reactions/:ref")).toBe(true))
-        expect(screen.getByRole("link", { name: "rxe_kftcgjn7zalusaouojwi23z3gy" }))
+        expect(screen.getByRole("link", { name: "Reaction entry: Version 2" }))
             .toHaveAttribute("href", "/reaction-entries/rxe_kftcgjn7zalusaouojwi23z3gy")
 
         const rows = screen.getAllByRole("row").slice(1) // drop header row
         expect(rows).toHaveLength(2)
+        expect(document.querySelector("table.data-table")!.textContent).not.toMatch(/rxe_|spe_/)
         expect(rows[0].textContent).toContain("not reviewed")
 
         // Precise per-cell assertions (not a loose `.toContain("no"/"yes")`
@@ -183,46 +184,43 @@ describe("ReactionOverviewPage", () => {
         expect(h1.textContent).toContain("⇌")
     })
 
-    // Every participant cell renders the
-    // formula link, the ref, the copy button and the stereo-label chip.
-    it("each participant cell carries its own spe_ ref, a copy button, and and its structured stereo chip", async () => {
+    // Every participant cell renders the formula link and the stereo-label chip, one per line.
+    it("each participant sits in its own line with its structured stereo chip, and prints no ref or copy button", async () => {
         server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(searchResponse())))
         page(REACTION_REF)
-        await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
+        await screen.findByRole("link", { name: "Reaction entry: Version 1" })
 
         // Appears in BOTH rows -- the fixture's two entries share the same
         // products -- so the first occurrence (row 0, where the "Z" label
         // is set) is what this test targets.
-        const refCode = screen.getAllByText("spe_cft35qrkqphdifcfqlcenqgdau")[0]
-        expect(refCode.tagName).toBe("CODE")
-        const cell = refCode.closest("td")!
-        expect(cell.querySelector(".copy-button")).not.toBeNull()
-        expect(cell.textContent).toContain("(Z isomer)")
+        const link = screen.getAllByRole("link", { name: /^Species entry: N=N \(H2N2\)/ })[0]
+        expect(link).toHaveAttribute("href", "/species-entries/spe_cft35qrkqphdifcfqlcenqgdau")
+        const cell = link.closest("td")!
+        expect(cell.querySelector(".copy-button")).toBeNull()
+        expect(cell.querySelectorAll("ul.participant-lines > li")).toHaveLength(2)
+        expect(link.closest("li")!.textContent).toContain("(Z isomer)")
+        expect(cell.textContent).not.toContain("spe_cft35qrkqphdifcfqlcenqgdau")
     })
 
-    // The between-participant separator ("·") and the stereo-chip's own
-    // separator must differ: with the same glyph a two-
-    // product cell would read "H2 ... · H2N2 ... · Z isomer" -- "Z isomer"
-    // looking like a THIRD product rather than a label on H2N2. Asserting
-    // the exact cell text (not just `.toContain`) proves the chip is
-    // parenthesised and therefore distinguishable from the participant
-    // separator, which uses the same "·" character either way.
-    it("the products cell text is unambiguous: the stereo chip never reads as a third product", async () => {
+    // Each participant is its own list line, so a stereo chip cannot read as a
+    // third product; the chip stays parenthesised and bound to its participant.
+    it("the products cell is unambiguous: two lines, no separator glyph, and the stereo chip stays in its participant's line", async () => {
         server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(searchResponse())))
         page(REACTION_REF)
-        await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
+        await screen.findByRole("link", { name: "Reaction entry: Version 1" })
         const rows = screen.getAllByRole("row").slice(1)
         const productsCell = rows[0].querySelector('td[data-label="Products"]')!
-        // Exactly ONE "·" (the real participant separator): the chip is parenthesised, so it cannot read as a third product.
-        const dotCount = (productsCell.textContent!.match(/·/g) ?? []).length
-        expect(dotCount).toBe(1)
-        expect(productsCell.textContent).toContain("(Z isomer)")
+        const lines = productsCell.querySelectorAll("ul.participant-lines > li")
+        expect(lines).toHaveLength(2)
+        expect(productsCell.textContent).not.toContain("·")
+        expect(lines[0].textContent).not.toContain("Z isomer")
+        expect(lines[1].textContent).toContain("(Z isomer)")
     })
 
     it("the identity header carries the record's own Equation (as deposited) fact", async () => {
         server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(searchResponse())))
         page(REACTION_REF)
-        await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
+        await screen.findByRole("link", { name: "Reaction entry: Version 1" })
         const dt = Array.from(document.querySelectorAll(".record-identity-header dt")).find((el) => el.textContent === "Equation (as deposited)")
         expect(dt).not.toBeUndefined()
         expect(dt!.nextElementSibling?.textContent).toBe("NN <=> [H][H] + N=N")
@@ -236,7 +234,7 @@ describe("ReactionOverviewPage", () => {
     it("the review card's collapsed summary is the TRUE total, never the fixed 6-row count", async () => {
         server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(searchResponse())))
         page(REACTION_REF)
-        await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
+        await screen.findByRole("link", { name: "Reaction entry: Version 1" })
 
         const reviewSection = document.querySelector('section[aria-labelledby="review-heading"]')!
         const card = reviewSection.querySelector(".card.card--derived.coverage-card") as HTMLElement
@@ -256,11 +254,11 @@ describe("ReactionOverviewPage", () => {
 })
 
 describe("ReactionOverviewPage: what the page says it chose, and paging", () => {
-    it("says the title and equation come from the first listed entry when there are several", async () => {
+    it("says the title and equation come from Version 1 when there are several versions", async () => {
         server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(searchResponse())))
         page(REACTION_REF)
-        await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
-        expect(screen.getByText(/Title from rxe_tku6xu2lt3girf2rsiwl5uds4e, the first entry; entries can differ\./)).toBeVisible()
+        await screen.findByRole("link", { name: "Reaction entry: Version 1" })
+        expect(screen.getByText("Title from Version 1; versions can differ.")).toBeVisible()
     })
 
     it("names no title source for a single entry, since nothing else could be the source", async () => {
@@ -269,7 +267,7 @@ describe("ReactionOverviewPage: what the page says it chose, and paging", () => 
             return HttpResponse.json({ ...response, records: response.records.slice(0, 1), pagination: { offset: 0, limit: 50, returned: 1, total: 1 } })
         }))
         page(REACTION_REF)
-        await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
+        await screen.findByRole("link", { name: "Reaction entry: Version 1" })
         expect(screen.queryByText(/Title from/)).not.toBeInTheDocument()
     })
 
@@ -290,7 +288,7 @@ describe("ReactionOverviewPage: what the page says it chose, and paging", () => 
         fireEvent.click(screen.getByRole("button", { name: "Next" }))
         expect(await screen.findByText("Showing 2\u20132 of 2 reaction entries.")).toBeVisible()
         expect(seen).toContain("1:1")
-        expect(await screen.findByRole("link", { name: "rxe_kftcgjn7zalusaouojwi23z3gy" })).toBeVisible()
+        expect(await screen.findByRole("link", { name: "Reaction entry: Version 2" })).toBeVisible()
     })
 
     it("keeps the title and its source when the reader pages to an entry that differs", async () => {
@@ -305,14 +303,14 @@ describe("ReactionOverviewPage: what the page says it chose, and paging", () => 
             return HttpResponse.json({ ...response, records, pagination: { offset, limit, returned: records.length, total: 2 } })
         }))
         page(REACTION_REF)
-        await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
+        await screen.findByRole("link", { name: "Reaction entry: Version 1" })
         const titleBefore = document.querySelector("h1")?.textContent
         expect(titleBefore).toContain("H2N2")
         expect(titleBefore).not.toContain("N=N")
         fireEvent.click(screen.getByRole("button", { name: "Next" }))
-        await screen.findByRole("link", { name: "rxe_kftcgjn7zalusaouojwi23z3gy" })
+        await screen.findByRole("link", { name: "Reaction entry: Version 2" })
         expect(document.querySelector("h1")?.textContent).toBe(titleBefore)
-        expect(screen.getByText(/Title from rxe_tku6xu2lt3girf2rsiwl5uds4e, the first entry/)).toBeVisible()
+        expect(screen.getByText("Title from Version 1; versions can differ.")).toBeVisible()
     })
 
     it("returns to the first page when the reaction changes while the page stays mounted", async () => {
@@ -353,9 +351,9 @@ describe("ReactionOverviewPage -- no depositor-typed text", () => {
         setAt(value, "records.0.reactants.0.species_entry_label", ADVERSARIAL.joinedLabel)
         server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(value)))
         page(REACTION_REF)
-        // The fixture reached the page: both reaction entries rendered with their participant refs.
-        expect(await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })).toBeVisible()
-        expect(screen.getAllByText("spe_cft35qrkqphdifcfqlcenqgdau").length).toBeGreaterThan(0)
+        // The fixture reached the page: both reaction entries rendered with their participants.
+        expect(await screen.findByRole("link", { name: "Reaction entry: Version 1" })).toBeVisible()
+        expect(screen.getAllByRole("link", { name: /^Species entry: N=N \(H2N2\)/ }).length).toBeGreaterThan(0)
 
         expectNoDepositorText()
         expectNoAdversarialText()
@@ -370,7 +368,7 @@ describe("ReactionOverviewPage -- electronic-state labels and term symbols", () 
         Object.assign(products[1], { electronic_state_kind: "excited", electronic_state_label: "R", term_symbol: "DEPOSITOR_SENTINEL_term" })
         server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(value)))
         page(REACTION_REF)
-        expect(await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })).toBeVisible()
+        expect(await screen.findByRole("link", { name: "Reaction entry: Version 1" })).toBeVisible()
         const text = document.body.textContent ?? ""
         expect(text).toContain("state S1")
         expect(text).toContain("¹A₁")

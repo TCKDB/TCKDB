@@ -528,7 +528,8 @@ describe("NetworkEntryPage — every ref that has a record page is a link to it"
         handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
         handleKtpEvaluate()
         page()
-        const link = await screen.findByRole("link", { name: "rxe_test1" })
+        const link = await screen.findByRole("link", { name: /^Reaction entry, channel \d+$/ })
+        expect(link.textContent).toBe("Reaction entry")
         expect(link).toHaveAttribute("href", "/reaction-entries/rxe_test1")
     })
 
@@ -539,16 +540,22 @@ describe("NetworkEntryPage — every ref that has a record page is a link to it"
         handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
         handleKtpEvaluate()
         page()
-        const link = await screen.findByRole("link", { name: "tse_test1" })
+        const link = await screen.findByRole("link", { name: /^Transition state, channel \d+$/ })
+        expect(link.textContent).toBe("Transition state")
         expect(link).toHaveAttribute("href", "/transition-state-entries/tse_test1")
     })
 })
 
 describe("NetworkEntryPage — solve-internal source calculations link to the calculation page", () => {
     // These two live inside the collapsed "Solve-internal state & channel
-    // energies" disclosure, so they are queried by text and asserted through
-    // the closest <a> -- a closed <details> is not role-queryable (see the
-    // composition_hash guard above for the same constraint).
+    // energies" disclosure, so they are found by their href -- a closed
+    // <details> is not role-queryable (see the composition_hash guard above
+    // for the same constraint).
+    const waitForLink = (href: string) => waitFor(() => {
+        const link = document.querySelector(`a[href="${href}"]`)
+        expect(link).not.toBeNull()
+        return link as HTMLAnchorElement
+    })
     it("a state energy's source calculation ref links to /calculations/:ref", async () => {
         handleNetworkDetail(networkDetailFixture())
         handleSolveDetail("nsolve_test1", [{
@@ -562,8 +569,9 @@ describe("NetworkEntryPage — solve-internal source calculations link to the ca
         handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
         handleKtpEvaluate()
         page()
-        const cell = await screen.findByText("calc_state1")
-        expect(cell.closest("a")).toHaveAttribute("href", "/calculations/calc_state1")
+        const link = await waitForLink("/calculations/calc_state1")
+        expect(link.textContent).toBe("Calculation")
+        expect(link).toHaveAccessibleName("Calculation")
     })
 
     it("a channel barrier's source calculation ref links to /calculations/:ref", async () => {
@@ -582,8 +590,9 @@ describe("NetworkEntryPage — solve-internal source calculations link to the ca
         handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
         handleKtpEvaluate()
         page()
-        const cell = await screen.findByText("calc_barrier1")
-        expect(cell.closest("a")).toHaveAttribute("href", "/calculations/calc_barrier1")
+        const link = await waitForLink("/calculations/calc_barrier1")
+        expect(link.textContent).toBe("Calculation")
+        expect(link).toHaveAccessibleName("Calculation")
     })
 })
 
@@ -691,7 +700,8 @@ describe("NetworkEntryPage -- k(T,P) heat map", () => {
         await waitFor(() => expect(container.querySelectorAll("svg.ktp-svg .ktp-value").length).toBeGreaterThan(0))
         const marked = Array.from(container.querySelectorAll("svg.ktp-svg .ktp-value")).filter((value) => value.textContent?.endsWith("†"))
         expect(marked).toHaveLength(5)
-        expect(container.querySelector(".ktp-caption")!.textContent).toMatch(/† is outside the stated range \(300–2000 K, 0\.01–100 bar\)\. Record nk_cheb1, solve nsolve_test1/)
+        expect(container.querySelector(".ktp-caption")!.textContent).toMatch(/† is outside the stated range \(300–2000 K, 0\.01–100 bar\)\. The table has the same values\./)
+        expect(container.querySelector(".ktp-caption")!.textContent).not.toMatch(/nk_cheb1|nsolve_test1/)
     })
 
     it("keeps channel_key out of the visible text of the section", async () => {

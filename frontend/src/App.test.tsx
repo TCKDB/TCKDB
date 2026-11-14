@@ -95,12 +95,11 @@ describe("public archive shell", () => {
         expect(await screen.findByRole("group", { name: /Search “Cl” as/ })).toBeVisible()
         await user.click(screen.getByRole("button", { name: "Formula" }))
         // The result reads as chemistry (SMILES leads, formula follows in
-        // parentheses), not as the raw ref -- the ref stays present, but
-        // demoted, alongside it.
+        // parentheses), and prints no ref.
         const result = await screen.findByRole("link", { name: /^\[Cl\] \(Cl\)/ })
         expect(result).toBeVisible()
         expect(result).toHaveAttribute("href", `/species/${speciesRef}`)
-        expect(screen.getByText(speciesRef)).toBeVisible()
+        expect(screen.queryByText(speciesRef)).not.toBeInTheDocument()
     })
 
     it("completes a StrictMode search and clears its loading state", async () => {
@@ -112,7 +111,7 @@ describe("public archive shell", () => {
         const button = screen.getByRole("button", { name: "Search" })
         await user.click(button)
         expect(await screen.findByRole("link", { name: /^O \(H2O\)/})).toBeVisible()
-        expect(screen.getByText(speciesRef)).toBeVisible()
+        expect(screen.queryByText(speciesRef)).not.toBeInTheDocument()
         expect(button).toHaveAttribute("aria-busy", "false")
     })
 
@@ -196,9 +195,9 @@ describe("public archive shell", () => {
         const other = screen.getByRole("link", { name: /^OO \(H2O2\) charge 0 · spin singlet \(1\) · 0 entries$/ })
         expect(other).toBeVisible()
         expect(other).toHaveAttribute("href", `/species/${speciesRefTwo}`)
-        // The ref stays present and copyable alongside the chemistry, just demoted.
-        expect(screen.getByText(speciesRef)).toBeVisible()
-        expect(screen.getByText(speciesRefTwo)).toBeVisible()
+        // No ref is printed beside the chemistry.
+        expect(screen.queryByText(speciesRef)).not.toBeInTheDocument()
+        expect(screen.queryByText(speciesRefTwo)).not.toBeInTheDocument()
         await user.click(result)
         expect(await screen.findByRole("heading", { name: "H2O" })).toBeVisible()
     })
@@ -225,7 +224,7 @@ describe("public archive shell", () => {
         expect(screen.getByText("formula not available")).toBeVisible()
         const result = await screen.findByRole("link", { name: /^CCO formula not available/ })
         expect(result).toHaveAttribute("href", `/species-entries/${entryRef}`)
-        expect(screen.getByText(entryRef)).toBeVisible()
+        expect(screen.queryByText(entryRef)).not.toBeInTheDocument()
     })
 
     it("keeps only the latest search result and does not navigate after unmount", async () => {
@@ -285,11 +284,10 @@ describe("public archive shell", () => {
         await user.clear(input); await user.type(input, "Cl"); await user.click(button)
         expect(await screen.findByRole("group", { name: /Search “Cl” as/ })).toBeVisible()
         expect(button).toHaveAttribute("aria-busy", "false")
-        // The ref is checked directly (not via an exact link name) because
-        // the row's accessible name is now the chemistry, not the ref --
-        // checking for the ref's continued *absence* still needs to survive
-        // that, since it stands in for "did the stale slow response render".
-        await delay(60); expect(screen.queryByText(speciesRef)).not.toBeInTheDocument()
+        // The stale slow response would render a result row (a ref-less record
+        // reads "Molecule"); none must appear.
+        await delay(60)
+        expect(document.querySelector(".search-result-headline-fallback")).toBeNull()
     })
 
     it("does not allow an ambiguity chooser to search stale textbox content", async () => {
@@ -310,7 +308,7 @@ describe("public archive shell", () => {
         await user.click(screen.getByRole("button", { name: "Formula" }))
         const result = await screen.findByRole("link", { name: /^\[Br\] \(Br\)/ })
         expect(result).toBeVisible()
-        expect(screen.getByText(speciesRef)).toBeVisible()
+        expect(screen.queryByText(speciesRef)).not.toBeInTheDocument()
     })
 })
 
@@ -792,7 +790,7 @@ it("routes a reaction ref to the chooser page (ReactionOverviewPage)", async () 
     // asserts against the h1's visible `textContent` instead.
     const h1 = document.querySelector("h1")
     expect(h1?.textContent).toContain("⇌")
-    expect(screen.getByRole("link", { name: "rxe_abc" })).toHaveAttribute("href", "/reaction-entries/rxe_abc")
+    expect(screen.getByRole("link", { name: "Reaction entry: Version 1" })).toHaveAttribute("href", "/reaction-entries/rxe_abc")
     // `/reactions` (exact) now renders a real page (BrowsePage) too, not a
     // placeholder -- confirms `/reactions/:reactionRef` still resolves to
     // THIS chooser page rather than being swallowed by the exact-match

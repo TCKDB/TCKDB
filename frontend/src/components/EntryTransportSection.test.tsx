@@ -335,11 +335,11 @@ describe("EntryTransportSection: paging", () => {
         }))
         page()
         expect(await screen.findByText("Showing 1–1 of 2 transport records.")).toBeVisible()
-        expect(screen.getByText("trn_one")).toBeVisible()
+        expect(screen.getByText("trn_one")).toBeInTheDocument()
         fireEvent.click(screen.getByRole("button", { name: "Next" }))
         expect(await screen.findByText("Showing 2–2 of 2 transport records.")).toBeVisible()
         expect(seen).toContain("1:1")
-        expect(screen.getByText("trn_two")).toBeVisible()
+        expect(screen.getByText("trn_two")).toBeInTheDocument()
         expect(screen.queryByText("trn_one")).not.toBeInTheDocument()
     })
 

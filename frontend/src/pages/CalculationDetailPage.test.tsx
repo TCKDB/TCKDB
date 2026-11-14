@@ -688,15 +688,16 @@ describe("CalculationDetailPage", () => {
         const list = within(dependsOnSection()).getByRole("list", { name: "Calculations this one depends on" })
         // A composite behind freq_on is named as the composite it is, never as an optimisation.
         await waitFor(() => expect(within(list).getAllByRole("listitem").map((item) => item.textContent)).toEqual([
-            "Optimisationcalc_a_opt",
-            "Composite energycalc_b_cbs",
+            "OptimisationCalculation",
+            "Composite energyCalculation",
         ]))
         expect(within(dependsOnSection()).queryByText(/in the order they ran/)).toBeNull()
         const own = dependsOnSection().querySelector(".dep-strip-own") as HTMLElement
         expect(own).toHaveTextContent("This calculationFrequency calculation")
         expect(within(own).queryByRole("link")).toBeNull()
         expect(dependsOnSection().querySelectorAll(".dep-strip-arrow")).toHaveLength(1)
-        expect(within(list).getByRole("link", { name: "calc_a_opt" })).toHaveAttribute("href", "/calculations/calc_a_opt")
+        expect(within(list).getByRole("link", { name: "Calculation, Optimisation" })).toHaveAttribute("href", "/calculations/calc_a_opt")
+        expect(list.textContent).not.toMatch(/calc_/)
     })
 
     it("claims no type while the types are loading", async () => {
@@ -712,8 +713,8 @@ describe("CalculationDetailPage", () => {
         )
         page()
         await findLoaded("Frequency")
-        const item = within(dependsOnSection()).getByRole("link", { name: "calc_p" }).closest("li") as HTMLElement
-        expect(item).toHaveTextContent("Geometry fromcalc_p")
+        const item = dependsOnSection().querySelector('a[href="/calculations/calc_p"]')!.closest("li") as HTMLElement
+        expect(item).toHaveTextContent("Geometry fromCalculation")
         expect(dependsOnSection()).not.toHaveTextContent("Optimisation")
     })
 
@@ -730,8 +731,8 @@ describe("CalculationDetailPage", () => {
         )
         page()
         await findLoaded("Frequency")
-        const item = within(dependsOnSection()).getByRole("link", { name: "calc_p" }).closest("li") as HTMLElement
-        await waitFor(() => expect(item).toHaveTextContent("Geometry fromcalc_p"))
+        const item = dependsOnSection().querySelector('a[href="/calculations/calc_p"]')!.closest("li") as HTMLElement
+        await waitFor(() => expect(item).toHaveTextContent("Geometry fromCalculation"))
         expect(dependsOnSection()).not.toHaveTextContent("Optimisation")
     })
 
@@ -760,14 +761,15 @@ describe("CalculationDetailPage", () => {
         page()
         await findLoaded("Frequency")
         const usedBy = screen.getByRole("heading", { name: "Used by" }).closest("section") as HTMLElement
-        await waitFor(() => expect(within(usedBy).getByRole("listitem")).toHaveTextContent("IRC: calc_later"))
-        expect(within(usedBy).getByRole("link", { name: "calc_later" })).toHaveAttribute("href", "/calculations/calc_later")
+        await waitFor(() => expect(within(usedBy).getByRole("listitem")).toHaveTextContent("IRC"))
+        expect(within(usedBy).getByRole("link", { name: "Calculation: IRC" })).toHaveAttribute("href", "/calculations/calc_later")
+        expect(usedBy.textContent).not.toContain("calc_later")
         const produced = screen.getByRole("heading", { name: "What this produced" }).closest("section") as HTMLElement
-        expect(within(produced).queryByRole("link", { name: "calc_later" })).toBeNull()
-        expect(within(dependsOnSection()).queryByRole("link", { name: "calc_later" })).toBeNull()
+        expect(produced.querySelector('a[href="/calculations/calc_later"]')).toBeNull()
+        expect(dependsOnSection().querySelector('a[href="/calculations/calc_later"]')).toBeNull()
     })
 
-    it("keeps the same order, by ref, before and after the types arrive", async () => {
+    it("keeps the same order, by target, before and after the types arrive", async () => {
         server.use(
             http.get(ENDPOINT, () => HttpResponse.json({
                 record: mockRecord({
@@ -781,10 +783,10 @@ describe("CalculationDetailPage", () => {
         )
         page()
         await findLoaded("Frequency")
-        const refs = () => within(dependsOnSection()).getAllByRole("link").map((link) => link.textContent)
-        expect(refs()).toEqual(["calc_m", "calc_z"])
+        const refs = () => within(dependsOnSection()).getAllByRole("link").map((link) => link.getAttribute("href"))
+        expect(refs()).toEqual(["/calculations/calc_m", "/calculations/calc_z"])
         await waitFor(() => expect(dependsOnSection()).toHaveTextContent("Single-point energy"))
-        expect(refs()).toEqual(["calc_m", "calc_z"])
+        expect(refs()).toEqual(["/calculations/calc_m", "/calculations/calc_z"])
     })
 
     it("words a composite input without repeating the Used by heading while the types load", async () => {
@@ -801,7 +803,8 @@ describe("CalculationDetailPage", () => {
         page()
         await findLoaded("Frequency")
         const usedBy = screen.getByRole("heading", { name: "Used by" }).closest("section") as HTMLElement
-        expect(within(usedBy).getByRole("listitem")).toHaveTextContent("Input to: calc_comp")
+        expect(within(usedBy).getByRole("listitem")).toHaveTextContent("Input to")
+        expect(within(usedBy).getByRole("listitem").textContent).not.toContain("calc_comp")
     })
 
     it("shows no energy above the not-requested note when the result section was not requested", async () => {
@@ -844,7 +847,7 @@ describe("CalculationDetailPage", () => {
         })))
         page()
         await findLoaded("Frequency")
-        const item = within(dependsOnSection()).getByRole("link", { name: "calc_ts0_opt" }).closest("li") as HTMLElement
+        const item = dependsOnSection().querySelector('a[href="/calculations/calc_ts0_opt"]')!.closest("li") as HTMLElement
         expect(item.textContent).toMatch(/some future role/)
         expect(item.textContent).not.toMatch(/optimi[sz]ed from/)
     })
@@ -1280,12 +1283,12 @@ describe("CalculationDetailPage", () => {
 
         fireEvent.click(furtherEvidenceSummary("SCF stability"))
         const scfSection = furtherEvidenceSummary("SCF stability").closest("details") as HTMLElement
-        expect(await within(scfSection).findByRole("link", { name: "calc_stability_source" }))
+        expect(await within(scfSection).findByRole("link", { name: "Calculation" }))
             .toHaveAttribute("href", "/calculations/calc_stability_source")
 
         fireEvent.click(furtherEvidenceSummary("Geometry validation"))
         const gvSection = furtherEvidenceSummary("Geometry validation").closest("details") as HTMLElement
-        expect(await within(gvSection).findByRole("link", { name: "geom_input_one" }))
+        expect((await within(gvSection).findAllByRole("link", { name: "Geometry" }))[0])
             .toHaveAttribute("href", "/geometries/geom_input_one")
 
         fireEvent.click(screen.getByText("Artifacts"))
@@ -1294,7 +1297,7 @@ describe("CalculationDetailPage", () => {
 
         fireEvent.click(screen.getByText("Energy corrections"))
         const ecSection = screen.getByText("Energy corrections").closest("details") as HTMLElement
-        expect(await within(ecSection).findByText("ecs_1")).toBeVisible()
+        expect(await within(ecSection).findByRole("link", { name: "Scheme: Energy-correction scheme" })).toHaveAttribute("href", "/methods/schemes/ecs_1")
     })
 
     describe("Artifacts section artifact ref cell", () => {
@@ -1302,7 +1305,7 @@ describe("CalculationDetailPage", () => {
         // backfill): a populated ref renders in the same code face as every
         // other ref on this page, with the shared copy button next to it --
         // not bare text, and not the old "not recorded" placeholder.
-        it("renders a populated artifact_ref in the data face with a copy button", async () => {
+        it("prints no artifact ref and no copy button, and keeps the row's own facts", async () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json({
                 record: mockRecord({
                     artifacts: [
@@ -1315,14 +1318,14 @@ describe("CalculationDetailPage", () => {
 
             fireEvent.click(screen.getByText("Artifacts"))
             const artifactSection = screen.getByText("Artifacts").closest("details") as HTMLElement
-            const row = (await within(artifactSection).findByText("art_9f3k2q7m1x8h4v6c0b5n3z2y7t")).closest("tr") as HTMLElement
-            expect(within(row).getByText("art_9f3k2q7m1x8h4v6c0b5n3z2y7t").tagName).toBe("CODE")
-            expect(within(row).getByRole("button", { name: "Copy artifact ref" })).toBeVisible()
-            expect(within(row).queryByText("no ref")).not.toBeInTheDocument()
+            const row = (await within(artifactSection).findByText("a".repeat(64))).closest("tr") as HTMLElement
+            expect(within(artifactSection).queryByRole("columnheader", { name: "Artifact ref" })).not.toBeInTheDocument()
+            expect(artifactSection.textContent).not.toContain("art_9f3k2q7m1x8h4v6c0b5n3z2y7t")
+            expect(within(row).queryByRole("button", { name: /Copy/ })).not.toBeInTheDocument()
             expect(within(row).getByText("a".repeat(64))).toHaveClass("data")
         })
 
-        it("reads a null artifact_ref as 'no ref', with no copy button", async () => {
+        it("shows a row whose artifact_ref is null the same way: no ref text, no copy button", async () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json({
                 record: mockRecord({
                     artifacts: [
@@ -1335,8 +1338,8 @@ describe("CalculationDetailPage", () => {
 
             fireEvent.click(screen.getByText("Artifacts"))
             const artifactSection = screen.getByText("Artifacts").closest("details") as HTMLElement
-            const row = (await within(artifactSection).findByText("no ref")).closest("tr") as HTMLElement
-            expect(within(row).getByText("no ref")).toBeVisible()
+            const row = (await within(artifactSection).findByText("a".repeat(64))).closest("tr") as HTMLElement
+            expect(within(row).queryByText("no ref")).not.toBeInTheDocument()
             // The recorded filename is producer-typed text: it is not printed.
             expect(row.innerHTML).not.toContain("input.log")
             expect(within(row).queryByRole("button", { name: /Copy/ })).not.toBeInTheDocument()
@@ -1619,9 +1622,9 @@ describe("CalculationDetailPage", () => {
         })))
         page()
         await findLoaded("Frequency")
-        expect(screen.getByRole("link", { name: "cobs_demo" })).toHaveAttribute("href", "/conformer-observations/cobs_demo")
-        // The group is named by its ref: the depositor's own label ("basin-1") is never shown.
-        expect(screen.getByRole("link", { name: "group cg_demo" })).toHaveAttribute("href", "/conformer-groups/cg_demo")
+        expect(screen.getByRole("link", { name: "Conformer observation: Observation" })).toHaveAttribute("href", "/conformer-observations/cobs_demo")
+        // The group is named in words: the depositor's own label ("basin-1") is never shown.
+        expect(screen.getAllByRole("link", { name: "Conformer group" })[0]).toHaveAttribute("href", "/conformer-groups/cg_demo")
         expect(screen.queryByText("basin-1")).not.toBeInTheDocument()
     })
 
@@ -1649,7 +1652,8 @@ describe("CalculationDetailPage", () => {
         expect(screen.getByText("Optimisation calculation · coarse pass")).toBeVisible()
 
         const usedBy = screen.getByRole("heading", { name: "Used by" }).closest("section") as HTMLElement
-        expect(within(usedBy).getByRole("link", { name: "calc_fine_stage" })).toHaveAttribute("href", "/calculations/calc_fine_stage")
+        expect(usedBy.querySelector('a[href="/calculations/calc_fine_stage"]')).not.toBeNull()
+        expect(usedBy.textContent).not.toContain("calc_fine_stage")
         expect(within(dependsOnSection()).queryByRole("link")).toBeNull()
     })
 
@@ -1669,9 +1673,9 @@ describe("CalculationDetailPage", () => {
         expect(h1).toHaveTextContent("Fine optimisation of CH3")
         expect(screen.getByText("Optimisation calculation · fine pass")).toBeVisible()
 
-        const link = within(dependsOnSection()).getByRole("link", { name: "calc_coarse_stage" })
-        expect(link).toHaveAttribute("href", "/calculations/calc_coarse_stage")
-        await waitFor(() => expect(link.closest("li")).toHaveTextContent("Coarse optimisationcalc_coarse_stage"))
+        const link = dependsOnSection().querySelector('a[href="/calculations/calc_coarse_stage"]') as HTMLElement
+        expect(link).not.toBeNull()
+        await waitFor(() => expect(link.closest("li")).toHaveTextContent("Coarse optimisationCalculation"))
         expect(within(dependsOnSection()).getByText("Fine optimisation")).toBeVisible()
     })
 
@@ -1711,7 +1715,7 @@ describe("CalculationDetailPage", () => {
         )).toBeVisible()
         expect(screen.queryByText("Input and output are the same stored geometry.")).not.toBeInTheDocument()
         expect(screen.queryByText("extracted from the deposited input file")).not.toBeInTheDocument()
-        expect(screen.getAllByRole("link", { name: "geom_same" })).toHaveLength(1)
+        expect(document.querySelectorAll('a.record-link[href="/geometries/geom_same"]')).toHaveLength(1)
     })
 
     // The sameGeometry branch must not say
@@ -1739,7 +1743,7 @@ describe("CalculationDetailPage", () => {
         expect(screen.queryByText(
             "Only one geometry was deposited for this pass; the archive records it as the output. The starting geometry was not deposited.",
         )).not.toBeInTheDocument()
-        expect(screen.getAllByRole("link", { name: "geom_same" })).toHaveLength(1)
+        expect(document.querySelectorAll('a.record-link[href="/geometries/geom_same"]')).toHaveLength(1)
     })
 
     it("keeps two separate cards when input and output geometries genuinely differ", async () => {
@@ -1747,8 +1751,8 @@ describe("CalculationDetailPage", () => {
         page()
         await findLoaded("Frequency")
         expect(screen.queryByText("Input and output are the same stored geometry.")).not.toBeInTheDocument()
-        expect(screen.getByRole("link", { name: "geom_input_one" })).toBeVisible()
-        expect(screen.getByRole("link", { name: "geom_output_one" })).toBeVisible()
+        expect(document.querySelector('a[href="/geometries/geom_input_one"]')).toBeVisible()
+        expect(document.querySelector('a[href="/geometries/geom_output_one"]')).toBeVisible()
     })
 
     // Item 3: the "extracted from the deposited input file" pill -- a
@@ -2048,7 +2052,7 @@ describe("CalculationDetailPage -- no depositor-typed text", () => {
         for (const summary of Array.from(container.querySelectorAll("summary"))) fireEvent.click(summary)
         // The fixture reached the page: lazily loaded rows with their controlled/ref columns are on screen.
         expect(await screen.findByText("scf_convergence")).toBeVisible()
-        expect(await screen.findByText("no ref")).toBeVisible()
+        expect(await screen.findByText("a".repeat(64))).toBeVisible()
         expect(screen.getAllByText("calc_freq_one").length).toBeGreaterThan(0)
 
         expectNoDepositorText()
