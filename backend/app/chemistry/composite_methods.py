@@ -21,7 +21,7 @@ paper is still named so a reviewer can check it.
 
 Keys
 ----
-The key is the identity key of the Gaussian / ARC spelling
+The key is the identity key of the Gaussian spelling
 (``method_identity_key``), so rows already stored under that spelling keep their
 hash. ``W1``, ``W1U``, ``W1BD`` and ``W1RO`` are four keys: they are four
 different recipes (UCCSD vs ROCCSD vs Brueckner doubles; a different
@@ -79,7 +79,7 @@ _KESHARWANI = (
 )
 _ZIPSE = "secondary: Zipse group teaching pages, zipse.cup.uni-muenchen.de, 'Overview of Gaussian theories'"
 _ARC_METHODS = (
-    "ARC data/ess_methods.yml (d9f47ab9), gaussian list: the spelling ARC writes for this method."
+    "Source: ARC data/ess_methods.yml (d9f47ab9), gaussian list: the spelling written for this method."
 )
 
 
@@ -107,7 +107,7 @@ class InternalLevel:
 class CompositeMethod:
     """One named composite method.
 
-    :param key: Identity key of the Gaussian / ARC spelling.
+    :param key: Identity key of the Gaussian spelling.
     :param name: The method as its paper writes it.
     :param paper_doi: DOI of the defining paper, checked against Crossref.
     :param paper: Citation of the defining paper.
@@ -145,7 +145,7 @@ _B3LYP_CBSB7 = InternalLevel(
         "functional geometries and frequencies'.",
         "Gaussian 09 manual, Basis Sets: 'CBSB7: Selects the 6-311G(2d,d,p) basis set used "
         "by CBS-QB3 high accuracy energy method [Montgomery99]'.",
-        "ARC arc/settings/settings.py:237-240 (d9f47ab9): 'B3LYP/CBSB7 ... the frequency "
+        "Source: ARC arc/settings/settings.py:237-240 (d9f47ab9): 'B3LYP/CBSB7 ... the frequency "
         "level of CBS-QB3'.",
         _KESHARWANI + ": 'The CBS-QB3 thermochemistry protocol specifies a B3LYP/CBSB7 ZPVE "
         "scaled by 0.9900'; CBSB7 is 'effectively 6-311G(d) on first row and 6-311G(2d) on "
@@ -222,7 +222,7 @@ CATALOGUE: tuple[CompositeMethod, ...] = (
         zpe_citations=(
             _KESHARWANI + ": 'The CBS-QB3 thermochemistry protocol specifies a B3LYP/CBSB7 "
             "ZPVE scaled by 0.9900'.",
-            "ARC data/freq_scale_factors.yml:174-178 (d9f47ab9), source 5 = "
+            "Source: ARC data/freq_scale_factors.yml:174-178 (d9f47ab9), source 5 = "
             "doi:10.1063/1.477924: 'the 0.99 value is the ZPE scale factor of CBS-QB3'.",
         ),
         programs=("gaussian",),
@@ -485,7 +485,7 @@ CATALOGUE: tuple[CompositeMethod, ...] = (
         not_stated=(),
         citations=(
             "The protocol of the paper. The Gaussian 09 manual documents the W1U, W1BD and "
-            "W1RO keywords (" + _G09_W1 + ") and no bare W1; ARC lists the same three. "
+            "W1RO keywords (" + _G09_W1 + ") and no bare W1; the ARC method list (data/ess_methods.yml) has the same three. "
             "Kept apart from them: they are different recipes.",
         ),
     ),

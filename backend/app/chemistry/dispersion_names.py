@@ -5,9 +5,9 @@ lower-cases it), and the method key joins D3(BJ) spellings inside the method
 string. This module adds two more joins:
 
 * the dispersion **column** joins ``d3bj``, ``gd3bj`` and
-  ``empiricaldispersion=gd3bj``, because ARC's Gaussian adapter writes
-  ``level.dispersion`` into the route unchanged (``arc/job/adapters/gaussian.py``)
-  and ARC's own matcher treats all three as one; and
+  ``empiricaldispersion=gd3bj``: a producer that copies ``level.dispersion``
+  into a Gaussian route unchanged sends one correction in all three
+  spellings; and
 * ``b3lyp-d3bj`` (dispersion folded into the method) is the same level of
   theory as ``b3lyp`` with ``dispersion=d3bj``.
 
@@ -18,7 +18,7 @@ under the same rules as the method table (``method_names.py``): an entry is
 admitted only if every program checked means the same correction by the
 spelling. Scope is the same as there: the hash cannot see a program.
 
-The table, with the canonical spelling ARC and ORCA write:
+The table, with the canonical spelling ORCA and workflow tools write:
 
 ==================  ===========  =========================================
 spelling            key          source of the claim
@@ -35,7 +35,7 @@ Not in the table, because no citation was found: ``d3(0)`` and ``d3bj2b``
 Gaussian route abbreviation ``em=``. Leaving them split is recoverable (the
 merge script joins them later once an entry is added with a revision).
 
-Gaussian writes the dispersion as a route option, and ARC stores the whole
+Gaussian writes the dispersion as a route option, and a producer may store the whole
 option. Each alias is therefore also recognised wrapped as
 ``EmpiricalDispersion=X``, ``EmpiricalDispersion=(X)`` and
 ``EmpiricalDispersion(X)``, in any case and with spaces around the tokens. A
@@ -43,9 +43,9 @@ wrapped value whose inside is *not* in the table (``empiricaldispersion=pfd``)
 is left as written: only what the table recognises is joined.
 
 **Bare ``d3`` stays its own key.** ORCA's ``D3`` is BJ-damped while Psi4's
-``-d3`` is zero-damped, so neither ``d3bj`` nor ``d3zero`` can claim it. (ARC's
-own matcher folds ``gd3`` into ``d3``; that is a divergence from this key, on
-purpose: ``gd3`` is zero damping and is keyed so.) ``pfd`` (Petersson-Frisch),
+``-d3`` is zero-damped, so neither ``d3bj`` nor ``d3zero`` can claim it. (Some
+producers fold ``gd3`` into ``d3``; this key deliberately does not: ``gd3``
+is zero damping and is keyed so.) ``pfd`` (Petersson-Frisch),
 ``d4``, ``d3mbj`` and the rest are not in the table.
 
 Folded dispersion

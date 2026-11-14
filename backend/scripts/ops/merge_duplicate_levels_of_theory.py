@@ -7,8 +7,8 @@ dispersion / solvent / solvent-model case. Groups are found with the
 application's own hash formula, so it follows whichever keys the running code
 has.
 
-Spellings such as ``b3lyp/def2-tzvp`` (Psi4) and ``b3lyp/def2tzvp`` (Gaussian,
-ARC) are one level of theory under the identity keys, but rows hashed under an
+Spellings such as ``b3lyp/def2-tzvp`` (Psi4) and ``b3lyp/def2tzvp`` (Gaussian)
+are one level of theory under the identity keys, but rows hashed under an
 older formula can still exist as separate rows. In each group of rows that are
 one level of theory, one row (the *holder*) has the identity-keyed hash and
 every upload resolves to it. The other rows (the *duplicates*) keep their own

@@ -229,9 +229,9 @@ class ThermoStateFields(SchemaBase):
     The ``phase`` default applies only to omitted computed state. Explicit
     null is evidence of unknown state and survives conversion to standalone
     uploads. ``reference_pressure_bar`` is NEVER defaulted, for any origin:
-    the dominant computed producer (ARC) computes entropy at 1 atm via a
-    hardcoded translational partition function and records no pressure
-    anywhere in its output, so a default would stamp every computed deposit
+    computed producers typically compute entropy at 1 atm via a
+    hardcoded translational partition function and record no pressure
+    anywhere in their output, so a default would stamp every computed deposit
     with a standard state its own numbers were not computed at. See
     ``app.schemas.workflows.thermo_upload.ThermoUploadRequest`` (backend)
     for why ``phase`` keeps its default. Both schemas must stay symmetric;

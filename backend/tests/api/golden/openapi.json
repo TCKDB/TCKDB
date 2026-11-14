@@ -110010,7 +110010,7 @@
             }
           },
           {
-            "description": "Workflow tool name, e.g. 'ARC'. OR-across-calculation, same as method=/basis=/software=.",
+            "description": "Workflow tool name, e.g. 'ARC' or 'Arkane'. OR-across-calculation, same as method=/basis=/software=.",
             "in": "query",
             "name": "workflow_tool",
             "required": false,
@@ -110023,7 +110023,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Workflow tool name, e.g. 'ARC'. OR-across-calculation, same as method=/basis=/software=.",
+              "description": "Workflow tool name, e.g. 'ARC' or 'Arkane'. OR-across-calculation, same as method=/basis=/software=.",
               "title": "Workflow Tool"
             }
           },

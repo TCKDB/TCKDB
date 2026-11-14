@@ -11,7 +11,7 @@ is recovered from that echo.  Two method families are supported, matching the
 real fixtures in ``tests/fixtures/molpro/``:
 
 * **CCSD(T)-F12 / cc-pVTZ-F12** (closed-shell ``ccsd(t)-f12`` and open-shell
-  ``uccsd(t)-f12``).  SP energy follows ARC's F12a/F12b-by-basis convention.
+  ``uccsd(t)-f12``).  SP energy uses the F12a/F12b-by-basis convention.
 * **Plain MRCI / cc-pVTZ** (a ``{rhf}`` → ``{casscf}`` → ``{mrci}`` chain).
   SP energy is the Davidson relaxed-reference cluster-corrected energy.
 
@@ -412,14 +412,14 @@ def _parse_f12_ansatz(text: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Single-point electronic energy  (ARC-convention, Hartree)
+# Single-point electronic energy  (F12a/F12b-by-basis convention, Hartree)
 # ---------------------------------------------------------------------------
 
 
 def _detect_f12_ansatz_choice(text: str) -> str:
     """Return ``"a"`` or ``"b"`` for the F12a/F12b energy selection.
 
-    Mirrors ARC: ``vtz``/``vdz`` basis → F12a; ``vqz``/``v5z``/… → F12b.
+    ``vtz``/``vdz`` basis → F12a; ``vqz``/``v5z``/… → F12b.
     Defaults to F12a when the basis is absent/ambiguous (the cc-pVTZ-F12
     case).
 
@@ -427,7 +427,7 @@ def _detect_f12_ansatz_choice(text: str) -> str:
     whole log — so a stray ``vqz`` token elsewhere in the output body (a
     ``gprint,basis`` library echo, an auxiliary-basis line, etc.) cannot
     silently flip a genuine cc-pVTZ-F12 job to F12b and return the wrong
-    energy.  This matches ARC's line-scoped ``basis=`` handling.
+    energy.
     """
     basis = ""
     for line in _extract_deck_lines(text):
@@ -487,7 +487,7 @@ _DAVIDSON_RE = re.compile(r"\(Davidson,\s*relaxed reference\)", re.IGNORECASE)
 def _parse_mrci_energy(text: str) -> float | None:
     """Extract the MRCI Davidson relaxed-reference energy (Hartree).
 
-    Mirrors ARC exactly: the line
+    Reads the line
     ``Cluster corrected energies   <E> (Davidson, relaxed reference)`` —
     take ``float(line.split()[3])``.  Searches from the end.
     """
@@ -505,10 +505,10 @@ def _parse_mrci_energy(text: str) -> float | None:
 def parse_sp_energy(text: str) -> float | None:
     """Parse the single-point electronic energy in Hartree.
 
-    Precedence (matching ARC): MRCI (Davidson relaxed reference) wins over
+    Precedence: MRCI (Davidson relaxed reference) wins over
     CCSD(T)-F12a/F12b.  ``MRCI-F12`` is an unsupported variant — it returns
     ``None`` rather than mis-reporting a wrong number.  Molpro's native unit
-    is Hartree, so no conversion is applied (unlike ARC's kJ/mol output).
+    is Hartree, so no conversion is applied (no kJ/mol conversion).
     """
     family = _detect_method_family(_extract_deck_lines(text))
 

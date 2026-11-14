@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Source prose describes behaviour for any producer (Unreleased)
+
+- **Behaviour:** none. Comments, docstrings, OpenAPI field descriptions and the generated producer contract no longer explain TCKDB behaviour in terms of one workflow tool: a rule is stated for any producer, ARC is named only as one example among others or as a plain source citation, and code that parses real software tokens is unchanged. The `workflow_tool_name` filter description now reads "e.g. 'ARC' or 'Arkane'".
+- **Schema and migration:** none. No new environment variable.
+- **Versions:** `tckdb-schemas` 0.175.2 and `tckdb-client` 0.208.2 (text only); `tckdb-qcschema` 0.9.5 (comments only).
+
 ## A test guards against decision narrative in source text (Unreleased)
 
 - **Behaviour:** one user-facing message is reworded; no change to when it fires: the QCSchema adapter's unsupported-driver refusal now ends "other atomic drivers are not supported (a scan is imported as a TorsionDriveResult via tckdb_qcschema.scan.build_scan_bundle_payload)" instead of naming a work package. The new test, `backend/tests/invariants/test_no_decision_narrative.py`, lists the tracked files under `backend/app`, `backend/scripts`, `backend/tests`, `schemas/python`, `clients/python` and `frontend/src` with `git ls-files` and fails on design-record pointers, links into decision-record folders, manuscript-folder paths, an owner's name, owner-decision wording, issue, pull-request and review-finding ids, and phase, work-package and chunk labels, naming each hit as `path:line: [pattern] matched text`. The repo gate workflow runs it on every pull request. Wording fixes elsewhere remove the remaining hits (comments, docstrings and fixture notes).

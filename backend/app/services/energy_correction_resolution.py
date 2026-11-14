@@ -664,7 +664,7 @@ def _resolve_or_create_fsf_row(
 #: A bond-additivity correction is definitionally a sum over bonds. A
 #: transition state carries no bond assignment at all: Arkane's own
 #: Petersson-BAC routine sums whatever bond dictionary it is handed, and
-#: ARC supplies none for a saddle point, so a componentless total there
+#: a producer supplies none for a saddle point, so a componentless total there
 #: can never be told apart from "nothing was actually summed" (17 measured rows are exactly
 #: that shape). A species entry is
 #: different: its identity SMILES states its bonds, so a monatomic

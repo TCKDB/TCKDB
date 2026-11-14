@@ -1,7 +1,7 @@
 """Human authentication and API-key management endpoints.
 
 Humans register/login/logout with sessions; once logged in they can mint
-API keys for automated uploaders such as ARC.  The plain API-key value
+API keys for automated uploaders such as ARC or AutoTST.  The plain API-key value
 is returned exactly once at creation time.
 """
 

@@ -19,8 +19,8 @@ on a mismatch.
 **Where it runs:** every path that persists an output-log artifact — the
 dedicated artifacts route (``POST /calculations/{id}/artifacts``) and output
 logs attached *inline* through the contribution-bundle workflows
-(``computed_species`` / ``computed_reaction``, which ARC uses in bundle
-mode), matching the coverage of the sibling hooks.
+(``computed_species`` / ``computed_reaction``, which producers use for bundle
+uploads), matching the coverage of the sibling hooks.
 
 Best-effort and never raises: artifact upload is canonical and must not be
 aborted by a reconciliation failure.

@@ -31,10 +31,10 @@ from app.schemas.fragments.refs import SoftwareReleaseRef
 #: Deliberately scoped to the *calculation* seam. A product row's
 #: ``software_release`` (thermo/statmech/kinetics, fed by the bundle-level
 #: ``analysis_software_release``) is documented as the analysis code --
-#: "e.g. Arkane, MESS" -- and the ARC adapter fills it with Arkane on every
-#: reaction deposit. Moving that slot has a schema
+#: "e.g. Arkane, MESS" -- and a producer that runs Arkane fills it with Arkane on
+#: every reaction deposit. Moving that slot has a schema
 #: dimension (the product's one ``workflow_tool_release`` slot already holds
-#: ARC), so it is not made here.
+#: the workflow tool), so it is not made here.
 #:
 #: Keys are in :func:`_workflow_tool_key` form: lowercase, separators removed,
 #: a trailing version token stripped -- so ``ARC 1.1.0``, ``ARC-1.1.0``,

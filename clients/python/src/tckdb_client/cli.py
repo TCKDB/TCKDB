@@ -778,7 +778,7 @@ def artifact_download_name(
     called ``input.log``, and 246 of kind ``input`` are all called
     ``input.gjf``. That is Gaussian's own convention -- ``g16 input.gjf``
     writes ``input.log``, so the output is named after the JOB rather
-    than its role -- and ARC names every job file ``input.gjf``.
+    than its role -- and some workflow tools name every job file ``input.gjf``.
 
     So the recorded filename was both non-identifying (563 files, two
     distinct names) and actively misleading: a directory of downloads

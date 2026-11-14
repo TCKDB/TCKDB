@@ -453,7 +453,7 @@ def refuse_workflow_tool_as_calculation_software(
     ``software_release`` names the program that ran it. Arkane runs no such
     job -- it reads the output of one -- so ``software_release.name=
     "Arkane"`` on a calculation is a category error this database cannot
-    repair: the program that actually ran is simply absent. ARC (which
+    repair: the program that actually ran is simply absent. Workflow tools such as ARC (which
     orchestrates the jobs) and RMG (which generates mechanisms) are refused
     for the same reason (see ``software_resolution.WORKFLOW_TOOLS_NOT_ESS``).
 
@@ -731,7 +731,7 @@ def record_software_reconciliation(
     **Software identity:** when the parsed banner names a *different program*
     than the declared ``name``, the observed program is what actually
     ran — an artifact is real evidence; a declared name can be a stale
-    value that rode along from an unrelated job (ARC's own per-job-type
+    value that rode along from an unrelated job (a producer's per-job-type
     version map, not this database's business to fix). In that case
     ``software_release_id`` is repointed at the observed release and the
     declared string is preserved on ``calculation.declared_software_banner``
@@ -978,7 +978,7 @@ def collect_converged_opt_energy_warnings(
 
     **Never refuses.** A bare, unevidenced number is not proof that the energy is
     unusable, so this guard only warns; a blocking check on this shape would
-    refuse real ARC ingestion. All
+    refuse real producer deposits. All
     52 historical rows this guard was written for satisfy branch (a) --
     this bites only a future deposit with neither an sp nor an evidenced
     opt energy, which is the genuinely unusable case.

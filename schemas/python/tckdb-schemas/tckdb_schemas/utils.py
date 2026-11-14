@@ -30,7 +30,7 @@ def normalize_tunneling_model(value):
 
     Case-insensitive; folds any unrecognized non-empty value to ``other``,
     mirroring the DB migration. ``None``/blank → ``None``. Real
-    producers (e.g. ARC) emit ``"Eckart"``, which normalizes to ``eckart``.
+    producers (e.g. ARC, Arkane) emit ``"Eckart"``, which normalizes to ``eckart``.
     Returns a string the enum field then coerces (or ``None``).
     """
     if value is None:

@@ -33,7 +33,7 @@ document the depositor supplies (``--parent-opt``). It is checked to be that
 optimization -- same atoms, same charge and multiplicity, and its
 ``final_molecule`` is one of the drive's ``initial_molecule`` geometries --
 and becomes the conformer's primary ``opt``. The scan becomes an additional
-calculation with a ``scan_parent`` edge to it, the same shape ARC deposits.
+calculation with a ``scan_parent`` edge to it, the same shape workflow tools deposit.
 
 ================================= ==========================================
 TorsionDrive                       TCKDB

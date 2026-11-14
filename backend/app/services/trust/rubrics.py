@@ -3276,7 +3276,7 @@ COMPUTED_TRANSITION_STATE: EvidenceRubric = EvidenceRubric(
             # set -- the same gap that made `include=trust` say
             # `irc_evidence_present: passed` on an entry whose read-model
             # `validation.irc` correctly says "absent" (no structured
-            # pass/fail evidence record was ever deposited by ARC
+            # pass/fail evidence record was ever deposited by
             # uploads). The wording now names what is actually checked.
             name="irc_evidence_present",
             kind=EvidenceCheckKind.optional,

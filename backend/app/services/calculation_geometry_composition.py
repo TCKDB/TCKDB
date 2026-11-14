@@ -38,8 +38,8 @@ has exactly two answers. Both references already existed:
   reachable.
 
 Deriving the TS reference any other way would refuse correct science on the
-first deposit: all 31 calculation geometries in the repository's ARC-derived
-fixture payloads are TS-owned, and every one of them is the whole reacting
+first deposit: all 31 calculation geometries in the repository's recorded
+producer fixture payloads are TS-owned, and every one of them is the whole reacting
 system rather than any participant.
 
 Output geometries are checked too, contrary to the note that stood here

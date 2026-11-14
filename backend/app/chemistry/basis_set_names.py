@@ -13,7 +13,7 @@ aug-cc-pVTZ     ``aug-cc-pVTZ`` (all five, up to case)
 ==============  ============  ============  ============  ==============  ============
 
 ``level_of_theory.lot_hash`` hashed the basis byte-for-byte, so Psi4's
-``def2-tzvp`` and ARC/Gaussian's ``def2tzvp`` became two levels of theory.
+``def2-tzvp`` and Gaussian's ``def2tzvp`` became two levels of theory.
 
 :func:`basis_identity_key` returns the string the hash is taken over. The
 verbatim name is still what the row stores and what every read shows; only

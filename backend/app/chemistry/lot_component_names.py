@@ -3,8 +3,9 @@
 ``dispersion``, ``solvent`` and ``solvent_model`` are names, and every program
 reads them case-insensitively (``EmpiricalDispersion=GD3BJ`` and ``gd3bj``,
 ``SCRF=(SMD,Solvent=Water)`` and ``water``, ORCA ``! D3BJ`` and ``d3bj``).
-ARC lower-cases them (``arc/level.py``, ``Level.lower``), so a stored ``D3BJ``
-and an uploaded ``d3bj`` were two levels of theory, as were ``Water`` and
+A producer that lower-cases them (ARC does: ``arc/level.py``, ``Level.lower``)
+uploads ``d3bj`` where a Gaussian user stored ``D3BJ``, so they were two
+levels of theory, as were ``Water`` and
 ``water``.
 
 :func:`component_identity_key` is the string each is hashed as: stripped and

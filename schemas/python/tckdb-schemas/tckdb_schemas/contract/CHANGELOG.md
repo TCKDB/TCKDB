@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.175.2 - 2026-11-14
+
+No schema, payload or code change. Field descriptions and docstrings explain a rule in terms of what any producer sends, naming a workflow tool only as one example. The generated producer contract carries the same text.
+
 ## 0.175.1 - 2026-11-14
 
 No schema, payload or code change. The package changelog describes each change by its behaviour, without issue, pull-request or design-record references, and lists each version once. Comments, docstrings and messages in the package state the rule without history. The generated producer contract carries the same changelog.
