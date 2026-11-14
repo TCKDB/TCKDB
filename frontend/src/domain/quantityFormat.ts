@@ -107,6 +107,17 @@ export function significant(value: number | null | undefined, digits: number, un
     return { ...quantity, value: quantity.value.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "") }
 }
 
+/**
+ * A computed value to 6 significant figures, in the house form: plain digits from 1e-2 up to 1e4, a mantissa and
+ * exponent outside that, trailing zeros trimmed. Unlike `deposited`, a whole number is rounded too, so 24254345 shows
+ * as 2.42543 x 10^7. `full` carries the served value when the shown one is shorter.
+ */
+export function evaluated(value: number | null | undefined, unit?: string | null): Quantity | null {
+    const quantity = significant(value, DEPOSITED_FIGURES, unit)
+    if (quantity === null || value === null || value === undefined) return quantity
+    return Number(value.toPrecision(DEPOSITED_FIGURES)) === value ? quantity : { ...quantity, full: String(value) }
+}
+
 function roundDeposited(value: number): number {
     const magnitude = Math.abs(value)
     if (magnitude >= 2 ** 53 || magnitude < 10 ** DEPOSITED_FIGURES) return Number(value.toPrecision(DEPOSITED_FIGURES))

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { ABSENT, DEPOSITED_SPEC_KEYS, fillValue, fixed, formatQuantity, QUANTITY_SPECS, scientific, type QuantitySpec } from "./quantityFormat"
+import { ABSENT, DEPOSITED_SPEC_KEYS, evaluated, fillValue, fixed, formatQuantity, QUANTITY_SPECS, scientific, type QuantitySpec } from "./quantityFormat"
 
 describe("fixed", () => {
     it("rounds to the requested number of digits", () => {
@@ -223,5 +223,17 @@ describe("formatQuantity / QUANTITY_SPECS", () => {
         // Plain digits only while they stay exact and short: this would round to 0, so it keeps its exponent.
         expect(formatQuantity("transport_rotational_relaxation", 1e-25)).toEqual({ value: "1", exponent: "−25", unit: null })
         expect(formatQuantity("transport_rotational_relaxation", null)).toBeNull()
+    })
+})
+
+describe("evaluated", () => {
+    it("rounds a whole-number rate to 6 figures and keeps the served value", () => {
+        expect(evaluated(24254345, "s")).toEqual({ value: "2.42543", exponent: "7", unit: "s", full: "24254345" })
+    })
+
+    it("shows a mid-range value in plain digits and a short one unchanged", () => {
+        expect(evaluated(12.3456789)).toEqual({ value: "12.3457", unit: null, full: "12.3456789" })
+        expect(evaluated(0.5)).toEqual({ value: "0.5", unit: null })
+        expect(evaluated(null)).toBeNull()
     })
 })
