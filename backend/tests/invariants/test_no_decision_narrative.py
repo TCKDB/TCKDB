@@ -16,12 +16,13 @@ Three properties keep it from passing on nothing:
 * a self-test runs a planted sample of every pattern through the same matcher.
 
 Exclusions are listed with a reason in ``_SKIP_DIRS``, ``_SKIP_SUFFIXES``,
-``_SKIP_NAMES`` and ``_SKIP_PATHS``. This file is itself excluded by exact path,
+``_SKIP_NAMES``, ``_SKIP_PATHS`` and ``_SKIP_RULES``. This file is itself excluded by exact path,
 because it has to spell the patterns out.
 """
 
 from __future__ import annotations
 
+import fnmatch
 import functools
 import os
 import re
@@ -37,7 +38,7 @@ TREES: dict[str, int] = {
     "backend/scripts": 80,
     "backend/tests": 1000,
     "schemas/python": 90,
-    "clients/python": 240,
+    "clients/python": 190,
     "frontend/src": 450,
 }
 
@@ -88,12 +89,42 @@ _SKIP_SUFFIXES = frozenset(
 _SKIP_NAMES = frozenset(
     {
         "package-lock.json",  # lockfile
-        "chem_annotated.yaml",  # recorded RMG model data: ids such as "#123" are data, not prose
     }
 )
 
-#: Files larger than this are machine-generated data (recorded payloads, models), not authored text.
-_MAX_BYTES = 300_000
+#: A scanned file larger than this must be covered by an explicit exclusion below; see
+#: ``test_no_large_file_is_scanned_by_accident``.
+_LARGE_FILE_BYTES = 300_000
+
+#: Directory-scoped exclusions: (directory prefix, file-name glob, reason).
+_SKIP_RULES: tuple[tuple[str, str, str], ...] = (
+    (
+        "schemas/python/tckdb-schemas/tckdb_schemas/contract/schemas/", "*",
+        "generated from the scanned sources by generate_producer_contract.py; its --check keeps it in sync",
+    ),
+    (
+        "schemas/python/tckdb-schemas/tckdb_schemas/contract/", "PRODUCER_CONTRACT.md",
+        "generated from the scanned sources by generate_producer_contract.py; its --check keeps it in sync",
+    ),
+    (
+        "schemas/python/tckdb-schemas/tckdb_schemas/contract/", "REFUSAL_CODES.md",
+        "generated from the scanned sources by generate_producer_contract.py; its --check keeps it in sync",
+    ),
+    (
+        "schemas/python/tckdb-schemas/tckdb_schemas/contract/", "WARNING_CODES.md",
+        "generated from the scanned sources by generate_producer_contract.py; its --check keeps it in sync",
+    ),
+    (
+        "schemas/python/tckdb-schemas/tckdb_schemas/contract/", "CHANGELOG.md",
+        "byte-identical copy of the scanned schemas/python/tckdb-schemas/CHANGELOG.md, written by generate_producer_contract.py",
+    ),
+    ("backend/tests/fixtures/arc_runs/", "output.yml", "recorded producer program output, data not prose"),
+    ("backend/tests/fixtures/arc_runs/", "*.payload.json", "recorded producer payloads, data not prose"),
+    ("backend/tests/fixtures/qcschema_scan/", "*", "recorded producer payloads, data not prose"),
+    ("clients/python/adapters/qcschema/tests/fixtures/", "*", "recorded QCSchema documents, data not prose"),
+    ("backend/tests/integration/fixtures/rmg_formic_acid_wu2026/", "chem_annotated.*", "recorded RMG model data, ids such as \"#123\" are data, not prose"),
+    ("backend/tests/fixtures/sdf/", "*.csv", "recorded kinetics table, data not prose"),
+)
 
 #: Exact repo-relative paths never scanned.
 _SKIP_PATHS = frozenset(
@@ -139,6 +170,14 @@ def find_hits(text: str) -> list[tuple[int, str, str]]:
     return hits
 
 
+def _excluded_by_rule(relative: str) -> bool:
+    directory, _, name = relative.rpartition("/")
+    return any(
+        f"{directory}/".startswith(prefix) and fnmatch.fnmatchcase(name, pattern)
+        for prefix, pattern, _reason in _SKIP_RULES
+    )
+
+
 def _iter_files(tree: str):
     for directory, dirnames, filenames in os.walk(REPO_ROOT / tree):
         dirnames[:] = sorted(d for d in dirnames if d not in _SKIP_DIRS and not d.endswith(".egg-info"))
@@ -147,7 +186,7 @@ def _iter_files(tree: str):
             relative = path.relative_to(REPO_ROOT).as_posix()
             if filename in _SKIP_NAMES or path.suffix in _SKIP_SUFFIXES or relative in _SKIP_PATHS:
                 continue
-            if path.stat().st_size > _MAX_BYTES:
+            if _excluded_by_rule(relative):
                 continue
             yield relative, path
 
@@ -198,6 +237,29 @@ def test_every_allowlist_entry_names_a_reason_and_an_existing_file() -> None:
     for path, text, reason in ALLOWLIST:
         assert reason.strip(), f"allowlist entry {path!r} {text!r} has no reason"
         assert (REPO_ROOT / path).is_file(), f"allowlist entry names a missing file: {path}"
+
+
+def test_no_large_file_is_scanned_by_accident() -> None:
+    """A big file that no exclusion names fails, so adding one is a deliberate decision."""
+    large = sorted(
+        relative
+        for tree in TREES
+        for relative, path in _iter_files(tree)
+        if path.stat().st_size > _LARGE_FILE_BYTES
+    )
+    assert not large, (
+        f"Files over {_LARGE_FILE_BYTES} bytes are scanned as prose. Split them, or add an explicit "
+        f"exclusion with a reason: {large}"
+    )
+
+
+def test_every_exclusion_rule_matches_a_file() -> None:
+    for prefix, pattern, _reason in _SKIP_RULES:
+        directory = REPO_ROOT / prefix
+        assert directory.is_dir(), f"exclusion names a missing directory: {prefix}"
+        assert any(fnmatch.fnmatchcase(p.name, pattern) for p in directory.rglob("*") if p.is_file()), (
+            f"exclusion matches no file: {prefix} {pattern}"
+        )
 
 
 def test_every_excluded_path_exists() -> None:
