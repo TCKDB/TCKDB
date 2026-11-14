@@ -59,11 +59,6 @@
     gap: .9rem 1.1rem;
 }
 
-/* `position: relative` gives `InlineExplain.tsx`'s absolutely-positioned
-   `.inline-explain-note` box (`inline-explain.css`) a near ancestor to
-   anchor against -- without it the box would position against the whole
-   `.browse-filter-grid`, or further out, instead of sitting right under
-   ITS OWN field. */
 .browse-filter-field {
     display: flex;
     flex-direction: column;
@@ -79,33 +74,10 @@
     text-transform: var(--type-label-transform);
 }
 
-/* The on-demand-explanation trigger (`TextField`'s `hint` path, an
-   on-demand alternative to a permanently-rendered paragraph under the
-   field, which would occupy more vertical space than the controls themselves). A dotted
-   underline plus `cursor: help` is the ONLY visual difference from a plain
-   field label: legible as "there's more here" without competing with the
-   value the reader actually typed, and `tabIndex` makes the label itself a
-   real keyboard stop so focus (not just mouse hover) reaches it -- see
-   `InlineExplain.tsx`'s own doc comment for why the field's `<input>` ALSO
-   drives the same box open on its own focus, so a keyboard user reaches the
-   explanation via the field's normal tab stop too, not only this one. */
-.browse-filter-field-label--explain {
-    cursor: help;
-    text-decoration: underline dotted;
-    text-decoration-color: var(--muted);
-    text-underline-offset: .2em;
-}
-
-.browse-filter-field-label--explain:hover,
-.browse-filter-field-label--explain:focus-visible {
-    color: var(--accent-700);
-    text-decoration-color: var(--accent-300);
-}
-
-.browse-filter-field-label--explain:focus-visible {
-    outline: 3px solid var(--focus-ring);
-    outline-offset: 2px;
-    border-radius: .15rem;
+.browse-filter-field-head {
+    display: flex;
+    align-items: baseline;
+    gap: .4rem;
 }
 
 /* A typed value (charge, formula, SMILES...) reads at the `--type-value`
@@ -606,15 +578,7 @@ span.browse-row-title {
         grid-template-columns: 1fr 1fr;
     }
 
-    /* Positional assumption: this grid is `1fr 1fr` here, so every even
-       child sits in the right-hand column. (A per-field modifier class was
-       considered, but the fields are emitted conditionally from several
-       components, so a hand-set class would drift from where the grid
-       actually places them.)
-       Right-hand column: grow the note leftwards. Left-anchored it ran off
-       the viewport (the closed note is still in layout) and made the whole
-       page scroll sideways at 320px. */
-    .browse-filter-field:nth-child(even) .inline-explain-note {
+    .browse-filter-field:nth-child(even) .term-popover {
         left: auto;
         right: 0;
     }
@@ -624,17 +588,6 @@ span.browse-row-title {
 .page-shell-side .browse-filters {
     margin: 0;
     padding: .9rem;
-}
-
-.page-shell-side .inline-explain-note {
-    position: static;
-    width: auto;
-    max-width: none;
-    margin-top: .35rem;
-}
-
-.page-shell-side .inline-explain-note:not(.inline-explain-note--open) {
-    display: none;
 }
 
 /* On phones the filters sit above the list behind a "Filters" disclosure. */

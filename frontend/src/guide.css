@@ -42,12 +42,3 @@
     color: var(--ink-2);
     font: var(--type-body-font);
 }
-
-.guide-order {
-    max-width: var(--measure-prose);
-    margin: 1rem 0 0;
-    padding-top: 1rem;
-    border-top: 1px solid var(--line);
-    color: var(--ink-2);
-    font: var(--type-body-font);
-}

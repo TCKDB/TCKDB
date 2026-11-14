@@ -193,19 +193,7 @@ describe("no CSS rule outside the reviewed allowlist resolves text-transform to 
         ).toEqual([])
     })
 
-    // ADVISORY ONLY, deliberately never a failing assertion: a stale allowlist entry -- a selector that was
-    // rewritten or deleted outright, so it no longer resolves to `uppercase`
-    // in the CSS at all -- is INERT, not a risk. The test above only checks
-    // selectors that ACTUALLY appear in `flaggedAsUppercase`; an allowlist
-    // entry matching nothing can never hide a genuine new violation, because
-    // there is no rule left for it to hide. Its only cost is a few stale
-    // lines in this file.
-    //
-    // Failing on a stale entry would force an edit to THIS file for an
-    // unrelated deletion of a rule that carries no scientific-text risk, so
-    // the check logs it instead. Someone doing allowlist hygiene can grep
-    // this warning in a verbose run and delete the dead line.
-    it("logs (never fails on) any allowlisted selector that no longer resolves to uppercase in the CSS", () => {
+    it("every allowlisted selector still resolves to uppercase in the CSS", () => {
         const flaggedKeys = new Set(flaggedAsUppercase.map((r) => `${r.file}::${r.selector}`))
         const stale: string[] = []
         for (const [file, selectors] of Object.entries(ALLOWLISTED_UPPERCASE_SELECTORS)) {
@@ -213,12 +201,6 @@ describe("no CSS rule outside the reviewed allowlist resolves text-transform to 
                 if (!flaggedKeys.has(`${file}::${selector}`)) stale.push(`${file} :: ${selector}`)
             }
         }
-        if (stale.length) {
-            console.warn(
-                "[text-transform-scientific-guard] advisory only, not a failure -- these allowlist entries " +
-                "no longer resolve to uppercase (selector likely renamed or deleted); safe to delete from " +
-                "ALLOWLISTED_UPPERCASE_SELECTORS whenever convenient:\n" + stale.map((s) => `  ${s}`).join("\n"),
-            )
-        }
+        expect(stale, "allowlist entries that no longer resolve to uppercase; delete them").toEqual([])
     })
 })

@@ -4,8 +4,7 @@ import { loadBasisSets, loadMethods, loadReactionFamilies, loadSoftwareNames, lo
 import type { VocabRecordKind } from "../api/vocabApi"
 import type { VersionVocabularyState, VocabularyState } from "../hooks/useVocabulary"
 import { useVersionVocabulary, useVocabulary } from "../hooks/useVocabulary"
-import { useInlineExplain } from "../hooks/useInlineExplain"
-import { InlineExplainNote } from "./InlineExplain"
+import { Term } from "./Term"
 
 const REVIEW_STATUSES = ["not_reviewed", "under_review", "approved", "deprecated", "rejected"]
 const TS_STATUSES = ["guess", "optimized", "validated", "rejected"]
@@ -516,16 +515,7 @@ function EvidenceChecks({ filters, onChange }: { filters: BrowseFilters; onChang
     )
 }
 
-/**
- * A hint is not a permanently-rendered paragraph under the field. The field's own
- * `<label>` becomes the trigger -- hover, keyboard focus, OR a tap all
- * reveal the SAME `InlineExplain` box, and the `<input>` itself carries
- * `aria-describedby` unconditionally, so a screen-reader user hears the
- * explanation the moment the field is focused regardless of whether
- * anything is drawn on screen (`useInlineExplain`'s own doc comment has the
- * full accessibility rationale). A field with no `hint` renders a bare
- * `<label>`, unchanged from before this fix.
- */
+/** A text field. Its `hint` opens from a "?" beside the label, so nothing takes space until asked for. */
 function TextField({ label, value, onChange, placeholder, hint }: {
     label: string
     value: string
@@ -534,40 +524,18 @@ function TextField({ label, value, onChange, placeholder, hint }: {
     hint?: string
 }) {
     const id = fieldId(label)
-    const hintId = `${id}-hint`
-    const explain = useInlineExplain()
     return (
         <div className="browse-filter-field">
-            {hint ? (
-                <label
-                    aria-describedby={hintId}
-                    className="browse-filter-field-label--explain"
-                    htmlFor={id}
-                    onBlur={explain.close}
-                    onClick={explain.toggle}
-                    onFocus={explain.open}
-                    onKeyDown={explain.onKeyDown}
-                    onMouseEnter={explain.open}
-                    onMouseLeave={explain.close}
-                    tabIndex={0}
-                    title={hint}
-                >
-                    {label}
-                </label>
-            ) : (
+            <div className="browse-filter-field-head">
                 <label htmlFor={id}>{label}</label>
-            )}
+                {hint && <Term note={hint} label={`About ${label}`}>?</Term>}
+            </div>
             <input
-                aria-describedby={hint ? hintId : undefined}
                 id={id}
-                onBlur={hint ? explain.close : undefined}
                 onChange={(event) => onChange(event.target.value)}
-                onFocus={hint ? explain.open : undefined}
-                onKeyDown={hint ? explain.onKeyDown : undefined}
                 placeholder={placeholder}
                 value={value}
             />
-            {hint && <InlineExplainNote id={hintId} note={hint} open={explain.isOpen} />}
         </div>
     )
 }

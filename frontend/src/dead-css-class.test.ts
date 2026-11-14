@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest"
 
 /**
- * Guards the general defect of a dead class: every class selector in the four
- * stylesheets `molecule-page.css`, `entry-science.css`, `browse.css` and `index.css` must have at least
- * one real `.tsx` consumer (not a test, not a comment), so a future class
+ * Guards the general defect of a dead class: every class selector in every
+ * stylesheet except `UNCHECKED_STYLESHEETS` must have at least
+ * one real `.ts` or `.tsx` consumer (not a test, not a comment), so a future class
  * that stops being rendered gets caught here instead of accumulating the
  * same way `.browse-row-ts-label` did (zero consumers, not even in a test).
  *
@@ -18,13 +18,19 @@ const ALL_STYLESHEETS: Record<string, string> = Object.fromEntries(
     Object.entries(STYLESHEET_SOURCES).map(([path, css]) => [path.replace(/^\.\//, ""), css]),
 )
 
-const CHECKED_STYLESHEETS = ["molecule-page.css", "entry-science.css", "browse.css", "index.css", "calculation-detail.css", "reaction-entry.css", "methods.css", "record-identity-header.css"]
+/** Stylesheets left out of the check, each with the reason. */
+const UNCHECKED_STYLESHEETS = new Map<string, string>([
+    ["theme.css", "tokens only; it defines no class selectors"],
+    ["design-system.css", "its type and card utilities are the shared vocabulary that design-system.css.test.ts pins, used or not"],
+])
+
+const CHECKED_STYLESHEETS = Object.keys(ALL_STYLESHEETS).filter((name) => !UNCHECKED_STYLESHEETS.has(name)).sort()
 
 // Every `.tsx` source in the project, EXCLUDING test files -- a class
 // referenced only by a `*.test.tsx` assertion (`document.querySelector`,
 // say) is not actually rendered by any real page, so it would not count
 // as a live consumer here.
-const COMPONENT_SOURCES = import.meta.glob("./**/*.tsx", { query: "?raw", import: "default", eager: true }) as Record<string, string>
+const COMPONENT_SOURCES = import.meta.glob(["./**/*.tsx", "./**/*.ts"], { query: "?raw", import: "default", eager: true }) as Record<string, string>
 
 function stripCssComments(source: string): string {
     return source.replace(/\/\*[\s\S]*?\*\//g, "")
@@ -68,8 +74,15 @@ function classNamesIn(css: string): Set<string> {
  *  its own token -- not as a substring of a longer identifier (so
  *  checking `"card"` does not count a hit inside `"card--selected"`). */
 function hasComponentConsumer(className: string): boolean {
-    const pattern = new RegExp(`(?<![A-Za-z0-9_-])${className.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-z0-9_-])`)
-    return pattern.test(COMPONENT_TEXT)
+    const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    const pattern = new RegExp(`(?<![A-Za-z0-9_-])${escape(className)}(?![A-Za-z0-9_-])`)
+    if (pattern.test(COMPONENT_TEXT)) return true
+    // A class built from a stem and a value, as in `review-chip--${tone}`.
+    for (let at = className.indexOf("-"); at !== -1; at = className.indexOf("-", at + 1)) {
+        const stem = className.slice(0, at + 1)
+        if (new RegExp(`(?<![A-Za-z0-9_-])${escape(stem)}\\$\\{`).test(COMPONENT_TEXT)) return true
+    }
+    return false
 }
 
 // Explicit allowlist, with a REASON for each entry. A `Set` here (the
@@ -89,8 +102,8 @@ const NOT_A_CLASS = new Map<string, string>([
     ["woff2", "a @font-face format-string literal in index.css (src: url(...) format(\"woff2\")), not a class selector at all"],
 ])
 
-describe("every class selector in species-entry/entry-science/browse/index.css has a real .tsx consumer", () => {
-    it("discovers the four checked stylesheets among what actually exists", () => {
+describe("every class selector in a checked stylesheet has a real consumer", () => {
+    it("discovers the checked stylesheets among what actually exists", () => {
         for (const name of CHECKED_STYLESHEETS) {
             expect(Object.keys(ALL_STYLESHEETS)).toContain(name)
         }
@@ -104,6 +117,12 @@ describe("every class selector in species-entry/entry-science/browse/index.css h
             .filter((name) => !NOT_A_CLASS.has(name))
             .filter((name) => !hasComponentConsumer(name))
         expect(deadClasses).toEqual([])
+    })
+})
+
+describe("UNCHECKED_STYLESHEETS entries are real files", () => {
+    it("names only stylesheets that exist", () => {
+        for (const name of UNCHECKED_STYLESHEETS.keys()) expect(Object.keys(ALL_STYLESHEETS)).toContain(name)
     })
 })
 

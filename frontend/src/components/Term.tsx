@@ -9,8 +9,15 @@ const EDGE_GAP_PX = 8
  * A glossary word as a button. The explanation is always in the DOM and linked by `aria-describedby`;
  * it opens on hover, focus and tap, closes on Esc with focus kept on the button, and stays open while the pointer is over it.
  */
-export function Term({ term, children }: { term: GlossaryKey; children?: ReactNode }) {
-    const entry = GLOSSARY[term]
+export function Term({ term, note, label, children }: {
+    term?: GlossaryKey
+    /** Free text in place of a glossary definition. */
+    note?: string
+    /** The button's accessible name, when its visible text is only a mark. */
+    label?: string
+    children?: ReactNode
+}) {
+    const entry = term === undefined ? undefined : GLOSSARY[term]
     const popoverId = useId()
     const wrapRef = useRef<HTMLSpanElement>(null)
     const popoverRef = useRef<HTMLSpanElement>(null)
@@ -80,6 +87,7 @@ export function Term({ term, children }: { term: GlossaryKey; children?: ReactNo
                 type="button"
                 className="term"
                 aria-describedby={popoverId}
+                aria-label={label}
                 onFocus={show}
                 onClick={(event) => {
                     // Enter or Space (detail 0) toggles; a pointer tap opens.
@@ -87,10 +95,10 @@ export function Term({ term, children }: { term: GlossaryKey; children?: ReactNo
                     else show()
                 }}
             >
-                {children ?? entry.term}
+                {children ?? entry?.term}
             </button>
             <span ref={popoverRef} id={popoverId} role="tooltip" className="term-popover t-preserve-case" data-open={open ? "true" : "false"}>
-                {entry.definition}
+                {note ?? entry?.definition}
             </span>
         </span>
     )
