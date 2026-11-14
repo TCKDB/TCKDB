@@ -154,14 +154,11 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
     return (
         <section className="conformer-page tse-page">
             <PageShell
-                side={(
-                    <>
-                        <RelationshipMap selfKind="reaction" selfLabel="This entry" state={neighbours} />
-                        {networksState.status === "ready" && (
-                            <ReactionNetworkRail networkRefs={networksState.networks.map((network) => network.network_ref)} reactionEntryRef={entry.reaction_entry_ref} />
-                        )}
-                    </>
-                )}
+                side={<RelationshipMap selfKind="reaction" selfLabel="This entry" state={neighbours}>
+                    {networksState.status === "ready" && (
+                        <ReactionNetworkRail networkRefs={networksState.networks.map((network) => network.network_ref)} reactionEntryRef={entry.reaction_entry_ref} />
+                    )}
+                </RelationshipMap>}
                 identity={(
                     <>
                         <Breadcrumbs crumbs={[

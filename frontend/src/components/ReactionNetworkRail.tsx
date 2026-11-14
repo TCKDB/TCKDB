@@ -3,6 +3,8 @@ import { Link } from "react-router-dom"
 import { loadNetworkTopology, type NetworkTopology } from "../api/networkEntryApi"
 import { NetworkMap } from "./NetworkMap"
 
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`
+
 function NetworkRailItem({ networkRef, reactionEntryRef }: { networkRef: string; reactionEntryRef: string }) {
     const [topology, setTopology] = useState<NetworkTopology | null>(null)
     useEffect(() => {
@@ -14,14 +16,14 @@ function NetworkRailItem({ networkRef, reactionEntryRef }: { networkRef: string;
     }, [networkRef])
     if (!topology || topology.states.length === 0) return null
     return (
-        <div className="rail-network">
+        <div>
             <NetworkMap
                 compact
                 states={topology.states}
                 channels={topology.channels}
                 channelBarriers={null}
                 highlightReactionEntryRef={reactionEntryRef}
-                caption={`${topology.states.length} states, ${topology.channels.length} channels. This reaction's channels are the thick lines.`}
+                caption={`${plural(topology.states.length, "state", "states")}, ${plural(topology.channels.length, "channel", "channels")}. Thick lines are this reaction.`}
             />
             <Link to={`/networks/${networkRef}`}>Open the network</Link>
         </div>
@@ -33,9 +35,9 @@ export function ReactionNetworkRail({ networkRefs, reactionEntryRef }: { network
     const headingId = useId()
     if (networkRefs.length === 0) return null
     return (
-        <section className="rel-map" aria-labelledby={headingId}>
-            <h2 id={headingId} className="rel-map-heading">Pressure-dependent network</h2>
+        <div className="rail-network" role="group" aria-labelledby={headingId}>
+            <h3 id={headingId} className="rel-map-heading">Pressure-dependent network</h3>
             {networkRefs.map((networkRef) => <NetworkRailItem key={networkRef} networkRef={networkRef} reactionEntryRef={reactionEntryRef} />)}
-        </section>
+        </div>
     )
 }
