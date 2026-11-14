@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A test guards against decision narrative in source text (Unreleased)
+
+- **Behaviour:** one user-facing message is reworded; no change to when it fires: the QCSchema adapter's unsupported-driver refusal now ends "other atomic drivers are not supported (a scan is imported as a TorsionDriveResult via tckdb_qcschema.scan.build_scan_bundle_payload)" instead of naming a work package. The new test, `backend/tests/invariants/test_no_decision_narrative.py`, lists the tracked files under `backend/app`, `backend/scripts`, `backend/tests`, `schemas/python`, `clients/python` and `frontend/src` with `git ls-files` and fails on design-record pointers, links into decision-record folders, manuscript-folder paths, an owner's name, owner-decision wording, issue, pull-request and review-finding ids, and phase, work-package and chunk labels, naming each hit as `path:line: [pattern] matched text`. The repo gate workflow runs it on every pull request. Wording fixes elsewhere remove the remaining hits (comments, docstrings and fixture notes).
+- **Schema and migration:** none. No new environment variable.
+- **Versions:** `tckdb-qcschema` 0.9.4 and `tckdb-chemkin` 0.7.3 (text only apart from the one message).
+
 ## Package changelogs, docs and sources in `tckdb-schemas` and `tckdb-client` describe behaviour only (Unreleased)
 
 - **Behaviour:** two refusal and error messages are reworded; no change to when they fire (the builder's dependency-role error and the QCSchema adapter's scan-coordinate refusal). Both package changelogs describe each change by its behaviour, without issue, pull-request or design-record references, and list each version once; the generated producer contract carries the same changelog. Comments, docstrings, docs, examples and test names in `schemas/python` and `clients/python` state the rule without history. The scan-coordinate refusal message in the QCSchema adapter no longer cites a design record.

@@ -6,7 +6,7 @@ Why this exists, and why it is not the scientific check register
 chemistry. Its inclusion test is "could this check be wrong in an
 interesting way?", and membership *is* the claim that a check encodes a
 scientific decision — so an entry that fails the test dilutes every other
-entry. That register is also the manuscript's validation claim.
+entry. That register is also the project's validation claim.
 
 The register and the set of codes the API can return are different sets. A
 role/type mismatch, an ownership refusal and ``missing_filter`` are real

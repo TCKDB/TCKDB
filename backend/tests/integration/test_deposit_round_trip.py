@@ -8,7 +8,7 @@ restore``) as a **subprocess** into a database that was made by nothing but
 such restore had ever succeeded (see ``MIGRATION_WRITTEN_TABLES`` in
 ``app/services/archive/registry.py``).
 
-The second test is the deposit round trip the B3 work package promises: a
+The second test is the deposit round trip: a
 small corpus is published and deposited from the test session, the deposit's
 archive is restored by subprocess into a scratch database, the
 manuscript-number generators are run against the restored database by the
