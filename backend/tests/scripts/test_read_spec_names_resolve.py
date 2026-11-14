@@ -9,10 +9,10 @@ existed: the spec annotated fields as ``CalculationResultSPSummary`` /
 ``CalculationFreqResultSummary`` — the words transposed, which is exactly the
 kind of drift a human eye slides over.
 
-**Why it now covers every spec (#167).** The very next PR produced an instance
-one document could not see: ``docs/specs/computed-species-bundle-spec.md``
+**Why it covers every spec.** A single-document guard misses an instance
+that a wider sweep sees: ``docs/specs/computed-species-bundle-spec.md``
 cited ``_assert_calculation_owned_by``, a helper removed when five per-product
-ownership checks were consolidated into one (#162). The same sweep found two
+ownership checks were consolidated into one. The same sweep found two
 more in that one file (``_assert_dependency_role_type_compatible``,
 ``_assert_thermo_role_type_compatible``) and a fourth in the artifact-upload
 spec (``_persist_artifact``, listed with a ✅ against a module it had been
@@ -33,7 +33,7 @@ annotations, never as definitions.
 **Two patterns, deliberately narrow.**
 
 *Classes* are matched by suffix (``…Summary|Read|Response|Payload|Block``)
-rather than "any CamelCase word". Measured over all 55 specs, the suffix rule
+rather than "any CamelCase word". Over all 55 specs, the suffix rule
 sees 205 references; matching any CamelCase word instead sees 706, of which 113
 are unresolved and almost all are noise — ``PostgreSQL``, ``OpenAPI``,
 ``InChIKey``, ``MinIO``, ``ValueError``, ``C2H4``. A guard with that
@@ -54,7 +54,7 @@ Every one of those elisions has one or two segments; every real helper name in
 the corpus that this guard needs to catch has three or more. The three-segment
 floor removes all of them and keeps the ones that matter. The known cost is
 that a genuinely stale two-segment helper is invisible — ``_persist_artifact``
-was found by hand during #167, not by this pattern. Widening the pattern to
+was found by hand, not by this pattern. Widening the pattern to
 catch it would re-admit the elisions, so the trade was made deliberately.
 
 **Resolution is deliberately generous.** A name is considered real if it is
@@ -88,7 +88,7 @@ SPEC_DIRS = (
     REPO_ROOT / "docs" / "specs",
 )
 
-#: The one document the guard covered before #167. Named so that widening the
+#: The one document the guard covers without widening. Named so that widening the
 #: sweep can never quietly stop covering the file it started from.
 ORIGINAL_SPEC = "backend/docs/specs/scientific_calculation_reads.md"
 
@@ -252,7 +252,7 @@ def _ids(pairs: list[tuple[str, str]]) -> list[str]:
 #
 # Every assertion below exists because a scan that quietly stops matching
 # reports success having checked nothing, and `parametrize` over an empty set
-# is a skip rather than a failure. Each floor was measured on the corpus and
+# is a skip rather than a failure. Each floor is set from the corpus and
 # then set below the measurement, so ordinary editing does not trip it but a
 # broken scan collapses well past it.
 # --------------------------------------------------------------------------
@@ -320,7 +320,7 @@ def test_the_helper_scan_finds_names_to_check() -> None:
 
 
 def test_the_document_this_guard_started_from_is_still_checked() -> None:
-    """#167 widened the sweep; it must not have diluted the original guarantee."""
+    """The widened sweep must not dilute the original guarantee."""
     from_original = [name for doc, name in _CLASS_CHECKS if doc == ORIGINAL_SPEC]
     assert len(from_original) >= 12, (
         f"Only {len(from_original)} referenced class names found in {ORIGINAL_SPEC}, "
@@ -349,7 +349,7 @@ def test_every_allowlist_entry_carries_a_reason() -> None:
 
 
 def test_every_allowlist_entry_is_still_earning_its_place() -> None:
-    """An exemption that no longer applies is rot with a comment on it."""
+    """An exemption that does not apply is rot with a comment on it."""
     still_referenced = set(_CLASS_REFERENCES) | set(_HELPER_REFERENCES)
     resolvable = _resolvable_names()
     for document, name in _ALLOWED:

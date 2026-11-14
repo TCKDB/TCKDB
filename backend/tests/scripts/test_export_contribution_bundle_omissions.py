@@ -2,7 +2,7 @@
 
 A portable bundle cannot carry everything a kinetics record states (a resolved-channel determination, a
 protocol's supporting calculations). The exporter reports each as a ``declaration_pruned`` omission through
-a sink; the CLI used to drop the sink on the kinetics path, so the loss was silent. These tests drive the CLI's
+a sink; a CLI that drops the sink on the kinetics path loses the omissions silently. These tests drive the CLI's
 own ``_export`` and ``main`` with the database and the exporter stubbed, so they test the wiring and nothing else.
 """
 

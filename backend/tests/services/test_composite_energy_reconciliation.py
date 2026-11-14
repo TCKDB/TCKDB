@@ -1,4 +1,4 @@
-"""Reconciling a deposited composite energy with the Gaussian log (ADR 0021, P3b).
+"""Reconciling a deposited composite energy with the Gaussian log.
 
 The log is a real CBS-QB3 run (``cbs_qb3_ts_c2h5no2_g16.out``) that prints
 ``E(ZPE) = 0.072623`` and ``CBS-QB3 (0 K) = -283.819775``. The deposited values

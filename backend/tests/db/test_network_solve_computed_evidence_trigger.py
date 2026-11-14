@@ -406,7 +406,7 @@ def test_computed_solve_with_a_saddle_point_path_needs_a_barrier(trigger_engine)
 def test_an_all_barrierless_network_needs_no_barrier(trigger_engine):
     """Barrierless association is correct science with zero barriers.
 
-    ADR 0008 forbids the blocking tier from firing on a correct result, so the
+    the blocking-tier rule forbids the blocking tier from firing on a correct result, so the
     barrier rule is conditional on the topology declaring a saddle point at
     all. Offering a barrier here would be a fabricated number, which is why
     ``validate_mechanistic_channel_evidence`` requires exactly none.
@@ -467,7 +467,7 @@ def test_the_legitimate_write_order_still_commits(trigger_engine):
 def test_reported_solves_are_exempt(trigger_engine):
     """A reported solve holds none of these inputs, by construction.
 
-    Demanding them is exactly the refusal ADR 0010 removed: a paper's
+    Demanding them is exactly the refusal that is not made: a paper's
     supplementary table does not publish the state energies, the barriers or
     the ⟨ΔE⟩down. What it must have instead — the citation — is already held by
     ``ck_network_solve_reported_requires_literature``.

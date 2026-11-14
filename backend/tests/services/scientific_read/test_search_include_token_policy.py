@@ -6,7 +6,7 @@ rather than a relaxation of it.
 **Before.** ``trust`` was legal only on detail / subresource surfaces and
 never on a broad search / list surface, because only the detail paths
 eager-load the graph the evidence evaluator walks. The drift this test was
-written for (fixed in b8f1429) was ``statmech_search`` importing a *detail*
+written for was ``statmech_search`` importing a *detail*
 include-token set: that made ``/scientific/statmech/search`` accept
 ``include=trust`` and leak it through ``include=all``.
 

@@ -1,12 +1,12 @@
-"""Offline pins for the one-atom ``sp`` primary rule (#610).
+"""Offline pins for the one-atom ``sp`` primary rule.
 
 The rule is ``require_opt_primary_unless_monatomic``, reached through the
 species conformer, the reaction conformer and the pressure-dependent network's
-conformer (#615). Every way it could be too wide
+conformer. Every way it could be too wide
 is a case here: a geometry that cannot be counted, two atoms, and every
 calculation type other than ``opt``, ``sp`` and ``composite``.
 
-``composite`` is the one deliberate third exception (ADR 0021): a program-run
+``composite`` is the one deliberate third exception: a program-run
 named method (CBS-QB3, G4, ...) optimises the geometry as the first step of its
 recipe, so it may be the conformer's primary for any geometry, provided it
 carries its ``composite_result`` (the pairing rule refuses it without one).

@@ -9,7 +9,7 @@ statements in ``app/schemas`` reported ``import-not-found``, and
 printed ``Success: no issues found in 149 source files`` while every type
 error inside the wire package -- and every type error in backend code
 arising from how it uses the wire package -- was invisible to it.
-Measured when it was fixed: 12 real findings in code that had merged
+Fixing the path surfaced 12 real findings in code that had merged
 green, one of them a live defect (a required ``str`` field left holding
 ``None``).
 
@@ -54,7 +54,7 @@ PYPROJECT = BACKEND_DIR / "pyproject.toml"
 def _config_only_env() -> dict[str, str]:
     """The subprocess environment with every *ambient* import path removed.
 
-    Measured, and it cost a false pass: mypy's module search path includes
+    It costs a false pass: mypy's module search path includes
     the target interpreter's ``sys.path``, so a ``PYTHONPATH`` naming the
     wire package makes ``tckdb_schemas`` resolve **regardless** of the
     configuration -- which is exactly how a developer running the suite
@@ -111,7 +111,7 @@ def test_every_configured_check_target_exists() -> None:
 
     ``files`` entries are resolved against the working directory, which
     for both CI (``working-directory: backend``) and the documented local
-    command is ``backend/``. An entry that no longer names anything is
+    command is ``backend/``. An entry that does not name anything is
     the failure mode that turns a gate into a no-op.
     """
     targets = _mypy_config()["files"]
@@ -256,7 +256,7 @@ def test_the_probe_would_pass_if_the_package_were_unresolvable(
     """The control for the test above -- otherwise it proves nothing.
 
     Same probe, same mypy, but ``ignore_missing_imports`` on and no
-    ``mypy_path``: the pre-fix configuration. It must report the import
+    ``mypy_path``: the broken configuration. It must report the import
     as missing rather than the misuse, which is exactly how a blatant
     error merged green.
     """

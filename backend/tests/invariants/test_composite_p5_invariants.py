@@ -1,4 +1,4 @@
-"""Structural guards for assembled composites (ADR 0021, P5).
+"""Structural guards for assembled composites.
 
 "Every place must do X" rules the phase adds. A rule that lives only in the call
 sites that existed when it was written is the house defect: the next workflow
@@ -12,7 +12,7 @@ anything about it, so a scan that stopped matching cannot pass empty.
 2. ``calc_composite_input`` rows are written in exactly one place, and that
    place writes the mirroring ``composite_input`` edge in the same function.
 3. ``calc_composite_input`` (a calculation child table) is archived and frozen
-   (held for every calculation child table by the P3a guard; named here so a
+   (held for every calculation child table by the dependency-parent guard; named here so a
    removal fails by name).
 """
 
@@ -88,7 +88,7 @@ def test_every_workflow_that_persists_a_calculation_finalises_assembled_inputs_b
 
 
 def test_a_finalise_call_is_never_handed_an_empty_literal() -> None:
-    """``finalize_composite_inputs(session, [])`` is the mutation that used to survive: it finalises nothing."""
+    """``finalize_composite_inputs(session, [])`` is a mutation that must not survive: it finalises nothing."""
     calls = 0
     for path in sorted(_WORKFLOWS.glob("*.py")):
         for function in _functions(path):

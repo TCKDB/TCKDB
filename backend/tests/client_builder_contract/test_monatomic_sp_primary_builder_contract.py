@@ -1,6 +1,6 @@
-"""Contract test: the client builders anchor a single atom on its ``sp`` (#610).
+"""Contract test: the client builders anchor a single atom on its ``sp``.
 
-``tckdb-client`` used to refuse any non-``opt`` primary calculation, so a
+A client that refuses any non-``opt`` primary calculation leaves a
 producer could not send an honest atom through the builders even after the
 server accepted one. The builders now apply the schema's own rule to the
 conformer geometry they will send: an ``sp`` primary is accepted for a
@@ -15,7 +15,7 @@ import pytest
 
 from tests._ci_dependency import require_module
 
-# Skips locally without the client; fails on CI, which installs it (#575).
+# Skips locally without the client; fails on CI, which installs it.
 require_module("tckdb_client.builders", install="pip install -e clients/python")
 
 from tckdb_client.builders import (

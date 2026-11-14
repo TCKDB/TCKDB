@@ -53,7 +53,7 @@ def test_a_terminal_group_is_reported_terminal_not_below_a_floor(db_session):
 
 
 def test_an_unreviewed_observation_inside_a_visible_group_is_in_the_world_under_curated(db_session):
-    """ADR 0023, Q2: an observation inside a group is evidence, used and badged unless it is rejected or deprecated.
+    """An observation inside a group is evidence, used and badged unless it is rejected or deprecated.
 
     Kills: the earlier rule, which held the observation out of the compared world because it was below ``approved``.
     """

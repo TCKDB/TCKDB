@@ -3,7 +3,7 @@
 Runs inside the pytest transaction, so every change rolls back with the
 test. The seed is what the re-key leaves behind on a database that
 already held two spellings of one level: a *holder* row carrying the
-identity-keyed hash, and a *duplicate* row still carrying its pre-#574 hash
+identity-keyed hash, and a *duplicate* row still carrying its pre-identity-key hash
 and its own calculations.
 """
 
@@ -137,7 +137,7 @@ def _approve(db_session, record, record_type=SubmissionRecordType.calculation) -
 def seeded(db_session):
     """Three groups: one mergeable, one with an approved calc, one cited by an FSF."""
     s = {}
-    # The #572 pair. Psi4's spelling holds the key; Gaussian's is the duplicate.
+    # The Psi4/Gaussian pair. Psi4's spelling holds the key; Gaussian's is the duplicate.
     s["psi4"] = _lot(db_session, "b3lyp-lotm", "def2-tzvp", holder=True)
     s["gaussian"] = _lot(db_session, "b3lyp-lotm", "def2tzvp", holder=False)
     s["psi4_calc"] = _calc(db_session, s["psi4"])
@@ -296,7 +296,7 @@ def test_commit_refuses_a_deployed_database_name(merge, monkeypatch, db_session,
 
 
 # ---------------------------------------------------------------------------
-# Review findings on #582: releases cite the duplicate's ref, and accepted
+# Releases cite the duplicate's ref, and accepted
 # products cite the moved calculations.
 # ---------------------------------------------------------------------------
 
@@ -404,7 +404,7 @@ def _merged_into(db_session, lot_id: int) -> int | None:
 
 
 # ---------------------------------------------------------------------------
-# #591: observations, and method case (#585)
+# observations, and method case
 # ---------------------------------------------------------------------------
 
 
@@ -446,7 +446,7 @@ def test_an_unapproved_observation_does_not_block_the_group(merge, db_session, s
 
 
 def test_two_spellings_of_the_method_are_one_group(merge, db_session):
-    """#585: ``CCSD(T)-F12`` (older, stored hash) and ``ccsd(t)-f12`` (holds the key)."""
+    """``CCSD(T)-F12`` (older, stored hash) and ``ccsd(t)-f12`` (holds the key)."""
     holder = _lot(db_session, "ccsd(t)-f12-lotm", "cc-pvtz-f12", holder=True)
     duplicate = LevelOfTheory(
         method="CCSD(T)-F12-LOTM",
@@ -474,7 +474,7 @@ def test_two_spellings_of_the_method_are_one_group(merge, db_session):
 def test_a_declared_energy_level_on_a_duplicate_blocks_the_group(
     merge, db_session, product
 ):
-    """#619: ``thermo`` and ``statmech`` now cite a level of theory of their own.
+    """``thermo`` and ``statmech`` now cite a level of theory of their own.
 
     The script finds foreign keys into ``level_of_theory`` at run time, so the
     new columns need no change to it; this pins that they block, because the
@@ -506,7 +506,7 @@ def test_a_declared_energy_level_on_a_duplicate_blocks_the_group(
 def test_a_scheme_citing_a_duplicate_as_its_frequency_level_blocks_the_group(
     merge, db_session
 ):
-    """Composite-levels P6: ``energy_correction_scheme.frequency_level_of_theory_id``.
+    """Composite levels: ``energy_correction_scheme.frequency_level_of_theory_id``.
 
     The script discovers foreign keys into ``level_of_theory`` at run time, so
     the new column needs no change to it. It repoints neither the scheme nor

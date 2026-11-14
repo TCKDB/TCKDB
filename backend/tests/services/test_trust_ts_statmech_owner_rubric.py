@@ -1,11 +1,11 @@
 """The owner-scoped statmech rubric ``computed_ts_statmech`` v1.
 
-A transition-state-owned statmech record used to be graded by the species rubric, whose first
-check asks for a species entry, and so read ``hard_failed`` / ``species_entry_missing`` however
-complete it was. It is now graded by ``computed_ts_statmech``: the species rubric with exactly
+A transition-state-owned statmech record is not graded by the species rubric, whose first
+check asks for a species entry and would read ``hard_failed`` / ``species_entry_missing`` however
+complete it was. It is graded by ``computed_ts_statmech``: the species rubric with exactly
 one check swapped ("attached to a transition-state entry" for "attached to a species entry").
 
-What these tests protect, in the order the owner stated the conditions:
+What these tests protect:
 
 1. Generic completeness stays non-certifying (``is_certified`` is false on a well-supported record).
 2. An automated geometry-validation fail stays advisory (a ``warning``, never a hard fail).
@@ -315,7 +315,7 @@ def test_live_matches_the_species_rubric_run_directly(db_session, name):
 
 def test_a_species_review_stored_before_the_change_is_current_after_it_and_nothing_is_rewritten(db_session):
     statmech = SCENARIOS["opt_freq_sp"](db_session)
-    # The review as it was stored before PR 6.6: legacy evaluation, legacy (species) recipe.
+    # A review stored with the legacy evaluation, legacy (species) recipe.
     legacy = build_trust_fragment(evaluate_loaded_statmech_under(statmech, COMPUTED_STATMECH))
     row = _store_review(db_session, statmech, legacy, SPECIES_RUBRIC)
     before = _row_snapshot(db_session)

@@ -1,6 +1,6 @@
 """Every TCKDB-owned version is at its expected current value, and no registry is empty.
 
-The versioning programme reset every version TCKDB owns to 1 at the release baseline (owner decision 1, 2026-10-24).
+The versioning programme resets every version TCKDB owns to 1 at the release baseline.
 This file fails when a registry is empty (so the parametrization cannot pass vacuously) and when a registered current
 version is not the one written out below.
 
@@ -55,13 +55,13 @@ REGISTRIES: dict[str, Callable[[], VersionRegistry]] = {
 
 #: Registries whose current version is not the baseline, and why: the method-preference rules were removed, which
 #: changed the decision documents these formats describe. A select request then gained filters and named eligibility
-#: defaults (2026-10): a recorded decision now carries them, so the format moved again, and the assessment semantics
+#: defaults: a recorded decision carries them, so the format is at the later version, and the assessment semantics
 #: moved because the recorded ``eligible`` flag is the verdict under the request's own settings. The curated evidence rule
-#: (ADR 0023, step 2) moved the thermo, kinetics, statmech, structure, network and relative-energy formats to 4: a manifest records the
+#: moved the thermo, kinetics, statmech, structure, network and relative-energy formats to 4: a manifest records the
 #: review statuses whose linked evidence its profile withheld, and one recorded before that is refused.
-#: The thermo and kinetics formats moved once more to 5 (2026-10-26): their provenance filters are matched through ONE source
+#: The thermo and kinetics formats are at 5: their provenance filters are matched through ONE source
 #: calculation and the filter set grew, so a decision recorded under the earlier reading is refused on replay.
-#: The structure and relative-energy formats moved to 5 (ADR 0023, step 5): a basin determination records its conformer
+#: The structure and relative-energy formats moved to 5: a basin determination records its conformer
 #: group's and observation's review statuses apart, so a replay judges the group as a record and the observation as evidence.
 EXPECTED: dict[str, int] = {
     "thermo_formats": 5,
@@ -77,7 +77,7 @@ EXPECTED: dict[str, int] = {
 
 #: Names above the baseline inside a registry whose other names are at it. The transition-state badge lists its
 #: qualifying refs in the structure administrative key, whose version 2 changed that order. The native export and the ML
-#: export are at 2 because no export picks a record any more: the native manifest says ``records`` instead of
+#: export are at 2 because no export picks a record: the native manifest says ``records`` instead of
 #: ``collapse`` / ``selection_policy``, and the ML species record carries ``thermos``, a list, where it carried the one
 #: thermo it had picked.
 EXPECTED_REF: dict[tuple[str, str], int] = {

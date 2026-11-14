@@ -225,7 +225,7 @@ def test_every_link1_job_reports_its_own_scf_thresholds_and_the_whole_file_repor
 def test_the_harris_guess_irad_an_is_not_read_as_the_scf_grid(fixture):
     """IRadAn prints only on the Harris initial-guess lines of these G16 logs (no `IXCGrd=` line): no grid row.
 
-    Measured on the fixture corpus: where a log has both, the Harris lines' IRadAn differs from the SCF grid line's in
+    On the fixture corpus, where a log has both, the Harris lines' IRadAn differs from the SCF grid line's in
     58 logs (IXCGrd 0 against Harris 1 or 4; IXCGrd 5 against Harris 4), so the guess step's code is not the grid.
     """
     text = _read(fixture)

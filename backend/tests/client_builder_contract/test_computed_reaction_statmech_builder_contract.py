@@ -1,4 +1,4 @@
-"""Contract test for the Phase-4 ``ComputedReactionUpload.species_statmech``.
+"""Contract test for the ``ComputedReactionUpload.species_statmech``.
 
 Unlike ``species_thermo``, the computed-reaction backend's
 ``BundleStatmechIn`` DOES carry ``source_calculations`` — these tests
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from tests._ci_dependency import require_module
 
-# Skips locally without the client; fails on CI, which installs it (#575).
+# Skips locally without the client; fails on CI, which installs it.
 require_module("tckdb_client.builders", install="pip install -e clients/python")
 
 from tckdb_client.builders import (

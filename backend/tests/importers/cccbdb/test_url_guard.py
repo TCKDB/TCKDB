@@ -1,6 +1,6 @@
 """Tests for the unverified-URL guardrail.
 
-The current Phase 2b allowlist contains placeholder ``exp1x.asp``
+The allowlist contains placeholder ``exp1x.asp``
 URLs that CCCBDB does not actually serve as per-species GET endpoints
 (see ``crawl_plan.py`` module docstring). The CLI must refuse to fetch
 them unless an explicit override flag is passed.

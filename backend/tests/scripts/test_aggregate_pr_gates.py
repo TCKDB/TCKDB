@@ -5,9 +5,9 @@ protection lists, so every test suite in this repository gates a merge
 through it and nothing else. That makes the interesting property not
 "does it pass on a good pull request" but "is there any pull request on
 which it passes without having checked anything". This repository has
-shipped four guards that could not fail (#79 a nightly red nobody read,
-#82 a sweep that verified nothing and exited 0, #93 a step that never
-executed, #95 three suites run by no job), and two of the guards written
+shipped four guards that could not fail (a nightly red nobody read,
+a sweep that verified nothing and exited 0, a step that never
+executed, three suites run by no job), and two of the guards written
 to close that family shipped containing it. So the tests below are
 weighted toward the four ways this one could join them:
 
@@ -19,7 +19,7 @@ weighted toward the four ways this one could join them:
     on a required check is indistinguishable from a block;
   * a GitHub API hiccup reported as though a gate had gone red -- a false
     *fail*, the mirror image of the first three and the one that actually
-    bit, on 2026-08-17, when a 504 blocked a pull request whose gates had
+    bites when a 504 blocks a pull request whose gates had
     all passed.
 
 The retry tests below assert **attempt counts**, not just outcomes. A
@@ -110,7 +110,7 @@ def test_every_non_success_conclusion_is_a_failure(conclusion):
     ``skipped`` is in this list and is the subtle one: a *run* concluding
     skipped means every job in it was skipped, so the gate did not
     execute. Reading that as "fine, nothing to do" is precisely the shape
-    of #93.
+    of a step that never executed.
     """
     state, _ = gates.classify_workflow(
         BACKEND_CI,
@@ -265,15 +265,15 @@ def test_a_backend_change_expects_the_backend_gate_and_not_the_client_gate():
 
 
 def test_an_api_surface_change_expects_the_client_gate_too():
-    """The fix for the gap that let #276 land without a ``_parity.py`` entry.
+    """A backend API change must not land without a ``_parity.py`` entry.
 
     ``clients/python/tests/test_openapi_parity.py`` requires every backend
-    operation to be triaged in ``tckdb_client._parity``, but the client
-    workflow used to trigger only on ``clients/python/**`` and
-    ``schemas/python/tckdb-schemas/**`` -- so a backend-only PR that added
-    a route never ran it. A route file under ``backend/app/api/**`` and a
-    regenerated OpenAPI golden snapshot must both wake the client gate now,
-    alongside the backend gate; neither wakes the frontend gate.
+    operation to be triaged in ``tckdb_client._parity``. A client workflow that
+    triggers only on ``clients/python/**`` and ``schemas/python/tckdb-schemas/**``
+    never runs for a backend-only PR that adds a route, so a route file under
+    ``backend/app/api/**`` and a regenerated OpenAPI golden snapshot must both
+    wake the client gate, alongside the backend gate; neither wakes the
+    frontend gate.
     """
     for changed in (
         ["backend/app/api/routes/scientific/species_browse.py"],
@@ -285,7 +285,7 @@ def test_an_api_surface_change_expects_the_client_gate_too():
 
 
 def test_a_client_source_change_expects_the_client_and_backend_gates():
-    """Client *source* also wakes the backend gate (#575).
+    """Client *source* also wakes the backend gate.
 
     ``backend/tests/client_builder_contract/`` validates the client's
     builder payloads against the backend's upload schemas and runs in the
@@ -353,7 +353,7 @@ def test_a_rename_counts_both_of_its_paths():
 
 
 def test_a_listing_that_hit_the_api_cap_expects_everything():
-    """Past the API's own listing cap the filter can no longer be evaluated."""
+    """Past the API's own listing cap the filter cannot be evaluated."""
     assert gates.workflow_is_expected(_real(CLIENT_CI), ["paper/x.tex"], files_truncated=True)
 
 
@@ -677,7 +677,7 @@ def test_the_two_status_sets_are_populated_and_disjoint():
 def test_a_transient_status_is_retried_and_succeeds_when_github_recovers(code):
     """More than one attempt, and the recovery is actually taken.
 
-    This is the 2026-08-17 incident as a unit: the first call gets a 504
+    This is the 504 incident as a unit: the first call gets a 504
     from a GitHub that is having a bad minute, the second gets the run
     listing, and the pull request is not blocked.
     """

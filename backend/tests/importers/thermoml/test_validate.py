@@ -1,6 +1,6 @@
 """``validate_bytes`` rejects schema-invalid ThermoML documents.
 
-Mutation check (verified manually; see the PR body's mutation table):
+Mutation check (verified manually):
 bypassing ``schema.validate(doc)`` (e.g. hardcoding ``valid = True``)
 makes ``test_schema_invalid_fixture_is_rejected`` go red.
 """

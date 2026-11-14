@@ -1,4 +1,4 @@
-"""Find the ways source code can make an ``UploadWarning`` whose message is not ``render_message(code, context)`` (#838).
+"""Find the ways source code can make an ``UploadWarning`` whose message is not ``render_message(code, context)``.
 
 ``UploadWarning.from_code`` is the one constructor. Anything else lets a producer write the message itself, or change
 it after the fact, so this finds, in a source file:

@@ -130,7 +130,7 @@ class TestOtherKindRequiresLabel:
 def _cp_kwargs(**overrides):
     """A minimal, honest experimental ideal-gas Cp(298.15 K) point.
 
-    Before Phase C-E1, this exact point could only be expressed as
+    Without the observation contract, this exact point could only be expressed as
     ``property_kind=other``, ``scalar_unit="J/K/mol"`` (free text -- no
     fixed-unit guarantee), no pressure, no state basis, and a bare
     ``scalar_uncertainty`` with no stated meaning (not even "standard
@@ -150,10 +150,10 @@ def _cp_kwargs(**overrides):
 
 
 class TestExperimentalCpPointContract:
-    """Phase C-E1: the previously-lossy experimental Cp(T) point.
+    """The experimental Cp(T) point.
 
     This is the first regression test of the new observation contract --
-    what a bare ``property_kind=other`` row used to lose (a heat-capacity
+    what a bare ``property_kind=other`` row loses (a heat-capacity
     kind, a fixed unit, a state basis, pressure, and a typed uncertainty)
     is now expressible and validated.
     """

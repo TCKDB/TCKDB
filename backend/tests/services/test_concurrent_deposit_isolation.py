@@ -185,7 +185,7 @@ class TestGeometryValidationIsTrulyBestEffort:
 
     The behaviour of the isolation itself is pinned by
     ``tests/services/test_best_effort_isolation.py``; what matters here is
-    that this function's write actually goes through it, because previously
+    that this function's write actually goes through it, because otherwise
     the row was added with no flush and its INSERT escaped to the caller's
     ``COMMIT`` where no guard could reach it.
     """

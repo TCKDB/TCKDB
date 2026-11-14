@@ -195,7 +195,7 @@ def test_the_partition_equals_the_connected_components_in_every_order_of_ethanol
 
 
 def test_drift_inside_the_tolerance_is_one_basin_in_every_order(db_conn) -> None:
-    """All pairs within 20 degrees: the case the old rule already got right, and must keep getting right."""
+    """All pairs within 20 degrees: the case every rule gets right, and must keep getting right."""
     structures = [butane("A", 65.0), butane("B", 72.0), butane("C", 58.0)]
     seen = partitions_over_all_orders(db_conn, _BUTANE, structures)
     assert set(seen.values()) == {frozenset({frozenset({"A", "B", "C"})})}

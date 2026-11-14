@@ -1,10 +1,9 @@
-"""No tracked file names one operator's private deployment (issue #521).
+"""No tracked file names one operator's private deployment.
 
-The public repository used to hardcode one operator's personal hostname as
-the client's default base URL, several ops scripts' default target, and the
-worked example in a handful of docs -- and, separately, that operator's
-private (Tailscale) network address in a Pi-specific deployment doc. Both
-were swept out in the PR that added this file. This is the regression guard:
+The public repository must not hardcode one operator's personal hostname as
+the client's default base URL, several ops scripts' default target, or the
+worked example in docs -- or that operator's private (Tailscale) network address
+in a Pi-specific deployment doc. This is the regression guard:
 if either string is ever reintroduced into a tracked file, this test fails.
 
 WHY THE TARGET STRINGS ARE BUILT RATHER THAN WRITTEN LITERALLY
@@ -104,7 +103,7 @@ def test_no_tracked_file_names_the_operators_private_network_address() -> None:
 
 def test_the_banned_strings_are_not_generic_examples() -> None:
     """Precision check on the guard itself: it must not be satisfiable by
-    the generic placeholders this PR introduced in their place."""
+    the generic placeholders that replace them."""
     assert _BANNED_HOSTNAME not in ("tckdb.example.com", "api.tckdb.example.org")
     assert "example" not in _BANNED_HOSTNAME
     assert _BANNED_ADDRESS != "127.0.0.1"

@@ -128,7 +128,7 @@ def test_an_authorized_same_subject_adjudication_settles_a_finding_and_history_i
         calculation=calc, kind=K.adjudication, verdict=V.does_not_invalidate, authority=A.authorized_adjudication,
         supersedes=disproof,
     )
-    assert verdict(db_session, use(calc, "sp")).blocking == ()  # a fresh decision no longer sees it
+    assert verdict(db_session, use(calc, "sp")).blocking == ()  # a fresh decision does not see it
     from sqlalchemy import func, select
 
     from app.db.models.structure_determination import StructureEvidenceFinding
@@ -205,7 +205,7 @@ def test_one_batch_answers_each_product_by_its_own_sources(db_session, world, sp
 
 
 # ---------------------------------------------------------------------------
-# Which determinations count as evidence about a source (ADR 0023, step 5)
+# Which determinations count as evidence about a source
 # ---------------------------------------------------------------------------
 
 
@@ -279,7 +279,7 @@ def test_a_finding_on_a_basin_of_an_approved_group_and_an_unreviewed_observation
 
 
 def test_a_finding_on_a_basin_of_an_unreviewed_group_is_not_a_witness_under_curated(db_session, world, sp):
-    """ADR 0023 (Q4): the conformer group is the record that gates a basin. A basin whose group is below the floor is not
+    """The conformer group is the record that gates a basin. A basin whose group is below the floor is not
     returned by the structure selection, so it is no witness about a source either; the two must agree.
 
     Kills: the gate checking only the observation and the entry, never the group (a finding blocking a visible product through

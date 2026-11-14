@@ -151,7 +151,7 @@ class TestBuilderMapping:
 
     def test_species_entry_id_remains_null(self):
         """Identity resolution is the workflow layer's job, not this
-        builder's. Phase 8 emits payloads with ``species_entry_id=None``."""
+        builder's. The payload builder emits payloads with ``species_entry_id=None``."""
 
         results = build_atomization_energy_payloads_from_form_result(
             _parse_h2o_table()
@@ -485,7 +485,7 @@ class FakeSession:
 
 
 def test_end_to_end_ethanol_exact_match_emits_payload(tmp_path):
-    """The full Phase 6→7→8 pipeline against an ethanol queue record:
+    """The full resolver-to-payload pipeline against an ethanol queue record:
 
     1. Fake session returns the live-shape choosex.asp page for the
        initial POST.

@@ -5,7 +5,7 @@ supposed to provide. It skips on CI exactly as it skips on a laptop, so an
 install step that stops installing the package turns every test behind it
 into a skip and the gate into a green that tested nothing.
 
-That is what happened to ``tests/client_builder_contract/`` (#575): the
+That is what happened to ``tests/client_builder_contract/``: the
 backend job never installed ``tckdb_client``, all nine builder contract
 modules skipped on every run, and the gate reported success.
 

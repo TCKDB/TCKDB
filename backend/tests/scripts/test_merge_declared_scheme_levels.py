@@ -1,4 +1,4 @@
-"""``merge_duplicate_levels_of_theory.py`` and declared-scheme levels (ADR 0021, P5).
+"""``merge_duplicate_levels_of_theory.py`` and declared-scheme levels.
 
 A declared level's columns cannot reproduce its ``lot_hash`` (``method`` is the
 generated label, everything else ``NULL``), so the script recomputes it **from the

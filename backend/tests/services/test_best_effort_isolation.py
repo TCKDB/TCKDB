@@ -128,7 +128,7 @@ class TestIsolatedBestEffort:
     ) -> None:
         """A hook that only assigns must not defer its failure to COMMIT.
 
-        This is the 2026-08-05 shape: no SQL is issued by the hook itself, so
+        This is the shape: no SQL is issued by the hook itself, so
         without a flush inside the savepoint the ``UPDATE``/``INSERT`` is
         emitted by the commit — outside every guard the hook wrote.
         """

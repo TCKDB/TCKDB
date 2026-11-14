@@ -1,9 +1,8 @@
-"""Named composite methods: aliases, SQL parity and the upload path (ADR 0021).
+"""Named composite methods: aliases, SQL parity and the upload path.
 
-Reproduction on ``main`` (f22d3a80): ``cbsqb3`` and ``CBS-QB3`` hash differently
-and so made two ``level_of_theory`` rows; ``g4(mp2)`` and ``g4mp2`` likewise.
-These tests fail there and pass with the curated aliases of
-``app/chemistry/method_names.py``.
+Without the curated aliases of ``app/chemistry/method_names.py``, ``cbsqb3`` and
+``CBS-QB3`` hash differently and so make two ``level_of_theory`` rows; ``g4(mp2)``
+and ``g4mp2`` likewise. These tests pass with the aliases.
 """
 
 from __future__ import annotations

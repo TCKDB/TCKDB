@@ -1,4 +1,4 @@
-"""``calc_sp_energy_component`` is frozen by the acceptance of its calculation (ADR 0021, P4).
+"""``calc_sp_energy_component`` is frozen by the acceptance of its calculation.
 
 The table is an ownership child of ``calculation``, guarded the way
 ``calc_sp_result`` is: once the calculation is approved, its energy parts can be

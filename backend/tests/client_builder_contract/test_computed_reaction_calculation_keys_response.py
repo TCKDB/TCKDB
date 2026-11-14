@@ -1,7 +1,7 @@
-"""Contract: ``ComputedReactionUploadResult`` now carries
+"""Contract: ``ComputedReactionUploadResult`` carries
 ``calculation_keys``.
 
-Phase 7 (artifact planning) adds a response-only field exposing the
+The response carries a response-only field exposing the
 bundle-local calc-key → assigned-calculation-id map. The request
 payload shape is unchanged; this test fixes the response wire
 contract that the builder's ``artifact_plan(result)`` reads.
@@ -56,9 +56,9 @@ _XYZ_CH4 = (
 # z = 0 plane (indices 2-4), and the incoming hydrogen on the C3 axis at a
 # stretched 1.500 A (index 5).
 #
-# This fixture used to list six atoms — a whole methane plus a sixth hydrogen —
+# A fixture that lists six atoms — a whole methane plus a sixth hydrogen —
 # which is CH5 for a CH4 reaction. ``validate_transition_state_composition``
-# refuses that, and has since it was introduced; this suite is in neither the
+# refuses that; this suite is in neither the
 # ``test-api`` nor the ``test-scientific`` gate, so the two tests below were
 # already failing on ``origin/main`` before the composition and charge work in
 # this branch touched anything.
@@ -252,7 +252,7 @@ def test_response_calculation_keys_field_is_optional() -> None:
     """Old workflow outputs (no ``calculation_keys`` key) still validate.
 
     Defaults to an empty dict so the response stays additive — clients
-    older than this PR (or downstream consumers that don't read the
+    older than this field (or downstream consumers that don't read the
     field) keep working unchanged.
     """
     minimal_payload = {

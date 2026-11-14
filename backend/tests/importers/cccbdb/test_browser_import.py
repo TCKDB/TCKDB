@@ -102,7 +102,7 @@ class TestAcceptedMoleculeDataPage:
 
 
 class TestFormulaEntryRejected:
-    """The Phase 5b classifier hardening must keep firing — a saved
+    """The classifier hardening must keep firing — a saved
     formula-entry page (the deceptive ``All data for one molecule``
     title with the ``getformx.asp`` form) is never accepted."""
 

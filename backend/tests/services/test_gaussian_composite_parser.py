@@ -1,4 +1,4 @@
-"""The Gaussian composite summary-block parser (ADR 0021, P3b).
+"""The Gaussian composite summary-block parser.
 
 Every expected value below was read off the printed block of a real Gaussian log
 under ``tests/fixtures/gaussian_composite`` (see the README there), to the digits

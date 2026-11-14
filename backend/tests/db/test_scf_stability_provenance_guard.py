@@ -139,7 +139,7 @@ def test_provenance_pointer_may_be_set_by_update(db_session) -> None:
 
 
 def test_pointer_free_insert_is_not_the_only_thing_allowed(db_session) -> None:
-    """The NULL-pointer insert succeeded before the fix too.
+    """The NULL-pointer insert succeeds.
 
     Kept beside the test above so the pair reads as the comparison that
     identified the defect: identical rows, differing only in whether they

@@ -1,8 +1,8 @@
-"""The owner-scoped reproducibility rubric ``tckdb_reproducibility_ts_statmech`` v1 (#760, PR-2).
+"""The owner-scoped reproducibility rubric ``tckdb_reproducibility_ts_statmech`` v1.
 
-A statmech record belongs to a species entry or to a transition-state entry, never both. The shared rubric used to
-ask of every statmech record whether it is attached to a species entry, so a TS-owned record read ``insufficient``
-whatever its evidence. A TS-owned record is now graded by a sibling rubric that asks the same question about a
+A statmech record belongs to a species entry or to a transition-state entry, never both. The shared rubric would
+ask of every statmech record whether it is attached to a species entry, so a TS-owned record would read ``insufficient``
+whatever its evidence. A TS-owned record is graded by a sibling rubric that asks the same question about a
 transition-state entry and nothing else. Species-owned records keep the shared rubric byte for byte (pinned by
 ``test_reproducibility_statmech_species_frozen``).
 

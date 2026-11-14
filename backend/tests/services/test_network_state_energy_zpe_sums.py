@@ -1,4 +1,4 @@
-"""``compare_state_energy_sums`` for ``electronic_plus_zpe`` from an sp and a scaled freq ZPE (#693).
+"""``compare_state_energy_sums`` for ``electronic_plus_zpe`` from an sp and a scaled freq ZPE.
 
 Pure, over stand-ins that carry exactly the attributes the function reads (see
 ``test_network_state_energy_sums``). The numbers are written out by hand.

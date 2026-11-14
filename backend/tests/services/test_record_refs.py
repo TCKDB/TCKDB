@@ -95,7 +95,7 @@ def test_applied_energy_correction_has_no_ref_and_none_is_invented(db_session):
 
     The tempting workaround is to fall back to the stringified row id, which is
     what the private machine-review matching key does. That would put an
-    internal id in front of a reader (DR-0028 Req 2) while looking like a
+    internal id in front of a reader while looking like a
     public handle. ``None`` is the honest answer until the table gains a ref.
     """
     assert SubmissionRecordType.applied_energy_correction not in REF_BEARING_RECORD_TYPES
@@ -138,11 +138,11 @@ def test_every_record_type_is_accounted_for():
 
 
 def test_molecular_property_observation_now_resolves_a_real_ref(db_session):
-    """Phase C-E5 gave ``molecular_property_observation`` a ``public_ref``
- -- it is no longer the second exception
+    """``molecular_property_observation`` has a ``public_ref``
+ -- it is not an exception
     alongside ``applied_energy_correction`` (see the module docstring's
-    history note). Membership here is derived from the column, so this
-    started passing the moment the mixin was added, with no edit to
+    note). Membership here is derived from the column, so this
+    passes as soon as the mixin is added, with no edit to
     ``record_refs.py`` itself.
     """
     from tests.services.scientific_read._factories import make_observation
@@ -215,7 +215,7 @@ def test_by_name_drops_an_unknown_type_without_raising(db_session):
     silently eats a coded refusal raised beneath it, costing a client the
     ``code`` and ``context`` it is told to branch on.
     ``tests/api/test_coded_exception_reraise_gate`` fails the build for that
-    shape and caught this exact one on 2026-09-14.
+    shape and catches this exact one.
     """
     species = make_species(db_session)
 

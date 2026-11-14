@@ -84,7 +84,7 @@ def _next_geom_hash() -> str:
 
 
 def _make_species(db_session: Session, smiles: str | None = None) -> Species:
-    # Species identity is (smiles, charge, multiplicity) (DR-0031), so each
+    # Species identity is (smiles, charge, multiplicity), so each
     # fixture species needs a distinct smiles or it collides with sibling /
     # cross-test species on the shared DB. Trust evaluation never parses
     # smiles, so a unique placeholder is sufficient here.
@@ -681,9 +681,9 @@ def test_validated_with_n_imag_zero_is_a_visible_warning_not_a_hard_fail_and_not
 
 
 def test_undesignated_extra_modes_are_a_missing_designation_not_a_hard_fail(db_session: Session):
-    """Rubric v3 (reason change): several imaginary modes with no designated reaction coordinate used to hard-fail with
-    ``frequency_source_reaction_coordinate_not_designated_for_validated_ts``. The badge no longer issues a frequency
-    verdict, so the fact surfaces where it always did, as the missing ``reaction_coordinate_designated_for_ts`` check; the
+    """Several imaginary modes with no designated reaction coordinate do not hard-fail with
+    ``frequency_source_reaction_coordinate_not_designated_for_validated_ts``. The badge issues no frequency
+    verdict, so the fact surfaces as the missing ``reaction_coordinate_designated_for_ts`` check; the
     scoped treatment (unresolved ``reaction_coordinate_not_established``) is the structure assessment's.
     """
     ts_entry = _make_ts_entry(
@@ -697,7 +697,7 @@ def test_undesignated_extra_modes_are_a_missing_designation_not_a_hard_fail(db_s
     assert result.label is not EvidenceBadge.hard_failed and result.hard_fail_reason is None
     assert result.checks["reaction_coordinate_designated_for_ts"] is EvidenceOutcome.missing
     assert "no_frequency_result_lacks_an_imaginary_mode" not in result.checks  # a warning check is recorded only when it fires
-    # v4 (#729): the same fact is also visible as an advisory warning (completeness is still the required check above).
+    # v4: the same fact is also visible as an advisory warning (completeness is still the required check above).
     assert result.checks[UNDESIGNATED] is EvidenceOutcome.warning
 
 
@@ -708,11 +708,11 @@ def test_undesignated_extra_modes_are_a_missing_designation_not_a_hard_fail(db_s
 def test_the_motivating_record_is_not_hard_failed_at_read_time(
     db_session: Session, status: TransitionStateEntryStatus
 ):
-    """The round trip ADR 0008 section 9 and ADR 0012 exist to close.
+    """The round trip the one-owner-per-fact rule and the imaginary-mode protocol exist to close.
 
     -1300 / -42 / -13 cm⁻¹ with the reaction coordinate designated is
-    accepted with a warning at upload. Before this change the surviving
-    copy of the count-based rule hard-failed exactly that record here, so
+    accepted with a warning at upload. A surviving
+    copy of the count-based rule would hard-fail exactly that record here, so
     the two tiers disagreed about the same deposit and the more permissive
     one silently won at upload time. The read layer now cites the stored
     designation instead of recounting, so it cannot.
@@ -743,7 +743,7 @@ def test_the_motivating_record_is_not_hard_failed_at_read_time(
 def test_a_recorded_structural_flag_warns_without_hard_failing(
     db_session: Session,
 ):
-    """ADR 0012's structural flag is surfaced, not recomputed."""
+    """The structural flag is surfaced, not recomputed."""
     ts_entry = _make_ts_entry(
         db_session, status=TransitionStateEntryStatus.validated
     )
@@ -866,7 +866,7 @@ def test_scan_child_of_ts_opt_counts_as_path_search_evidence(db_session: Session
     """A scan run *from* the TS opt (role=scan_parent, TS opt is the
     parent) must satisfy ``path_search_evidence_present``.
 
-    Regression test: the check used to walk the wrong side of the
+    Regression test: the check must not walk the wrong side of the
     ``scan_parent`` edge (treating the TS opt as the child), so a scan
     run from an already-optimized TS could never make this check pass.
     """
@@ -1083,12 +1083,12 @@ def test_rubric_metadata_pinned():
     assert COMPUTED_TRANSITION_STATE.version == 2
     assert COMPUTED_TRANSITION_STATE.record_type == "transition_state_entry"
     assert len(COMPUTED_TRANSITION_STATE.checks) == 32
-    # The undesignated-modes warning (#729) sits right after the zero-mode warning and carries no weight.
+    # The undesignated-modes warning sits right after the zero-mode warning and carries no weight.
     names = [c.name for c in COMPUTED_TRANSITION_STATE.checks]
     i = names.index("no_frequency_result_lacks_an_imaginary_mode")
     assert names[i + 1] == "no_frequency_result_has_undesignated_imaginary_modes"
     assert COMPUTED_TRANSITION_STATE.checks[i + 1].kind is EvidenceCheckKind.warning
-    # The scoped-assessment warning (#723) follows, carries no weight, and is the only check that reads the assessment.
+    # The scoped-assessment warning follows, carries no weight, and is the only check that reads the assessment.
     assert names[i + 2] == "declared_saddle_target_qualifies"
     assert COMPUTED_TRANSITION_STATE.checks[i + 2].kind is EvidenceCheckKind.warning
 
@@ -1118,8 +1118,8 @@ def test_a_contradicting_result_stays_visible_whether_it_is_older_newer_or_alone
 
 
 def test_a_null_count_is_unknown_it_neither_rescues_nor_condemns(db_session: Session):
-    """Reviewer case T4: an older zero-mode result plus a newer result with ``n_imag`` null. The unknown newer count must
-    not read as a contradiction (it used to make the entry hard-fail via the null-skipping representative) and must not
+    """An older zero-mode result plus a newer result with ``n_imag`` null. The unknown newer count must
+    not read as a contradiction (the null-skipping representative must not make the entry hard-fail) and must not
     hide the older recorded zero either."""
     ts_entry = _make_ts_entry(db_session, status=TransitionStateEntryStatus.validated)
     opt = _attach_ts_opt_calc(db_session, ts_entry)

@@ -327,7 +327,7 @@ def test_a_hidden_calculation_cannot_make_a_record_match_under_curated(db_sessio
     ids=lambda f: "+".join(f),
 )
 def test_an_unreviewed_calculation_still_matches_family_and_rung_under_curated(db_session, kind, filters, status):
-    """ADR 0023 step 4: only a rejected or deprecated calculation is withheld as evidence, so a linked calculation that
+    """Only a rejected or deprecated calculation is withheld as evidence, so a linked calculation that
     is not reviewed (or under review) takes part in a family or rung match under curated, with the one-calculation rule.
 
     The review row is stated explicitly (``status``), not left to an absent row. Calculation A (hybrid DFT, gaussian) is

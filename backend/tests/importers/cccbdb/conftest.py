@@ -1,4 +1,4 @@
-"""pytest fixtures shared by Phase 2a builder tests."""
+"""pytest fixtures shared by builder tests."""
 
 from tests.importers.cccbdb._fixture_records import (
     BENZENE_URL,

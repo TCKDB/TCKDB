@@ -311,7 +311,7 @@ class TestTheMessage:
         assert "accepted and flagged" in warning.message
 
     def test_it_carries_no_database_identifiers(self):
-        """DR-0028 Requirement 2: nothing a depositor cannot act on."""
+        """Nothing a depositor cannot act on."""
         warning = evaluate_frequency_list_linearity(
             4, WATER_XYZ, location="calculations[0].freq_result.modes"
         )[0]
@@ -573,7 +573,7 @@ class TestTheMirrorMessage:
         assert "de-duplicates" in message
 
     def test_it_carries_no_database_identifiers(self):
-        """DR-0028 Requirement 2: nothing a depositor cannot act on."""
+        """Nothing a depositor cannot act on."""
         message = self._warning().message
         assert "_id" not in message
         assert "id=" not in message

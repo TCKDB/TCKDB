@@ -1,4 +1,4 @@
-"""Unit tests for ``derive_stereo_label_from_3d`` (DR-0018, DR-0031).
+"""Unit tests for ``derive_stereo_label_from_3d``.
 
 This function assigns configurational CIP labels (R/S, E/Z) from 3D geometry.
 It was silently dead for months: ``MolFromXYZBlock`` produced a bondless atom
@@ -172,7 +172,7 @@ class TestDeterministicOrdering:
 
 
 # ---------------------------------------------------------------------------
-# Open-shell / radical species (formerly a KNOWN LIMITATION, now supported)
+# Open-shell / radical species (supported)
 # ---------------------------------------------------------------------------
 
 
@@ -199,7 +199,7 @@ class TestRadicalStereo:
         assert derive_stereo_label_from_3d("CC=C[CH2]", xyz) == "Z"
 
     def test_e_and_z_crotyl_radicals_are_distinct(self) -> None:
-        # The two stereoisomeric radicals must no longer merge: distinct labels.
+        # The two stereoisomeric radicals must not merge: distinct labels.
         e_label = derive_stereo_label_from_3d(
             "CC=C[CH2]", _xyz_from_smiles(r"C/C=C/[CH2]")
         )

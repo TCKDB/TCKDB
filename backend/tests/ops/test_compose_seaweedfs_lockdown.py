@@ -1,4 +1,4 @@
-"""The SeaweedFS lockdown in ``docker-compose.yml`` stays locked down (#545).
+"""The SeaweedFS lockdown in ``docker-compose.yml`` stays locked down.
 
 Two things are pinned here, both of which a well-meaning edit could undo
 without any other test noticing:
@@ -6,7 +6,7 @@ without any other test noticing:
 * **Network isolation.** ``seaweedfs`` is on the ``storage`` network and no
   other. Its gRPC ports take no credentials, and from another container on
   the same network ``weed shell`` deleted an object and the bucket's whole
-  collection (measured on 4.47). Adding ``default`` back -- the obvious fix
+  collection (on 4.47). Adding ``default`` back -- the obvious fix
   for "the API can't reach the store" -- would reopen that to ``db`` and to
   anything else in the project, so it fails here instead.
 * **The key is checked at start, not at interpolation.** A ``${VAR:?}``

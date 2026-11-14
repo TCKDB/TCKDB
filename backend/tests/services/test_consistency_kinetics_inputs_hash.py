@@ -1,7 +1,7 @@
 """A kinetics record's declared energy level restales no stored review.
 
 ``compare_kinetics`` hashes every column of both rates it compares. No kinetics consistency
-check reads ``energy_level_of_theory_id`` (a depositor's declaration, like thermo's, #619), so
+check reads ``energy_level_of_theory_id`` (a depositor's declaration, like thermo's), so
 declaring one must not change the context hash a stored review is judged against, and a rate
 stored before the column existed must keep the hash it had (the pinned hashes in
 ``test_phase_d_d3_invariance`` pin the latter for every D3 scenario).

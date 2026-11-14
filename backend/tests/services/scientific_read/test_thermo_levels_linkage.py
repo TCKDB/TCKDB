@@ -1,8 +1,8 @@
-"""A thermo's derived ``levels`` come only from what the thermo itself owns (#636).
+"""A thermo's derived ``levels`` come only from what the thermo itself owns.
 
 ``get_species_thermo`` resolves a basis statmech per record, from the record's
 own ``thermo.statmech_id`` only. Provenance and evidence do not borrow either
-(#645, see ``test_thermo_provenance_never_borrows.py``), and neither do the
+(see ``test_thermo_provenance_never_borrows.py``), and neither do the
 derived ``levels.*`` (geometry / frequency / energy): an experimental thermo,
 or a computed one with its own source calculations, must not report the levels
 of an unrelated statmech on the same entry.
@@ -55,7 +55,7 @@ def _refs(levels):
 
 
 def test_an_unlinked_experimental_thermo_reports_no_levels(db_session):
-    """Reproduces #636: the sibling statmech's levels used to appear here."""
+    """The sibling statmech's levels must not appear here."""
     entry = _entry(db_session)
     lot = make_lot(db_session, method="wb97xd", basis="def2tzvp")
     _add_statmech_with_freq_sp(db_session, entry, lot)

@@ -13,7 +13,7 @@ def _legacy_undeclared_thermo_id(db_session) -> int:
     """A row that already violates the rule -- h298 set, no declaration.
 
     Only reachable by disabling the guard trigger for the insert: the ORM
-    model no longer carries a CheckConstraint for this rule (the trigger
+    model does not carry a CheckConstraint for this rule (the trigger
     enforces it), the trigger itself refuses this on INSERT same as it
     would on UPDATE, and the workflow layer refuses to build such a
     request at all. This models a row that predates the declaration and

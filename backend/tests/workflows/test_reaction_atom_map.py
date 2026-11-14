@@ -1,4 +1,4 @@
-"""Atom mapping across a reaction (ADR 0011).
+"""Atom mapping across a reaction.
 
 The reaction under test throughout is ``CH3 + H -> CH4`` with its saddle point,
 the same bundle the rest of the computed-reaction workflow tests use. Its atom
@@ -7,7 +7,7 @@ a wrong map is visibly wrong: the methyl carries the carbon and three
 hydrogens, the lone hydrogen becomes the fifth saddle-point atom, and methane
 carries all five.
 
-The tiering under test is ADR 0008's: **absence warns, contradiction blocks**.
+The tiering under test: **absence warns, contradiction blocks**.
 An unmapped reaction is an incomplete record, not a false one, so it is
 accepted and annotated. A map that cannot be what it says it is — an element
 changing on the way across, an atom claimed twice, an atom of the reactants
@@ -344,7 +344,7 @@ def test_a_blank_note_does_not_name_an_algorithm(db_conn) -> None:
 
     Without normalisation ``note='   '`` satisfies "an inferred map says what
     inferred it" while saying nothing, which is the anonymous inferred map
-    ADR 0011 refuses, admitted through a loophole.
+    the atom-map rule refuses, admitted through a loophole.
     """
     payload = _payload()
     payload["atom_map"] = _complete_map(source="inferred", note="   ")
@@ -379,9 +379,8 @@ def test_database_refuses_relabelling_an_inferred_map_as_declared(
     ``inferred`` member, so ``SET source='declared', note=NULL`` satisfies the
     check as written and commits: the row then reads back as a depositor's own
     statement about a mechanism an algorithm produced. There is no API route
-    that does this — which is exactly why it is a trigger, per ADR 0010's
-    argument about rules that hold only because today's code happens not to
-    exercise them.
+    that does this — which is exactly why it is a trigger: a rule that holds only
+    because today's code happens not to exercise it is not enforced.
     """
     from sqlalchemy import text
     from sqlalchemy.exc import DBAPIError
@@ -412,7 +411,7 @@ def test_database_refuses_blanking_an_inferred_maps_note(
 ) -> None:
     """Freezing ``source`` is only half of "an inferred map names its origin".
 
-    ``source`` can no longer leave ``inferred``, but ``note`` stays mutable so
+    ``source`` cannot leave ``inferred``, but ``note`` stays mutable so
     a typo can be corrected -- which means the same anonymity the wire schema
     refuses on the way in can still be reached by emptying the note afterwards.
     The check has to hold the trimmed value, not merely a non-NULL one.
@@ -566,7 +565,7 @@ def test_map_omitting_atoms_of_a_mapped_participant_is_accepted_and_warned(
 
 
 # ---------------------------------------------------------------------------
-# Contradiction blocks: one test per class named in ADR 0011
+# Contradiction blocks: one test per named class
 # ---------------------------------------------------------------------------
 
 
@@ -631,7 +630,7 @@ def test_saddle_point_atom_claimed_by_neither_leg_is_refused(db_conn) -> None:
 
 
 def test_unbalanced_reaction_is_not_refused_for_an_unaccounted_atom() -> None:
-    """ADR 0011's hedge: "where no species is missing".
+    """The atom-map rule's hedge on unaccounted atoms: "where no species is missing".
 
     Here a co-product genuinely is absent — the declared participants do not
     conserve hydrogen — so the same leftover saddle-point atom that blocks a
@@ -669,7 +668,7 @@ def test_unbalanced_reaction_is_not_refused_for_an_unaccounted_atom() -> None:
 def test_legs_covering_different_atoms_of_a_balanced_reaction_is_refused(
     db_conn,
 ) -> None:
-    """The named case from ADR 0011, with nothing missing to explain it.
+    """The atom-map rule's named case (legs covering different atoms), with nothing missing to explain it.
 
     Both legs are complete over every declared participant and the reaction
     conserves every element, so a saddle-point atom claimed by one leg and not
@@ -817,10 +816,10 @@ def test_map_across_geometries_that_disagree_only_about_case_persists(
     Both ends of a pair quote a *different* geometry. A depositor whose
     reactant came out of a program that writes ``c`` and whose saddle point
     came out of one that writes ``C`` must be able to record a correct map;
-    refusing it for a capital letter is the failure ADR 0008 puts out of
+    refusing it for a capital letter is the failure the blocking-tier rule puts out of
     bounds.
 
-    On the *deposit* path the two spellings no longer reach the comparison:
+    On the *deposit* path the two spellings do not reach the comparison:
     ``parse_xyz`` canonicalises the symbol before it becomes a
     ``geometry_atom`` row, so both ends of the pair store ``C``. The deposited
     ``c`` is still readable — it survives in ``geometry.xyz_text``, which is
@@ -903,24 +902,19 @@ def test_a_stored_symbol_that_is_not_canonical_cannot_exist(
 ) -> None:
     """The precondition that licenses comparing ``element`` as stored.
 
-    This test used to assert the opposite conclusion from the same setup, and
-    it was right to. ``parse_xyz`` canonicalised the element on the way into
-    ``geometry_atom``,
-    but no CHECK required the column to be canonical, so a restore from an
-    older backup, a bulk import, or any write path that skipped ``parse_xyz``
-    could leave ``CL`` in the table. The service's element-conservation check
-    is **blocking**, and a blocking check has to be correct on rows the running
-    process never wrote: refusing a correct map because one geometry shouted
-    its carbon would have been refusing correct chemistry over a capital
-    letter, which ADR 0008 puts out of bounds. So the comparison normalised
-    both sides, and this test proved it had to.
+    The service's element-conservation check is **blocking**, and a blocking check
+    has to be correct on rows the running process never wrote: refusing a correct
+    map because one geometry shouted its carbon would be refusing correct
+    chemistry over a capital letter, which the blocking-tier rule puts out of
+    bounds. A comparison that tolerates case would have to normalise both sides to
+    survive a restore from an older backup, a bulk import, or any write path that
+    skipped ``parse_xyz``.
 
-    ``ck_geometry_atom_element_canonical`` removes the
-    premise rather than the concern. The row this test used to write can no
-    longer exist on **any** path — a CHECK, unlike a foreign key or a trigger,
-    is not suspended by ``session_replication_role = replica``, which is the
-    bulk-load and restore path the normalisation existed to survive. So the
-    same provocation is made and the database is required to refuse it.
+    ``ck_geometry_atom_element_canonical`` removes that premise: a row such as
+    ``CL`` cannot exist on **any** path — a CHECK, unlike a foreign key or a
+    trigger, is not suspended by ``session_replication_role = replica``, the
+    bulk-load and restore path. So the same provocation is made and the database
+    is required to refuse it.
 
     Written **directly**, bypassing ``parse_xyz``, because a write path that
     does not canonicalise is the entire class of writer the constraint is for.
@@ -986,7 +980,7 @@ def test_a_stored_symbol_that_is_not_canonical_cannot_exist(
         assert geometry_id_by_key["ts-geom"] == ts_geometry_id
         assert len(participants) == 3
 
-        # The row `parse_xyz` can no longer produce, attempted the only way it
+        # The row `parse_xyz` cannot produce, attempted the only way it
         # could ever have arrived: directly, around the canonicalising path.
         with pytest.raises(IntegrityError) as excinfo:
             session.execute(
@@ -1013,7 +1007,7 @@ def test_a_stored_symbol_disagreeing_with_the_saddle_point_still_blocks(
     between two *stored* geometries rather than inside a payload — the seam the
     wire validator cannot see.
 
-    It used to spell that nitrogen ``n``, to prove that tolerating case bought
+    A spelling of that nitrogen as ``n`` would prove that tolerating case bought
     tolerance of case and nothing else. ``ck_geometry_atom_element_canonical``
     makes ``n`` unwritable, so the element is spelled canonically and the
     assertion — nitrogen is not carbon, and the service says so with
@@ -1157,7 +1151,7 @@ def test_database_refuses_a_pair_whose_two_ends_are_different_elements(
 ) -> None:
     """The element rule is a constraint, not just a validator on one path.
 
-    ADR 0010's lesson: a rule that lives only in one Pydantic validator on one
+    The lesson: a rule that lives only in one Pydantic validator on one
     wired write path is a rule a second write path does not have.
     """
     from sqlalchemy.exc import IntegrityError

@@ -1,7 +1,7 @@
-"""Every site that runs the composition check also runs the isotope check (#666).
+"""Every site that runs the composition check also runs the isotope check.
 
 ``assert_calculation_geometry_composition`` reads ``D``, ``T`` and ``[2H]`` as
-hydrogen, so it cannot see an isotope disagreement; the gap in #666 was exactly
+hydrogen, so it cannot see an isotope disagreement; the gap is exactly
 a route that had the first and nothing for the second. This guard is structural,
 like ``test_calculation_geometry_composition_guard.py``: a site added with one
 check and not the other fails here even if no behavioural test reaches it.
@@ -29,7 +29,7 @@ _APP = Path(__file__).resolve().parents[2] / "app"
 _COMPOSITION = "assert_calculation_geometry_composition"
 _ISOTOPES = "assert_isotopes"
 #: ``module::function`` for every function that calls the composition check, as
-#: of #666. Listed so a *removed* site is as visible as an unchecked one.
+#: of the isotope rule. Listed so a *removed* site is as visible as an unchecked one.
 _EXPECTED_SITES = {
     "services/calculation_resolution.py::_persist_irc_result",
     "services/calculation_resolution.py::_persist_path_search_result",
@@ -80,7 +80,7 @@ def test_every_composition_site_also_checks_isotopes() -> None:
 
 
 def test_every_geometry_link_construction_is_preceded_by_the_isotope_check() -> None:
-    """Per construction, not per function (#680): see ``_geometry_link_guard``."""
+    """Per construction, not per function: see ``_geometry_link_guard``."""
 
     assert construction_sites(), "found no geometry-link write sites at all -- the AST walk broke"
     missing = unchecked_constructions(_ISOTOPES)

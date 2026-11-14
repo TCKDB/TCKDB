@@ -11,7 +11,7 @@ anchored to a side which carried no conservation guarantee of its own.
 
 Charge conservation is the same argument as elemental balance applied to the
 other conserved quantity: electrons are neither created nor destroyed by
-rearranging bonds. Definitional under ADR 0008, therefore blocking, with the
+rearranging bonds. Definitional, therefore blocking, with the
 same stoichiometric-coefficient handling and the same pseudo-species exemption.
 
 The accepting half of this file is the load-bearing half. Ionic chemistry is
@@ -64,7 +64,7 @@ def _request(*, reactants: list[dict], products: list[dict]) -> ReactionUploadRe
 def test_a_reaction_that_loses_an_electron_is_refused(db_conn) -> None:
     """``[OH-] + [H] -> H2O``: element-balanced (OH2 both sides), charge -1 -> 0.
 
-    The exact deposit that used to succeed silently.
+    An exact deposit that must not succeed silently.
     """
 
     with Session(db_conn) as session:
@@ -142,7 +142,7 @@ def test_a_reaction_with_a_conserved_nonzero_charge_is_accepted(db_conn) -> None
 
     Conservation, not neutrality, is the rule. Requiring both sides to be
     neutral would refuse every ion-molecule reaction in the literature, which
-    is the false-positive ADR 0008 disqualifies a blocking check for.
+    is the false positive the blocking-tier rule disqualifies a blocking check for.
     """
 
     with Session(db_conn) as session:

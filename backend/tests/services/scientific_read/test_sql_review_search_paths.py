@@ -66,7 +66,7 @@ from tests.services.scientific_read._factories import (
     set_review,
 )
 
-#: Measured in :func:`test_bind_parameter_cap_is_the_wire_protocol_limit`.
+#: Established by :func:`test_bind_parameter_cap_is_the_wire_protocol_limit`.
 #: The number of bind parameters PostgreSQL's extended-query protocol
 #: accepts in one statement.
 MAX_BIND_PARAMETERS = 65_535
@@ -179,7 +179,7 @@ def test_bind_parameter_cap_is_the_wire_protocol_limit(db_session):
 def test_calculations_search_above_the_bind_parameter_cap(db_session):
     """A calculation search matching more candidates than the cap must work.
 
-    ``calculation_type=sp`` matches 119,701 rows on the Stage 4 benchmark
+    ``calculation_type=sp`` matches 119,701 rows on the benchmark
     corpus. Whatever the page size, the candidate set must never become bind
     parameters.
     """
@@ -972,7 +972,7 @@ def _analyze(session, *tables: str) -> None:
 def _no_statement_timeout(session):
     """Exempt this test's bulk seeding, and only the seeding, from the timeout.
 
-    The harness engine carries the deployment's ``statement_timeout`` (#611).
+    The harness engine carries the deployment's ``statement_timeout``.
     One seeding ``INSERT`` here writes 65,599 species whose ``mol_formula``
     index entries RDKit computes row by row: 17.9 s on a workstation and over
     30 s on a CI runner, which cancelled the fixture rather than the code

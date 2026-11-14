@@ -5,7 +5,7 @@ contract: a snapshot produced by ``run_snapshot(write_payloads=True)``
 contains payload JSON that the real TCKDB upload/request models accept
 without further transformation.
 
-The Phase 2a builder tests already validate in-memory builder output
+The builder tests already validate in-memory builder output
 against the same models. The point of this file is to additionally
 exercise the on-disk artifact boundary, so subtle JSON
 serialization/deserialization drift (enum values, datetime

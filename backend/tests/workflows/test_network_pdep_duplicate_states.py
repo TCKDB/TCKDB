@@ -2,7 +2,7 @@
 
 A state's composition is the multiset of its participants' species *entries*. Two states that
 resolve to the same entries collide on ``uq_network_state_network_id`` (network, composition
-hash). That used to surface as an ``IntegrityError`` (HTTP 500); it is now refused before the
+hash). That would surface as an ``IntegrityError`` (HTTP 500); it is refused before the
 insert as ``network_state_duplicate_composition`` (422), naming the two state keys.
 """
 
@@ -85,7 +85,7 @@ def _state_with_two_keys_for_one_entry_payload() -> dict:
 
 
 def test_two_keys_for_one_entry_inside_a_state_are_a_coded_422_not_a_500(db_conn) -> None:
-    """It used to be a raw ``UniqueViolation`` on ``pk_network_state_participant`` (HTTP 500)."""
+    """It must not be a raw ``UniqueViolation`` on ``pk_network_state_participant`` (HTTP 500)."""
     with Session(db_conn) as session, session.begin():
         request = NetworkPDepUploadRequest(**_state_with_two_keys_for_one_entry_payload())
         with pytest.raises(CodedValueError) as excinfo:

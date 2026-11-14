@@ -1,4 +1,4 @@
-"""A ``D`` spelling and an ``H`` plus mass number map onto each other (#672).
+"""A ``D`` spelling and an ``H`` plus mass number map onto each other.
 
 ``reaction_atom_map_pair`` carries ``element`` on both ends and
 ``ck_reaction_atom_map_pair_element_matches`` requires them equal, so how a

@@ -1,6 +1,6 @@
 """``archive.py``: digest verification (fetch) and article selection.
 
-Mutation checks (verified manually; see the PR body's mutation table):
+Mutation checks (verified manually):
 
 * ``test_fetch_archive_rejects_digest_mismatch``: removing the
   ``digest.hexdigest() != ARCHIVE_SHA256`` check in ``fetch_archive``

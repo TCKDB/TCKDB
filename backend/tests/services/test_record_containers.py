@@ -188,7 +188,7 @@ def test_kinetics_is_contained_by_its_reaction_entry(db_session):
 
 
 def test_transition_state_is_contained_by_its_reaction_entry(db_session):
-    """``transition_state`` is in the broken 30% and the #262 brief lists no
+    """``transition_state`` is in the broken 30% and no
     parent for it. It has one: ``transition_state.reaction_entry_id``, NOT
     NULL, and the reaction entry page is where transition states are shown.
     """
@@ -254,7 +254,7 @@ def test_correction_on_a_reaction_entry_names_that_entry(db_session):
 
 
 def test_correction_on_a_transition_state_entry_names_that_entry(db_session):
-    """The third target column, which the #262 brief does not mention.
+    """The third target column, which is easy to overlook.
 
     A registry naming only the species and reaction columns passes both tests
     above and leaves every transition-state correction unlinked.
@@ -280,7 +280,7 @@ def test_a_correction_that_cannot_be_named_can_still_be_located(db_session):
 
     ``applied_energy_correction`` has no ``public_ref`` column, so
     ``record_refs`` correctly refuses to name it -- 164 rows of the queue
-    render as "cannot be named". Giving the table a ref is task #253. This
+    render as "cannot be named". Giving the table a ref is separate work. This
     module does not need it: knowing the correction sits on ``spc_...`` is
     what a reviewer actually has to know, and it is available today.
     """
@@ -412,7 +412,7 @@ def test_every_container_type_can_actually_be_named():
 def test_the_six_unopenable_queue_types_are_all_covered():
     """The measured defect, pinned as a list.
 
-    These are the record types the #262 survey found unopenable, with their
+    These are the record types found unopenable, with their
     row counts on the live archive: applied_energy_correction 164, statmech
     101, thermo 65, transition_state 34, kinetics 17, network_solve 4 -- 385
     of 1,299 rows. Every one must have a container, or that fraction of the
@@ -469,7 +469,7 @@ def test_a_page_whose_rows_have_DIFFERENT_parents_still_costs_two(
     parent, and that is a hole rather than a simplification: with a single
     distinct container, a resolver that queried once per *container* costs
     exactly what the grouped one does, so all of them pass it. MEASURED
-    2026-09-16 -- replacing pass 2 with
+    -- replacing pass 2 with
 
         for c in set(container_ids.values()):
             container_refs.update(resolve_record_public_refs(session, [c]))

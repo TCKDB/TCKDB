@@ -1,4 +1,4 @@
-"""Tests for the review-tier external-Cp-comparison runner (Phase C-E4).
+"""Tests for the review-tier external-Cp-comparison runner.
 
 Before this runner existed, ``CheckTier.review`` (``app/scientific_checks/
 __init__.py``) had zero declared members and nothing in TCKDB compared a
@@ -84,7 +84,7 @@ def _make_thermo(session, *, smiles: str, tmin_k: float = 200.0, tmax_k: float =
     )
 
     # Only ``phase`` is set here: heat-capacity applicability requires the
-    # gas phase but never a reference pressure (decided 2026-09-23, see
+    # gas phase but never a reference pressure (see
     # engine.gas_state_reason's ``quantity="cp"`` branch) -- Cp is
     # pressure-independent. Leaving reference_pressure_bar unset by default
     # is deliberate: it exercises that every Cp comparison in this file
@@ -182,7 +182,7 @@ def test_computed_thermo_with_three_cp_observations_yields_one_row_three_finding
 
 
 # --------------------------------------------------------------------------- #
-# HIGH finding, review round 2: a Cp-comparison row must never restale a
+# A Cp-comparison row must never restale a
 # thermo's existing reviewer-family (LLM) review. Before
 # app.services.machine_review.query.MachineReviewRecordFamily existed,
 # get_record_machine_review_currency_for_record loaded every persisted row
@@ -291,7 +291,7 @@ def test_latest_cp_comparison_for_thermo_ignores_a_newer_reviewer_family_row(db_
 
 # --------------------------------------------------------------------------- #
 # NASA-7 Cp at a known T matches a hand-computed value.
-# Mutation: perturb one coefficient -> the hand-calc no longer matches -> red.
+# Mutation: perturb one coefficient -> the hand-calc does not match -> red.
 # Mutation: use the wrong J/kmol->J/mol conversion -> off by 1000x -> red.
 # --------------------------------------------------------------------------- #
 
@@ -413,7 +413,7 @@ def test_real_gas_observation_is_comparable_with_unquantified_non_ideality_and_p
 
 
 def test_null_reference_pressure_still_yields_a_cp_residual(db_session):
-    """Decision (2026-09-23): reference pressure cannot change a heat
+    """Reference pressure cannot change a heat
     capacity, so a thermo with no recorded ``reference_pressure_bar`` must
     still produce a comparable Cp residual (the pre-D2 behaviour, restored
     here after D2 briefly required a pressure for every applicability
@@ -441,7 +441,7 @@ def test_null_reference_pressure_leaves_entropy_comparison_unavailable(db_sessio
     pressure (it is baked into the entropy coefficient), so the D1
     thermo-consistency check must keep reporting it unavailable when the
     thermo carries no ``reference_pressure_bar`` -- even though the same
-    record's Cp comparisons now succeed (decision, 2026-09-23).
+    record's Cp comparisons now succeed.
     """
     from app.services.consistency.thermo import compare_thermo
 
@@ -634,9 +634,9 @@ def test_finding_message_decodes_to_every_required_field_including_custody_ref(d
 def test_a_long_custody_key_does_not_blow_the_findings_message_size_limit(db_session):
     """A 2000-char ``source_record_key`` must not make the whole run raise.
 
-    MEDIUM finding, review round 2: ``source_record_key``
-    (``ExternalSourceRecord``) is an unbounded ``Text`` column, and before
-    this fix it was embedded, untruncated, into the JSON ``message`` twice
+    ``source_record_key``
+    (``ExternalSourceRecord``) is an unbounded ``Text`` column, and without a cap
+    it would be embedded, untruncated, into the JSON ``message`` twice
     (as both ``observation_ref`` and ``external_source_record_ref``).
     ``MachineReviewFinding.message`` is capped at 1000 chars
     (``app.services.machine_review.schemas``), and the only existing
@@ -646,7 +646,7 @@ def test_a_long_custody_key_does_not_blow_the_findings_message_size_limit(db_ses
     ``ValidationError`` instead of recording a finding, silently killing an
     otherwise-successful comparison run. Mutation: remove ``_bounded_ref``
     from ``_finding_payload`` -> this test goes red with a raised
-    ``ValidationError`` (or, run against the pre-fix code, does exactly
+    ``ValidationError`` (or, without the guard, does exactly
     that).
     """
     thermo = _make_thermo(db_session, smiles="CCCCCCCCCCCCCCCCCCCC")
@@ -661,7 +661,7 @@ def test_a_long_custody_key_does_not_blow_the_findings_message_size_limit(db_ses
         external_source_record=custody,
     )
 
-    # Must not raise (the pre-fix behaviour) and must persist a row.
+    # Must not raise  and must persist a row.
     row = run_and_record(db_session, thermo.id)
     (finding,) = row.findings_json
     assert len(finding["message"].encode("utf-8")) <= 1000
@@ -685,7 +685,7 @@ def test_observation_without_custody_gets_its_public_ref_never_the_db_id(db_sess
 
     Pre-D2 this was a content-derived label built from temperature and
     value (``heat_capacity_cp@{t}K={v}``); the D2 rewrite switched to the
-    observation's own ``mpo_``-prefixed public ref (Phase C-E5), which is
+    observation's own ``mpo_``-prefixed public ref, which is
     an opaque random token, not content-derived -- this test (and its
     name) pin that current behaviour rather than the stale pre-D2 claim.
     """
@@ -717,7 +717,7 @@ def test_observation_without_custody_gets_its_public_ref_never_the_db_id(db_sess
 def test_status_pins_the_shared_derivation_and_is_not_an_accuracy_verdict(db_session):
     """Pin what the status token actually is, and record its known limitation.
 
-    MEDIUM finding, review round 2: ``run_and_record`` derives its status via
+    ``run_and_record`` derives its status via
     the shared ``derive_machine_review_status`` (``app.services.machine_review
     .derivation``), the same function every reviewer-family review uses.
     Every Cp finding is ``severity=info`` (no ratio is ever judged here --

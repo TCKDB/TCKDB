@@ -1,4 +1,4 @@
-"""Tests for :mod:`app.services.review_queue` (task #269).
+"""Tests for :mod:`app.services.review_queue`.
 
 The owner rejected the flat record-review queue: two corrections on one
 species render as two lines with nothing telling them apart, "applied_energy_
@@ -238,7 +238,7 @@ class TestSubjectChemistry:
     def test_a_recorded_but_unparseable_smiles_is_distinguishable_from_never_recorded(
         self, db_session
     ):
-        """Review #492, finding 7: `unmapped_smiles` is the candidate's OWN
+        """`unmapped_smiles` is the candidate's OWN
         structural SMILES, not a reaction SMILES, and it can be set while
         `formula` is still null -- a reaction-shaped string
         (``"[CH3].[H]>>C"``) is not one molecule RDKit's single-molecule
@@ -279,7 +279,7 @@ class TestSubjectChemistry:
 
 
 class TestReactionEntrySubjectCarriesItsEquation:
-    """Review #492, finding 6: a kinetics reviewer saw "Reaction entry
+    """A kinetics reviewer must not see "Reaction entry
     rxe_..." and nothing else -- the species side of this module named
     subjects well and the reaction side named nothing, same defect seen
     from the other direction.
@@ -327,7 +327,7 @@ class TestReactionEntrySubjectCarriesItsEquation:
     def test_the_reaction_entrys_own_review_row_folds_into_the_same_subject_as_its_kinetics(
         self, db_session
     ):
-        """Review #492 (second round), finding 1: every reaction workflow
+        """Every reaction workflow
         also writes a review row for the reaction_entry ITSELF (two
         `RecordRef(reaction_entry)` sites in `app/workflows`), which used
         to group under `reaction` -- a second, nameless block ("Reaction
@@ -580,8 +580,8 @@ class TestQueryCost:
 
 
 class TestRowResolutionCap:
-    """Review of #492, mutation 3: ``if False:`` on the cap check passed
-    all 15 previously-shipped tests -- ``TestQueryCost`` above pins a
+    """Mutation: ``if False:`` on the cap check passes
+    all the other tests -- ``TestQueryCost`` above pins a
     DIFFERENT property (query count does not grow with row count) and
     never seeds enough rows to cross any cap, so it cannot see the cap
     being disabled entirely. Monkeypatching the module's cap constant

@@ -2,7 +2,7 @@
 
 ``mirror-ci-images.yml`` copies two Docker Hub images into ``ghcr.io/tckdb``
 and lists each with its index digest. These tests check that no workflow
-pulls those images from Docker Hub any more, that every GHCR reference is
+pulls those images from Docker Hub, that every GHCR reference is
 pinned to the digest the mirror lists, and that ``docker-compose.yml`` (which
 stays on Docker Hub) pins the same digests.
 """

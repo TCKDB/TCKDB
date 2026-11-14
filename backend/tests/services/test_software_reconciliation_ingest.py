@@ -1,4 +1,4 @@
-"""Ingest-level tests for software provenance reconciliation (DR-0008).
+"""Ingest-level tests for software provenance reconciliation.
 
 The pure reconciliation function is unit-tested in
 ``test_software_reconciliation.py``. This module verifies the *wiring*:
@@ -15,7 +15,7 @@ The pure reconciliation function is unit-tested in
 * a *name* mismatch confirmed by a real artifact is corrected at write
   time -- ``software_release_id`` is repointed at the observed program,
   the declared string survives on ``declared_software_banner``, and a
-  warning is produced (issue #305's ARC follow-up, 2026-09).
+  warning is produced.
 """
 
 from __future__ import annotations
@@ -248,7 +248,7 @@ def test_parsed_only_when_no_declared_software(db_conn) -> None:
 #    time: software_release_id repoints to the observed program, the
 #    declared string survives, and a warning is produced.
 #
-#    This is the live ARC defect (issue #305 follow-up): a per-job-type
+#    This is an ARC defect: a per-job-type
 #    version map borrows an unrelated job's declared software name, so
 #    ``name='gaussian'`` sits next to a genuinely-observed ORCA artifact.
 # ---------------------------------------------------------------------------
@@ -284,7 +284,7 @@ def test_name_mismatch_with_confirming_artifact_corrects_software_identity(
         # catches a correction that silently keeps pointing at Gaussian.
         assert calc.software_release is not None
         assert calc.software_release.software.name == "ORCA"
-        # The originally-declared string must not be silently discarded.
+        # The declared string must not be silently discarded.
         assert calc.declared_software_banner is not None
         assert "gaussian" in calc.declared_software_banner.lower()
         assert "ORCA 6.0.0" in calc.declared_software_banner

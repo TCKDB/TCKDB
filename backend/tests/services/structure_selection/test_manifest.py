@@ -321,7 +321,7 @@ def _relabel_curated(manifest):
 def test_a_determination_grain_manifest_relabelled_curated_is_refused_unless_its_unit_statuses_are_relabelled_too(db_session):
     """The relabel changes the profile and the effective statuses but not the statuses a unit may have, which the manifest
     records separately (``candidate_review_statuses``): the three disagree, so the replay refuses it. This is the check that
-    refuses it, not the sources' statuses: an unreviewed source is evidence, and a curated request may use it (ADR 0023).
+    refuses it, not the sources' statuses: an unreviewed source is evidence, and a curated request may use it.
 
     Kills: dropping the ``candidate_review_statuses`` comparison (the half-relabelled manifest passing).
     """
@@ -352,7 +352,7 @@ def test_a_genuinely_curated_determination_manifest_with_a_source_flipped_is_ref
         reset_current_read_profile(token)
     assert genuine["read_profile"]["profile"] == "curated" and replay_matches(genuine)
     assert all(c["review_status"] == "approved" for c in genuine["calculations"])
-    # ADR 0023: a source calculation is evidence, so an unreviewed one is a status a curated request may use and the replay
+    # A source calculation is evidence, so an unreviewed one is a status a curated request may use and the replay
     # accepts it; a rejected or deprecated one is withheld, so no curated request could have used it and the replay refuses.
     unreviewed = copy.deepcopy(genuine)
     unreviewed["calculations"][0]["review_status"] = "not_reviewed"
@@ -454,7 +454,7 @@ def test_the_writer_stamps_the_registered_format_and_every_reader_refuses_a_floa
 
 @pytest.mark.parametrize("status", ["not_reviewed", "under_review"])
 def test_a_curated_transition_state_unit_below_the_floor_is_refused_on_replay(db_session, status):
-    """ADR 0023 (Q3): at transition-state grain a unit's recorded status is the owning entry's, a RECORD, so a curated
+    """At transition-state grain a unit's recorded status is the owning entry's, a RECORD, so a curated
     request could never have returned a unit below the floor. Evidence inputs (the sources) may be unreviewed; the unit may not.
 
     Kills: the replay judging a transition-state unit by the evidence rule (``is_basin`` true at every non-calculation grain).
@@ -479,7 +479,7 @@ def test_a_curated_transition_state_unit_below_the_floor_is_refused_on_replay(db
 
 
 def test_a_conformer_manifest_records_the_group_and_the_observation_apart_and_replay_judges_each(db_session):
-    """ADR 0023 (Q2, Q4): a basin's group is the record that gates it and its observation is evidence. The manifest records the
+    """A basin's group is the record that gates it and its observation is evidence. The manifest records the
     two statuses apart, so a ``not_reviewed`` that came from the group (which a curated request cannot return) is told from one
     that came from the observation (which it can use).
 
@@ -549,7 +549,7 @@ def test_a_basin_with_a_terminal_status_the_request_did_not_lift_is_excluded_liv
 ):
     """Every terminal status among a basin's group and observation must be lifted by the request, not only the weaker one.
 
-    Asking for rejected records does not ask for a deprecated group: the loader used to judge the weaker of the two only,
+    Asking for rejected records does not ask for a deprecated group: the loader must not judge the weaker of the two only,
     admit the unit, and write a manifest the replay (which checks each status on its own) then refused.
 
     Kills: the loader judging only the weaker status (the unit admitted, the manifest refused on replay).

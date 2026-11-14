@@ -141,7 +141,7 @@ def _orca_record(session, *, frequencies=None, dispositions=None, hessian=True):
 def test_a_transition_state_reaction_coordinate_is_determined_not_thresholded(
     db_session,
 ):
-    """The block answers ADR 0012's question about a real record.
+    """The block answers the imaginary-mode protocol's question about a real record.
 
     The reaction coordinate of this transition state is 0.0000 rigid-body
     and 0.0000 torsion, so it is internal motion that is not a rotation
@@ -176,13 +176,13 @@ def test_a_transition_state_reaction_coordinate_is_determined_not_thresholded(
 def test_an_unprojected_low_mode_is_determined_to_be_rigid_body_residue(
     db_session,
 ):
-    """The case ADR 0012 says a threshold cannot decide, decided.
+    """The case the imaginary-mode protocol says a threshold cannot decide, decided.
 
     -7.15 cm-1 is a genuine eigenvalue of ``freq_g09.log``'s stored
     Hessian -- one of the six rigid-body directions, which Gaussian
     projected out before printing its own frequency list but a code (or a
     pipeline) that does not project would report. Against every row of
-    ADR 0012's tau table it is "below tau, sign indeterminate". Projected,
+    the tau table it is "below tau, sign indeterminate". Projected,
     it is 0.9999 rigid-body motion and the question does not arise.
     """
     parsed = _gaussian_hessian()
@@ -230,7 +230,7 @@ def test_a_declared_torsion_the_projection_excludes_is_reported_as_a_conflict(
     """The case this whole feature exists for.
 
     A depositor declaring ``torsion`` on a genuine reaction coordinate is
-    exactly what ADR 0013 says TCKDB cannot check -- "a depositor who
+    exactly what TCKDB cannot check without a projection -- "a depositor who
     writes ``torsion`` on a genuine second reaction coordinate has
     falsified a record". It can now be checked. This transition state has
     no rotatable bond at all, so the declaration is excluded rather than
@@ -238,7 +238,7 @@ def test_a_declared_torsion_the_projection_excludes_is_reported_as_a_conflict(
 
     Both readings survive in the payload and neither is preferred: the
     declaration stays exactly as deposited, the determination sits beside
-    it, and ``agreement`` names the disagreement. Under ADR 0008 that is
+    it, and ``agreement`` names the disagreement. Under the blocking-tier rule that is
     the most a projection may do -- it is an expectation about the record,
     not a definition, so it informs and does not block.
     """
@@ -432,13 +432,13 @@ def test_a_stored_frequency_the_matrix_does_not_reproduce_is_not_projected(
 
 
 # ---------------------------------------------------------------------------
-# What a refusal says instead of nothing (ADR 0012's stored tau)
+# What a refusal says instead of nothing (the stored tau)
 # ---------------------------------------------------------------------------
 #
 # The statuses above are honest and they are also a shrug: a reader who
 # asks about the corpus records with an imaginary mode and no Hessian
 # learns only that nothing was checked. TCKDB is not silent about those
-# modes -- ADR 0012 judged every one of them by magnitude at upload,
+# modes -- the imaginary-mode protocol judges every one of them by magnitude at upload,
 # against a tau resolved from the protocol that produced them, and
 # persisted the tau, its basis and the resulting structural flag. These
 # tests are about returning that judgement beside the refusal, and about
@@ -469,9 +469,9 @@ def _seed_parameter(session, *, calculation, canonical_key, canonical_value):
 
 
 def _judged_record_without_a_hessian(session, **freq_kwargs):
-    """ADR 0012's motivating record, judged and deposited without a matrix.
+    """The motivating record, judged and deposited without a matrix.
 
-    -1300, -42 and -13 cm-1 is the case ADR 0012 opens with. No live
+    -1300, -42 and -13 cm-1 is the imaginary-mode protocol's opening case. No live
     record reaches this path: ``n_imag`` is only ever 0 or 1 across the
     whole corpus, so ``imaginary_disposition`` is null everywhere and a
     record with an extra imaginary mode has to be constructed.
@@ -490,8 +490,8 @@ def test_a_record_with_no_hessian_reports_the_tau_it_was_judged_against(db_sessi
     """"Not determinable" stops being a shrug.
 
     The projection still refuses -- there is no matrix, and no amount of
-    stored provenance conjures one. What it now carries is the judgement
-    that *was* made: the tau applied, which row of ADR 0012's protocol
+    stored provenance conjures one. What it carries is the judgement
+    that *was* made: the tau applied, which row of the protocol
     table chose it, and the structural flag that followed.
     """
     calc = _judged_record_without_a_hessian(
@@ -518,7 +518,7 @@ def test_a_record_with_no_hessian_reports_the_tau_it_was_judged_against(db_sessi
 def test_the_tau_block_ranks_by_magnitude_and_names_only_the_designation(db_session):
     """Ranked magnitudes, and one mode named -- by the depositor.
 
-    ADR 0012's tiers turn on the *ordering* of magnitudes against the
+    The tiers turn on the *ordering* of magnitudes against the
     designated reaction coordinate, so the ordering is what the block
     reports, and it is a re-ordering rather than a pass-through: the
     modes are deliberately stored here in an order the frequency list
@@ -553,7 +553,7 @@ def test_the_tau_block_ranks_by_magnitude_and_names_only_the_designation(db_sess
 
 
 def test_the_tau_block_reports_a_magnitude_and_refuses_to_assign_a_mode(db_session):
-    """The line ADR 0012 draws, asserted as a property of the payload.
+    """The line the imaginary-mode protocol draws, asserted as a property of the payload.
 
     A torsion at -300 cm-1 and a genuine second reaction coordinate at
     -300 cm-1 are the same number in a frequency list, which is the
@@ -598,7 +598,7 @@ def test_the_tau_block_reports_a_magnitude_and_refuses_to_assign_a_mode(db_sessi
 def test_the_recorded_protocol_that_set_tau_is_reported_absences_included(db_session):
     """Which recorded provenance chose the threshold, including what was missing.
 
-    ADR 0012: an unrecorded Hessian method takes the conservative row
+    An unrecorded Hessian method takes the conservative row
     "whatever else is present", so the parameter that is *absent* is
     frequently the one that decided tau. Listing only the recorded keys
     would hide it.
@@ -632,7 +632,7 @@ def test_the_recorded_protocol_that_set_tau_is_reported_absences_included(db_ses
 def test_the_stored_basis_wins_over_the_parameters_and_the_disagreement_shows(db_session):
     """tau is read back, never re-resolved.
 
-    ADR 0012 stores tau so that "a later parser improvement cannot
+    Tau is stored so that "a later parser improvement cannot
     silently re-decide every historical record". A record judged at
     50 cm-1 whose parameters now say analytic/tight is exactly that
     case: the block reports the 50 it was judged at, alongside the
@@ -664,7 +664,7 @@ def test_the_stored_basis_wins_over_the_parameters_and_the_disagreement_shows(db
 def test_a_record_judged_before_adr_0012_reports_no_tau_rather_than_a_default(db_session):
     """A missing tau is a missing tau, not 50.
 
-    ADR 0012's migration "backfills nothing, because there is nothing
+    The migration "backfills nothing, because there is nothing
     true to backfill". The read surface has to hold the same line: a
     record deposited before the decision was never judged under it, and
     substituting the protocol-not-recorded row here would manufacture a
@@ -683,7 +683,7 @@ def test_a_record_judged_before_adr_0012_reports_no_tau_rather_than_a_default(db
 
 
 def test_an_assumed_basis_renders_verbatim_and_stays_distinguishable(db_session):
-    """ADR 0012's 2026-09-04 amendment, read back.
+    """The imaginary-mode protocol's assumed default, read back.
 
     An assumed basis is read straight off the stored row exactly like
     every other basis -- this block does no basis-specific branching --
@@ -756,7 +756,7 @@ def test_every_way_of_failing_to_determine_carries_the_tau_judgement(db_session)
 def test_a_determined_projection_carries_no_tau_block(db_session):
     """A determination beats a threshold, so the threshold stands down.
 
-    ADR 0012 is explicit that the projections "should be implemented
+    The imaginary-mode protocol is explicit that the projections "should be implemented
     before tau is tuned, because a determination beats a threshold
     wherever one is available". Returning both would invite a reader to
     average a measurement with a tolerance. The response for a record
@@ -832,7 +832,7 @@ def test_tau_context_ignores_a_reported_row_and_takes_the_last_stored_requested_
 
 
 def test_tau_context_lists_a_reported_hessian_method_ahead_of_the_requested_one_and_says_so(db_session):
-    """A basis decided from a log's report traces to the report (ADR 0012, amendment 2026-11-05)."""
+    """A basis decided from a log's report traces to the report."""
     from app.db.models.common import ArtifactKind, ParameterSource, ParameterStatementKind
 
     calc = _judged_record_without_a_hessian(

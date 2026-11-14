@@ -1,4 +1,4 @@
-"""The Arrhenius A-units order follows the side the coefficient is a rate of (#695).
+"""The Arrhenius A-units order follows the side the coefficient is a rate of.
 
 A forward coefficient is a rate of the reactants, a reverse one of the products.
 H2 -> 2H deposited as the reverse rate (2H -> H2) is bimolecular, so its A is in

@@ -226,7 +226,7 @@ def test_extraction_raises_when_software_unknown(db_conn) -> None:
 def test_psi4_raises_instead_of_falling_through_to_orca(db_conn) -> None:
     """Psi4 is sniffed, but has no parameter parser — so nothing is emitted.
 
-    ``_run_parser`` used to treat ORCA as its catch-all, so a newly
+    ``_run_parser`` must not treat ORCA as its catch-all, so a newly
     recognised program would have had its log fed to the ORCA parser and
     stored parameter rows describing a run that never happened. The
     dispatch is now exhaustive and raises instead.

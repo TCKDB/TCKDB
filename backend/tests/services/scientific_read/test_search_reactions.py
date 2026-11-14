@@ -294,7 +294,7 @@ def test_sort_is_deterministic(db_session):
 # match=contains vs match=exact
 #
 # ``contains`` is set containment per role and is the default; ``exact`` is
-# multiset equality on both roles and is what the endpoint used to do
+# multiset equality on both roles and is what an unrestricted endpoint would do
 # unconditionally. The two axes (``direction``, ``match``) are independent
 # and every combination below is asserted rather than assumed.
 # ---------------------------------------------------------------------------
@@ -380,7 +380,7 @@ def test_exact_reproduces_the_old_result_for_a_full_query(db_session):
 
 
 def test_exact_still_rejects_a_reactants_only_query(db_session):
-    """``exact`` keeps the old behaviour, defect included, by explicit request.
+    """``exact`` keeps the exact-match behaviour, defect included, by explicit request.
 
     Asking for "reactants exactly {X} and products exactly {}" is still
     unanswerable. Under ``exact`` that is the caller's stated question, not
@@ -616,7 +616,7 @@ def test_contains_query_naming_an_unknown_species_returns_nothing(db_session):
     Documented here because it is *not* the same failure as the one this
     change fixes: the empty answer is caused by the species being unknown to
     the database, not by the query shape being unanswerable. It is still a
-    silent empty rather than a "no such species" error — see the PR notes.
+    silent empty rather than a "no such species" error.
     """
     _setup_reaction(
         db_session,

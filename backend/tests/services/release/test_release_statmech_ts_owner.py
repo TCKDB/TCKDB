@@ -1,6 +1,6 @@
 """A statmech record is a release candidate for its own owner: a species entry or a TS entry.
 
-PR 6.5. The owner is a discriminated pair (``statmech_exactly_one_subject``),
+The owner is a discriminated pair (``statmech_exactly_one_subject``),
 so a release derives the subject from whichever key is set. Supporting a TS
 candidate never selects, embeds or endorses its sibling statmech records.
 """

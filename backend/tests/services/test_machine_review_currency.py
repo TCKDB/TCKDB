@@ -279,7 +279,7 @@ def test_classification_is_deterministic_across_input_order():
 
 
 # --------------------------------------------------------------------------- #
-# The versioning reset (PR-4): every review stored before it reads stale, for a true named reason
+# A review stored under an earlier recipe version reads stale, for a true named reason
 # --------------------------------------------------------------------------- #
 
 

@@ -1,4 +1,4 @@
-"""Species identity tests (DR-0031).
+"""Species identity tests.
 
 Identity = canonical SMILES + charge + multiplicity. Covers:
 - multiplicity is authoritative (spin states representable): singlet vs
@@ -44,7 +44,7 @@ def _rolled_back_session(db_engine):
 
 
 # ---------------------------------------------------------------------------
-# Chemistry-layer: multiplicity is no longer validated against SMILES
+# Chemistry-layer: multiplicity is not validated against SMILES
 # ---------------------------------------------------------------------------
 
 
@@ -149,7 +149,7 @@ def test_cis_and_trans_diazene_resolve_to_distinct_entries(db_engine) -> None:
 
 
 def test_inchikey_can_map_to_multiple_species(db_engine) -> None:
-    """After the identity change, an InChIKey is no longer unique: the two
+    """After the identity change, an InChIKey is not unique: the two
     CH2 spin states share one InChIKey but are two species rows."""
     ch2_inchikey = inchi.MolToInchiKey(Chem.MolFromSmiles("[CH2]"))
     with _rolled_back_session(db_engine) as session:

@@ -141,7 +141,7 @@ def test_db_engine_drops_database_when_migrations_fail(monkeypatch: pytest.Monke
     had already run, so the database existed, but the migration subprocess
     raised *before* the fixture entered its ``try`` — so ``finally`` never ran.
 
-    Against the pre-fix fixture this test fails on the final assertion (the
+    Against a fixture without the fix this test fails on the final assertion (the
     database survives); against the fixed fixture it passes.
     """
     monkeypatch.setenv("DB_TEST_NAME", scratch_database_name("regress"))
@@ -286,7 +286,7 @@ def test_sweep_can_be_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
 #
 # Run tokens make two concurrent runs pick different names, so the refusal
 # below is a backstop rather than the primary defence. It exists because the
-# failure it replaces was unreadable: on 2026-08-10 two runs sharing eight
+# failure it replaces was unreadable: two runs sharing eight
 # databases produced 2305 errors, every one of them reading `terminating
 # connection due to administrator command`, and nothing anywhere said "another
 # run is using your database".

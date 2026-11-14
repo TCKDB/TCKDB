@@ -1,4 +1,4 @@
-"""``ScientificLevelsSummary.notation`` for every shape (ADR 0021, plan section 2.6).
+"""``ScientificLevelsSummary.notation`` for every shape.
 
 The notation is derived from ``energy`` and ``geometry`` at read time, never stored. The rules,
 each pinned by a test below that fails when its rule is bent:

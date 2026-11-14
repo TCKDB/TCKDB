@@ -1,4 +1,4 @@
-"""The upload worker must keep the warnings the direct routes return (#647).
+"""The upload worker must keep the warnings the direct routes return.
 
 What was wrong
 --------------
@@ -96,7 +96,7 @@ def _pdep() -> dict:
     payload["species"][0]["species_entry"]["species_entry_kind"] = "vdw_complex"
     payload["species"][0]["calculations"].append(_vdw_freq_calc("ethyl_geom", "ethyl_freq"))
     # An sp at a named composite method's level is a misshapen deposit the
-    # workflow reports (ADR 0021, decision 7).
+    # workflow reports.
     payload["species"][0]["calculations"][0]["level_of_theory"] = {"method": "CBS-QB3"}
     return payload
 
@@ -224,7 +224,7 @@ def test_the_job_result_carries_the_warnings_the_direct_route_returns(client, ki
     assert "result_unavailable" not in result, "the warnings could not be stored in the job result"
     assert result["warnings"] == expected
     # And the sentence is TCKDB's for the code, the same one the direct route, the stored row and the public read
-    # carry (#838): never text the depositor typed.
+    # carry: never text the depositor typed.
     assert result["warnings"], "nothing to compare"
     for warning in result["warnings"]:
         assert warning["message"] == render_message(warning["code"], warning["context"]), warning["code"]
@@ -253,7 +253,7 @@ def test_a_retried_attempt_reports_each_warning_once(client, kind: UploadJobKind
 
 
 def test_the_scan_coordinate_warning_is_the_same_on_the_direct_route_and_the_job(client) -> None:
-    """A scan whose stored values disagree with its geometries (#835) earns one warning, and the job reports it
+    """A scan whose stored values disagree with its geometries earns one warning, and the job reports it
     exactly as the direct route does (the check runs after the flush, so the worker has to run it too)."""
     from tests.api.test_api_scan_coordinate_warning import CODE, h2_scan_conformer
 
@@ -269,7 +269,7 @@ def test_the_scan_coordinate_warning_is_the_same_on_the_direct_route_and_the_job
 
 
 def test_a_stale_recorded_warning_is_re_rendered_when_the_job_result_is_assembled(client) -> None:
-    """A warning recorded on a job before this wording (#838) carries a message that quoted the depositor.
+    """A warning recorded on a job before this wording carries a message that quoted the depositor.
 
     The recorded text is data: the job result says the sentence for the code and context, whatever was stored.
     """
@@ -296,7 +296,7 @@ def test_a_stale_recorded_warning_is_re_rendered_when_the_job_result_is_assemble
 
 @pytest.mark.parametrize("route", ["thermo", "conformer", "pdep"])
 def test_the_job_result_carries_the_atomic_electronic_warnings_the_direct_route_returns(client, route: str) -> None:
-    """A single atom deposited as a job hears the same atomic warnings as the direct route (#836)."""
+    """A single atom deposited as a job hears the same atomic warnings as the direct route."""
     from tests.api.test_atomic_warnings_every_route import ATOMIC, ROUTES, _aec
 
     build, direct_url, job_url = ROUTES[route]

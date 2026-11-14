@@ -67,7 +67,7 @@ class TestNormalizeInChI:
         )
 
     def test_does_not_validate_prefix(self):
-        # Phase 1 is permissive; a missing prefix is preserved verbatim.
+        # The normalizer is permissive; a missing prefix is preserved verbatim.
         assert normalize_inchi("1S/H2O/h1H2") == "1S/H2O/h1H2"
 
 
@@ -76,7 +76,7 @@ class TestNormalizeSMILES:
         assert normalize_smiles("  O  ") == "O"
 
     def test_aromatic_kept(self):
-        # Phase 1 does NOT canonicalize via RDKit; aromatic SMILES is
+        # The normalizer does NOT canonicalize via RDKit; aromatic SMILES is
         # preserved as-is.
         assert normalize_smiles("c1ccccc1") == "c1ccccc1"
 

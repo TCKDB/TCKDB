@@ -301,7 +301,7 @@ _PREDICTION_XML = f"""<?xml version="1.0" encoding="UTF-8"?>
 # sense but explicitly excluded from the strict eMethodName-only candidate table per the WP0
 # brief. Catches mutation (f): counted in `skipped_free_method` but not actually excluded from
 # `candidates` / `playground_hit`, and verifies it DOES surface in the separate
-# `free_method_ideal_gas_candidates` report (finding 4).
+# `free_method_ideal_gas_candidates` report.
 _SMETHOD_XML = f"""<?xml version="1.0" encoding="UTF-8"?>
 <DataReport xmlns="{_NS}">
   <Version><nVersionMajor>2</nVersionMajor><nVersionMinor>0</nVersionMinor></Version>
@@ -673,7 +673,7 @@ class TestFindsOnlyTheQualifyingRecords:
 
 
 class TestPressureReading:
-    """Finding 2: pressure must be read from a per-point ``Variable`` as well as a block-level
+    """Pressure must be read from a per-point ``Variable`` as well as a block-level
     ``Constraint``, and the kind/min/max/distinct-count must be reported per candidate.
     """
 
@@ -707,7 +707,7 @@ class TestPressureReading:
 
 
 class TestMixturePredictionAndFreeMethodAreCountedNotJustExcluded:
-    """Finding 3: the mixture block, the Prediction block and the sMethodName-only block must
+    """The mixture block, the Prediction block and the sMethodName-only block must
     each be both excluded from the strict candidate table AND counted in their own counter.
     """
 
@@ -725,7 +725,7 @@ class TestMixturePredictionAndFreeMethodAreCountedNotJustExcluded:
 
 
 class TestFreeMethodIdealGasReport:
-    """Finding 4: sMethodName-only matches must survive even though they are excluded from the
+    """sMethodName-only matches must survive even though they are excluded from the
     strict candidate table, and must appear in the dedicated report with full detail.
     """
 
@@ -752,7 +752,7 @@ class TestFreeMethodIdealGasReport:
 
 
 class TestCompoundsWithoutInchikey:
-    """Finding 6: a compound with sStandardInChI but no sStandardInChIKey must be counted and
+    """A compound with sStandardInChI but no sStandardInChIKey must be counted and
     logged, not silently dropped."""
 
     def test_missing_inchikey_is_counted_and_logged(self, scan_module, monkeypatch, no_inchikey_archive, tmp_path):
@@ -797,8 +797,7 @@ class TestDigestGate:
 
 
 class TestArchiveNotFound:
-    """Finding 7: a missing --archive path is a distinct exit code (3) from a digest mismatch
-    (2); previously both returned 2."""
+    """A missing --archive path exits with its own code (3), distinct from a digest mismatch (2)."""
 
     def test_missing_archive_exits_three(self, scan_module, monkeypatch, inchikeys_file, tmp_path):
         missing = tmp_path / "does-not-exist.tgz"
@@ -827,6 +826,6 @@ class TestNoPlaygroundHitExitsOne:
         # The archive-wide fallback picture is still reported even with zero playground hits.
         assert payload["fallback_coverage_by_compound"]
         assert payload["fallback_coverage_by_compound"][0]["inchikey"] == METHANE_INCHIKEY
-        # The sMethodName-only report is unaffected by playground status (finding 4): it still
+        # The sMethodName-only report is unaffected by playground status: it still
         # reports the smethod compound even though nothing in the playground list was hit.
         assert SMETHOD_INCHIKEY in {c["inchikey"] for c in payload["free_method_ideal_gas_candidates"]}

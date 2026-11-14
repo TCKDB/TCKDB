@@ -124,7 +124,7 @@ def test_every_symbol_the_ingestion_path_produces_is_accepted(
     ``normalize_element_symbol`` settles capitalisation and deliberately leaves
     hydrogen isotope labelling alone, so ``D`` is what a deuterated deposit
     stores. A constraint that refused it would refuse correct chemistry, which
-    ADR 0008 puts out of bounds -- and would refuse it on ingestion, not at the
+    the blocking-tier rule puts out of bounds -- and would refuse it on ingestion, not at the
     edges.
     """
     savepoint = db_session.begin_nested()
@@ -143,7 +143,7 @@ def test_every_symbol_the_ingestion_path_produces_is_accepted(
 
 
 def test_the_constraint_holds_under_a_bulk_load_session(db_session, geometry_id):
-    """The measured fact that decided the shape of this change.
+    """The fact that decides the shape of the rule.
 
     ``session_replication_role = replica`` suspends system triggers -- which is
     how PostgreSQL implements a foreign key -- and leaves CHECK constraints
@@ -153,7 +153,7 @@ def test_the_constraint_holds_under_a_bulk_load_session(db_session, geometry_id)
 
     If this ever reverses, the argument in
     :mod:`app.db.models.reaction_atom_map` for keeping ``element`` and
-    ``ts_element`` as two columns is no longer sound and should be revisited.
+    ``ts_element`` as two columns is not sound and should be revisited.
     """
     savepoint = db_session.begin_nested()
     try:
@@ -274,7 +274,7 @@ def test_the_element_rule_is_case_sensitive_now(db_session):
     ``ck_reaction_atom_map_pair_ts_element_canonical`` as well, so which of them
     reports it is PostgreSQL's choice of evaluation order rather than anything
     this schema states. Reading the definition asserts the claim itself: the
-    rule is no longer case-blind, now that the reason it was case-blind has
+    rule is not case-blind, because the reason to be case-blind has
     gone.
     """
     definition = db_session.scalar(

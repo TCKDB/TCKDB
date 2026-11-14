@@ -1,5 +1,5 @@
 """Tests for the property-table ingestion façade classes + the
-polarizability_iso property kind added in Phase 5c.
+polarizability_iso property kind.
 
 The façades wrap existing primitives (parser, builder, runner) so the
 heavy correctness tests live under their respective files:
@@ -127,7 +127,7 @@ class TestPolarizabilityIsoTable:
         assert h2o.value == pytest.approx(9.90)
         assert h2o.unit == "Bohr^3"
         # The detected header is the live one, not the
-        # previously-inferred xx/yy/zz/iso shape.
+        # inferred xx/yy/zz/iso shape.
         assert "alpha" in table.column_names
         assert "xx" not in table.column_names
 
@@ -185,7 +185,7 @@ class TestPropertyTableParser:
     def test_known_property_kinds_includes_new_polarizability(self):
         parser = PropertyTableParser()
         kinds = parser.known_property_kinds()
-        # All Phase 3a + Phase 5c kinds should be visible to callers
+        # All kinds should be visible to callers
         # without forcing them to import PROPERTY_CONFIGS directly.
         assert {
             "hf_0",

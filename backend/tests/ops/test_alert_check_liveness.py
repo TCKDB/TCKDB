@@ -159,7 +159,7 @@ def test_a_checker_that_cannot_start_sends_no_ping(fake_host, run_alert_check):
 
 
 def test_missing_status_url_refuses_to_run(fake_host, run_alert_check):
-    """TCKDB_STATUS_URL has no default (issue #521): a public copy of this
+    """TCKDB_STATUS_URL has no default: a public copy of this
     script must never guess at a host to poll, so an unset URL is the same
     class of failure as an unset topic -- refuse before a verdict exists,
     say why, and ping nothing."""
@@ -202,7 +202,7 @@ def test_a_failed_ping_does_not_put_the_ping_url_in_the_log(
     they like, which silences the one channel that covers the host dying.
     And a failed ping is exactly the moment someone reads this journal and
     pastes it into an issue -- so the failure path is the one that must not
-    quote it. The CI watchdog has always withheld it; this script used to
+    quote it. The CI watchdog has always withheld it; this script must not
     print it in full.
     """
     secret = "0e9f4a21-not-a-real-check-uuid"

@@ -1,4 +1,4 @@
-"""Network solve declarations, fit determinations and their persistence (chunk 1).
+"""Network solve declarations, fit determinations and their persistence.
 
 Every refusal test names the exact code and field it expects, and every positive test reads the stored
 row back, so a check that silently stopped firing -- or a stored form that silently stopped carrying

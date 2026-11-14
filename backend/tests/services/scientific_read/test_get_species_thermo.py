@@ -112,13 +112,11 @@ def test_points_thermo_returns_points_array(db_session):
 
 
 def test_nasa_and_points_both_served_when_both_exist(db_session):
-    """The live-archive shape: every one of the 65 thermo records on the
-    deployed DB has BOTH a ThermoNASA row AND ThermoPoint rows, and
-    ``thermo.model_kind`` is explicitly stored as ``nasa7`` (post the
-    #316 backfill) rather than left NULL for fallback classification.
-    Before the fix, ``points`` was gated on ``model_kind ==
-    ThermoModelKindQuery.points``, so the NASA classification made all
-    585 stored Cp points unreachable. Both must now come back together.
+    """A thermo record has BOTH a ThermoNASA row AND ThermoPoint rows, and
+    ``thermo.model_kind`` is explicitly stored as ``nasa7`` rather than left NULL
+    for fallback classification. ``points`` must not be gated on ``model_kind ==
+    ThermoModelKindQuery.points``: that would make every stored Cp point
+    unreachable behind the NASA classification. Both come back together.
     """
     entry = _entry_with_smiles(db_session)
     thermo = make_thermo_scalar(db_session, species_entry=entry)
@@ -384,13 +382,13 @@ def test_sort_is_deterministic(db_session):
 
 
 # ---------------------------------------------------------------------------
-# Phase 2 audit: statmech-source-calculation fallback for thermo provenance
+# Statmech-source-calculation fallback for thermo provenance
 # (see docs/audits/thermo_provenance_geometry_audit.md).
 #
 # When a thermo's own ThermoSourceCalculation rows do not cover the freq /
 # SP / opt roles, the read service falls back to the StatmechSourceCalculation
 # rows of the statmech the thermo is LINKED to (``thermo.statmech_id``) --
-# never an entry-wide pick (#645) -- so that ``provenance.freq_calculation_ref``,
+# never an entry-wide pick -- so that ``provenance.freq_calculation_ref``,
 # ``sp_calculation_ref``, ``primary_calculation``, ``level_of_theory``, and
 # ``software`` populate from real, persisted data — matching the actual
 # computed-thermo derivation path.
@@ -441,9 +439,8 @@ def _seed_thermo_with_statmech_sources(db_session, *, with_thermo_sources: bool)
     )
     db_session.add(statmech)
     db_session.flush()
-    # Changed for #645: the thermo is now LINKED to its statmech. These tests
-    # used to leave ``statmech_id`` NULL and pass only because the read
-    # borrowed the entry's lowest-id statmech; borrowing is gone, so the
+    # The thermo is LINKED to its statmech. The read does not borrow the
+    # entry's lowest-id statmech, so the
     # statmech-derived roles are exercised through the record's own link.
     thermo.statmech_id = statmech.id
     db_session.add(
@@ -556,8 +553,8 @@ def test_evidence_completeness_counts_statmech_freq_sp_when_thermo_sources_empty
     checklist = response.records[0].evidence_completeness.checklist
 
     assert checklist["has_statmech_source"] is True
-    # Phase 2 audit: these used to be False because the predicates only
-    # looked at ThermoSourceCalculation. They now OR-in the LINKED
+    # These are True because the predicates read ThermoSourceCalculation
+    # and also OR-in the LINKED
     # statmech's source roles.
     assert checklist["has_source_calculations"] is True
     assert checklist["has_frequency_evidence"] is True
@@ -570,9 +567,9 @@ def test_multiple_statmech_never_leak_into_an_unlinked_thermo(db_session):
     it: the unlinked thermo reports no statmech and no calculations, the
     linked one reports exactly its own, and both answers are stable.
 
-    Changed for #645 (owner decision: never borrow). This test used to pin
-    "the lowest-id statmech is the fallback" for the unlinked thermo; that
-    fallback showed a statmech the record never used. The original
+    Never borrow: an unlinked thermo does not take
+    "the lowest-id statmech" as a fallback; that
+    fallback would show a statmech the record never used. The
     determinism concern (the ``next(iter(set))`` bug) still holds for the
     linked record, which this keeps asserting.
     """
@@ -636,12 +633,12 @@ def test_multiple_statmech_never_leak_into_an_unlinked_thermo(db_session):
 
 
 # ---------------------------------------------------------------------------
-# Audit finding #3b (read half): per-record statmech attribution.
+# Per-record statmech attribution (read half).
 #
 # The read path must attribute a computed thermo's statmech basis from the
-# record's OWN ``thermo.statmech_id`` FK (populated by the write fix), not a
-# per-entry ``min(statmech_ids)`` fallback. The min fallback is gone (#645):
-# a record whose ``statmech_id`` is NULL shows no statmech at all.
+# record's OWN ``thermo.statmech_id`` FK, not a
+# per-entry ``min(statmech_ids)`` fallback: a record whose ``statmech_id`` is NULL
+# shows no statmech at all.
 # ---------------------------------------------------------------------------
 
 
@@ -734,9 +731,9 @@ def test_provenance_null_statmech_id_borrows_nothing(db_session):
     """A thermo with ``statmech_id`` NULL on an entry with statmech A + B
     reports no statmech, no freq/SP calculation and no level of theory.
 
-    Changed for #645 (owner decision: never borrow). This test used to be
-    ``..._falls_back_to_entry_min`` and asserted that the unlinked record
-    surfaced statmech A; showing a statmech the record never used is false.
+    Never borrow: an unlinked record does not
+    fall back to the entry's lowest-id statmech;
+    showing a statmech the record never used is false.
     """
     from tests.services.scientific_read._factories import make_lot
 
@@ -863,10 +860,10 @@ def test_wilhoit_coverage_falls_through_to_row_level_bounds(db_session):
 
 
 # ---------------------------------------------------------------------------
-# Issue #284: the thermo's OWN software/workflow-tool provenance vs. the
+# The thermo's OWN software/workflow-tool provenance vs. the
 # calculation's, and the conformer link it was missing (Part 2).
 #
-# Two disjoint populations, matched to what was measured on the deployed
+# Two disjoint populations, matched to what occurs in a real
 # archive:
 #
 #   Population A - a full opt/freq/sp ThermoSourceCalculation chain, but no
@@ -876,7 +873,7 @@ def test_wilhoit_coverage_falls_through_to_row_level_bounds(db_session):
 #                   ThermoSourceCalculation rows of its own (no resolvable
 #                   primary calculation, hence no conformer either).
 #
-# Not one production record has both. The pre-fix bug served the primary
+# Not one production record has both. A bug would serve the primary
 # CALCULATION's software under the field that read as the thermo's own,
 # which was wrong for A (leaked a value that was never the thermo's) and
 # silently correct-looking-but-fragile for B only because a statmech
@@ -999,14 +996,14 @@ def _make_thermo_with_no_evidence_chain(db_session, *, smiles="C#CCNCNCCN"):
 
 
 def _make_real_population_b(db_session, *, smiles="C#CCNCNCCNC"):
-    """The actual shape measured on the live archive for population B:
+    """The actual shape of population B:
     thermo carries its own software/workflow_tool (Arkane / ARC 1.1.0) AND
     is linked to a statmech (``thermo.statmech_id``) whose SP source calc
     carries a real ``conformer_observation_id`` -- but the thermo has ZERO
     direct ``ThermoSourceCalculation`` rows of its own.
 
     This is the shape that makes the statmech-fallback route load-bearing
-    for issue #284 / conformer resolution: ``primary_calc_id_v`` resolves
+    for conformer resolution: ``primary_calc_id_v`` resolves
     via ``_statmech_primary_calc_id`` (thermo -> statmech ->
     statmech_source_calculation -> calculation), not via any direct
     thermo-source row, and the conformer must follow that SAME resolved
@@ -1087,7 +1084,7 @@ def test_population_a_reports_no_thermo_software_of_its_own(db_session):
     software recorded only on the calculations) must report
     ``provenance.software_release`` (and ``workflow_tool_release``) as null.
     It must NOT be backfilled from the primary calculation's software --
-    that would restore issue #284. The calc's own software is still
+    that would leak the calculation's software as the thermo's own. The calc's own software is still
     correctly visible one level down, under ``primary_calculation.software``.
     """
     entry, _thermo, calcs = _make_population_a(db_session)

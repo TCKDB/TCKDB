@@ -82,7 +82,7 @@ def test_agreeing_kinds_are_accepted_unchanged() -> None:
 def test_disagreeing_kind_is_a_coded_refusal_with_no_ids(channel_key, supplied, derived) -> None:
     payload = deepcopy(_parallel_path_payload())
     next(c for c in payload["channels"] if c["key"] == channel_key)["kind"] = supplied
-    if derived is None:  # a value that no longer exists is an unknown enum member, not a mismatch
+    if derived is None:  # a value that does not exist is an unknown enum member, not a mismatch
         with pytest.raises(ValueError, match="kind"):
             NetworkPDepUploadRequest(**payload)
         return

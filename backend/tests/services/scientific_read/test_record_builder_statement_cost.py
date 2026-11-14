@@ -84,7 +84,7 @@ from tests.services.scientific_read._factories import (
 #: 2. the combined provenance/available-sections probe;
 #: 3. the submission-link lookup.
 #:
-#: A fully-provenanced calculation costs a few more — on the Stage 4
+#: A fully-provenanced calculation costs a few more — on the
 #: benchmark corpus the marginal cost is six, not three — so this is a floor
 #: on the real number, not the real number. That is the right thing to pin
 #: anyway: the regression this guards against is a *fan-out*, one builder
@@ -131,7 +131,7 @@ def test_a_search_page_costs_a_fixed_few_statements_per_record(db_session):
     )
     # Conformer-LINKED, one basin per calculation -- an unlinked calc short
     # circuits the conformer block for free (`conformer_observation_id is
-    # None` returns without a query), which used to make this fixture blind
+    # None` returns without a query), which would make this fixture blind
     # to a per-record conformer join. Most calculations on the live archive
     # ARE conformer-linked, so this is the honest ceiling.
     for index in range(_LARGE_PAGE + 5):
@@ -279,7 +279,7 @@ def test_the_integrity_load_costs_exactly_one_statement_per_artifact_load(
 ):
     """One custody statement per artifact-loading statement, and no more.
 
-    That ratio is the whole claim made for ``lazy="selectin"``. Measured on
+    That ratio is the whole claim made for ``lazy="selectin"``. On
     this fixture the calculations search issues one artifact load per
     record rather than one per page, so the integrity load costs one more
     statement per record too -- a real per-record cost, bounded by
@@ -318,21 +318,21 @@ def test_the_integrity_load_costs_exactly_one_statement_per_artifact_load(
 
 
 # ---------------------------------------------------------------------------
-# What ADR 0012's fields cost on the frequency-result projection
+# What the imaginary-mode fields cost on the frequency-result projection
 # ---------------------------------------------------------------------------
 
 #: Statements that *load* a ``calc_freq_result`` row, per record on an
 #: ``include=results`` page. One: the projection loads the row it projects
 #: and nothing else.
 #:
-#: ADR 0012 requires ``n_imag`` to travel with the tolerance it was judged
+#: The imaginary-mode protocol requires ``n_imag`` to travel with the tolerance it was judged
 #: at, how that tolerance was chosen, and the count above it. The first two
 #: are columns on the row that was already being loaded and are free. The
 #: count is not stored -- it is taken over ``calc_freq_mode`` -- and the
 #: obvious way to get it is a second round trip, which this builder runs
 #: once per record and would therefore multiply by the page size. It rides
 #: along as a correlated aggregate on the same SELECT instead, so the cost
-#: of ADR 0012 compliance on this projection is measurably zero statements.
+#: of protocol compliance on this projection is measurably zero statements.
 _FREQ_RESULT_STATEMENTS_PER_RECORD = 1
 
 _FREQ_SMALL_PAGE = 5
@@ -341,7 +341,7 @@ _FREQ_LARGE_PAGE = 20
 #: A column only the projection's SELECT list names. The
 #: provenance/available-sections probe also mentions ``calc_freq_result``
 #: -- once per record, inside its own combined statement, and it did so
-#: before ADR 0012's fields existed -- so counting the table name would
+#: without the imaginary-mode fields -- so counting the table name would
 #: measure two unrelated statements as one number and hide a change in
 #: either.
 _PROJECTION_MARKER = "imaginary_mode_tau_basis"
@@ -417,7 +417,7 @@ def test_the_adr_0012_fields_cost_no_extra_statement_per_record(db_session):
 
     Two claims, and the second is the one that would regress silently.
     The ``calc_freq_result`` slope stays at one statement per record --
-    unchanged by the four ADR 0012 columns joining the projection, because
+    unchanged by the four imaginary-mode columns joining the projection, because
     they were always on the row being loaded. And no statement touches
     ``calc_freq_mode`` on its own: the count above tau is a correlated
     aggregate, not a second trip. A future edit that reaches for
@@ -546,7 +546,7 @@ def _ts_entries_page(db_session, *, label: str, entries: int):
 def test_the_levels_map_costs_a_ts_search_page_one_statement(db_session):
     """Flat in ``limit`` on ``/transition-states/search``.
 
-    Measured on this fixture: one statement for a 4-record page and one for
+    On this fixture: one statement for a 4-record page and one for
     a 20-record page. A per-record implementation would spend 4 and 20.
     """
     ts = _ts_entries_page(
@@ -680,8 +680,8 @@ def test_the_saddle_point_map_costs_a_ts_search_page_one_statement(db_session):
 
     The regression this guards: ``saddle_point`` resolved inside the
     per-record builder rather than batched over the page -- see BLOCKING
-    finding #d on PR #357 (measured 169 -> 189 statements at ``limit=20``
-    before ``_build_saddle_point_index`` was introduced).
+    (169 -> 189 statements at ``limit=20``
+    without ``_build_saddle_point_index``).
     """
     ts = _ts_entries_page_with_freq_results(
         db_session,
@@ -813,7 +813,7 @@ def test_the_levels_map_costs_a_conformer_search_page_one_statement(
 #: ``calc_freq_result`` is keyed by ``calculation_id`` and ``calc_freq_mode``
 #: hangs off the same key -- which is exactly why a builder called once per
 #: record is the obvious wrong implementation, and why this is pinned rather
-#: than assumed. The correlated ``count(*)`` subqueries ADR 0012 needs ride
+#: than assumed. The correlated ``count(*)`` subqueries the imaginary-mode protocol needs ride
 #: *inside* the one result statement; they are not extra round trips, and a
 #: regression to a subquery per record would show here because this counts
 #: statements.
@@ -995,7 +995,7 @@ def test_include_freq_modes_costs_a_page_one_more_statement(db_session):
 
 
 # ---------------------------------------------------------------------------
-# Composite records: the verification is one pass per page (ADR 0021, P7a)
+# Composite records: the verification is one pass per page
 # ---------------------------------------------------------------------------
 
 #: A page of assembled composites costs the ordinary per-record floor and nothing for the verification:

@@ -12,12 +12,10 @@ That has now happened twice, for two different reasons:
 
 * **Congenital.** ``BundleThermoIn`` (8 fields) and ``ThermoInBundle``
   (15) were written three days apart in April 2026 and never agreed.
-  Fixed in #151.
-* **Regression.** ``BundleStatmechIn`` was born narrow in ``17706cf7``,
-  but the three rotational constants were then added to
-  ``StatmechInBundle`` **only**, by ``264519f1`` — two days after
-  ``0ea9182f`` had correctly updated both models in a single commit. The
-  habit was right and then it lapsed. Fixed in #142.
+  The two models now agree.
+* **Regression.** ``BundleStatmechIn`` was narrow while the three rotational
+  constants were added to ``StatmechInBundle`` **only**. Updating both models in
+  a single commit is the right habit, and it can lapse.
 
 The second is the one this file exists for. Nothing in the tree could
 distinguish a one-sided addition from a deliberate asymmetry, so the
@@ -45,8 +43,8 @@ def _standalone_kinetics_model():
     """``KineticsUploadRequest``, the standalone route's kinetics shape.
 
     Imported inside a function because it lives backend-side, not in the
-    wire package: the standalone kinetics schema was never extracted when
-    the bundle roots were (``9fde2742``). That split is itself part of why
+    wire package: the standalone kinetics schema is not extracted with
+    the bundle roots. That split is itself part of why
     the two drifted — the models do not sit next to each other, and
     nothing imported both until this file did.
     """
@@ -283,7 +281,7 @@ def test_the_allowlist_describes_asymmetries_that_still_exist():
     Without this, closing an asymmetry would leave its entry behind, and
     the leftover entry would silently exempt the field if it were ever
     removed from one root again. It also keeps the reasons honest: an
-    entry that no longer corresponds to anything cannot be reviewed.
+    entry that does not correspond to anything cannot be reviewed.
     """
     live: set[tuple[str, str]] = set()
     for pair_name, species_model, reaction_model in MODEL_PAIRS:
@@ -314,13 +312,13 @@ def test_every_allowlist_entry_states_a_reason():
 
 
 def test_the_statmech_pair_needs_no_exemptions():
-    """#142's headline claim, asserted directly rather than by absence.
+    """The headline claim, asserted directly rather than by absence.
 
     ``test_bundle_root_models_carry_the_same_fields`` would also pass if
     somebody added six allowlist entries instead of six fields, so the
     claim that statmech is now *actually* symmetric is worth its own
     assertion. The six fields named here are precisely the ones
-    ``BundleStatmechIn`` could not carry before #142.
+    ``BundleStatmechIn`` could not otherwise carry.
     """
     statmech_exemptions = {
         field for (pair, field) in ALLOWED_ASYMMETRIES if pair == "statmech"
@@ -348,7 +346,7 @@ def test_kinetics_and_transport_have_no_second_spelling_across_the_two_roots():
     """Recorded because "cover those too" needs an answer either way.
 
     Kinetics exists only on the reaction root -- a species bundle has no
-    reaction to have a rate for. Transport (#622) is on both roots, but as
+    reaction to have a rate for. Transport is on both roots, but as
     ONE class, ``TransportInBundle``, that both roots import, so there is no
     second spelling to drift. A second transport class on either root would
     be a pair and belongs in MODEL_PAIRS.
@@ -397,7 +395,7 @@ def test_kinetics_and_transport_have_no_second_spelling_across_the_two_roots():
 #: correct; it is a claim that the gap is *known*, so that a new one is visible
 #: on the day it lands rather than months later.
 #:
-#: Empty since #620: ``interpretation_assignments``, ``tunneling_application``
+#: Empty: ``interpretation_assignments``, ``tunneling_application``
 #: and ``network_kinetics_ref`` were the three entries, the first two recorded
 #: drift, and all three now exist on the bundle with the same models,
 #: validators and persistence as the standalone route. Keep the dict: a new
@@ -433,7 +431,7 @@ _STANDALONE_ONLY_BY_DESIGN = frozenset(
         # ``_collect_bundle_provenance_warnings`` already passes it as
         # NOT_APPLICABLE.
         "energy_level_of_theory",
-        # Kinetics child tables. 2fb5c25b (#29) decided this explicitly:
+        # Kinetics child tables are excluded by design:
         # BundleKineticsIn "carries only scalar Arrhenius fields … and its
         # workflow writes no kinetics child tables", and its
         # ``validate_model_kind`` refuses the forms that would need them,
@@ -483,7 +481,7 @@ def test_the_by_design_exclusions_still_name_real_fields():
     """A stale exclusion is a hole that silently swallows the next gap.
 
     ``_STANDALONE_ONLY_BY_DESIGN`` subtracts names before anything is
-    judged, so a name that no longer exists on either model — a rename, a
+    judged, so a name that does not exist on either model — a rename, a
     removal — would sit there forever excusing nothing, and a *new* field
     that happened to reuse the name would be excused without anyone
     deciding. Checked against the union so a field legitimately added to
@@ -515,7 +513,7 @@ def test_the_known_gap_list_describes_gaps_that_still_exist():
     )
 
 
-#: The kinetics-evidence fields #620 gave the bundle. Each must be the standalone
+#: The kinetics-evidence fields of the bundle. Each must be the standalone
 #: route's own annotation, not a structurally similar copy: a copy is how the
 #: two routes drift apart a second time.
 _SHARED_EVIDENCE_FIELDS = (

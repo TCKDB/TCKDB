@@ -134,7 +134,7 @@ class TestMatchingValuesEmitNothing:
 
 
 # ---------------------------------------------------------------------------
-# Absence is not a contradiction (ADR 0008)
+# Absence is not a contradiction
 # ---------------------------------------------------------------------------
 
 

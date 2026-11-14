@@ -1,11 +1,11 @@
-"""No ESS parser writes a banner where a version belongs (issue #305, item 2).
+"""No ESS parser writes a banner where a version belongs.
 
 The composite ``"Gaussian 16, Revision C.02"`` release on the deployed
 archive was declared by the producer; it was never written by TCKDB's own
 banner extraction. These tests pin that for all three parsers, on real
 output logs: each ``parse_software_version`` returns a bare version token
 and nothing else, and the Gaussian build string decomposes into
-``version="16"``, ``revision="C.02"`` through the DR-0008 reconciliation
+``version="16"``, ``revision="C.02"`` through the software reconciliation
 mapper -- the same fields a normalised declaration lands on.
 
 Also the evidence side of item 3: these are the lines the stored

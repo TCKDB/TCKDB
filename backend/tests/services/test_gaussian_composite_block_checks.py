@@ -1,4 +1,4 @@
-"""The checks every Gaussian composite block must pass (ADR 0021, P3b).
+"""The checks every Gaussian composite block must pass.
 
 Companion to ``test_gaussian_composite_parser.py``: the block identity, the
 archive cross-check, route wrapping, and partial-block handling.

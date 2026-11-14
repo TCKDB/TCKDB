@@ -1,4 +1,4 @@
-"""Tests for the durable record of custody breaks (ADR 0014).
+"""Tests for the durable record of custody breaks.
 
 A log line is not a record. These tests are about what makes the
 difference: an ``artifact_integrity_event`` row that carries expected

@@ -111,8 +111,7 @@ def digest(evaluation: EvidenceEvaluation) -> str:
 
 
 #: ``(label, hard_fail, completeness, digest)`` per scenario, captured from ``main`` before the owner-scoped rubric.
-#: The digests were re-captured once, in versioning PR-4, because the digest covers ``rubric_version`` and the rubric
-#: restarted at 1 (it was 2): label, hard-fail reason, completeness and the whole check map are byte-identical.
+#: The digests cover ``rubric_version``; label, hard-fail reason, completeness and the whole check map are pinned.
 FROZEN: dict[str, tuple[str, str | None, float, str]] = {
     "sparse": ("unsupported", None, 0.1111, "24196551ded32dac4f9a8c951dedd8fd5e866d62f530a5eaca05a0382ed3f6ef"),
     "full_metadata_no_sources": ("sparse", None, 0.4444, "e078edab4701f5172a81c8f5e33642c9348091705e2aefadf4c3a81f9471ce25"),

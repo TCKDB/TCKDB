@@ -1,4 +1,4 @@
-"""The same-order Kabsch comparison of the no-optimisation duplicate rule is bounded (#692).
+"""The same-order Kabsch comparison of the no-optimisation duplicate rule is bounded.
 
 What was wrong
 --------------
@@ -45,7 +45,7 @@ from tests.services.test_permuted_rigid_match import (
 
 
 def _reference_same_structure(a, b, budget=None, prepared=None) -> bool:
-    """``_same_polyatomic_structure`` as it was before #692: same-order Kabsch on every pair."""
+    """``_same_polyatomic_structure`` without the radius-of-gyration filter or the same-order allowance: same-order Kabsch on every pair."""
     tolerance = levels._rigid_motion_tolerance(a.decimals, b.decimals)
     if a.species == b.species and kabsch_rmsd(a.coordinates, b.coordinates) <= tolerance:
         return True
@@ -59,7 +59,7 @@ def _reference_same_structure(a, b, budget=None, prepared=None) -> bool:
 
 
 def _reference_merge(geometries) -> dict[int, int]:
-    """``_merge_rigidly_equal_geometries`` as it was before #692, over the reference rule."""
+    """``_merge_rigidly_equal_geometries`` without the radius-of-gyration filter or the same-order allowance, over the reference rule."""
     root = {g.id: g.id for g in geometries}
     budget = SearchBudget()
     prepared: dict[int, PreparedGeometry] = {}
@@ -371,7 +371,7 @@ def test_a_same_order_comparison_is_charged_per_atom_and_per_call_to_its_own_all
 
 def test_the_fixed_cost_bounds_the_comparisons_a_record_can_make_at_small_sizes(monkeypatch) -> None:
     """Three-atom shapes cost mostly the call overhead, so the allowance must stop them sooner than
-    ``30 * n`` alone would (#745): with it, 50 M units allow at most ``50e6 / 890`` comparisons."""
+    ``30 * n`` alone would: with it, 50 M units allow at most ``50e6 / 890`` comparisons."""
     calls = []
     real_kabsch = levels.kabsch_rmsd
     monkeypatch.setattr(levels, "kabsch_rmsd", lambda *a, **k: calls.append(1) or real_kabsch(*a, **k))

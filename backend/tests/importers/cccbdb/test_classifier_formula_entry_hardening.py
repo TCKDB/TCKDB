@@ -1,9 +1,9 @@
-"""Regression tests for the Phase 5b classifier hardening.
+"""Regression tests for the classifier hardening.
 
 The CCCBDB formula-entry page carries a deceptive
 ``<TITLE>CCCBDB All data for one molecule</TITLE>`` and an H1 of
 ``All data (experiment and calculated) for one species``. The
-Phase 5a classifier accepted such pages as ``molecule_data_page``
+unhardened classifier accepted such pages as ``molecule_data_page``
 because the molecule-data heading + the bare word "CAS" anywhere
 in the body was enough. This file pins the new precedence and the
 strict identifier-value requirements.

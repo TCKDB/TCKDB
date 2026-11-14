@@ -1,7 +1,7 @@
 """Tests for the public-ref helper module + ORM auto-population.
 
-Phase A scope: helpers exist, work, and are wired up to ORM inserts.
-No API response shapes are touched — that's Phase B.
+Scope: helpers exist, work, and are wired up to ORM inserts.
+No API response shapes are touched.
 """
 
 from __future__ import annotations
@@ -125,7 +125,7 @@ class TestRefFormat:
 
 class TestPrefixRegistry:
     def test_phase_a_classes_all_have_prefixes(self):
-        # All 24 Phase A classes; missing one would mean ORM listener won't
+        # All 24 classes; missing one would mean ORM listener won't
         # auto-populate that table's rows.
         expected = {
             "Species", "SpeciesEntry",
@@ -521,7 +521,7 @@ class TestEnergyCorrectionSchemeRefIdentity:
         """``units`` is not an identity axis.
 
         This asserted refs must *differ* when units differ, because
-        ``units`` was an identity column. It is not one any more: an
+        ``units`` is not an identity column: an
         energy correction is always an energy, so hartree and kJ/mol are
         one library written two ways, and the resolver now lands both on
         the same row.

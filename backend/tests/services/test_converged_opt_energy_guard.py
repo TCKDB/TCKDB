@@ -1,4 +1,4 @@
-"""Tests for the converged-opt-energy ingest guard (issue #292).
+"""Tests for the converged-opt-energy ingest guard.
 
 52 converged optimisations on the deployed archive carry
 ``converged = true`` with no ``final_energy_hartree``. Convergence is

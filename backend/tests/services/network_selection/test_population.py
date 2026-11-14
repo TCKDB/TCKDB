@@ -352,7 +352,7 @@ def test_the_applicability_vocabulary_is_the_shared_kernels(db_session, world):
 
 
 def test_a_reference_to_an_unreviewed_solve_is_kept_under_curated(db_session, world):
-    """ADR 0023: a validation entry's reference solve is evidence it rests on, so unreviewed is used, not withheld.
+    """A validation entry's reference solve is evidence it rests on, so unreviewed is used, not withheld.
 
     Kills: the earlier rule (``reference_solve_ref`` nulled and the model-fidelity evidence unavailable).
     """

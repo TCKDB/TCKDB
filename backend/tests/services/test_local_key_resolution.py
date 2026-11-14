@@ -64,9 +64,8 @@ _WORKFLOWS = Path(__file__).resolve().parents[2] / "app" / "workflows"
 
 #: Every workflow that resolves a calculation by local key, and the name
 #: it gives that namespace. The two standalone product workflows are on
-#: the list for the same reason as the three bundle ones: the issue was
-#: filed against the bundles, and stopping there would have left two raw
-#: subscripts behind a PR whose title says there are none.
+#: the list for the same reason as the three bundle ones: checking only the
+#: bundles would leave two raw subscripts behind in the standalone workflows.
 _CALC_KEY_MAPS = {
     "computed_species.py": "calc_keys_to_id",
     "computed_reaction.py": "calculation_key_to_id",
@@ -152,7 +151,7 @@ def test_an_empty_namespace_says_so_rather_than_listing_nothing() -> None:
 
 
 def test_no_row_id_reaches_the_depositor() -> None:
-    """DR-0028 Requirement 2. The ids are the map's *values*."""
+    """The ids are the map's *values*."""
     with pytest.raises(CodedValueError) as exc_info:
         resolve_calculation_key("ghost", {"opt1": 424242}, field="f")
     assert "424242" not in str(exc_info.value)
@@ -242,7 +241,7 @@ def test_the_seven_namespaces_have_seven_distinct_codes() -> None:
     ids=[fn.__name__ for fn, _, _ in _RESOLVERS],
 )
 def test_no_resolver_leaks_a_row_id(resolve, code: str, subject: str) -> None:
-    """DR-0028 Requirement 2. The ids are every map's *values*."""
+    """The ids are every map's *values*."""
     with pytest.raises(CodedValueError) as exc_info:
         resolve("ghost", {"real": 424242}, field="f")
     assert "424242" not in str(exc_info.value)
@@ -283,7 +282,7 @@ def _map_accesses(source: str, name: str) -> tuple[list[str], list[str]]:
 
     A write is an assignment into the namespace -- the workflow filling
     its own map -- and is exactly what the lookup helper is not for. A
-    read is the cross-reference that used to be able to ``KeyError``.
+    read is the cross-reference that must not ``KeyError``.
     """
     pattern = re.compile(rf"\b{re.escape(name)}\[(.*?)\]", re.DOTALL)
     writes: list[str] = []

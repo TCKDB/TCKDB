@@ -1,9 +1,9 @@
-"""An assembled composite is reproducible only if its inputs are (ADR 0021, P7a).
+"""An assembled composite is reproducible only if its inputs are.
 
-On ``main`` (fea447ec) the reproducibility rubric graded an assembled composite on the evidence of a
+The reproducibility rubric must not grade an assembled composite on the evidence of a
 program run it never had: no software, no output log, no preserved inputs, no parameters. It could
-never reach ``auditable``; with no literature either it was ``insufficient`` whatever its inputs were.
-Now its evidence *is* its inputs':
+never reach ``auditable``; with no literature either it would be ``insufficient`` whatever its inputs were.
+Its evidence *is* its inputs':
 
 * each input calculation is graded by this same rubric, and the composite reaches a level only when
   every input does (``composite_inputs_auditable`` / ``composite_inputs_rerunnable``);
@@ -114,7 +114,7 @@ def test_an_input_that_is_auditable_but_not_rerunnable_caps_the_composite_at_aud
     calcs, objects, user = deposit
     for key in ("spt", "spq"):
         _make_rerunnable(db_session, calcs[key], objects, user)
-    # Drop spt's parameters and input deck: still auditable (log verified), no longer rerunnable.
+    # Drop spt's parameters and input deck: still auditable (log verified), not rerunnable.
     spt = calcs["spt"]
     for row in list(spt.parameters):
         db_session.delete(row)
@@ -143,7 +143,7 @@ def test_a_total_the_inputs_no_longer_give_blocks_auditable_even_when_every_inpu
         _make_rerunnable(db_session, calcs[key], objects, user)
     assert _evaluate(db_session, calcs["cbs"], objects).grade is G.rerunnable
     # Move the QZ energy and its reference together (the stored split still adds up): the inputs are
-    # as reproducible as ever, but the stated total no longer follows from them.
+    # as reproducible as ever, but the stated total does not follow from them.
     from sqlalchemy import select
 
     from app.db.models.calculation import CalculationSPEnergyComponent
@@ -178,7 +178,7 @@ def test_an_input_whose_log_cannot_be_read_blocks_the_composite(db_session, depo
     for key in ("spt", "spq"):
         _make_rerunnable(db_session, calcs[key], objects, user)
     log = next(a for a in calcs["spt"].artifacts if a.kind is ArtifactKind.output_log)
-    del objects[log.sha256]  # the store no longer answers for it
+    del objects[log.sha256]  # the store does not answer for it
     result = _evaluate(db_session, calcs["cbs"], objects)
     assert result.grade is not G.rerunnable
     assert "composite_inputs_auditable" in _names(result.missing)

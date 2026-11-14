@@ -1,4 +1,4 @@
-"""Relabelling search behind the no-optimisation duplicate rule (#679).
+"""Relabelling search behind the no-optimisation duplicate rule.
 
 ``find_matching_permutation`` answers one question: is the second geometry the
 first moved rigidly, with its atoms listed in another order? These tests drive
@@ -483,7 +483,7 @@ def test_a_record_of_many_large_distinct_geometries_costs_a_bounded_amount(monke
     elapsed = time.perf_counter() - started
     assert roots == {g.id: g.id for g in geometries}
     budget = spent[0]
-    # Since #692 the radius of gyration answers each pair first, so neither the O(n^2) gate nor the
+    # The radius of gyration answers each pair first, so neither the O(n^2) gate nor the
     # same-order Kabsch is reached (tests/services/test_same_order_kabsch_bound.py holds the bound).
     gate_units = 780 * (200 * 199 // 2)
     assert prm.MAX_WORK_PER_RECORD - budget.work_left <= gate_units, "at most the O(n^2) gate was charged"
