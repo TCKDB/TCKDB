@@ -134,7 +134,7 @@ describe("NetworkMap: accessible names and structure", () => {
         const svg = container.querySelector("svg.net-map-svg")!
         expect(svg.getAttribute("role")).toBe("group")
         const caption = document.getElementById(svg.getAttribute("aria-labelledby")!)!
-        expect(caption.textContent).toBe("4 states joined by 3 channels. Position carries no meaning.")
+        expect(caption.textContent).toBe("Position carries no meaning.")
     })
 
     it("names each link by its chemistry, in plain words", () => {
@@ -178,19 +178,38 @@ describe("NetworkMap: the tables carry everything", () => {
     })
 })
 
+describe("NetworkMap: state kinds", () => {
+    it("words each state by its own kind, three molecules apart included, and the legend says molecules apart", () => {
+        const states = [
+            ...HYDRAZINE_STATES,
+            { ...state("hash_t", "termolecular", "A + B + C", []), kind: "termolecular" },
+        ]
+        renderMap(states, HYDRAZINE_CHANNELS, null)
+        expect(screen.getByRole("link", { name: "State NN, a stable molecule" })).toBeInTheDocument()
+        expect(screen.getByRole("link", { name: "State 2 [NH2], two molecules apart" })).toBeInTheDocument()
+        expect(screen.getByRole("link", { name: "State A + B + C, three molecules apart" })).toBeInTheDocument()
+        expect(screen.getByRole("list", { name: "What the shapes mean" }).textContent).toContain("3 states: molecules apart (hexagon)")
+    })
+
+    it("states channels that are not drawn because a state is missing", () => {
+        renderMap(HYDRAZINE_STATES.slice(0, 1), HYDRAZINE_CHANNELS, null)
+        expect(screen.getByRole("list", { name: "What the shapes mean" }).textContent).toContain("3 channels (lines); 1 dashed: no rate deposited; 3 not drawn, see the table")
+    })
+})
+
 describe("NetworkMap: legend", () => {
     it("states live counts in plain words", () => {
         renderMap()
         const legend = screen.getByRole("list", { name: "What the shapes mean" })
-        expect(legend.textContent).toContain("2 stable molecules (circle)")
-        expect(legend.textContent).toContain("2 pairs of molecules apart (hexagon)")
-        expect(legend.textContent).toContain("3 channels (line); dashed when no rate is deposited (1)")
+        expect(legend.textContent).toContain("2 states: a stable molecule (circle)")
+        expect(legend.textContent).toContain("2 states: molecules apart (hexagon)")
+        expect(legend.textContent).toContain("3 channels (lines); 1 dashed: no rate deposited")
         expect(legend.textContent).toContain("A transition state with a deposited barrier (1)")
     })
 
     it("changes with the data", () => {
         renderMap(HYDRAZINE_STATES.slice(0, 1), [], null)
-        expect(screen.getByRole("list", { name: "What the shapes mean" }).textContent).toContain("1 stable molecule (circle)")
+        expect(screen.getByRole("list", { name: "What the shapes mean" }).textContent).toContain("1 state: a stable molecule (circle)")
     })
 })
 

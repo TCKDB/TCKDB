@@ -109,3 +109,20 @@
 .net-map-legend svg {
     flex: none;
 }
+
+.net-participant-list {
+    display: grid;
+    gap: .3rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.rail-network {
+    margin-top: var(--s-4);
+}
+
+.rail-network a {
+    display: inline-block;
+    margin-top: var(--s-1);
+}

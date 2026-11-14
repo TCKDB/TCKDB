@@ -325,7 +325,7 @@ describe("NetworkEntryPage -- energy coverage is computed live, never hardcoded"
             ],
         })
         page()
-        expect(await screen.findByText(/for 2 of 2 states, and a forward\/reverse electronic barrier for 0 of 1 channels/)).toBeInTheDocument()
+        expect(await screen.findByText(/for 2 of 2 states and a forward and reverse barrier for 0 of 1 channels/)).toBeInTheDocument()
     })
 })
 
@@ -464,13 +464,38 @@ describe("NetworkEntryPage -- network map", () => {
         expect(screen.getByRole("table", { name: "Channels in this network" })).toBeInTheDocument()
     })
 
-    it("says the energies in one sentence and keeps the rest in a closed disclosure", async () => {
+    it("says no energy sentence when the solve carries no energies", async () => {
         handleEverything()
         page()
         await screen.findByRole("heading", { name: "Energies" })
-        expect(screen.getByText("Energies are electronic only, relative to the lowest state; they are not free energies.")).toBeVisible()
+        expect(screen.queryByText(/Energies are electronic only/)).not.toBeInTheDocument()
+    })
+
+    it("says the energies in one sentence when the solve carries some, and keeps the rest closed", async () => {
+        handleEverything({ stateEnergies: [{ state_composition_hash: "hash_well", energy_kj_mol: 0, energy_zero_convention: "lowest_state", correction_convention: "electronic_only" }] })
+        page()
+        await screen.findByRole("heading", { name: "Energies" })
+        expect(await screen.findByText("Energies are electronic only, relative to the lowest state; they are not free energies.")).toBeVisible()
         const summary = screen.getByText("Energy coverage", { selector: "summary" })
         expect(summary.closest("details")).not.toHaveAttribute("open")
+    })
+})
+
+describe("NetworkEntryPage -- barrier table numbering", () => {
+    it("numbers a barrier by its channel's position in the channel list, as the map and the other tables do", async () => {
+        const channel = (key: string) => ({
+            channel_key: key, kind: "isomerization", mechanism: "elementary",
+            source_state_composition_hash: "hash_bim", sink_state_composition_hash: "hash_well", has_kinetics: false, microreactions: [],
+        })
+        handleEverything({
+            record: { channels: [channel("channel_1"), channel("channel_2")] },
+            channelBarriers: [
+                { channel_key: "channel_2", reaction_entry_ref: "rxe_test1", transition_state_entry_ref: "tse_test1", forward_barrier_kj_mol: 20, reverse_barrier_kj_mol: 70, energy_zero_convention: "lowest_state", correction_convention: "electronic_only" },
+            ],
+        })
+        page()
+        const table = await screen.findByRole("table", { name: "Solve-internal channel barriers" })
+        expect(table.querySelector('td[data-label="Channel"]')!.textContent).toBe("2")
     })
 })
 
@@ -599,15 +624,15 @@ describe("NetworkEntryPage — an unreadable solve degrades, it does not blank t
         handleKtpEvaluate()
         const { container } = page()
         await screen.findByRole("heading", { name: "Pressure-dependent network" })
-        expect(container.textContent ?? "").toContain("could not read")
-        expect(container.textContent ?? "").toContain("not a statement that no energies were deposited")
+        expect(container.textContent ?? "").toContain("could not be read here")
+        expect(container.textContent ?? "").toContain("not a statement that none were deposited")
     })
 
     it("a network whose solve reads fine says no such thing", async () => {
         handleEverything()
         const { container } = page()
         await screen.findByRole("heading", { name: "Pressure-dependent network" })
-        expect(container.textContent ?? "").not.toContain("could not read")
+        expect(container.textContent ?? "").not.toContain("could not be read here")
     })
 })
 
@@ -620,7 +645,7 @@ describe("NetworkEntryPage -- k(T,P) heat map", () => {
         const cells = container.querySelectorAll("svg.ktp-svg .ktp-cell")
         const values = container.querySelectorAll("svg.ktp-svg .ktp-value")
         expect(values).toHaveLength(cells.length)
-        for (const value of Array.from(values)) expect(value.textContent).toMatch(/\d\.\de\d/)
+        for (const value of Array.from(values)) expect(value.textContent).toMatch(/^\d\.\d×10[⁰¹²³⁴⁵⁶⁷⁸⁹⁻]+$/)
         const select = screen.getByLabelText("Rate record") as HTMLSelectElement
         expect(Array.from(select.options).map((option) => option.textContent)).toEqual(["NN + [H][H] to NN, Chebyshev", "NN + [H][H] to NN, PLOG"])
     })
@@ -648,7 +673,7 @@ describe("NetworkEntryPage -- k(T,P) heat map", () => {
         await waitFor(() => expect(container.querySelectorAll("svg.ktp-svg .ktp-value").length).toBeGreaterThan(0))
         // First record: k = 2 * T, and T = 300 K is the first column, at every pressure.
         const cell = container.querySelector('[data-testid="ktp-cell-0-4"]')!
-        expect(cell.parentElement!.querySelector(".ktp-value")!.textContent).toBe("6.0e2")
+        expect(cell.parentElement!.querySelector(".ktp-value")!.textContent).toBe("6.0×10²")
     })
 
     it("marks a point outside the record's stated range and never hides it", async () => {
@@ -666,7 +691,7 @@ describe("NetworkEntryPage -- k(T,P) heat map", () => {
         await waitFor(() => expect(container.querySelectorAll("svg.ktp-svg .ktp-value").length).toBeGreaterThan(0))
         const marked = Array.from(container.querySelectorAll("svg.ktp-svg .ktp-value")).filter((value) => value.textContent?.endsWith("†"))
         expect(marked).toHaveLength(5)
-        expect(screen.getByText(/† is outside the record's stated range/)).toBeInTheDocument()
+        expect(container.querySelector(".ktp-caption")!.textContent).toMatch(/† is outside the stated range \(300–2000 K, 0\.01–100 bar\)\. Record nk_cheb1, solve nsolve_test1/)
     })
 
     it("keeps channel_key out of the visible text of the section", async () => {
@@ -679,7 +704,7 @@ describe("NetworkEntryPage -- k(T,P) heat map", () => {
         expect(section.querySelector(`[data-channel-key="${channelHandle("channel_1")}"]`)).not.toBeNull()
     })
 
-    it("links the value to the reaction entry that carries the channel", async () => {
+    it("links the value to the channel's own row on this page", async () => {
         handleEverything()
         page()
         await screen.findByRole("heading", { name: "k(T,P)" })
@@ -688,7 +713,8 @@ describe("NetworkEntryPage -- k(T,P) heat map", () => {
             expect(found).not.toBeNull()
             return found as HTMLAnchorElement
         })
-        expect(link).toHaveAttribute("href", "/reaction-entries/rxe_test1")
+        expect(link).toHaveAttribute("href", "#channel-row-0")
+        expect(document.getElementById("channel-row-0")).not.toBeNull()
     })
 
     it("has a table with the same values", async () => {
@@ -696,7 +722,11 @@ describe("NetworkEntryPage -- k(T,P) heat map", () => {
         page()
         await screen.findByRole("heading", { name: "k(T,P)" })
         const table = await screen.findByRole("table", { name: "k at each pressure and temperature" })
-        expect(within(table).getAllByRole("row")).toHaveLength(6)
+        // 40 pressure and temperature pairs and a header; one column for each record of the channel.
+        expect(within(table).getAllByRole("row")).toHaveLength(41)
+        expect(within(table).getAllByRole("columnheader").map((header) => header.textContent)).toEqual([
+            "Pressure", "Temperature", "Chebyshev, s⁻¹", "PLOG, s⁻¹",
+        ])
     })
 
     it("says so when no channel carries kinetics, and asks for nothing", async () => {
@@ -757,7 +787,7 @@ describe("NetworkEntryPage -- keyboard path", () => {
         await user.keyboard("{ArrowRight}")
         expect(pressure).toHaveAttribute("aria-valuetext", "10 bar")
         const live = document.querySelector(".announcer")!
-        await waitFor(() => expect(live.textContent).toMatch(/^k at 1271 K and 10 bar: 2\.5429×10³ s⁻¹$/))
+        await waitFor(() => expect(live.textContent).toMatch(/^k at 1271 K and 10 bar: 2542\.86 s⁻¹$/))
 
         await user.keyboard("{ArrowLeft}{ArrowLeft}")
         expect(pressure).toHaveAttribute("aria-valuetext", "0.1 bar")
@@ -800,8 +830,8 @@ describe("NetworkEntryPage -- which solve the energies came from, and the order 
         const make = (ref: string) => ({ network_solve_ref: ref, kind: "computed", me_method: "modified strong collision", interpolation_model: "chebyshev", tmin_k: 300, tmax_k: 2000, pmin_bar: 0.01, pmax_bar: 100, review: { status: "not_reviewed" } })
         handleEverything({ stateEnergies, record: { solves: [make("nsolve_test1"), make("nsolve_test2")] } })
         page()
-        expect(await screen.findByText(/The first of this network's 2 deposited solves \(nsolve_test1; the others are not read here, and it is not preferred over them\) separately carries/)).toBeInTheDocument()
-        expect(screen.queryByText(/This network's own solve separately carries/)).not.toBeInTheDocument()
+        expect(await screen.findByText(/The first of this network's 2 solves \(nsolve_test1; none is preferred\) carries/)).toBeInTheDocument()
+        expect(screen.queryByText(/This network's own solve carries/)).not.toBeInTheDocument()
         fireEvent.click(screen.getByText(/^References/))
         expect(screen.getByText("nsolve_test1")).toBeInTheDocument()
         expect(screen.getByText("nsolve_test2")).toBeInTheDocument()
@@ -811,7 +841,7 @@ describe("NetworkEntryPage -- which solve the energies came from, and the order 
     it("with one solve the sentence stays as it was", async () => {
         handleEverything({ stateEnergies })
         page()
-        expect(await screen.findByText(/This network's own solve separately carries/)).toBeInTheDocument()
+        expect(await screen.findByText(/This network's own solve carries/)).toBeInTheDocument()
     })
 
     it("states the master-equation method per solve when several are deposited, not the first solve's alone", async () => {

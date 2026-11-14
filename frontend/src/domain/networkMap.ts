@@ -5,6 +5,7 @@ export type NetworkMapNode = {
     label: string
     /** A stable molecule (circle) or molecules apart (hexagon). */
     isWell: boolean
+    kind: string
     x: number
     y: number
     /** Unit direction away from the centre, used to place the caption. */
@@ -42,8 +43,11 @@ const RING_RY = 105
 const CAPTION_ROOM = 24
 
 /** The words a reader sees for a state's kind. */
-export function stateKindWords(isWell: boolean): string {
-    return isWell ? "a stable molecule" : "two molecules apart"
+export function stateKindWords(kind: string): string {
+    if (kind === "well") return "a stable molecule"
+    if (kind === "bimolecular") return "two molecules apart"
+    if (kind === "termolecular") return "three molecules apart"
+    return "molecules apart"
 }
 
 /**
@@ -76,6 +80,7 @@ export function layoutNetworkMap(
             hash: state.composition_hash,
             label: labelOf(state),
             isWell: state.kind === "well",
+            kind: state.kind,
             x: cx + (count === 1 ? 0 : rx * dx),
             y: cy + (count === 1 ? 0 : ry * dy),
             dx,

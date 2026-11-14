@@ -160,7 +160,7 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
 
                 <section className="ledger-section" aria-labelledby="ktp-heading">
                     <SectionHeading id="ktp-heading">k(T,P)</SectionHeading>
-                    <NetworkKtpHeatmap networkRef={network.network_ref} network={network} channels={record.channels} states={record.states} />
+                    <NetworkKtpHeatmap key={network.network_ref} networkRef={network.network_ref} network={network} channels={record.channels} states={record.states} />
                 </section>
 
                 <section className="ledger-section" aria-labelledby="reactions-heading">
@@ -170,7 +170,7 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
 
                 <section className="ledger-section" aria-labelledby="energy-heading">
                     <SectionHeading id="energy-heading">Energies</SectionHeading>
-                    <p className="t-body section-intro">{NETWORK_ENERGY_LEDE}</p>
+                    {((record.stateEnergies?.length ?? 0) > 0 || (record.channelBarriers?.length ?? 0) > 0) && <p className="t-body section-intro">{NETWORK_ENERGY_LEDE}</p>}
                     <Disclosure summary="Energy coverage">
                         <EnergyCoverageCard record={record} />
                     </Disclosure>
@@ -240,24 +240,29 @@ function speciesThermoSentence(withThermo: number, total: number): string {
         return "This network's states name no participant species entries to check for thermochemistry."
     }
     if (withThermo === 0) {
-        return `No thermochemistry is deposited for the species these states are built from — none of the ${total} participant species entries carry a thermo (H298) record. A thermal free-energy surface needs every participant covered, so it cannot be drawn from species-level data today.`
+        return `No thermochemistry is deposited: none of the ${total} participant species entries carry a thermo (H298) record.`
     }
     if (withThermo === total) {
         return `Every one of the ${total} participant species entries carries a thermo (H298) record.`
     }
-    return `${withThermo} of the ${total} participant species entries carry a thermo (H298) record; the remaining ${total - withThermo} do not. A thermal free-energy surface needs every participant covered, so it cannot be drawn from species-level data today.`
+    return `${withThermo} of the ${total} participant species entries carry a thermo (H298) record.`
 }
 
 /** Which solve the sentence about solve energies is about: the one solve, or the first of several (named, and not preferred). */
 function solveSubject(solveRefs: readonly string[]): string {
     if (solveRefs.length <= 1) return "This network's own solve"
-    return `The first of this network's ${solveRefs.length} deposited solves (${solveRefs[0]}; the others are not read here, and it is not preferred over them)`
+    return `The first of this network's ${solveRefs.length} solves (${solveRefs[0]}; none is preferred)`
 }
 
-function solveEnergySentence(solveRefs: readonly string[], meMethod: string | null | undefined, stateCovered: number, stateTotal: number, barrierCovered: number, channelTotal: number): string | null {
+function solveEnergySentence(solveRefs: readonly string[], stateCovered: number, stateTotal: number, barrierCovered: number, channelTotal: number): string | null {
     if (stateCovered === 0 && barrierCovered === 0) return null
-    const solverLabel = meMethod ?? "master equation"
-    return `That is a different claim from "no energies are deposited on this network." ${solveSubject(solveRefs)} separately carries a relative electronic-only energy, referenced to its own lowest state, for ${stateCovered} of ${stateTotal} states, and a forward/reverse electronic barrier for ${barrierCovered} of ${channelTotal} channels — real, deposited data. It is an internal ${solverLabel} solver input, not thermo-grade H298, and mixing the two conventions on one axis would misrepresent the surface — so it is shown below as its own disclosure, not folded into a potential-energy surface.`
+    return `${solveSubject(solveRefs)} carries a relative electronic-only energy for ${stateCovered} of ${stateTotal} states and a forward and reverse barrier for ${barrierCovered} of ${channelTotal} channels.`
+}
+
+/** The channel's 1-based position in the served list, as the map and the other tables number it. */
+function channelNumber(channels: NetworkChannel[], channelKey: string): ReactNode {
+    const index = channels.findIndex((channel) => channel.channel_key === channelKey)
+    return index < 0 ? <span className="record-identity-absent-inline">not on a listed channel</span> : <code className="data">{index + 1}</code>
 }
 
 function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
@@ -266,16 +271,15 @@ function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
     const channelBarriers = record.channelBarriers ?? []
     const stateTotal = record.evidence_summary.state_count
     const channelTotal = record.evidence_summary.channel_count
-    const solveSentence = solveEnergySentence(record.solves.map((solve) => solve.network_solve_ref), record.solves[0]?.me_method, stateEnergies.length, stateTotal, channelBarriers.length, channelTotal)
+    const solveSentence = solveEnergySentence(record.solves.map((solve) => solve.network_solve_ref), stateEnergies.length, stateTotal, channelBarriers.length, channelTotal)
 
     const stateLabelByHash = new Map(record.states.map((state) => [state.composition_hash, state.composition.state_label]))
     const solveSource = solveEnergySourceSentence(record.solves.map((solve) => solve.network_solve_ref))
     const sortedStateEnergies = [...stateEnergies].sort((a, b) => a.energy_kj_mol - b.energy_kj_mol)
 
     return (
-        <div className="card" style={{ marginTop: "1.25rem" }} id="energy-coverage">
-            <span className="t-label">Energy coverage</span>
-            <p className="t-body" style={{ margin: ".6rem 0 0" }}>{speciesThermoSentence(speciesCoverage.withThermo, speciesCoverage.total)}</p>
+        <div id="energy-coverage">
+            <p className="t-body" style={{ margin: 0 }}>{speciesThermoSentence(speciesCoverage.withThermo, speciesCoverage.total)}</p>
             {solveSentence && <p className="t-body" style={{ margin: ".6rem 0 0" }}>{solveSentence}</p>}
             {record.solveEnergiesUnavailable && (
                 // Read failure, not an absence. Without this the page would
@@ -283,16 +287,11 @@ function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
                 // energies at all, which understates the archive -- the same
                 // conflation the sentence above exists to prevent.
                 <p className="t-body" style={{ margin: ".6rem 0 0" }}>
-                    This network has a deposited solve, but its state and channel energies came back in a form
-                    this page could not read, so they are not shown. That is a read failure on this page, not a
-                    statement that no energies were deposited.
+                    This network has a solve, but its energies could not be read here. That is not a statement that none were deposited.
                 </p>
             )}
             {(stateEnergies.length > 0 || channelBarriers.length > 0) && (
-                <Disclosure
-                    className="disclosure--inset"
-                    summary="Solve-internal state & channel energies (electronic-only, referenced to the lowest state)"
-                >
+                <>
                     {solveSource && <p className="t-body" style={{ margin: "0 0 .6rem" }}>{solveSource}</p>}
                     {stateEnergies.length > 0 && (
                         <>
@@ -325,9 +324,9 @@ function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
                                 <table className="data-table" aria-label="Solve-internal channel barriers">
                                     <thead><tr><th scope="col">Channel</th><th scope="col">Forward barrier</th><th scope="col">Reverse barrier</th><th scope="col">Source calculation</th></tr></thead>
                                     <tbody>
-                                        {channelBarriers.map((row, barrierIndex) => (
+                                        {channelBarriers.map((row) => (
                                             <tr key={row.channel_key}>
-                                                <td data-label="Channel"><code className="data">{barrierIndex + 1}</code></td>
+                                                <td data-label="Channel">{channelNumber(record.channels, row.channel_key)}</td>
                                                 <td className="num" data-label="Forward barrier">{formatKjMol(row.forward_barrier_kj_mol)}</td>
                                                 <td className="num" data-label="Reverse barrier">{formatKjMol(row.reverse_barrier_kj_mol)}</td>
                                                 <td data-label="Source calculation">
@@ -342,7 +341,7 @@ function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
                             </div>
                         </>
                     )}
-                </Disclosure>
+                </>
             )}
         </div>
     )
@@ -391,7 +390,7 @@ function ReactionsSection({ channels, reactionEntries, totalChannels }: {
     return (
         <>
             <p className="t-body section-intro">
-                {`${channelsWithReaction} of this network's ${totalChannels} channels carry a directly deposited elementary reaction/transition-state pair — ${barrierlessCount} of those are barrierless, so no transition state. ${withoutReaction > 0 ? `The remaining ${withoutReaction} channels have no elementary reaction or transition state on file — an archive gap, not something this page invents around.` : ""}`}
+                {`${channelsWithReaction} of ${totalChannels} channels name a deposited reaction; ${barrierlessCount} are barrierless.${withoutReaction > 0 ? ` ${withoutReaction} name none.` : ""}`}
             </p>
             <div className="table-scroll">
                 <table className="data-table" aria-label="Reaction entries admitted to this network">

@@ -55,8 +55,8 @@ export type NetworkKtpEvaluatedPoint = z.infer<typeof evaluatedPointSchema>
 export type NetworkKtpFit = z.infer<typeof batchFitSchema>
 
 /**
- * One request, always -- this is the only call site for this endpoint on
- * `NetworkKtpChart.tsx`, fired once per mount (invariant 1: "one request
+ * One request, always -- this is the only call site for this endpoint, in
+ * `NetworkKtpHeatmap.tsx`, fired once per mount (invariant 1: "one request
  * per page load. Not one per channel, not one per fit.").
  */
 export async function loadNetworkKtpEvaluation(

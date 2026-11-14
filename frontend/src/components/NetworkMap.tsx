@@ -12,26 +12,27 @@ function plural(count: number, one: string, many: string): string {
     return `${count} ${count === 1 ? one : many}`
 }
 
-function Legend({ wells, ends, edges, withBarrier, withoutKinetics }: {
+function Legend({ wells, ends, channels, dashed, notDrawn, withBarrier }: {
     wells: number
     ends: number
-    edges: number
+    channels: number
+    dashed: number
+    notDrawn: number
     withBarrier: number
-    withoutKinetics: number
 }) {
     return (
         <ul className="net-map-legend" aria-label="What the shapes mean">
             <li>
                 <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8" className="net-map-node" /></svg>
-                {plural(wells, "stable molecule", "stable molecules")} (circle)
+                {plural(wells, "state", "states")}: a stable molecule (circle)
             </li>
             <li>
                 <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><polygon points={hexagonPoints(11, 11, 9)} className="net-map-node net-map-node--end" /></svg>
-                {plural(ends, "pair of molecules apart", "pairs of molecules apart")} (hexagon)
+                {plural(ends, "state", "states")}: molecules apart (hexagon)
             </li>
             <li>
                 <svg width="28" height="22" viewBox="0 0 28 22" aria-hidden="true"><line x1="2" y1="11" x2="26" y2="11" className="net-map-edge" /></svg>
-                {plural(edges, "channel", "channels")} (line); dashed when no rate is deposited ({withoutKinetics})
+                {plural(channels, "channel", "channels")} (lines); {dashed} dashed: no rate deposited{notDrawn > 0 ? `; ${notDrawn} not drawn, see the table` : ""}
             </li>
             <li>
                 <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><polygon points={trianglePoints(11, 11, 7)} className="net-map-ts" /></svg>
@@ -62,8 +63,8 @@ export function NetworkMap({ states, channels, channelBarriers, compact = false,
 
     const wells = layout.nodes.filter((node) => node.isWell).length
     const withBarrier = layout.edges.filter((edge) => edge.hasBarrier).length
-    const withoutKinetics = layout.edges.filter((edge) => !edge.hasKinetics).length
-    const text = caption ?? `${plural(states.length, "state", "states")} joined by ${plural(channels.length, "channel", "channels")}. Position carries no meaning.`
+    const dashed = channels.filter((channel) => !channel.has_kinetics).length
+    const text = caption ?? "Position carries no meaning."
 
     return (
         <figure className={compact ? "net-map net-map--compact" : "net-map"}>
@@ -120,7 +121,7 @@ export function NetworkMap({ states, channels, channelBarriers, compact = false,
                                     key={node.hash}
                                     href={`#${stateRowId(node.hash)}`}
                                     className="net-map-link"
-                                    aria-label={`State ${node.label}, ${stateKindWords(node.isWell)}`}
+                                    aria-label={`State ${node.label}, ${stateKindWords(node.kind)}`}
                                 >
                                     {shape}
                                     <text x={textX} y={textY} textAnchor={anchor} className="net-map-label t-preserve-case">{node.label}</text>
@@ -136,11 +137,13 @@ export function NetworkMap({ states, channels, channelBarriers, compact = false,
                 <Legend
                     wells={wells}
                     ends={layout.nodes.length - wells}
-                    edges={layout.edges.length}
+                    channels={channels.length}
+                    dashed={dashed}
+                    notDrawn={channels.length - layout.edges.length}
                     withBarrier={withBarrier}
-                    withoutKinetics={withoutKinetics}
                 />
             )}
+            {compact && dashed > 0 && <p className="net-map-hint">Dashed lines have no rate deposited.</p>}
         </figure>
     )
 }

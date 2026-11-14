@@ -61,11 +61,19 @@ describe("ReactionNetworkRail", () => {
     it("shows a small map of the network, this reaction's channel highlighted, and a link to the network", async () => {
         serveNetwork()
         const { container } = rail(["net_rail1"])
-        expect(screen.getByRole("heading", { name: "Pressure-dependent network" })).toBeInTheDocument()
+        expect(await screen.findByRole("heading", { name: "Pressure-dependent network" })).toBeInTheDocument()
         await waitFor(() => expect(container.querySelectorAll("svg.net-map-svg").length).toBe(1))
         expect(container.querySelectorAll("path.net-map-edge--here")).toHaveLength(1)
         expect(screen.getByRole("link", { name: "Open the network" })).toHaveAttribute("href", "/networks/net_rail1")
-        expect(container.textContent).toContain("2 states, 1 channel")
+        expect(container.textContent).toContain("1 of 1 channel is this reaction (thick line).")
+        expect(container.textContent).toContain("Dashed lines have no rate deposited.")
+    })
+
+    it("renders no heading when the network cannot be read", async () => {
+        server.use(http.get("/api/v1/scientific/networks/net_rail1", () => HttpResponse.json({}, { status: 500 })))
+        const { container } = rail(["net_rail1"])
+        await new Promise((resolve) => setTimeout(resolve, 200))
+        expect(container.firstChild).toBeNull()
     })
 
     it("renders nothing when the reaction belongs to no network", () => {
