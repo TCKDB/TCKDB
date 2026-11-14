@@ -299,7 +299,7 @@ describe("ConformerObservationPage", () => {
         serve()
         page()
         await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
-        expect(screen.getByRole("link", { name: "co_two" })).toHaveAttribute("href", "/conformer-observations/co_two")
+        expect(screen.getByRole("link", { name: "Conformer observation: Another observation" })).toHaveAttribute("href", "/conformer-observations/co_two")
         expect(screen.queryByRole("link", { name: "co_one" })).not.toBeInTheDocument()
         expect(screen.getByRole("heading", { name: "Review history" })).toBeVisible()
         expect(screen.getByText("Looks consistent")).toBeVisible()
@@ -508,7 +508,7 @@ describe("ConformerObservationPage", () => {
         page()
         await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
         expect(screen.getByText("No other deposited observations were returned for this conformer.")).toBeVisible()
-        expect(screen.queryByRole("link", { name: "co_two" })).not.toBeInTheDocument()
+        expect(screen.queryByRole("link", { name: "Conformer observation: Another observation" })).not.toBeInTheDocument()
     })
 
     it("states the order of the sibling list", async () => {
@@ -606,7 +606,7 @@ describe("ConformerObservationPage", () => {
         page()
         await screen.findByRole("heading", { level: 1, name: /^Observation of Conformer Group 1 of CH3/ })
 
-        const siblingRow = screen.getByRole("link", { name: "co_two" }).closest("li")
+        const siblingRow = screen.getByRole("link", { name: "Conformer observation: Another observation" }).closest("li")
         expect(siblingRow).not.toBeNull()
         expect(within(siblingRow as HTMLElement).getByText("reviewed")).toBeVisible()
     })

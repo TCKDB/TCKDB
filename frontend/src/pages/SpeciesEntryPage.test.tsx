@@ -902,12 +902,12 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
         await screen.findByRole("heading", { name: "Its 3D shapes" })
-        expect((await screen.findAllByRole("link", { name: "geom_g1" })).length).toBeGreaterThan(0)
-        expect(screen.queryByText("geom_g3")).not.toBeInTheDocument()
+        await waitFor(() => expect(document.querySelector('a[href="/geometries/geom_g1"]')).not.toBeNull())
+        expect(document.querySelector('a[href="/geometries/geom_g3"]')).toBeNull()
 
         await user.click(within(cardFor("Conformer Group 2")).getByRole("button", { name: /Conformer Group 2/ }))
-        expect((await screen.findAllByRole("link", { name: "geom_g3" })).length).toBeGreaterThan(0)
-        expect(screen.queryByText("geom_g1")).not.toBeInTheDocument()
+        await waitFor(() => expect(document.querySelector('a[href="/geometries/geom_g3"]')).not.toBeNull())
+        expect(document.querySelector('a[href="/geometries/geom_g1"]')).toBeNull()
         expect(new URLSearchParams(window.location.search).get("conformer")).toBe(groupTwoRef)
 
         await user.click(screen.getByRole("tab", { name: "Single-point energy" }))
@@ -1006,10 +1006,10 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         render(<App />)
         // co_1 has TWO opt calculations (calc_opt_1a, calc_opt_1b); co_2 has one.
         expect(await screen.findByText((_, element) => (
-            element?.tagName === "LI" && element.textContent === "co_1 — 2 optimization calculations"
+            element?.tagName === "LI" && element.textContent === "Observation 1 — 2 optimization calculations"
         ))).toBeVisible()
         expect(screen.getByText((_, element) => (
-            element?.tagName === "LI" && element.textContent === "co_2 — 1 optimization calculation"
+            element?.tagName === "LI" && element.textContent === "Observation 2 — 1 optimization calculation"
         ))).toBeVisible()
     })
 

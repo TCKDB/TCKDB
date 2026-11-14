@@ -522,7 +522,7 @@ describe("LevelOfTheoryPage: wording, links and counts", () => {
         server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord()))))
         page()
         await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })
-        expect(screen.getByRole("link", { name: "spe_one" })).toHaveAttribute("href", "/species-entries/spe_one")
+        expect(screen.getByRole("link", { name: "species entry" })).toHaveAttribute("href", "/species-entries/spe_one")
         expect(screen.getByText(/calculations; first 50 listed\./)).toBeVisible()
     })
 

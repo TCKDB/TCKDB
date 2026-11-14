@@ -1,4 +1,5 @@
 import { Fragment, type CSSProperties } from "react"
+import { geometryWords } from "../domain/recordWords"
 import { Link } from "react-router-dom"
 import "../conformer-group.css"
 import "../entry-science.css"
@@ -94,14 +95,14 @@ export function ConformerGeometryTab({ conformer }: { conformer: ConformerProjec
                 // them read in the same sans face as the rest of the
                 // page's prose.
                 <ul className="checklist">
-                    {observations.map((observation) => {
+                    {observations.map((observation, observationIndex) => {
                         const ref = observation.conformer_observation.conformer_observation_ref
                         const optCalcs = (observation.calculations ?? []).filter((calculation) => calculation.type === "opt")
                         const groups = groupByGeometry(optCalcs, geometryByCalculationRef)
                         return (
                             <Fragment key={ref}>
                                 <li>
-                                    <Link className="data" to={`/conformer-observations/${ref}`} style={linkStyle}>{ref}</Link>
+                                    <Link to={`/conformer-observations/${ref}`} style={linkStyle} aria-label={`Observation ${observationIndex + 1}`}>{`Observation ${observationIndex + 1}`}</Link>
                                     {" — "}{optCalcs.length} optimization calculation{optCalcs.length === 1 ? "" : "s"}
                                 </li>
                                 {groups.map((group) => {
@@ -111,8 +112,8 @@ export function ConformerGeometryTab({ conformer }: { conformer: ConformerProjec
                                             {group.calcRefs.map((calculation, index) => (
                                                 <Fragment key={calculation.calculation_ref}>
                                                     {index > 0 && ", "}
-                                                    <Link to={`/calculations/${calculation.calculation_ref}`} style={linkStyle} aria-label={`Calculation ${index + 1}`}>
-                                                        {`Calculation ${index + 1}`}
+                                                    <Link to={`/calculations/${calculation.calculation_ref}`} style={linkStyle} aria-label={group.calcRefs.length > 1 ? `Optimisation ${index + 1}` : "Optimisation"}>
+                                                        {group.calcRefs.length > 1 ? `Optimisation ${index + 1}` : "Optimisation"}
                                                     </Link>
                                                     {calculation.level_of_theory ? <> (<LevelLabel levelOfTheory={calculation.level_of_theory} />)</> : " (level of theory not recorded)"}
                                                 </Fragment>
@@ -120,11 +121,10 @@ export function ConformerGeometryTab({ conformer }: { conformer: ConformerProjec
                                             {" → "}
                                             {geometry ? (
                                                 <>
-                                                    <Link className="data" to={`/geometries/${geometry.geometry_ref}`} style={linkStyle}>
-                                                        {geometry.geometry_ref}
+                                                    <Link to={`/geometries/${geometry.geometry_ref}`} style={linkStyle} aria-label={geometryWords(geometry.natoms)}>
+                                                        {geometryWords(geometry.natoms)}
                                                     </Link>
-                                                    {geometry.natoms != null ? ` · ${geometry.natoms} atoms` : ""}
-                                                    {geometry.geom_hash ? <> · <span className="data">{geometry.geom_hash.slice(0, 12)}…</span></> : ""}
+                                                                                                        {geometry.geom_hash ? <> · <span className="data">{geometry.geom_hash.slice(0, 12)}…</span></> : ""}
                                                 </>
                                             ) : "geometry not recorded"}
                                         </li>
