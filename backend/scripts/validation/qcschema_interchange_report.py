@@ -200,9 +200,7 @@ ROUND_TRIP_CHECKS = (
 #: about each (``lost_by_import_accounting``): stored but not exported,
 #: listed ``retained_only`` (``extras.qcvars`` and the ``properties.*``
 #: entries, including the energy; they survive only in the raw document), or
-#: listed ``unsupported``. Before tckdb-qcschema 0.5.0 (issue #573) the
-#: ``properties.*`` entries and ``extras.qcvars`` were in none of the import
-#: report's lists.
+#: listed ``unsupported``.
 EXPECTED_LOST_PATHS = (
     "extras.qcvars",
     "input_data.specification.keywords",
@@ -227,9 +225,8 @@ EXPECTED_LOST_PATHS = (
 )
 
 #: Paths present on both sides with a different value. The top-level
-#: ``provenance`` is TCKDB's own. (``fix_com`` and ``fix_orientation`` were
-#: listed here until tckdb-qcschema 0.5.0: the exporter now declares the
-#: frame fixed, as the Psi4 input did, so they compare equal.)
+#: ``provenance`` is TCKDB's own. (``fix_com`` and ``fix_orientation`` compare
+#: equal: the exporter declares the frame fixed, as the Psi4 input did.)
 EXPECTED_CHANGED_PATHS = (
     "provenance.creator",
     "provenance.routine",
@@ -699,7 +696,7 @@ def _lost_by_import_accounting(lost: list[str], trip: dict[str, Any]) -> dict[st
     QCSchema field it writes them back to. ``reported_retained_only`` and
     ``reported_unsupported``: the import's mapping report lists it in that
     bucket; it survives only in the raw document. ``not_named_by_import_report``:
-    dropped without the report saying so -- must be empty (issue #573).
+    dropped without the report saying so -- must be empty.
     """
     report = trip["mapping_report"]
     copied = {

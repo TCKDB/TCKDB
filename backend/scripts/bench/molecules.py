@@ -1,4 +1,4 @@
-"""Chemically real molecule generation for the Stage 4 benchmark corpus.
+"""Chemically real molecule generation for the benchmark corpus.
 
 Why not random strings
 ----------------------

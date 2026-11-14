@@ -605,7 +605,7 @@ def model_closure(root: type[BaseModel]) -> list[type[BaseModel]]:
         if not model.__pydantic_complete__:
             # A field typed by a forward reference ("SchemeAtomParamPayload") keeps the
             # unresolved string as its annotation until something first validates the
-            # model. Resolve it here so the closure never depends on what ran before (#717).
+            # model. Resolve it here so the closure never depends on what ran before.
             model.model_rebuild()
         for field in model.model_fields.values():
             queue.extend(sub for sub in _nested_models(field.annotation) if sub not in order)
@@ -976,7 +976,7 @@ def _refusal_types() -> tuple[type[BaseException], ...]:
 
 
 #: How far :func:`refusal_site` follows calls. Deep enough for every chain in
-#: the payload models today (the deepest measured is 4); bounded so a cycle or
+#: the payload models; bounded so a cycle or
 #: a sprawling service graph cannot make generation unbounded.
 REFUSAL_SEARCH_DEPTH = 8
 
@@ -2005,7 +2005,7 @@ class ContractBuilder:
         """A code's first sentence, cut to one short line, or ``""`` when it has none.
 
         The full sentence is in the code's reference entry; a producer reading "Will be refused if"
-        should not have to follow a link to learn what an adapter-critical code means (#686).
+        should not have to follow a link to learn what an adapter-critical code means.
         """
         # Only the sentence written beside the code at its raise site. A check's ``asserts`` is printed
         # once in "Checks several surfaces apply" and a gloss must not repeat that body.
@@ -2300,7 +2300,7 @@ class ContractBuilder:
     def _group_what(self, group: SharedGroup, noun: str) -> str:
         """What a link to a group says it holds: a count, or the item itself for a group of one.
 
-        A link to a group of one is pure indirection, so it names its only member (#686).
+        A link to a group of one is pure indirection, so it names its only member.
         """
         if len(group.items) != 1:
             return _count(len(group.items), noun)
@@ -2311,7 +2311,7 @@ class ContractBuilder:
         """How the group's surfaces reach a code, naming the surfaces that differ from the rest.
 
         Where one way is not common to the whole group it is followed by ``(only on: ...)``, so the
-        column is not read as "every surface, every way" (#686).
+        column is not read as "every surface, every way".
         """
         per_surface = {title: set(self.surface_codes(by_title[title]).get(code, [])) for title in group.titles}
         ways = sorted(set().union(*per_surface.values()))

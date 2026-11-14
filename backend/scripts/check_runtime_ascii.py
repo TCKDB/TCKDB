@@ -145,12 +145,10 @@ PAPER_SNAPSHOT_TARGET = "../scripts/paper_snapshot"
 #: ``seed_scientific_demo_data.py``) and one of them says in its own comment
 #: that the cluster it connects to is ``SQL_ASCII``.
 #:
-#: ``tckdb_schemas`` because it was left out and the omission was not a
-#: judgement, it was an oversight: the wire package raises validation errors
-#: and builds the ``message=`` strings that become ``UploadWarning.message``
-#: rows. A database column and a client-facing string are exactly what this
-#: check was written for, and until now it was the one package that produced
-#: them and was never looked at. Nine violations were sitting there.
+#: ``tckdb_schemas`` because the wire package raises validation errors and
+#: builds the ``message=`` strings that become ``UploadWarning.message`` rows.
+#: A database column and a client-facing string are exactly what this check
+#: is for.
 #:
 #: ``tests`` is deliberately NOT checked. Test data is the one place where
 #: non-ASCII is the point: ``tests/schemas/test_artifact_in_schema.py``

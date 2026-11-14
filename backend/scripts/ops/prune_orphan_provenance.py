@@ -2,7 +2,7 @@
 """List, and optionally delete, provenance registry rows nothing references.
 
 Scope: ``software_release``, ``software``, ``workflow_tool_release`` and
-``workflow_tool`` (issue #305). These are identity rows -- a program, or one
+``workflow_tool``. These are identity rows -- a program, or one
 exact release of it. A row that no record cites asserts nothing about the
 archive; it only shows up in registry listings as though something had been
 run with it. Such rows occur, for example an ``Arkane`` release or a

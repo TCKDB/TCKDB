@@ -234,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
         engine.dispose()
 
     if isinstance(result, ThermoBundleExport):
-        # Report every legacy row the exporter could not carry forward
+        # Report every row the exporter could not carry forward
         # unchanged, named by its public ref, before touching the bundle
         # (or the lack of one) itself.
         for omission in result.omissions:

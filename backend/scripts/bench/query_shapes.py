@@ -1,4 +1,4 @@
-"""The query shapes the Stage 4 benchmark measures.
+"""The query shapes the benchmark measures.
 
 Each shape is one supported read the API advertises, expressed as the HTTP
 request a client actually sends. Shapes are grouped by the question they

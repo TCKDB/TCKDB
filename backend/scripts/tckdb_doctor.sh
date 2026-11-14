@@ -179,7 +179,7 @@ else
     hint "expected mapping shape: \"127.0.0.1:<host>:5432\""
 fi
 
-# API port: warn if env file (or shell) still uses the old default 8000
+# API port: warn if env file (or shell) uses port 8000
 # while the canonical local port is 8010.
 if [[ -n "$env_api_port" && "$env_api_port" == "8000" ]]; then
     warn "TCKDB_API_PORT=8000 in $TCKDB_ENV_FILE -- the canonical local/host-run API port is now 8010"
@@ -339,8 +339,8 @@ else
     hint "or directly:   conda run -n $CONDA_ENV uvicorn main:app --host 127.0.0.1 --port 8010"
     hint "the command must run from backend/ so 'main.py' is importable."
 
-    # If the user is on the canonical 8010 but actually launched on the
-    # legacy 8000 default, probe and tell them. Saves a round of
+    # If the user is on the canonical 8010 but actually launched on port
+    # 8000, probe and tell them. Saves a round of
     # confused debugging.
     if [[ "$TCKDB_BASE_URL" == *":8010/"* ]] && \
        legacy_body="$(curl -fsS "${TCKDB_BASE_URL//:8010\//:8000\/}/health" 2>/dev/null)" && \

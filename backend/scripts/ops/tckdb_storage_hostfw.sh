@@ -1,9 +1,9 @@
 #!/bin/sh
-# Close SeaweedFS's internal ports to the Docker host itself (#548).
+# Close SeaweedFS's internal ports to the Docker host itself.
 #
 # WHAT THIS CLOSES
 #   docker-compose.yml puts `seaweedfs` on its own `storage` network, which
-#   keeps every other container away from its ports (#545, #547). The host's
+#   keeps every other container away from its ports. The host's
 #   own network namespace is not a container: Docker bridge addresses are
 #   routable from it, so any process on the host -- and any container run
 #   with `network_mode: host`, such as `cloudflared` -- could still reach the

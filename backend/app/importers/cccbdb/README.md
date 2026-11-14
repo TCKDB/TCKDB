@@ -28,9 +28,8 @@ NIST CCCBDB experimental data.
 - No RDKit-based structural canonicalization. SMILES / InChI strings
   are whitespace-stripped only; structural normalization is not done in the parser.
 - No mode-level experimental frequency persistence model. Mode-level
-  frequencies are produced by the parser but their final destination
-  depends on Schema Gap 2 in
-  `backend/docs/specs/cccbdb_importer.md`.
+  frequencies are produced by the parser and kept in the builder's
+  `external_source.unparsed` side-channel.
 - No computed method/basis page parsing.
 
 ## How to run the tests
@@ -421,8 +420,7 @@ upload payloads.
 
 ## `molecular_property_observation` + property-table builder
 
-`molecular_property_observation` closes CCCBDB **Schema Gap 1**. The
-table is the first-class home for
+`molecular_property_observation` is the first-class home for
 scalar / vector / tensor molecular properties — dipoles, IE/EA/PA,
 HOMO/LUMO, atomization energies, enthalpies of formation,
 spectroscopic constants, etc. These do **not** belong on
@@ -1823,6 +1821,5 @@ inspection but is not promised to satisfy the upload schema.
 
 ### Target layout
 
-See `backend/docs/specs/cccbdb_importer.md` §9 for the full target
-layout, and Schema Gaps §7 for the tables that need to land before
-some builders can produce final payloads.
+See `backend/docs/specs/cccbdb_importer.md` for what the importer
+persists and what stays as payload JSON.

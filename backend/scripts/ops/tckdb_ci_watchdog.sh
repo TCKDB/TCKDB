@@ -64,12 +64,12 @@
 # A RUN THAT CHECKED NOTHING IS NOT A PASS
 #   The count of verdicts reached is reported unconditionally and before the
 #   result, because it is the number that says whether the run is evidence of
-#   anything at all. It exists because it was once possible for every entry in
-#   TCKDB_WATCHED_WORKFLOWS to be rejected as malformed -- each one warned
-#   about on stderr, none of them watched -- and for the script to then exit 0
-#   and send the dead man's ping, so the external monitor vouched for a checker
-#   that had checked nothing. Zero verdicts is now the loudest state this
-#   script has: no ping, and exit 2.
+#   anything at all. It exists because every entry in TCKDB_WATCHED_WORKFLOWS
+#   can be rejected as malformed -- each one warned about on stderr, none of
+#   them watched -- and without it the script would exit 0 and send the dead
+#   man's ping, so the external monitor would vouch for a checker that had
+#   checked nothing. Zero verdicts is the loudest state this script has: no
+#   ping, and exit 2.
 #
 #   There is deliberately no --allow-empty equivalent, unlike
 #   verify_artifact_integrity.py, which has one because a fresh deployment can
@@ -200,8 +200,8 @@ for spec in "$@"; do
     max_age_hours="${spec##*:}"
     if [[ "$workflow" == "$spec" || -z "$max_age_hours" ]]; then
         # An entry that cannot be parsed is a workflow the operator asked for
-        # and did not get. Warning about it and carrying on was how every
-        # entry could be dropped and the run still called clean, so it now
+        # and did not get. Warning about it and carrying on would let every
+        # entry be dropped and the run still called clean, so it
         # counts as unchecked and takes the heartbeat with it -- the config is
         # wrong until someone fixes it, and nothing here can fix it.
         echo "warning: ignoring malformed TCKDB_WATCHED_WORKFLOWS entry '${spec}' (want file.yml:hours)" >&2

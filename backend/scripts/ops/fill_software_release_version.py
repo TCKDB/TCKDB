@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Give calculations on a version-less ``software_release`` the version their logs state.
 
-Curator tool for issue #305, item 3. For every ``software_release`` of the
+Curator tool. For every ``software_release`` of the
 named program whose ``version`` is NULL, reads each citing calculation's
 stored ``output_log`` (then ``input``) artifact, parses the program's own
 startup banner, and -- with ``--commit`` -- re-points the calculation at the
@@ -10,7 +10,7 @@ release that banner describes, recording the banner on the calculation
 never overwritten. See ``app/services/software_release_version_fill.py`` for
 why the row is not filled in place.
 
-Attestation mode (``--attest-version``; issue #305): where no
+Attestation mode (``--attest-version``): where no
 stored artifact carries a banner, the person who ran the calculations can
 state the version. The statement is recorded verbatim in
 ``software_version_attestation`` (who, when, which release, which version),

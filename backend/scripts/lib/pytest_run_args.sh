@@ -23,9 +23,8 @@
 #
 # Pinning is reproducibility, not a workaround — and the difference is only
 # credible if something still runs an unpinned order. The suite is verified
-# order-independent at seeds 1, 2, 3, 4, 5, 7, 11, 90210 and 424242, across 8,
-# 4, 2 and 0 workers (see backend/docs/testing.md), so the pin now costs
-# nothing but the coverage it would remove if it were the only mode. Hence:
+# order-independent across seeds and worker counts (see backend/docs/testing.md),
+# so the pin costs nothing but the coverage it would remove if it were the only mode. Hence:
 #
 #   TCKDB_TEST_SEED=random bash backend/scripts/test-full.sh
 #
@@ -131,10 +130,9 @@ tckdb_pytest_run_args() {
 
     # Itemise every skip with its reason in the summary, alongside pytest's
     # default failures and errors (``fE``). Under ``-q`` a skip is otherwise a
-    # bare count, and a count cannot say *what* skipped: the nine builder
-    # contract modules skipped on every CI run for want of tckdb_client (#575),
-    # inside "40 skipped" that nobody could read. A caller's own ``-r``
-    # replaces this one, since pytest keeps the last.
+    # bare count, and a count cannot say *what* skipped: a module skipped for
+    # want of tckdb_client is invisible inside "40 skipped". A caller's own
+    # ``-r`` replaces this one, since pytest keeps the last.
     if [[ "$caller_args" != *" -r"* ]]; then
         TCKDB_PYTEST_ARGS+=("-rfEs")
     fi

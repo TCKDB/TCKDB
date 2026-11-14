@@ -522,7 +522,7 @@ def build_network_pdep_payload(
             if atom_count_of_xyz(info.xyz_text) == 1:
                 # An atom has no geometry to optimise; Arkane ran a single
                 # point on it. That single point is its honest conformer
-                # primary (#615): send it once, as the primary, and fabricate
+                # primary: send it once, as the primary, and fabricate
                 # no optimisation. (An atom with no energy is skipped above.)
                 # The primary needs no geometry_key: the conformer's own
                 # geometry is the atom.
@@ -746,7 +746,7 @@ def build_network_pdep_payload(
             if value is not None:
                 sp_energy_hartree[species["key"]] = float(value)
                 break
-    # (state, hartree, [(species_key, single-point key), ...]) -- one source per participant (#678):
+    # (state, hartree, [(species_key, single-point key), ...]) -- one source per participant:
     # a state with several species is a sum, and its energy names every term's calculation.
     raw_state_energies: list[tuple[dict, float, list[tuple[str, str]]]] = []
     for state in states:

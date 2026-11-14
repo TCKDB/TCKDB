@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-"""CLI: backfill a submission link for legacy unresolved observation rows.
+"""CLI: backfill a submission link for observation rows that have none.
 
-Closes issue #514. ``app.services.observation_identity_attach`` refuses to
+``app.services.observation_identity_attach`` refuses to
 attach a species-entry identity to a ``molecular_property_observation`` row
 with no ``submission_record_link``
 (``observation_identity_attach_requires_submission``) -- there is nowhere
