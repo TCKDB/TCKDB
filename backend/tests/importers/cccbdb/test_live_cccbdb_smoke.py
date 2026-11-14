@@ -24,6 +24,7 @@ import time
 import pytest
 
 from app.importers.cccbdb.parsers import parse_experimental_species_page
+from app.importers.cccbdb.snapshot import _DEFAULT_USER_AGENT
 
 _LIVE_ENABLED = os.environ.get("TCKDB_CCCBDB_LIVE_TESTS") == "1"
 
@@ -32,12 +33,8 @@ pytestmark = pytest.mark.skipif(
     reason="Set TCKDB_CCCBDB_LIVE_TESTS=1 to enable live CCCBDB smoke tests.",
 )
 
-_USER_AGENT = (
-    "tckdb-cccbdb-importer/0.1 "
-    "(+https://github.com/TCKDB/TCKDB; "
-    "mailto:calvin.p@campus.technion.ac.il) "
-    "phase=1 mode=smoke"
-)
+# The snapshot crawler's own User-Agent, so the smoke test sends what the importer sends.
+_USER_AGENT = _DEFAULT_USER_AGENT
 _TIMEOUT_SECONDS = 15.0
 
 _ALLOWLIST = {

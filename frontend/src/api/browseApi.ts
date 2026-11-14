@@ -132,7 +132,7 @@ export function browseKindForPath(pathname: string): BrowseKind | undefined {
  * three-way type (`"" | "true" | "false"`) matching the query parameter's
  * own optional-boolean shape, back when each flag had its own tri-state
  * select (Any / Yes / No). The seven selects collapsed into one "Show
- * only entries with..." checkbox row (item 4 of the findability change),
+ * only entries with..." checkbox row,
  * which offers only the positive half -- a checkbox has no third state to
  * put "No" in, and nothing in `BrowseFilterForm.tsx` produces "false" for
  * any of these fields any more. Narrowed to match: the backend query
@@ -195,7 +195,7 @@ export type BrowseFilters = {
     hasPathSearch: EvidenceFlagState
     hasGeometryValidation: EvidenceFlagState
     hasScfStability: EvidenceFlagState
-    // Transition-state findability filters (item 4): `/transition-states/
+    // Transition-state findability filters: `/transition-states/
     // browse` has no formula/elements of its own -- a transition state is
     // identified by the reaction it connects, not a molecular graph -- so
     // these narrow through that reaction instead. `participantSmiles` is
@@ -263,7 +263,7 @@ const COMPOSITION_DEFAULTS = {
  * both accept all six (see `buildSpeciesBrowseQuery` /
  * `buildTransitionStateBrowseQuery`) -- so they are only ever cleared
  * explicitly by a reader picking "Any", never by `clearInapplicableFilters`
- * on a kind switch. `participantSmiles` (item 4's TS-only findability
+ * on a kind switch. `participantSmiles` (the TS-only findability
  * field) is here too, but `family` is NOT -- `family` is shared with the
  * "reaction" kind below (see `FAMILY_DEFAULT`'s own comment).
  */
@@ -475,7 +475,7 @@ export function buildTransitionStateBrowseQuery(filters: BrowseFilters, offset: 
         ["has_geometry_validation", filters.hasGeometryValidation], ["has_scf_stability", filters.hasScfStability],
     ]
     for (const [param, value] of evidenceFlags) if (value !== "") query.set(param, value)
-    // Findability filters (item 4) -- both additive, both exact match. See
+    // Findability filters -- both additive, both exact match. See
     // `TransitionStatesBrowseRequest.participant_smiles`/`.family` on the
     // backend for the matching semantics.
     if (filters.participantSmiles !== "") query.set("participant_smiles", filters.participantSmiles)

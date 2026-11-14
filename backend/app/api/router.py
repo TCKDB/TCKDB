@@ -115,7 +115,7 @@ api_router.include_router(
 )
 
 # Legacy entity-read routers. Wrapped with the auth gate so a hosted
-# deployment doesn't surface the pre-Phase-D shape anonymously. Local
+# deployment doesn't surface the legacy shape anonymously. Local
 # dev keeps the routes open by setting ``LEGACY_READS_REQUIRE_AUTH=false``.
 _legacy_auth = [Depends(require_auth_for_legacy_reads)]
 # The legacy reads are the raw entity layer. They honour the same read profile and default visibility as the

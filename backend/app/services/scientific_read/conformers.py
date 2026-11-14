@@ -243,7 +243,7 @@ def build_group_record(
     return identical per-record payloads for the same include set.
 
     The caller is responsible for handing in the resolved include set
-    (post-`validate_includes`, post-Phase-D) and the group's review
+    (after `validate_includes` and the internal-ids policy) and the group's review
     badge. A caller building a whole page may also hand in the group's
     ``levels_map``, resolved for every group on the page in one statement;
     a caller that does not gets it resolved here, which is the right
@@ -317,7 +317,8 @@ def build_group_record(
             else {}
         )
         if "observation_details" in includes:
-            # Deliberate, explicit opt-in into the expensive shape. Without ``observations``/``observation_details`` both
+            # Deliberate, explicit opt-in into the expensive shape.
+            # Without ``observations``/``observation_details`` both
             # removed from the nested set, every embedded observation
             # would resolve the same sibling list this block already is.
             nested_includes = includes - {"observations", "observation_details"}

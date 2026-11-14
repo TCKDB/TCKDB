@@ -2232,8 +2232,8 @@ class TestCorrectionSchemeTrustChecks:
 
     def test_new_checks_never_gate_well_supported_label(self, db_session):
         """Optional checks are informational: their absence must never
-        block a well_supported label (ruling 3's "advised, not required"
-        applies to the rubric exactly as it applies to the upload).
+        block a well_supported label (checks are "advised, not required"
+        in the rubric exactly as in the upload).
 
         On this rubric a maximally-provisioned computed_thermo
         fixture tops out at evidence_completeness == 0.95 (19/20) even

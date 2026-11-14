@@ -160,7 +160,8 @@ def _level_of_theory_hash(ref: LevelOfTheoryRef) -> str:
     curated aliases), so ``CCSD(T)-F12`` and
     ``ccsd(t)-f12`` are too, and so are ``wb97x-d`` and ``wb97xd``. Dispersion,
     solvent and solvent-model names go through
-    :func:`~app.chemistry.lot_component_names.component_identity_key`, so ``D3BJ`` and ``d3bj`` are one. The dispersion column has its own
+    :func:`~app.chemistry.lot_component_names.component_identity_key`, so ``D3BJ`` and ``d3bj`` are one. The
+    dispersion column has its own
     curated aliases (``gd3bj``, ``EmpiricalDispersion=GD3BJ``), and a
     recognised dispersion folded into the method (``b3lyp-d3bj``) moves into
     the dispersion key (:func:`~app.chemistry.dispersion_names.level_identity_keys`).
@@ -975,9 +976,9 @@ def collect_converged_opt_energy_warnings(
     state, so a single-point calculation or artifact deposited earlier in
     the *same* request already counts.
 
-    **Never refuses.** A blocking check on this shape broke real ARC
-    ingestion; the DB owner was explicit that a bare, unevidenced number is
-    "not the end all be all" and refusal here would be "too harsh". All
+    **Never refuses.** A bare, unevidenced number is not proof that the energy is
+    unusable, so this guard only warns; a blocking check on this shape would
+    refuse real ARC ingestion. All
     52 historical rows this guard was written for satisfy branch (a) --
     this bites only a future deposit with neither an sp nor an evidenced
     opt energy, which is the genuinely unusable case.

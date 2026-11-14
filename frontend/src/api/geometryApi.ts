@@ -21,7 +21,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
 //       `ScientificGeometryResponse` — there is no review/review_history
 //       on a geometry at all. Requesting it changes only the request echo.
 //     * `internal_ids` does not surface `geometry_id` on the hosted
-//       deployment either (same Phase-D visibility gate as the
+//       deployment either (same internal-ids visibility gate as the
 //       calculation surface — the deployment does not permit it).
 //   So this client still requests `include=provenance` (the one token with
 //   a real, if currently redundant, semantic match to a field this page

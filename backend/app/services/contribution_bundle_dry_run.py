@@ -158,7 +158,8 @@ def with_import_warnings(
     """Add the upload warnings submit would return to the preview's messages.
 
     The preview alone cannot know them: some come from the persistence
-    workflows resolving rows. The route gets them by rehearsing submit, which is why they are appended here rather than computed here.
+    workflows resolving rows. The route gets them by rehearsing submit, which is why they are appended
+    here rather than computed here.
     They are warnings, so they change neither ``bundle_valid`` nor any error
     count; ``summary.warnings`` is recounted to include them.
     """

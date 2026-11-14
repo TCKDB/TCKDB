@@ -315,8 +315,8 @@ def test_mutation_a_plus_one_unit_of_the_original_print_is_green(pipeline):
 def test_mutation_a_plus_one_unit_of_the_export_print_is_red(pipeline):
     # 2.1790E+06 -> 2.1791E+06: one full unit of the export's own grid. The
     # export reproduced the stored value exactly at that digit, so the bound,
-    # half a unit, is exceeded by construction. (The brief expected this row
-    # green; a half-unit rounding bound cannot admit a full-unit change.)
+    # half a unit, is exceeded by construction. (A half-unit rounding
+    # bound cannot admit a full-unit change.)
     result = _a_mutation(pipeline, "2.1791E+06")
     assert result.bound_violations and all(v.startswith(_A_REACTION) for v in result.bound_violations)
     entry = next(e for e in result.reactions if e["key"] == _A_REACTION)

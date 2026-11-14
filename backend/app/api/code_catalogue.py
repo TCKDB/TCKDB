@@ -246,12 +246,12 @@ class Surface(str, Enum):
     #: rather than hidden, and never exported to a client — a fabricated
     #: code that looks real is worse than an honestly generic one.
     #:
-    #: **No entry uses this today.** The two that did —
-    #: ``create_applied_group_additivity`` and ``keyset_predicate`` —
-    #: were reworded so that their refusals say what went wrong
+    #: **No entry uses this today.** Rewording is the better fix, and the two
+    #: messages that had this shape (``create_applied_group_additivity`` and
+    #: ``keyset_predicate``) are reworded: they say what went wrong
     #: instead of naming the function it went wrong in, and a message
     #: with no token in the code position is not an accidental prefix at
-    #: all. Cataloguing one was always the second-best fix: it stopped
+    #: all. Cataloguing one is the second-best fix: it stops
     #: the token being *promoted* while leaving a depositor to
     #: read a function name. The value stays because the classification
     #: is what makes recording the next one cheaper than hiding it.

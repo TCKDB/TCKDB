@@ -124,7 +124,7 @@ CO2_179_999_XYZ = _bent_co2_xyz(1.161000, 0.000010)
 #: CO2 at 179°: genuinely between the two thresholds.
 CO2_179_XYZ = _bent_co2_xyz(1.161956, 0.010140)
 
-#: CO2 at 178° — the brief's example of a genuinely ambiguous geometry.
+#: CO2 at 178° — an example of a genuinely ambiguous geometry.
 CO2_178_XYZ = _bent_co2_xyz(1.161823, 0.020280)
 
 #: CO2 at 170°: bent past any tolerance argument.

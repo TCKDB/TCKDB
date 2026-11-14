@@ -66,7 +66,9 @@ describe("register", () => {
             { code: "email_taken", detail: "email_taken: That email address is already in use.", context: {} },
             { status: 409 },
         )))
-        await expect(register({ username: "ada", password: "password123", email: "taken@example.com" })).rejects.toEqual(
+        await expect(register({
+            username: "ada", password: "password123", email: "taken@example.com",
+        })).rejects.toEqual(
             expect.objectContaining<Partial<AuthApiError>>({
                 status: 409,
                 code: "email_taken",

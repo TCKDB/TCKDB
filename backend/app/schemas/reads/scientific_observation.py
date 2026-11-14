@@ -5,8 +5,7 @@ envelope, reused for the sole (species-entry-scoped) surface this record type
 has today. ``molecular_property_observation`` is not a *product* with
 candidacy/selection semantics (unlike thermo/statmech/transport) — it is a
 raw external observation, so this surface carries no ``collapse`` /
-``selection_policy`` knob. See
-``docs/research/tckdb-phase-c-implementation-plan.md`` C5.
+``selection_policy`` knob.
 
 Identity is resolved by construction: every record returned here was found by
 its ``species_entry_id``, so there is no separate "identity *status*" field —

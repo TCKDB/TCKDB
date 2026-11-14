@@ -126,47 +126,47 @@
     {
       "name": "computed_calculation",
       "version": 1,
-      "reason": "Stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+      "reason": "Stereo identity changes no check or grading. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
     },
     {
       "name": "computed_kinetics",
       "version": 1,
-      "reason": "Stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+      "reason": "Stereo identity changes no check or grading. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
     },
     {
       "name": "computed_statmech",
       "version": 1,
-      "reason": "Stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+      "reason": "Stereo identity changes no check or grading. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
     },
     {
       "name": "computed_thermo",
       "version": 1,
-      "reason": "Stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+      "reason": "Stereo identity changes no check or grading. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
     },
     {
       "name": "computed_transition_state",
       "version": 2,
-      "reason": "Stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+      "reason": "Stereo identity changes no check or grading. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
     },
     {
       "name": "computed_transport",
       "version": 1,
-      "reason": "Stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+      "reason": "Stereo identity changes no check or grading. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
     },
     {
       "name": "computed_ts_statmech",
       "version": 1,
-      "reason": "Stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+      "reason": "Stereo identity changes no check or grading. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
     },
     {
       "name": "tckdb_reproducibility",
       "version": 1,
-      "reason": "Stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+      "reason": "Stereo identity changes no check or grading. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
     },
     {
       "name": "tckdb_reproducibility_ts_statmech",
       "version": 1,
-      "reason": "Stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+      "reason": "Stereo identity changes no check or grading. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
     },
     {
       "name": "computed_calculation",

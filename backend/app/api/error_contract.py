@@ -77,20 +77,19 @@ that lands in the code position is catalogued as
 own word for "not a code" — and is therefore not promoted. The honest
 record of a defect becomes the thing that stops it reaching a client.
 
-That record is the second-best fix. The first-best fix is applied:
-both messages say what went wrong rather than naming the function they
-went wrong in, so neither token is in the code position and neither is
+That record is the second-best fix. Rewording is the better fix, and both
+messages are reworded: they say what went wrong rather than naming the
+function they went wrong in, so neither token is in the code position and neither is
 catalogued under any surface. The gate below is unchanged and is what
 covers the next one written the same way — an allow-list of
 ``message_prefix`` codes refuses an unknown token whether or not anyone
 thought to record it.
 
-Why consulting a list is safe here, having been refused before
---------------------------------------------------------------
-An earlier design declined to gate promotion on a hand-list, on the grounds that the
-list is a second artifact to keep in step and that forgetting to register
+Why consulting a list is safe here
+----------------------------------
+A hand-list is a second artifact to keep in step, and forgetting to register
 a new code would silently degrade it to ``validation_error`` — the same
-failure class the narrowing existed to fix. That objection was correct
+failure class the narrowing exists to fix. That objection holds
 against a *bare* list. It is answered by a catalogued one, because
 forgetting is caught at test time by two static scans that between them
 cover every shape a message-prefix code is written in:
@@ -112,15 +111,14 @@ cover every shape a message-prefix code is written in:
   is the one such helper and the six ``*_handle_conflict`` codes are its
   arguments.
 
-That second scan is not belt and braces; it replaces a net this change
-removes. The runtime observer in ``backend/tests/error_code_observer.py``
-fails the test that *emits* an uncatalogued code, and until now that was
-the only thing covering an interpolated code — it is how the six
+That second scan is not belt and braces; it covers what the runtime
+observer cannot. The runtime observer in ``backend/tests/error_code_observer.py``
+fails the test that *emits* an uncatalogued code, which is how the six
 ``*_handle_conflict`` codes were found. But a gated promotion never puts an
 unknown token in ``code`` at all, so the body the observer inspects is a
 clean ``validation_error`` and it has nothing to see. Measured, not
 reasoned about: renaming ``conflict_code="level_of_theory_handle_conflict"``
-leaves the observer green after this change and made it red before. The
+leaves the observer green. The
 observer still covers every other surface; for this one, the scan above is
 the replacement.
 

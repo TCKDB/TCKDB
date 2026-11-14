@@ -208,7 +208,7 @@ def export_chemkin(
     # so the zipped manifest.json states its contract exactly like every other
     # TCKDB manifest and response.
 
-    # Curated guard (PR-4). The sources are filtered where the record set is
+    # Curated guard. The sources are filtered where the record set is
     # built (a hidden record is never a linearity witness); these two calls are
     # the net under that. The manifest goes through the document withhold, and
     # the generated text is refused outright if it names a hidden record, since

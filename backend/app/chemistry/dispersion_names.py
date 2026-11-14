@@ -1,7 +1,8 @@
 """Identity keys of the dispersion column, and of a dispersion folded into the method.
 
-The *case* of the dispersion column is part of identity, and D3(BJ) spellings
-inside the **method** string are joined. Two further splits are closed here:
+Case is not part of the dispersion column's identity (``component_identity_key``
+lower-cases it), and the method key joins D3(BJ) spellings inside the method
+string. This module adds two more joins:
 
 * the dispersion **column** joins ``d3bj``, ``gd3bj`` and
   ``empiricaldispersion=gd3bj``, because ARC's Gaussian adapter writes

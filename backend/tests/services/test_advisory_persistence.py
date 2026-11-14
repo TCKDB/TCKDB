@@ -29,7 +29,7 @@ def setup_records(session):
     thermo = _make_thermo(session, smiles="CCO")
     attach_thermo_nasa(session, thermo=thermo)
     attach_thermo_points(session, thermo=thermo, temperatures_k=[300.0, 400.0])
-    custody = _make_external_source_record(session, key="phase-d-custody")
+    custody = _make_external_source_record(session, key="custody-source")
     observation = _make_observation(session, thermo=thermo, temperature_k=300.0, scalar_value=90.0,
                                     external_source_record=custody)
     return thermo, observation, custody

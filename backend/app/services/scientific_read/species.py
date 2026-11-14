@@ -1248,13 +1248,11 @@ def _rank_and_slice_species(
 
         Size leads; review status does not disappear, it becomes the
         tiebreak among same-sized species (still ``best_rank ASC`` next in
-        line) rather than the other way around. The owner's request was
-        explicit -- "smallest first ... ending with the largest at the
-        end" -- and putting ``best_rank`` ahead of size would not deliver
-        that: a large *approved* species would still sort before a small
+        line) rather than the other way around. The ordering is smallest
+        first, ending with the largest, and putting ``best_rank`` ahead of
+        size would not deliver that: a large *approved* species would still sort before a small
         *unreviewed* one. Demoting review status to a tiebreak keeps it
-        meaningful (it still decides ties) without breaking the ordering
-        the owner asked for.
+        meaningful (it still decides ties) without breaking that ordering.
 
         A species whose SMILES the cartridge cannot parse gets a NULL
         ``heavy_atom_count`` (:func:`_heavy_atom_count_expr`'s documented

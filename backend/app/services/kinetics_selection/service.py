@@ -110,7 +110,7 @@ def assess_reaction_entry_kinetics(
     scan = scan_population(session, reaction_entry_id=reaction_entry_id, request=request)
     excluded = _excluded_refs(session, scan)
     loaded = load_population(session, scan)
-    # The loader to engine seam (guard PR-3): a hidden ref in the captured facts becomes a placeholder token BEFORE any
+    # The loader to engine seam: a hidden ref in the captured facts becomes a placeholder token BEFORE any
     # record is assessed, grouped or decided, so every equality the assessment reads (the determination's network and
     # the record's own channel, a solve shared by alternate fits) survives under the tokens.
     loaded.subject, loaded.candidates = withhold_selection_facts(session, (loaded.subject, loaded.candidates))

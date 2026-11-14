@@ -474,13 +474,13 @@ describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
         // One h1 per route, and a title that names the page.
         expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1)
         await waitFor(() => expect(document.title).toBe(EXPECTED_TITLES[path]))
-        // Route ordering (item 1 of the per-kind browse paths): a heading
+        // Route ordering: a heading
         // match alone does not prove the URL actually resolved to THIS
         // route rather than some other one that happens to render the same
         // text -- assert the address bar too.
         expect(window.location.pathname).toBe(path)
         // The calculation page's own ref lives inside the collapsed
-        // References disclosure (item 3 of the calculation-page rework) --
+        // References disclosure --
         // present in the DOM, but not VISIBLE until opened.
         if (path.startsWith("/calculations/")) {
             const summary = screen.getByText(bySummaryText(/References \(/))

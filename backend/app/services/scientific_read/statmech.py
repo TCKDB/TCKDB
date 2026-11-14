@@ -213,8 +213,8 @@ _TRUST_EAGER_LOADS = (
     selectinload(Statmech.source_calculations)
     .selectinload(StatmechSourceCalculation.calculation)
     .selectinload(Calculation.child_dependencies),
-    # The opt-source check asks whether a calculation is a single atom's
-    #: its geometries' atom counts, loaded per page, not per record.
+    # The opt-source check asks whether a calculation is a single atom's: its
+    # geometries' atom counts, loaded per page, not per record.
     selectinload(Statmech.source_calculations)
     .selectinload(StatmechSourceCalculation.calculation)
     .selectinload(Calculation.input_geometries)
@@ -324,7 +324,7 @@ def build_statmech_record(
 
     Exported so the statmech search service can produce records with
     the same shape as the detail endpoint. Caller passes the resolved
-    include set (post-`validate_includes`, post-Phase-D).
+    include set (after `validate_includes` and the internal-ids policy).
     """
     # A statmech row has exactly one subject. Attributing a TS-owned record to
     # an empty species stand-in fabricated a species context that does not

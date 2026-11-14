@@ -56,8 +56,7 @@ Whose calculation it is
 ------------------------------
 The type is half the rule. A calculation of the right type can still belong to
 the wrong subject: a well's energy cited to another well's single point, or a
-saddle point's barrier cited to a species single point (an earlier test matrix
-of this route stored exactly that). The transition-state route already refuses this for its
+saddle point's barrier cited to a species single point. The transition-state route already refuses this for its
 ``energy_ordering`` evidence (each energy must come from the participant
 it is the energy of); this is the same rule for the network route, read from
 the persisted ``Calculation.species_entry_id`` / ``transition_state_entry_id``
@@ -76,7 +75,7 @@ and never from the payload:
   states, and ``barrier_energy`` one of a transition state the upload declares.
 
 The subject is checked after the type, so a calculation that fails both reports
-the type (the older, narrower refusal). Neither refusal runs on a read.
+the type. Neither refusal runs on a read.
 
 One source per participant, and their sum
 ------------------------------------------------
@@ -101,7 +100,7 @@ energies, ``sum(stoichiometry * stored energy)``, and refuses a contradiction
   - an ``sp`` (or ``opt``) electronic energy plus the zero-point energy of the participant's own
     ``freq``, named as ``zpe_calculation_key``: ``E + s * ZPE`` with the state's declared
     ``zpe_scale_factor`` ``s``. The two must be at one geometry (an sp's or freq's input, an opt's
-    final), each declared exactly once, as for a transition state's. TCKDB stores the
+    final), each declared exactly once, as a transition state's pair is. TCKDB stores the
     producer's unscaled ZPE, so with no factor stated the state is *not compared*
     (``zpe_scaling_unstated``) whatever the numbers are: unity is never assumed, even when the
     unscaled sum happens to agree. A freq with no stored ZPE is ``zpe_not_stated``; an sp and a freq

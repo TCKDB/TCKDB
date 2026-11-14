@@ -62,8 +62,8 @@ are declared — because naming the alternatives is what turns a refusal
 into a mechanical fix. Never a row id: the ids are the *values* of these
 maps and they stay there, out of anything a depositor reads.
 
-Where the codes live now, and why not here
-------------------------------------------
+Where the codes live, and why not here
+--------------------------------------
 The codes this module raises are *defined* in
 :mod:`tckdb_schemas.local_key_codes` and re-exported below. A
 refusal's code and context belong to the check, not to the layer that

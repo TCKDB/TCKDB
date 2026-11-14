@@ -4,7 +4,7 @@ Runs against the pytest transaction (the ``_SessionProxy`` device from
 ``test_backfill_assumed_tau.py``), so every delete rolls back with the test.
 
 The seed mirrors a deployed database with one deliberate
-twist the brief did not know about: the Arkane release has zero
+twist: the Arkane release has zero
 calculations but *is* cited by a thermo row -- the analysis-software shape
 the ARC adapter deposits. A tool that only looked at
 ``calculation.software_release_id`` would delete it; this one must not.
@@ -164,8 +164,8 @@ def test_discovery_matches_the_orm_and_is_not_just_calculation(prune, db_session
     }
 
     assert as_pairs == _metadata_references()
-    # The brief's premise was "calculation is the only FK into
-    # software_release". It is one of many; the thermo one is what keeps
+    # ``calculation`` is not the only FK into ``software_release``;
+    # the thermo one is what keeps
     # the Arkane analysis release alive.
     assert ("calculation", "software_release_id") in as_pairs["software_release"]
     assert ("thermo", "software_release_id") in as_pairs["software_release"]

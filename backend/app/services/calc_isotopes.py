@@ -162,9 +162,10 @@ def _isotope_reference_for(
 def _geometry_isotope_counts(session: Session, geometry_id: int) -> IsotopeCounts:
     """Count a stored geometry's non-standard isotopes.
 
-    A ``D`` or ``T`` element spelling is an isotope declaration: ``parse_xyz`` stores it as ``H`` with ``isotope_mass_number`` 2/3, so
-    new rows are counted from the stored mass number. A row deposited before
-    that spelling was read as an isotope holds ``D``/``T`` with a NULL mass number and cannot be
+    A ``D`` or ``T`` element spelling is an isotope declaration: ``parse_xyz`` stores it as ``H`` with
+    ``isotope_mass_number`` 2/3, so new rows are counted from the stored mass
+    number. A row deposited before that spelling was read as an isotope holds
+    ``D``/``T`` with a NULL mass number and cannot be
     rewritten (``trg_as_geometry_atom``), so the mass is read from the row's own
     symbol: ``mass = stored or implied_isotope_mass_number(element)``. Nothing is
     borrowed from a sibling record.

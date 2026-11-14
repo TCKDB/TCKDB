@@ -206,8 +206,8 @@ function headlineEnergy(
  * where this IS the answer the reader came for: an unlabelled absence
  * there reads as a layout bug, not as "no value recorded"). This wrapper
  * is headline-only and keeps the label (and, implicitly, the fact that
- * this row is an energy at all) visible even when there is no number --
- * see finding 2 of the review this fixes. `EnergyDisplay`'s own
+ * this row is an energy at all) visible even when there is no number.
+ * `EnergyDisplay`'s own
  * null-handling is unchanged and still applies to every inline use
  * elsewhere on the archive.
  */

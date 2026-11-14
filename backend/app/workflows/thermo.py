@@ -198,7 +198,8 @@ def _resolve_source_calculation(
     ``context`` naming this field. Same code as the public-ref
     spelling on ``/uploads/kinetics``, on purpose: the row that is missing
     is the same kind of row and the repair is the same, so making the code
-    depend on the spelling would make the status depend on the spelling too.
+    depend on the spelling would give one missing row two different answers
+    depending on how the caller spelled it.
     The id the caller supplied is *not* echoed — it goes to the log, per
     :func:`app.services.upload_reference.unknown_reference`.
     """

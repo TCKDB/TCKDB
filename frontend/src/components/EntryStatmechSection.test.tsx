@@ -392,7 +392,7 @@ describe("EntryStatmechSection", () => {
         // `source_calculations` is fetched eagerly (every record card
         // derives its conformer from it by default), and so is
         // `frequencies` now (every card's own `FrequenciesBlock` shows it
-        // by default, finding 6) -- `torsions` is not, it still waits for
+        // by default) -- `torsions` is not, it still waits for
         // its own disclosure to be opened.
         await waitFor(() => expect(requestedIncludeSets).toEqual([[], ["source_calculations"], ["frequencies"], ["calculation_settings"]]))
 
@@ -512,8 +512,7 @@ describe("EntryStatmechSection", () => {
         // Four requests, never a fifth for "Electronic levels" (which
         // stays request-free): the base list load, plus the three eager
         // fetches every record card needs by default -- `source_calculations`
-        // (conformer derivation), `frequencies` (finding 6's
-        // `FrequenciesBlock`) and `calculation_settings` (the "Settings
+        // (conformer derivation), `frequencies` (`FrequenciesBlock`) and `calculation_settings` (the "Settings
         // behind this value" block) -- see the eager-load test above.
         await waitFor(() => expect(requestCount).toBe(4))
     })

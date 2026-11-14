@@ -200,7 +200,7 @@ def _headers(key: str = "default") -> dict:
 
 def _ids_in(obj) -> set[str]:
     """Every dict key ending in ``_id`` (or bare ``id``), anywhere in the
-    response tree -- the C-E6 brief's own scan-for-``_id``-keys check."""
+    response tree (the scan-for-``_id``-keys check)."""
     found: set[str] = set()
     if isinstance(obj, dict):
         for key, value in obj.items():

@@ -85,7 +85,7 @@ reaction it sits on.
 
 **Naming a reaction subject.** ``kinetics`` and ``transition_state`` both
 container to ``reaction_entry`` (see :mod:`app.services.record_containers`),
-and -- since the self-subject fix above -- so does a ``reaction_entry``'s
+and so does a ``reaction_entry``'s
 OWN review row, which every reaction workflow writes one of. A
 ``reaction_entry`` is therefore a common subject type in real data --
 a kinetics reviewer seeing "Reaction entry rxe_..." and nothing else is

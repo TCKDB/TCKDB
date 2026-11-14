@@ -41,8 +41,9 @@ Design contract
   ``observation_identity_attach_requires_submission`` refuses an
   observation with no submission link, so every row this importer writes
   is linked. Rows written by an earlier version of this importer carry no
-  link; ``app.services.observation_submission_link_backfill`` is the operator
-  remediation.
+  link; ``app.services.observation_submission_link_backfill`` (entry point
+  ``backend/scripts/ops/backfill_observation_submission_links.py``) is the
+  operator remediation.
 * **Dry-run by default.** ``commit=False`` runs the full pipeline
   inside the caller's transaction without committing. ``commit=True``
   commits on success and rolls back on unexpected error.
