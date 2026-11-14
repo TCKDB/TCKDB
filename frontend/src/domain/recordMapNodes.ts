@@ -148,8 +148,9 @@ export function calculationNodes(input: {
         const parts = [before.size > 0 ? together(`depends on ${before.size}`) : null, after.size > 0 ? together(`used by ${after.size}`) : null].filter(Boolean)
         if (parts.length > 0) {
             nodes.push({
-                id: "related", kind: "calculation", label: "Related calculations", relation: "Listed under Related calculations",
-                sub: parts.join(", "), to: "#dependencies-heading", found: null,
+                id: "related", kind: "calculation", label: "Calculations it links to",
+                relation: before.size > 0 && after.size > 0 ? "Listed under Depends on and Used by" : before.size > 0 ? "Listed under Depends on" : "Listed under Used by",
+                sub: parts.join(", "), to: before.size > 0 ? "#dependencies-heading" : "#used-by-heading", found: null,
             })
         }
     }

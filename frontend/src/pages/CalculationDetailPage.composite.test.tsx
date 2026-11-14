@@ -100,7 +100,7 @@ const ASSEMBLED = {
 async function load(rec: unknown) {
     server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: rec })))
     page()
-    return screen.findByRole("heading", { level: 1, name: /^composite of / })
+    return screen.findByRole("heading", { level: 1, name: /^Composite energy of / })
 }
 
 describe("composite calculation page", () => {
