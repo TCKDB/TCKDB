@@ -29,7 +29,8 @@ import { parameterStatement, parameterValueText } from "../domain/effectiveSetti
 import { publicParameterValue } from "../domain/publicText"
 import { EffectiveSettingsSummary } from "../components/EffectiveSettings"
 import { ArtifactDownloadButton } from "../components/ArtifactDownloadButton"
-import { CalculationDependencyGraph } from "../components/CalculationDependencyGraph"
+import { DependencyStrip, ProducedItem } from "../components/CalculationLineage"
+import { ReactionEquation } from "../components/ReactionEquation"
 import { CompositeSchemeLink } from "../components/CompositeSchemeLink"
 import { CompositeVerificationBadge, ContradictionMarker } from "../components/CompositeVerification"
 import { Disclosure } from "../components/Disclosure"
@@ -62,6 +63,10 @@ import { formatQuantity } from "../domain/quantityFormat"
 import { identityFromCalculationOwner } from "../domain/recordIdentity"
 import { hessianMethodLabel, isAssumedTauBasis, tauBasisNote } from "../domain/tauBasis"
 import { useCalculation } from "../hooks/useCalculation"
+import { useLoaded } from "../hooks/useLoaded"
+import { loadReactionEntryParticipants } from "../api/reactionEntryApi"
+import { calculationLede, calculationTitleWords, dependsOn, usedBy } from "../domain/calculationLineage"
+import { equationNeedsStructure } from "../domain/reactionEquation"
 import { useCalculationSection, type CalculationSectionState } from "../hooks/useCalculationSection"
 import { LiteratureCitation } from "../components/LiteratureCitation"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
@@ -343,7 +348,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
         ? optimisationStage(dependencies)
         : null
     const stageWords = stage && stage.kind !== "unknown" ? OPTIMISATION_STAGE_WORDS[stage.kind] : null
-    const titleTypeLabel = stageWords ? stageWords.label : typeLabel(core.type)
+    const titleTypeLabel = stageWords ? stageWords.label : calculationTitleWords(core.type)
     useDocumentTitle("Calculation", titleTypeLabel)
     const kickerText = `${typeLabel(core.type)} calculation · ${stageWords ? stageWords.kickerSuffix : OPTIMISATION_STAGE_UNKNOWN_KICKER_SUFFIX}`
     // `provenance.submission_ref` is `string | null | undefined` on the
@@ -385,40 +390,25 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
         { label: "Literature ref", value: literature?.literature_ref },
     ].filter((entry): entry is RefEntry => typeof entry.value === "string" && entry.value.length > 0)
 
-    // Identity subject for the h1 -- "Optimisation of C2H4" / "Optimisation
-    // of tse_...". A species entry prefers its formula, rendered through
-    // the SAME `Formula` component `RecordIdentityHeader`'s own identity
-    // tier uses (subscripted element counts), falling back to the plain
-    // canonical SMILES only when no formula was derived.
-    //
-    // Deliberately NOT SMILES-leads-formula-in-brackets (used everywhere
-    // else a species is shown): this h1 is a sentence
-    // ("Optimisation of C2H4"), not a bare identity chip, and this
-    // calculation belongs to exactly ONE species -- no second participant
-    // for a bare formula to be confused with. `identity.canonicalSmiles`
-    // already renders in this same header's own identity block a few
-    // lines below (`RecordIdentityHeader`'s "SMILES" fact), so leading
-    // the sentence with a long SMILES string ("Optimisation of [CH2]SO
-    // (CH3OS)") would only make the h1 harder to read for no
-    // disambiguation this page did not already have.
-    //
-    // A TS entry has
-    // no formula the way a species does, so it falls back through its own
-    // ref instead -- never the depositor's own `transition_state.label`
-    // (e.g. "TS0"), which this page does not read (house rule:
-    // no depositor-typed labels on public pages).
-    // `.data` (mono, the same step every other ref on this page
-    // uses) is the honest treatment for a ref, even when it happens to sit
-    // inside an h1 -- `font-size: inherit` on `.calc-headline-ref`
-    // (`calculation-detail.css`) is what keeps it at the h1's own 52px
-    // serif-adjacent scale rather than dropping to `--type-data-font`'s
-    // bare 13px baseline-aligned inside it.
+    // The title's subject is read from the owner: a species entry by its formula, a transition state by the
+    // reaction it connects (read from the reaction entry it names; the depositor's own label is never used).
+    const participants = useLoaded(loadReactionEntryParticipants, ownerTS?.reaction_entry_ref ?? null)
+    const reactants = participants.status === "ready" ? (participants.data.species?.reactants ?? []) : []
+    const products = participants.status === "ready" ? (participants.data.species?.products ?? []) : []
+    const equation = participants.status === "ready" && reactants.length > 0 && products.length > 0
+        ? (
+            <ReactionEquation
+                reactants={reactants}
+                products={products}
+                reversible={participants.data.reaction_entry.reversible}
+                formulaOnly={!equationNeedsStructure(reactants, products)}
+            />
+        )
+        : null
     const titleSubject: ReactNode = identity.kind === "species_entry"
         ? (identity.formula ? <Formula value={identity.formula} /> : identity.canonicalSmiles)
         : identity.kind === "transition_state_entry"
-            ? (identity.transitionStateEntryRef
-                ? <code className="data calc-headline-ref">{identity.transitionStateEntryRef}</code>
-                : "this record")
+            ? (equation ? <>the {equation} transition state</> : "a transition state")
             : "this record"
 
     const mapNodes = calculationNodes({
@@ -469,6 +459,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                             kicker={kickerText}
                             glyph="calculation"
                             review={core.review.status}
+                            lede={calculationLede(core.type)}
                             title={<>{titleTypeLabel} of {titleSubject}</>}
                             identity={identity}
                             ownRef={{ label: "Calculation ref", value: core.calculation_ref }}
@@ -508,11 +499,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                             </p>
                         )}
 
-                        <StageAndConformerNote
-                            ownRef={core.calculation_ref}
-                            stage={stage}
-                            conformer={conformer ?? null}
-                        />
+                        <ConformerNote conformer={conformer ?? null} />
 
                         {/* One row of human provenance, always shown -- software
                             and workflow tool must never be hidden (house rule).
@@ -575,6 +562,21 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 section directly below that shows the same one or three links.
                 The evidence checklist is the only card that carries a fact
                 with no other home on the page. */}
+            <DependsOnSection
+                dependencies={dependencies}
+                ownType={core.type}
+                stageLabel={stageWords ? stageWords.label : null}
+                availability={dependenciesAvailability}
+                contradicted={dependenciesAvailability === "empty" && available.has_dependencies}
+            />
+
+            <ProducedSection
+                ownRef={core.calculation_ref}
+                results={calculation.results ?? null}
+                outputGeometries={outputGeometries}
+                dependencies={dependencies}
+            />
+
             <section className="ledger-summary ledger-summary--single" aria-label="Calculation evidence summary">
                 {/* `.card--derived` -- a COMPUTED evidence-completeness summary
                     (`--derived` marks an aggregated
@@ -599,7 +601,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                         { label: "Geometry validation", value: geometryValidationOutcome, tone: evidenceTone(geometryValidationOutcome) },
                         { label: "SCF stability", value: scfStabilityOutcome, tone: evidenceTone(scfStabilityOutcome) },
                     ]}
-                    note="A recorded outcome here is the actual verdict; the full evidence, where the archive has more to show, is under Further evidence below."
+                    note="Each outcome is the recorded verdict. More is under Further evidence."
                 />
             </section>
 
@@ -630,18 +632,6 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 openGeometryValidation={openGeometryValidation}
             />
 
-            {/* Demoted below every evidence section (results, geometries,
-                further evidence): the graph and the review log are
-                provenance ABOUT this record, not the scientific evidence
-                itself. */}
-            <DependenciesSection
-                dependencies={dependencies}
-                ownRef={core.calculation_ref}
-                ownType={core.type}
-                availability={dependenciesAvailability}
-                contradicted={dependenciesAvailability === "empty" && available.has_dependencies}
-            />
-
             <ReviewHistorySection
                 entries={reviewHistory}
                 availability={reviewAvailability}
@@ -651,97 +641,24 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
     )
 }
 
-/**
- * The dependency-derived stage strip (for `opt` calculations) plus the
- * conformer-context links (for species-entry-owned calculations), stacked
- * as one small block right under the identity header. Both read the
- * already-fetched eager data -- no extra request for either. `stage` is
- * computed once, in `CalculationDetail`, and shared with the identity
- * header's title/kicker -- see the comment there.
- */
-function StageAndConformerNote({ ownRef, stage, conformer }: {
-    ownRef: string
-    stage: OptimisationStage | null
-    conformer: CalculationConformer | null
-}) {
-    if (!stage && !conformer) return null
+/** The conformer this calculation belongs to, for a species-entry-owned calculation. */
+function ConformerNote({ conformer }: { conformer: CalculationConformer | null }) {
+    if (!conformer) return null
     return (
         <dl className="kv-list record-context--compact">
-            {stage && (
-                stage.kind === "unknown" ? (
-                    <div>
-                        <dt>Refinement stage</dt>
-                        <dd><span className="value-pill value-pill--muted">not recorded</span></dd>
-                    </div>
-                ) : (
-                    <div className="kv-list--wide">
-                        <dt>Optimisation stages</dt>
-                        <dd><OptimisationStageStrip ownRef={ownRef} stage={stage} /></dd>
-                    </div>
-                )
-            )}
-            {conformer && (
-                <div>
-                    <dt>Conformer</dt>
-                    <dd>
-                        <Link to={`/conformer-observations/${conformer.conformer_observation_ref}`}>
-                            <code className="data">{conformer.conformer_observation_ref}</code>
-                        </Link>
-                        {" · "}
-                        {/* The group is named by its ref. `conformer_group_label` is
-                            the depositor's own text ("conformer_1") and the calculation
-                            read has no server-computed label for a group, so none is
-                            shown: no depositor-typed labels on public pages. */}
-                        <Link to={`/conformer-groups/${conformer.conformer_group_ref}`}>
-                            group <code className="data">{conformer.conformer_group_ref}</code>
-                        </Link>
-                    </dd>
-                </div>
-            )}
+            <div>
+                <dt>Conformer</dt>
+                <dd>
+                    <Link to={`/conformer-observations/${conformer.conformer_observation_ref}`}>
+                        <code className="data">{conformer.conformer_observation_ref}</code>
+                    </Link>
+                    {" · "}
+                    <Link to={`/conformer-groups/${conformer.conformer_group_ref}`}>
+                        group <code className="data">{conformer.conformer_group_ref}</code>
+                    </Link>
+                </dd>
+            </div>
         </dl>
-    )
-}
-
-/**
- * Two boxes, coarse
- * then fine (the data-flow order -- the coarse pass feeds the fine one),
- * joined by the SAME arrow-connector recipe `.linkage-flow`/
- * `.linkage-connector` (`species-entry.css`) already draws for the
- * conformer evidence linkage -- see `calculation-detail.css`'s own
- * `.opt-stage-flow` comment for why this is that pattern's CSS, not a
- * third arrow style. The box for THIS calculation's own stage is
- * `.card--selected` (accent fill, no link -- a page never links to
- * itself); the other box links out to its calculation, with both refs in
- * the `.data` mono face underneath their box, matching every other ref on
- * this page.
- */
-function OptimisationStageStrip({ ownRef, stage }: {
-    ownRef: string
-    stage: { kind: "coarse" | "fine"; otherRef: string }
-}) {
-    const coarseRef = stage.kind === "coarse" ? ownRef : stage.otherRef
-    const fineRef = stage.kind === "coarse" ? stage.otherRef : ownRef
-    return (
-        <div className="opt-stage-flow" data-testid="opt-stage-strip">
-            <OptimisationStageBox kind="coarse" calcRef={coarseRef} selected={stage.kind === "coarse"} />
-            <span className="opt-stage-connector" aria-hidden="true">→</span>
-            <OptimisationStageBox kind="fine" calcRef={fineRef} selected={stage.kind === "fine"} />
-        </div>
-    )
-}
-
-function OptimisationStageBox({ kind, calcRef, selected }: {
-    kind: "coarse" | "fine"
-    calcRef: string
-    selected: boolean
-}) {
-    return (
-        <div className={`card opt-stage-box${selected ? " card--selected" : ""}`} data-testid={`opt-stage-box-${kind}`}>
-            <span className="opt-stage-box-label">{OPTIMISATION_STAGE_WORDS[kind].label}</span>
-            {selected
-                ? <code className="data">{calcRef}</code>
-                : <Link to={`/calculations/${calcRef}`}><code className="data">{calcRef}</code></Link>}
-        </div>
     )
 }
 
@@ -971,45 +888,71 @@ function TauValueCell({ tauCm1, basis }: { tauCm1: number | null | undefined; ba
     )
 }
 
-/**
- * Renders exactly, and only, the edges the archive returned under
- * `include=dependencies`. No edge here is inferred from `type`, timestamps,
- * or ref ordering — see the module docstring above; this is the one rule
- * the whole slice is graded on.
- *
- * This section itself is a thin shell: the populated case hands the raw
- * `dependencies` array straight to `CalculationDependencyGraph.tsx`,
- * which owns both the graph AND the demoted sentence list beneath it
- * (its own docstring covers the layout/paint-order/accessibility design).
- * The per-role WORDING both of those read — one sentence per edge, with a
- * FIXED subject (this calculation, or the related one), and a dispatch on
- * `role` that never collapses `freq_on`/`single_point_on`/`irc_start`
- * into "This was optimized from <link>" (a `role` names the CHILD's
- * relation to the parent, so on a parent-side row it describes what the
- * *other* calculation is, not this one) — lives in ONE shared table,
- * `domain/dependencyWording.ts`, not in this function.
- */
-function DependenciesSection({ dependencies, ownRef, ownType, availability, contradicted }: {
+/** The calculations this one depends on, in the order they ran. Only edges the archive returned are drawn. */
+function DependsOnSection({ dependencies, ownType, stageLabel, availability, contradicted }: {
     dependencies: CalculationDependency[]
-    ownRef: string
     ownType: string
+    stageLabel: string | null
     availability: SectionAvailability
     contradicted: boolean
 }) {
+    const steps = dependsOn(dependencies)
     return (
         <section className="ledger-section" aria-labelledby="dependencies-heading">
-            {/* No kicker: repeated this section's own title. */}
-            <SectionHeading id="dependencies-heading">
-                Related calculations
-            </SectionHeading>
-            {availability === "populated" ? (
-                <CalculationDependencyGraph dependencies={dependencies} ownRef={ownRef} ownType={ownType} />
+            <SectionHeading id="dependencies-heading">Depends on</SectionHeading>
+            {availability === "populated" && steps.length > 0 ? (
+                <DependencyStrip steps={steps} ownWords={stageLabel ?? calculationTitleWords(ownType)} />
             ) : (
                 <SectionEmptyMessage
                     availability={availability}
-                    emptyText="No dependency edges are recorded for this calculation."
+                    emptyText="No earlier calculation is recorded for this one."
                     contradicted={contradicted}
                 />
+            )}
+        </section>
+    )
+}
+
+const RESULT_WORDS: Readonly<Record<string, string>> = {
+    sp: "An electronic energy",
+    opt: "An optimisation outcome",
+    freq: "A frequency result",
+    composite: "A composite energy",
+    scan: "A scan result",
+    irc: "An IRC result",
+    path_search: "A path search result",
+}
+
+/** The results and records this calculation produced, each linked to its evidence. */
+function ProducedSection({ ownRef, results, outputGeometries, dependencies }: {
+    ownRef: string
+    results: CalculationRecord["results"]
+    outputGeometries: CalculationGeometryLink[]
+    dependencies: CalculationDependency[]
+}) {
+    const here = `/calculations/${ownRef}`
+    const used = usedBy(dependencies)
+    const resultWords = results ? (Object.hasOwn(RESULT_WORDS, results.kind) ? RESULT_WORDS[results.kind] : "A result") : null
+    const hasItems = resultWords !== null || outputGeometries.length > 0 || used.length > 0
+    return (
+        <section className="ledger-section" aria-labelledby="produced-heading">
+            <SectionHeading id="produced-heading">What this produced</SectionHeading>
+            {hasItems ? (
+                <ul className="produced-list">
+                    {resultWords && <ProducedItem to={`${here}#results-heading`}>{resultWords}</ProducedItem>}
+                    {outputGeometries.length > 0 && (
+                        <ProducedItem to={`${here}#geometries-heading`}>
+                            {outputGeometries.length} output {outputGeometries.length === 1 ? "geometry" : "geometries"}
+                        </ProducedItem>
+                    )}
+                    {used.map((step) => (
+                        <ProducedItem key={`${step.role}-${step.ref}`} lead={`${step.words}: `} to={`/calculations/${step.ref}`}>
+                            <code className="data">{step.ref}</code>
+                        </ProducedItem>
+                    ))}
+                </ul>
+            ) : (
+                <p className="empty-projection">No result, geometry or later calculation is recorded for this one.</p>
             )}
         </section>
     )
