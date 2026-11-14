@@ -814,7 +814,7 @@ describe("NetworkEntryPage -- which solve the energies came from, and the order 
     it("names the one deposited solve the energies are read from", async () => {
         handleEverything({ stateEnergies })
         page()
-        expect(await screen.findByText(/read from the network's one deposited solve, nsolve_test1/)).toBeInTheDocument()
+        expect(await screen.findByText(/read from the network's one deposited solve\./)).toBeInTheDocument()
     })
 
     it("with several solves deposited, says the energies are the first one's and that the first is not preferred", async () => {
@@ -822,7 +822,7 @@ describe("NetworkEntryPage -- which solve the energies came from, and the order 
         const first = { network_solve_ref: "nsolve_test1", kind: "computed", me_method: "modified strong collision", interpolation_model: "chebyshev", tmin_k: 300, tmax_k: 2000, pmin_bar: 0.01, pmax_bar: 100, review: { status: "not_reviewed" } }
         handleEverything({ stateEnergies, record: { solves: [first, second] } })
         page()
-        expect(await screen.findByText(/read from solve nsolve_test1, the first of 2 deposited solves/)).toBeInTheDocument()
+        expect(await screen.findByText(/read from solve 1, the first of 2 deposited solves/)).toBeInTheDocument()
         expect(screen.getByText(/the first is not preferred/)).toBeInTheDocument()
     })
 

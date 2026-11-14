@@ -62,8 +62,8 @@ export function coverageFraction(coveredCount: number, totalCount: number): { co
  */
 export function solveEnergySourceSentence(solveRefs: readonly string[]): string | null {
     if (solveRefs.length === 0) return null
-    if (solveRefs.length === 1) return `These energies are read from the network's one deposited solve, ${solveRefs[0]}.`
-    return `These energies are read from solve ${solveRefs[0]}, the first of ${solveRefs.length} deposited solves in the `
+    if (solveRefs.length === 1) return `These energies are read from the network's one deposited solve.`
+    return `These energies are read from solve 1, the first of ${solveRefs.length} deposited solves in the `
         + "archive's order. The other solves' energies are not read on this page, and the first is not preferred."
 }
 

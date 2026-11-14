@@ -5,6 +5,7 @@
 
 .energy-profile-picker {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--s-2);
     margin: var(--s-3) 0;
     max-width: var(--measure-prose);
