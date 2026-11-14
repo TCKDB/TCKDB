@@ -1,12 +1,12 @@
 """Recover the vibrational spectrum from every stored Hessian and compare it
 with the frequency list that was deposited beside it.
 
-The manuscript claims that a spectrum recovered from stored data alone --
+This module checks whether a spectrum recovered from stored data alone --
 the packed Cartesian force-constant matrix in ``calc_hessian``, the
 geometry it is bound to, and the masses those atoms determine -- agrees
-with the separately parsed ``calc_freq_mode`` list. This module is the
-deposited check behind that sentence: DB-read-only, nothing persisted,
-one result per calculation, every calculation in scope accounted for.
+with the separately parsed ``calc_freq_mode`` list. It is DB-read-only,
+persists nothing, returns one result per calculation, and accounts for
+every calculation in scope.
 
 What is compared
 ----------------
@@ -119,8 +119,8 @@ carries a comparison; the others each name what stopped it:
 
 ``hessian_not_stored``
     No ``calc_hessian`` row. This is most of the corpus's frequency
-    calculations and it is **not** agreement -- it is the case the
-    manuscript's denominator has to include.
+    calculations and it is **not** agreement -- it is a case the
+    count of calculations in scope has to include.
 ``frequency_list_missing``
     A Hessian with no ``calc_freq_mode`` rows to compare against.
 ``geometry_incomplete``
@@ -620,7 +620,7 @@ def _declares_isotope_under_protium(calc: Calculation, atoms: Sequence[GeometryA
     if entry is None:
         return False
     # The entry's declared isotopes, read through the one helper the upload
-    # check uses (``isotope_key``, else the labels on a pre-#66 species SMILES),
+    # check uses (``isotope_key``, else the labels on a legacy species SMILES),
     # so a legacy ``[2H][2H]`` entry with a NULL key is not judged protium here
     # after the upload accepted a deuterated Hessian under it.
     declared = entry_isotope_counts(entry, entry.species)
@@ -762,7 +762,8 @@ def reanalyse_calculation(
 def reanalysis_scope(session: Session, *, calculation_ref: str | None = None) -> list[Calculation]:
     """Every calculation with a stored Hessian **or** a stored frequency list.
 
-    The union is the denominator the manuscript needs: a frequency
+    The union is the set of calculations in scope, and so the
+    denominator of the agreement count: a frequency
     calculation with no Hessian is exactly the record that must be
     counted as not checkable rather than left out.
     """

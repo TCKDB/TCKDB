@@ -577,13 +577,13 @@ describe("building curator tasks for a submission", () => {
     it("lists the build's own warnings", async () => {
         serveAnyInspection()
         serveBuild(
-            tally({ created_count: 1, warnings: ["finding 2 named no record"] }),
+            tally({ created_count: 1, warnings: ["a finding named no record"] }),
         )
         const user = await inspect()
         await user.click(await screen.findByRole("button", { name: BUILD_BUTTON }))
 
         expect(
-            await screen.findByText("finding 2 named no record"),
+            await screen.findByText("a finding named no record"),
         ).toBeInTheDocument()
     })
 

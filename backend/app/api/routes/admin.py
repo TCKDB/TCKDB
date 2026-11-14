@@ -503,7 +503,7 @@ class AdminCuratorTaskResponse(BaseModel):
 
     ``record_public_ref`` is the same record's public ref, resolved at read
     time and never stored on the task. A curator working this queue has to get
-    from "task #12 concerns calculation 431" to the record itself, and 431 is
+    from "task 12 concerns calculation 431" to the record itself, and 431 is
     not something any read route answers to -- ``calc_...`` is. Without it the
     only way across is an internal id a curator cannot use and a UI must not
     show.

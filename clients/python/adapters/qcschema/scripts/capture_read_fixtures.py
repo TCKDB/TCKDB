@@ -250,7 +250,7 @@ def _capture(client, case: str) -> None:
                 "case": case,
                 "calculation_id": calc_id,
                 "captured_from": (
-                    "backend GET routes, real DB, C-Q3 pinned-read capture"
+                    "backend GET routes, real DB, pinned-read capture"
                 ),
             },
             indent=2,

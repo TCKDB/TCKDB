@@ -50,7 +50,7 @@ in a different, discarded context copy.
 
 Outside a request (unit tests, workers, CLI scripts) the context variable is
 unset and everything falls back to ``exploratory`` — i.e. exactly the
-pre-Stage-3 behaviour.
+unfiltered ``exploratory`` behaviour.
 """
 
 from __future__ import annotations

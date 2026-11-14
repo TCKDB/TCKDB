@@ -111,7 +111,7 @@ describe("ConformerEvidenceLinkage", () => {
         expect(section.className.split(" ")).not.toContain("card--sunken")
     })
 
-    // Finding 14: the card above prints "11 obs" / "opt 7/11 obs" with no
+    // The card above prints "11 obs" / "opt 7/11 obs" with no
     // expansion anywhere on the page -- this mechanics note is the one
     // place "obs" (and "calc") ever gets tied back to its full word, so it
     // must actually say so, not just define "observation" in isolation.

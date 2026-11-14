@@ -628,7 +628,7 @@ def _assert_observations_have_rights_basis(
     archive -- every table, unconditionally -- into one release's deposit
     (see the module docstring), and nothing before this checked that the
     observations inside it are licensed compatibly with ``release.
-    data_license``. That is the real gap C-E5 was opened to close.
+    data_license``. That is the gap this closes.
 
     **Scope, stated and chosen deliberately narrow.** The archive is a full
     database dump; it has no concept of "this release's data" to filter by.

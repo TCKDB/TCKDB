@@ -75,6 +75,13 @@ jobs:
       - name: Every test file is run by a required job
         run: python -m pytest --noconftest -q backend/tests/scripts/test_gate_coverage.py
 
+      # Backend CI's path filter has no frontend/** and only part of
+      # clients/python, so a pull request touching only those trees would not
+      # start it. The guard reads tracked files with `git ls-files` and uses
+      # only the standard library.
+      - name: Source text describes present behaviour only
+        run: python -m pytest --noconftest -q backend/tests/invariants/test_no_decision_narrative.py
+
       # The frontend image is published only after merge, so its own workflow
       # cannot protect a pull request. Run this wiring guard in the unfiltered
       # repository gate instead: it pins the path filter, architecture list,

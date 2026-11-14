@@ -1,6 +1,6 @@
 {
   "case": "water_b3lyp_def2tzvp_psi4",
-  "purpose": "Phase C C-Q4 QCSchema interchange demonstration; read by backend/scripts/validation/qcschema_interchange_report.py",
+  "purpose": "QCSchema interchange demonstration; read by backend/scripts/validation/qcschema_interchange_report.py",
   "documents": {
     "water_b3lyp_def2tzvp_hessian_v1.json": {
       "outcome": "route",
