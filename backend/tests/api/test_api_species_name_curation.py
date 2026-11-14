@@ -11,6 +11,7 @@ from app.api.app import create_app
 from app.api.deps import get_db, get_write_db
 from app.db.models.common import SpeciesNameSourceKind
 from app.db.models.species_name import SpeciesName
+from app.services.species_name_curation import DUPLICATE_MESSAGE, INVALID_MESSAGE
 from tests.id_leak import id_in_text
 from tests.services.scientific_read._factories import make_species, make_species_entry, next_inchi_key
 
@@ -80,6 +81,7 @@ def test_a_curator_adds_a_name(client, db_session, curator):
     assert body["name_ref"].startswith("snm_")
     row = _live(db_session, sp)[0]
     assert row.created_by_user_id == curator.id and row.created_at is not None
+    assert body["created_by"]["username"] == curator.username
     assert row.source_kind is SpeciesNameSourceKind.curated and row.external_source_id is None
     assert row.name_key == "but-1-ene"
 
@@ -160,10 +162,10 @@ def test_retire_then_retire_again(client, db_session, curator):
     first = client.post(f"{URL}/{ref}/retire")
     assert first.status_code == 200 and first.json()["retired_at"] is not None
     stamp = first.json()["retired_at"]
-    assert first.json()["retired_by"] == curator.username
+    assert first.json()["retired_by"]["username"] == curator.username
     second = client.post(f"{URL}/{ref}/retire")
     assert second.status_code == 200 and second.json()["retired_at"] == stamp
-    assert second.json()["retired_by"] == curator.username
+    assert second.json()["retired_by"]["username"] == curator.username
     assert _live(db_session, sp) == []
 
 
@@ -173,7 +175,7 @@ def test_a_second_retirer_does_not_replace_the_first(client, db_session, curator
     client.post(f"{URL}/{ref}/retire")
     admin = login_as(_api_admin_user)
     again = client.post(f"{URL}/{ref}/retire")
-    assert again.json()["retired_by"] == curator.username != admin.username
+    assert again.json()["retired_by"]["username"] == curator.username != admin.username
     row = db_session.scalar(select(SpeciesName).where(SpeciesName.public_ref == ref))
     assert row.retired_by_user_id == curator.id
 
@@ -240,25 +242,40 @@ def test_a_species_ref_given_as_a_name_ref_is_the_same_404_as_an_unknown_one(cli
 # --- no ids ---------------------------------------------------------------------------------------------------------
 
 
+def _without_timestamps(value):
+    if isinstance(value, dict):
+        return {k: _without_timestamps(v) for k, v in value.items() if k not in {"created_at", "retired_at"}}
+    return value
+
+
 def test_no_response_carries_an_internal_id(client, db_session, curator):
     sp = _species(db_session)
-    responses = [
-        _post(client, sp),
-        _post(client, sp),  # duplicate
-        _post(client, sp, name=""),  # invalid
-        client.post(URL, json={"species_ref": "spc_" + "a" * 26, "name": "abc", "kind": "common"}),
-        client.post(f"{URL}/snm_{'a' * 26}/retire"),
+    missing_species = "spc_" + "a" * 26
+    missing_name = "snm_" + "a" * 26
+    created = _post(client, sp)
+    ref = created.json()["name_ref"]
+    expected = [
+        (created, 201, None),
+        (_post(client, sp), 409, DUPLICATE_MESSAGE),
+        (_post(client, sp, name=""), 422, INVALID_MESSAGE),
+        (
+            client.post(URL, json={"species_ref": missing_species, "name": "abc", "kind": "common"}),
+            404,
+            f"species not found (species_ref='{missing_species}')",
+        ),
+        (client.post(f"{URL}/{missing_name}/retire"), 404, f"species_name not found (name_ref='{missing_name}')"),
+        (client.post(f"{URL}/{ref}/retire"), 200, None),
     ]
-    ref = responses[0].json()["name_ref"]
-    responses.append(client.post(f"{URL}/{ref}/retire"))
     row = db_session.scalar(select(SpeciesName).where(SpeciesName.public_ref == ref))
-    for resp in responses:
+    for resp, status, detail in expected:
+        assert resp.status_code == status, resp.text
+        body = resp.json()
+        if detail is not None:
+            assert body["detail"] == detail
+            body = {k: v for k, v in body.items() if k != "detail"}  # the fixed message prose has numbers
         for value in (sp.id, row.id, curator.id):
-            body = {k: v for k, v in resp.json().items() if k != "detail"}  # the fixed message prose has numbers
-            assert not id_in_text(value, body)
-            if resp.status_code != 422:
-                assert not id_in_text(value, resp.text)
-    body = responses[0].json()
+            assert not id_in_text(value, _without_timestamps(body))
+    body = created.json()
     assert set(body) == {
         "name_ref",
         "species_ref",
@@ -266,9 +283,11 @@ def test_no_response_carries_an_internal_id(client, db_session, curator):
         "kind",
         "source_kind",
         "created_at",
+        "created_by",
         "retired_at",
         "retired_by",
     }
+    assert set(body["created_by"]) == {"username", "full_name", "orcid", "affiliation"}
 
 
 # --- the search read ------------------------------------------------------------------------------------------------

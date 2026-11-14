@@ -49,7 +49,7 @@ class SpeciesName(Base, TimestampMixin, PublicRefMixin):
     )
     #: Set when the name is retired; a retired name is not searched.
     retired_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=False), nullable=True)
-    #: The curator or admin who retired the name; null when it is live or was retired before this was recorded.
+    #: The curator or admin who retired the name; null when the name is live or when no retirer is recorded.
     retired_by_user_id: Mapped[Optional[int]] = mapped_column(
         BigInteger, ForeignKey("app_user.id", deferrable=True, initially="IMMEDIATE"), nullable=True
     )

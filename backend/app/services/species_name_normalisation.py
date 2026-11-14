@@ -46,6 +46,11 @@ def normalise_name(text: str) -> str:
     return " ".join(folded.split())
 
 
+def display_name(text: str) -> str:
+    """The name as stored for display: runs of whitespace collapsed to one space, ends trimmed."""
+    return " ".join(text.split())
+
+
 def _allowed_char(ch: str) -> bool:
     if ch == " " or ch in ALLOWED_PUNCTUATION:
         return True

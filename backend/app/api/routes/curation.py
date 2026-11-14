@@ -21,6 +21,7 @@ from app.schemas.entities.structure_evidence_finding import (
     StructureEvidenceFindingPageRead,
     StructureEvidenceFindingRead,
 )
+from app.schemas.reads.scientific_release import CuratorSummary
 from app.services.reproducibility_assessment import get_latest_reproducibility_assessment
 from app.services.reproducibility_rubric import evaluate_and_append_reproducibility
 from app.services.scientific_record_supersession import supersede_scientific_record
@@ -155,8 +156,16 @@ def list_structure_evidence_findings(
     )
 
 
+def _actor(session: Session, user_id: int | None) -> CuratorSummary | None:
+    user = session.get(AppUser, user_id) if user_id is not None else None
+    if user is None:
+        return None
+    return CuratorSummary(
+        username=user.username, full_name=user.full_name, orcid=user.orcid, affiliation=user.affiliation
+    )
+
+
 def _name_read(session: Session, row, species) -> SpeciesNameRead:
-    retirer = session.get(AppUser, row.retired_by_user_id) if row.retired_by_user_id is not None else None
     return SpeciesNameRead(
         name_ref=row.public_ref,
         species_ref=species.public_ref,
@@ -164,8 +173,9 @@ def _name_read(session: Session, row, species) -> SpeciesNameRead:
         kind=row.kind,
         source_kind=row.source_kind,
         created_at=row.created_at,
+        created_by=_actor(session, row.created_by_user_id),
         retired_at=row.retired_at,
-        retired_by=retirer.username if retirer is not None else None,
+        retired_by=_actor(session, row.retired_by_user_id),
     )
 
 

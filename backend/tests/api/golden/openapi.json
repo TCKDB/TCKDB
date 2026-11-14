@@ -57105,6 +57105,16 @@
             "title": "Created At",
             "type": "string"
           },
+          "created_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CuratorSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "kind": {
             "$ref": "#/components/schemas/SpeciesNameKind"
           },
@@ -57131,13 +57141,12 @@
           "retired_by": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/CuratorSummary"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Retired By"
+            ]
           },
           "source_kind": {
             "$ref": "#/components/schemas/SpeciesNameSourceKind"

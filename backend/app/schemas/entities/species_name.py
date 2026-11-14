@@ -6,6 +6,7 @@ from pydantic import Field
 
 from app.db.models.common import SpeciesNameKind, SpeciesNameSourceKind
 from app.schemas.common import SchemaBase
+from app.schemas.reads.scientific_release import CuratorSummary
 
 
 class SpeciesNameCreate(SchemaBase):
@@ -25,6 +26,7 @@ class SpeciesNameRead(SchemaBase):
     kind: SpeciesNameKind
     source_kind: SpeciesNameSourceKind
     created_at: datetime
+    created_by: CuratorSummary | None = None
     retired_at: datetime | None = None
-    #: Username of the curator or admin who retired the name; null when live or not recorded.
-    retired_by: str | None = None
+    #: Who retired the name; null when it is live or when no retirer is recorded.
+    retired_by: CuratorSummary | None = None

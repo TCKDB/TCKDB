@@ -24,7 +24,7 @@ from app.db.models.species_name import SpeciesName
 from app.services.public_refs import PREFIXES
 from app.services.scientific_read.handles import is_ref_handle
 from app.services.species_merge import canonical_species
-from app.services.species_name_normalisation import name_problem, normalise_name
+from app.services.species_name_normalisation import display_name, name_problem, normalise_name
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ def validated_name(name: str) -> tuple[str, str]:
     problem = name_problem(name)
     if problem is not None:
         raise _invalid(problem)
-    return " ".join(name.split()), normalise_name(name)
+    return display_name(name), normalise_name(name)
 
 
 def add_species_name(
@@ -100,7 +100,8 @@ def add_species_name(
             session.flush()
     except IntegrityError as exc:
         orig = exc.orig
-        if getattr(orig, "sqlstate", None) == "23505" or LIVE_UNIQUE_INDEX in str(orig):  # a concurrent add
+        diag = getattr(orig, "diag", None)
+        if getattr(orig, "sqlstate", None) == "23505" and getattr(diag, "constraint_name", None) == LIVE_UNIQUE_INDEX:
             raise SpeciesNameDuplicate() from exc
         raise
     session.refresh(row)

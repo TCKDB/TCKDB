@@ -3,7 +3,7 @@
 The columns are ``name``, ``kind``, ``record_key``, ``retrieved_at`` (ISO 8601) and an identity: ``inchikey``, or
 ``smiles`` with ``charge`` and ``multiplicity`` (all three), or both. A row without a record key and a retrieval time
 is refused (``provenance_missing``). It resolves a species conservatively, acts only when exactly one live species
-matches, and passes the name as given to :func:`app.services.species_name_import.write_name`.
+matches, and passes the name to :func:`app.services.species_name_import.write_name`.
 
 An InChIKey is matched as stored, so it is blind to stereo and isotope marks that the stored key does not carry. A
 SMILES is resolved the way an upload resolves it, so any spelling of the graph finds its species.

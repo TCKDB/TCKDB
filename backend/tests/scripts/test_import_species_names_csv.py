@@ -266,3 +266,14 @@ def test_propose_from_cccbdb_lists_new_names_and_writes_nothing(script, db_sessi
     assert script.main(["--propose-from-cccbdb"], session=db_session, out=out) == 0
     assert out.getvalue().splitlines()[0] == "species_ref,inchikey,name,kind,record_key,retrieved_at"
     assert _names(db_session, a) == []
+
+
+def test_whitespace_in_a_name_is_collapsed_as_the_curator_route_does(script, db_session, tmp_path):
+    a = make_species(db_session, inchi_key=next_inchi_key("IS"))
+    path = _write(
+        tmp_path,
+        f'inchikey,name,kind,record_key,retrieved_at\n{a.inchi_key},"Alpha   \tol  x",common,k1,{STAMP}\n',
+    )
+    _run(script, db_session, path, "--commit")
+    (row,) = _names(db_session, a)
+    assert row.name == "Alpha ol x" and row.name_key == "alpha ol x"

@@ -1,8 +1,8 @@
 """Record who retired a species name.
 
 Adds ``species_name.retired_by_user_id``, a nullable reference to ``app_user``, set when a curator or admin retires a
-name. Names retired before the column existed keep NULL, which reads as "retirer not recorded". A check keeps a
-retirer from being set on a name that is not retired.
+name. The column is null when the name is live or when no retirer is recorded. A check keeps a retirer from being
+set on a name that is not retired.
 """
 
 from __future__ import annotations
@@ -30,13 +30,13 @@ def upgrade() -> None:
         deferrable=True,
     )
     op.create_check_constraint(
-        "ck_species_name_retired_by_needs_retired_at",
+        "retired_by_needs_retired_at",
         "species_name",
         "retired_by_user_id IS NULL OR retired_at IS NOT NULL",
     )
 
 
 def downgrade() -> None:
-    op.drop_constraint("ck_species_name_retired_by_needs_retired_at", "species_name", type_="check")
+    op.drop_constraint("retired_by_needs_retired_at", "species_name", type_="check")
     op.drop_constraint("fk_species_name_retired_by_user_id_app_user", "species_name", type_="foreignkey")
     op.drop_column("species_name", "retired_by_user_id")

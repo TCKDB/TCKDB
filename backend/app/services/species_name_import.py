@@ -22,7 +22,7 @@ from app.db.models.common import SpeciesNameKind, SpeciesNameSourceKind
 from app.db.models.external_source import ExternalSource
 from app.db.models.species import Species
 from app.db.models.species_name import SpeciesName
-from app.services.species_name_normalisation import name_problem, normalise_name
+from app.services.species_name_normalisation import display_name, name_problem, normalise_name
 from app.services.species_name_review import REVIEW_FORMAT, is_inchikey
 
 SOURCE_NAME = "PubChem Compound"
@@ -103,7 +103,7 @@ def write_name(
     retrieved_at: datetime,
     dry_run: bool,
 ) -> RowOutcome:
-    """Store ``name`` (as given) on ``species`` as an offline import, or say why not on ``out``.
+    """Store ``name`` (whitespace collapsed, as the curator route does) on ``species`` as an offline import, or say why not on ``out``.
 
     Skips a merged species and a name the species already holds, live or retired. The insert runs in a savepoint, so
     a species merged since it was read is reported as ``species_merged``.
@@ -127,7 +127,7 @@ def write_name(
             session.add(
                 SpeciesName(
                     species_id=species.id,
-                    name=name,
+                    name=display_name(name),
                     name_key=name_key,
                     kind=kind,
                     source_kind=SpeciesNameSourceKind.offline_import,
