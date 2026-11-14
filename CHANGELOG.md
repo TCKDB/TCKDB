@@ -28,6 +28,12 @@ dataset must never require a code release.
 - **Schema and migration:** revision `a7c3e1f5b942` adds `species_name.retired_by_user_id` (nullable, references `app_user`) and a check that a retirer is set only on a retired name; the column is null when the name is live or no retirer is recorded. No new environment variable.
 - **Versions:** `tckdb-client` 0.208.0 (two rejection codes, two parity-ledger rows, schemas requirement widened); `tckdb-schemas` 0.175.0.
 
+## Code comments, docstrings and test text describe behaviour only (Unreleased)
+
+- **Behaviour:** none. Comments, docstrings, fixture notes and the rubric pin ledger in `backend/app`, `backend/tests` and `frontend/src` state current behaviour without issue, pull-request, design-record or phase references; frontend test accounts use a neutral name.
+- **Schema and migration:** none. No new environment variable.
+- **Versions:** no package version changes.
+
 ## Script help, test names and site text describe behaviour only (Unreleased)
 
 - **Behaviour:** script `--help` and printed text, test names and assertion messages, and site wording state current behaviour without design-record, issue or date references. `backend/scripts/bulk_load_arc.py` takes its source directory from `--src` or the new `TCKDB_ARC_RUNS_DIR` environment variable and exits 2 naming both when neither is set. A review stamped with version 0 reads "(no version recorded)".

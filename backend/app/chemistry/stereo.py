@@ -195,7 +195,7 @@ _ALLENE_DEPENDENT = "allene_dependent"
 #: Chain elements (anchored at the two chain ends, read from geometry only).
 _CHAIN_KINDS = frozenset({_AXIAL, _CUMULENE})
 #: A cyclic allene in a ring of at most this size is never read: no QM geometry has been checked for it (a ring of
-#: four or five atoms may not even have the allene as a minimum). Rings of 6, 7 and 8 are read (#832).
+#: four or five atoms may not even have the allene as a minimum). Rings of 6, 7 and 8 are read.
 _SMALL_RING_MAX = 5
 #: Allene: the end-to-end torsion between the CIP-higher substituents must lie in [10, 170] degrees (ideal 90).
 #:

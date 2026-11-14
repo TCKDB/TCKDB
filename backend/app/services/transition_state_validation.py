@@ -136,7 +136,7 @@ _TOLERANCE_FLOAT_SLACK = 1e-12
 
 #: The calculation types an ``energy_ordering`` energy may be taken from, by
 #: ``energy_kind``: the table the network energy-source rule reads too
-#: (:mod:`app.services.energy_source_types`, #669). An electronic energy is what an
+#: (:mod:`app.services.energy_source_types`). An electronic energy is what an
 #: ``sp`` reports, an ``opt`` ends on or a ``composite`` stores. An E0 includes the
 #: zero-point energy, which a ``freq`` calculation carries (a ``composite`` stores
 #: an E0 of its own), so the E0 is cited to the ``freq`` it came from. A record that

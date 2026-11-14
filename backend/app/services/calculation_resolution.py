@@ -154,17 +154,17 @@ def _level_of_theory_hash(ref: LevelOfTheoryRef) -> str:
     """Compute the canonical level-of-theory hash used for dedupe.
 
     Basis-set names enter the hash through
-    :func:`~app.chemistry.basis_set_names.basis_identity_key` (issue #574),
+    :func:`~app.chemistry.basis_set_names.basis_identity_key`,
     so ``def2-tzvp`` and ``Def2TZVP`` are one level of theory, and the method
-    through :func:`~app.chemistry.method_names.method_identity_key` (issue
-    #585, with the curated aliases of #618), so ``CCSD(T)-F12`` and
+    through :func:`~app.chemistry.method_names.method_identity_key` (with its
+    curated aliases), so ``CCSD(T)-F12`` and
     ``ccsd(t)-f12`` are too, and so are ``wb97x-d`` and ``wb97xd``. Dispersion,
     solvent and solvent-model names go through
-    :func:`~app.chemistry.lot_component_names.component_identity_key` (issue
-    #602), so ``D3BJ`` and ``d3bj`` are one. The dispersion column has its own
+    :func:`~app.chemistry.lot_component_names.component_identity_key`, so ``D3BJ`` and ``d3bj`` are one. The
+    dispersion column has its own
     curated aliases (``gd3bj``, ``EmpiricalDispersion=GD3BJ``), and a
     recognised dispersion folded into the method (``b3lyp-d3bj``) moves into
-    the dispersion key (issue #630, :func:`~app.chemistry.dispersion_names.level_identity_keys`).
+    the dispersion key (:func:`~app.chemistry.dispersion_names.level_identity_keys`).
     The row still stores every name verbatim. There is no free-text ``keywords`` in the identity: the four method
     qualifiers (core treatment, relativistic Hamiltonian, PNO truncation, RI approximation) join it only when stated.
 
@@ -354,9 +354,9 @@ def resolve_level_of_theory_ref(
                 select(LevelOfTheory).where(LevelOfTheory.lot_hash == lot_hash)
             )
 
-    # A merged row keeps its old hash so its ref still resolves (#574). If a
+    # A merged row keeps its old hash so its ref still resolves. If a
     # spelling ever hashes to one, the calculation belongs on the row it was
-    # merged into: the database refuses a calculation on a merged row (#591).
+    # merged into: the database refuses a calculation on a merged row.
     kept_id = session.scalar(
         select(LevelOfTheoryMerge.into_lot_id).where(
             LevelOfTheoryMerge.merged_lot_id == level_of_theory.id
@@ -440,7 +440,7 @@ def resolve_execution_environment_manifest(
     )
 
 
-#: A calculation's ``software_release`` named a workflow tool (issue #305).
+#: A calculation's ``software_release`` named a workflow tool.
 E_CALCULATION_SOFTWARE_IS_WORKFLOW_TOOL = "calculation_software_is_workflow_tool"
 
 
@@ -838,7 +838,7 @@ def banner_supplies_missing_version(
 
 
 # ---------------------------------------------------------------------------
-# Converged-optimisation energy guard (issue #292)
+# Converged-optimisation energy guard
 # ---------------------------------------------------------------------------
 #
 # Convergence is a statement about successive energies -- an optimiser
@@ -967,8 +967,7 @@ def collect_converged_opt_energy_warnings(
     calculation_ids: Iterable[int],
 ) -> list[UploadWarning]:
     """Warn on any converged ``opt`` among ``calculation_ids`` that has no
-    usable energy -- see the module-level note above for the rule and the
-    #292 history.
+    usable energy -- see the module-level note above for the rule.
 
     Intended to run once a request's calculations (and, for bundle
     uploads, its inline artifacts) are all flushed -- callers pass every
@@ -977,10 +976,9 @@ def collect_converged_opt_energy_warnings(
     state, so a single-point calculation or artifact deposited earlier in
     the *same* request already counts.
 
-    **Never refuses.** A blocking check on this shape broke real ARC
-    ingestion earlier (#315's first version, since reverted for the same
-    reason); the DB owner was explicit that a bare, unevidenced number is
-    "not the end all be all" and refusal here would be "too harsh". All
+    **Never refuses.** A bare, unevidenced number is not proof that the energy is
+    unusable, so this guard only warns; a blocking check on this shape would
+    refuse real ARC ingestion. All
     52 historical rows this guard was written for satisfy branch (a) --
     this bites only a future deposit with neither an sp nor an evidenced
     opt energy, which is the genuinely unusable case.
@@ -1507,7 +1505,7 @@ def persist_calculation_result(
         hess_geom = resolve_geometry_payload(session, hess.geometry)
         # A Hessian is read back with masses taken from this geometry
         # (``hessian_reanalysis``), so a wrong element or isotope here would
-        # yield wrong frequencies with no refusal (#680).
+        # yield wrong frequencies with no refusal.
         assert_calculation_geometry_composition(
             session,
             calc=calculation,
@@ -2211,7 +2209,7 @@ def attach_calculation_output_geometries(
     by construction; any other type's output role would be a guess.
 
     One exception, for a bundle's conformer primary when the conformer's
-    geometry is a single atom (``is_single_atom_primary``, #610): an atom
+    geometry is a single atom (``is_single_atom_primary``): an atom
     has no geometry to optimise, so its honest primary is an ``sp``, and
     that ``sp`` is the only calculation that could carry the conformer's
     geometry. Without the link the conformer reads back with no geometry at
@@ -2339,8 +2337,8 @@ def resolve_and_persist_calculation_with_results(
         software_release=calc_upload.software_release,
     )
     # The citation arrives as an inline fragment, never as a row id: a
-    # depositor knows their paper's DOI, not our ``literature.id`` (#194,
-    # .claude/rules/schema-rules.md). This is the single place it is
+    # depositor knows their paper's DOI, not our ``literature.id`` (the
+    # schema rules). This is the single place it is
     # resolved — every upload root that persists a calculation comes
     # through here, so putting the resolution at any earlier seam would
     # mean doing it once per caller and getting it wrong in one of them,

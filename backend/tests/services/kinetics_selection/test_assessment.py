@@ -1,6 +1,6 @@
 """The kinetics applicability assessor: an unstated fact is unknown, never a default.
 
-Every adversarial case from the council's list is one row: a record that differs from the
+Every adversarial case is one row: a record that differs from the
 fully-qualifying baseline in one fact (or a request that asks a different question), the verdict,
 and the reason that must appear. The headline property is the first test: removing a statement
 never *improves* a verdict.

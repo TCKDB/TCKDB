@@ -77,7 +77,7 @@ def snapshot(row, relationships=(), *, exclude=frozenset()):
 
 
 #: Thermo columns no consistency check reads, kept out of the context hash so a
-#: stored review stays current when one is added (#619). ``energy_level_of_theory_id``
+#: stored review stays current when one is added. ``energy_level_of_theory_id``
 #: is a depositor's declaration; D1-D6 and the external Cp comparison never use it.
 #: The target and protocol declarations (H298 selection) are the same kind of claim and
 #: are excluded the same way. They stay in the reproducibility-assessment snapshot

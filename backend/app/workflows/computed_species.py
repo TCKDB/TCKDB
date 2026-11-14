@@ -423,7 +423,7 @@ def persist_computed_species_upload(
         # and all other types now produce zero output_geometry rows
         # unless the producer declares them explicitly. Bundle's primary
         # calc is type=opt, so this fallback fires for the primary slot,
-        # except for a one-atom conformer (#610), whose primary may be an
+        # except for a one-atom conformer, whose primary may be an
         # sp; ``is_single_atom_primary`` gives that sp the same final
         # output link, so the atom's geometry is still reachable from the
         # conformer.
@@ -521,8 +521,8 @@ def persist_computed_species_upload(
             # Auto-edge to primary opt when the additional type maps to
             # a known dependency role (mirrors persist_additional_calculations).
             dep_role = _DEPENDENCY_ROLE_FOR_TYPE.get(additional_in.type)
-            # The guard fires for a one-atom conformer with an ``sp`` primary
-            # (#610): ``ConformerInBundle.validate_primary_is_opt`` admits
+            # The guard fires for a one-atom conformer with an ``sp`` primary:
+            # ``ConformerInBundle.validate_primary_is_opt`` admits
             # that shape, and the atom has no ``opt`` for a ``single_point_on``
             # edge to name. The additional calculation is stored and anchored
             # to the observation; only the inferred edge is skipped, and no
@@ -568,7 +568,7 @@ def persist_computed_species_upload(
 
         session.flush()
 
-        # Phase-1 geometry-identity validation. Best-effort: opt calcs
+        # Geometry-identity validation. Best-effort: opt calcs
         # only, skips when output geometry / SMILES is unavailable, and
         # never aborts the upload. A failed/warned result is recorded as
         # evidence; it does NOT gate persistence of the calculation.
@@ -827,7 +827,7 @@ def persist_computed_species_upload(
                         )
                     # Output logs also carry the program's version banner; a
                     # version the declared release lacked re-points the
-                    # calculation (#305 (c)). Once per calculation, so every log
+                    # calculation. Once per calculation, so every log
                     # is compared with the declared release.
                     software_warning = try_reconcile_software_from_output_uploads(
                         session, calc_row, calc_in.artifacts
@@ -912,7 +912,7 @@ def persist_computed_species_upload(
         )
 
         # One-atom species: is the electronic partition function and the
-        # spin-orbit energy actually there? (#609)
+        # spin-orbit energy actually there?
         upload_warnings.extend(
             collect_bundle_atomic_warnings(
                 species_entry=request.species_entry,
@@ -1005,7 +1005,7 @@ def persist_computed_species_upload(
     # Evaluated last, once every calculation *and* every inline artifact
     # in the bundle (step 6, above) is flushed — an opt and its sibling
     # sp, or an opt and its own artifact, can arrive as two calcs in the
-    # same bundle and both must already be visible here (#292).
+    # same bundle and both must already be visible here.
     bundle_calc_ids: list[int] = []
     for outcome in conformer_outcomes:
         bundle_calc_ids.append(outcome.primary_calculation.id)

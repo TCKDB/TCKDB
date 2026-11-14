@@ -86,12 +86,12 @@
     {
       "name": "computed_transition_state",
       "version": 2,
-      "reason": "curated linked-evidence visibility (ADR 0023): stored and exploratory verdicts are unchanged; curated read-time verdicts may change, because a curated read now supplies not-reviewed and under-review evidence to the grading, which it used to leave out"
+      "reason": "curated linked-evidence visibility: stored and exploratory verdicts are unchanged; curated read-time verdicts may change, because a curated read now supplies not-reviewed and under-review evidence to the grading, which it used to leave out"
     },
     {
       "name": "computed_transition_state",
       "version": 2,
-      "reason": "curated matching follows the evidence rule (ADR 0023 step 4); stored and exploratory verdicts unchanged, curated read-time verdicts may change"
+      "reason": "curated matching follows the evidence rule; stored and exploratory verdicts unchanged, curated read-time verdicts may change"
     },
     {
       "name": "computed_transition_state",
@@ -101,17 +101,17 @@
     {
       "name": "computed_kinetics",
       "version": 1,
-      "reason": "ADR 0023 step 5: the trust checklist and the scoped structure assessment read a returned record's linked calculations by the evidence rule (only rejected and deprecated are withheld; an unreviewed one is read) instead of the record floor. Stored and exploratory verdicts are unchanged; curated read-time verdicts may change."
+      "reason": "The trust checklist and the scoped structure assessment read a returned record's linked calculations by the evidence rule (only rejected and deprecated are withheld; an unreviewed one is read) instead of the record floor. Stored and exploratory verdicts are unchanged; curated read-time verdicts may change."
     },
     {
       "name": "computed_transition_state",
       "version": 2,
-      "reason": "ADR 0023 step 5: the trust checklist and the scoped structure assessment read a returned record's linked calculations by the evidence rule (only rejected and deprecated are withheld; an unreviewed one is read) instead of the record floor. Stored and exploratory verdicts are unchanged; curated read-time verdicts may change."
+      "reason": "The trust checklist and the scoped structure assessment read a returned record's linked calculations by the evidence rule (only rejected and deprecated are withheld; an unreviewed one is read) instead of the record floor. Stored and exploratory verdicts are unchanged; curated read-time verdicts may change."
     },
     {
       "name": "computed_transition_state",
       "version": 2,
-      "reason": "ADR 0023 step 5 review fixes: the structure loader (_scan_determinations, NormalizedDetermination) records a basin's conformer group and observation statuses apart, judges the group as a record and the observation as evidence, and excludes a basin unless every terminal status among them is lifted by the request. Stored and exploratory verdicts are unchanged under default settings; curated read-time verdicts may change."
+      "reason": "The structure loader (_scan_determinations, NormalizedDetermination) records a basin's conformer group and observation statuses apart, judges the group as a record and the observation as evidence, and excludes a basin unless every terminal status among them is lifted by the request. Stored and exploratory verdicts are unchanged under default settings; curated read-time verdicts may change."
     },
     {
       "name": "computed_transition_state",
@@ -126,47 +126,47 @@
     {
       "name": "computed_calculation",
       "version": 1,
-      "reason": "DR-0038 stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+      "reason": "Stereo identity changes no check or grading. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
     },
     {
       "name": "computed_kinetics",
       "version": 1,
-      "reason": "DR-0038 stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+      "reason": "Stereo identity changes no check or grading. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
     },
     {
       "name": "computed_statmech",
       "version": 1,
-      "reason": "DR-0038 stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+      "reason": "Stereo identity changes no check or grading. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
     },
     {
       "name": "computed_thermo",
       "version": 1,
-      "reason": "DR-0038 stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+      "reason": "Stereo identity changes no check or grading. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
     },
     {
       "name": "computed_transition_state",
       "version": 2,
-      "reason": "DR-0038 stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+      "reason": "Stereo identity changes no check or grading. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
     },
     {
       "name": "computed_transport",
       "version": 1,
-      "reason": "DR-0038 stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+      "reason": "Stereo identity changes no check or grading. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
     },
     {
       "name": "computed_ts_statmech",
       "version": 1,
-      "reason": "DR-0038 stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+      "reason": "Stereo identity changes no check or grading. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
     },
     {
       "name": "tckdb_reproducibility",
       "version": 1,
-      "reason": "DR-0038 stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+      "reason": "Stereo identity changes no check or grading. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
     },
     {
       "name": "tckdb_reproducibility_ts_statmech",
       "version": 1,
-      "reason": "DR-0038 stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+      "reason": "Stereo identity changes no check or grading. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
     },
     {
       "name": "computed_calculation",
@@ -216,17 +216,17 @@
     {
       "name": "computed_transition_state",
       "version": 2,
-      "reason": "The fingerprint reaches structure_selection/assessment.py:_minimum_support and tckdb_schemas.stationary_point.evaluate_species_entry_frequency, which changed for declared minima (ADR 0012 note, 2026-10-29). Transition-state grading cannot change: _minimum_support returns early with entry_kind_is_not_a_minimum for a transition-state subject, and evaluate_transition_state_frequency is untouched."
+      "reason": "The fingerprint reaches structure_selection/assessment.py:_minimum_support and tckdb_schemas.stationary_point.evaluate_species_entry_frequency, which changed for declared minima. Transition-state grading cannot change: _minimum_support returns early with entry_kind_is_not_a_minimum for a transition-state subject, and evaluate_transition_state_frequency is untouched."
     },
     {
       "name": "computed_transition_state",
       "version": 2,
-      "reason": "message/context only; StationaryPointFinding gains a context field and warn findings state their numbers in it; no check or grading change (#838)"
+      "reason": "message/context only; StationaryPointFinding gains a context field and warn findings state their numbers in it; no check or grading change"
     },
     {
       "name": "computed_transition_state",
       "version": 2,
-      "reason": "message/context only; TauResolution gains assumed_software, assumed_family and assumption_rule (the table's own tokens, carried for the warning sentence); tau value and basis are unchanged; paths quoted with !r in finding locations; no check or grading change (#838)"
+      "reason": "message/context only; TauResolution gains assumed_software, assumed_family and assumption_rule (the table's own tokens, carried for the warning sentence); tau value and basis are unchanged; paths quoted with !r in finding locations; no check or grading change"
     },
     {
       "name": "computed_calculation",

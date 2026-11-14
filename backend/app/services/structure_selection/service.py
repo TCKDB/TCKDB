@@ -139,7 +139,7 @@ def assess_entry_structures(
     scan = scan_population(session, entry_id=entry_id, request=request)
     excluded = _excluded_refs(session, scan)
     loaded = load_population(session, scan, request)
-    # The loader to engine seam (guard PR-3): a hidden ref in the captured facts (an observation's conformer group, a
+    # The loader to engine seam: a hidden ref in the captured facts (an observation's conformer group, a
     # dependency or witness calculation outside the population, a validation row's calculation) becomes a placeholder
     # token BEFORE any unit is assessed, decided, hashed or written to the manifest.
     loaded.subject, loaded.calculations, loaded.determinations = withhold_selection_facts(

@@ -1050,7 +1050,7 @@ def evaluate_loaded_transition_state_entry(
     ``child_dependencies`` (both directions), and the linked calcs along
     each dependency edge.
 
-    ``context`` is required and has no default (#723): it carries the scoped structure assessment and the declared
+    ``context`` is required and has no default: it carries the scoped structure assessment and the declared
     curvature pins the rubric reads, computed by the caller because runners never query. A caller that has no
     assessment to offer passes :func:`app.services.trust.ts_scoped.not_assessed_on_lists_context`, which says so out
     loud; it cannot fall back to the unscoped answer by omission.

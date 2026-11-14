@@ -1,4 +1,4 @@
-"""WP0 pilot scan script, driven against a synthetic archive this suite builds itself.
+"""Pilot scan script, driven against a synthetic archive this suite builds itself.
 
 Never touches the real 189 MB NIST archive or the network. A single seven-member ``.tgz`` is
 built in-process with hand-written, minimal ThermoML documents, each isolating one thing the
@@ -61,7 +61,7 @@ def _tag(local: str) -> str:
 
 # A single-component, ideal-gas Cp record with an eMethodName (enumerated, experimental), a
 # combined expanded uncertainty tied to a property-level coverage factor and level of confidence,
-# and a per-point pressure Variable (finding 2: pressure can be a Variable, not just a
+# and a per-point pressure Variable (pressure can be a Variable, not just a
 # Constraint). This is the one record the strict scan is expected to find.
 _METHANE_IDEAL_GAS_XML = f"""<?xml version="1.0" encoding="UTF-8"?>
 <DataReport xmlns="{_NS}">
@@ -298,9 +298,8 @@ _PREDICTION_XML = f"""<?xml version="1.0" encoding="UTF-8"?>
 """
 
 # Single-component, Ideal gas, an sMethodName (free-text) method -- experimental in the schema's
-# sense but explicitly excluded from the strict eMethodName-only candidate table per the WP0
-# brief. Catches mutation (f): counted in `skipped_free_method` but not actually excluded from
-# `candidates` / `playground_hit`, and verifies it DOES surface in the separate
+# sense but explicitly excluded from the strict eMethodName-only candidate table. Catches mutation (f): counted in `skipped_free_method` but not
+# actually excluded from `candidates` / `playground_hit`, and verifies it DOES surface in the separate
 # `free_method_ideal_gas_candidates` report.
 _SMETHOD_XML = f"""<?xml version="1.0" encoding="UTF-8"?>
 <DataReport xmlns="{_NS}">
@@ -480,9 +479,9 @@ _JOIN_DECOY_XML = f"""<?xml version="1.0" encoding="UTF-8"?>
 """
 
 # A compound with sStandardInChI but NO sStandardInChIKey element at all, matched by a qualifying
-# (single-component, target property, Ideal gas, eMethodName) block. Before finding 6's fix this
-# was silently dropped with no trace; now it must be counted in `compounds_without_inchikey` and
-# must not appear in `candidates` or `free_method_ideal_gas_candidates` (it has no key to key by).
+# (single-component, target property, Ideal gas, eMethodName) block. It must be counted in
+# `compounds_without_inchikey`, not silently dropped, and must not appear in `candidates` or
+# `free_method_ideal_gas_candidates` (it has no key to key by).
 _NO_INCHIKEY_XML = f"""<?xml version="1.0" encoding="UTF-8"?>
 <DataReport xmlns="{_NS}">
   <Version><nVersionMajor>2</nVersionMajor><nVersionMinor>0</nVersionMinor></Version>

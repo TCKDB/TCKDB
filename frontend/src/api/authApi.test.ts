@@ -10,9 +10,9 @@ afterAll(() => server.close())
 
 const meResponse = {
     id: 1,
-    username: "calvin",
-    email: "calvin@example.com",
-    full_name: "Calvin Pieters",
+    username: "ada",
+    email: "ada@example.com",
+    full_name: "Ada Example",
     role: "user",
     is_active: true,
 }
@@ -29,18 +29,18 @@ describe("login", () => {
         let sawCredentials: RequestCredentials | undefined
         server.use(http.post("/api/v1/auth/login", async ({ request }) => {
             sawCredentials = request.credentials
-            expect(await request.json()).toEqual({ username: "calvin", password: "correct-horse" })
+            expect(await request.json()).toEqual({ username: "ada", password: "correct-horse" })
             return HttpResponse.json(meResponse, { status: 200 })
         }))
-        await expect(login({ username: "calvin", password: "correct-horse" })).resolves.toEqual({
-            id: 1, username: "calvin", email: "calvin@example.com", full_name: "Calvin Pieters", role: "user", is_active: true,
+        await expect(login({ username: "ada", password: "correct-horse" })).resolves.toEqual({
+            id: 1, username: "ada", email: "ada@example.com", full_name: "Ada Example", role: "user", is_active: true,
         })
         expect(sawCredentials).toBe("include")
     })
 
     it("surfaces a 401 as an AuthApiError carrying the server's message", async () => {
         server.use(http.post("/api/v1/auth/login", () => HttpResponse.json({ detail: "Invalid username or password." }, { status: 401 })))
-        await expect(login({ username: "calvin", password: "wrong" })).rejects.toEqual(
+        await expect(login({ username: "ada", password: "wrong" })).rejects.toEqual(
             expect.objectContaining<Partial<AuthApiError>>({ status: 401, message: "Invalid username or password." }),
         )
     })
@@ -52,7 +52,7 @@ describe("register", () => {
             { code: "username_taken", detail: "username_taken: That username is already in use.", context: {} },
             { status: 409 },
         )))
-        await expect(register({ username: "calvin", password: "password123" })).rejects.toEqual(
+        await expect(register({ username: "ada", password: "password123" })).rejects.toEqual(
             expect.objectContaining<Partial<AuthApiError>>({
                 status: 409,
                 code: "username_taken",
@@ -66,7 +66,9 @@ describe("register", () => {
             { code: "email_taken", detail: "email_taken: That email address is already in use.", context: {} },
             { status: 409 },
         )))
-        await expect(register({ username: "calvin", password: "password123", email: "taken@example.com" })).rejects.toEqual(
+        await expect(register({
+            username: "ada", password: "password123", email: "taken@example.com",
+        })).rejects.toEqual(
             expect.objectContaining<Partial<AuthApiError>>({
                 status: 409,
                 code: "email_taken",
@@ -80,7 +82,7 @@ describe("fetchMe", () => {
     it("resolves the user on 200", async () => {
         server.use(http.get("/api/v1/auth/me", () => HttpResponse.json(meResponse)))
         await expect(fetchMe()).resolves.toEqual({
-            id: 1, username: "calvin", email: "calvin@example.com", full_name: "Calvin Pieters", role: "user", is_active: true,
+            id: 1, username: "ada", email: "ada@example.com", full_name: "Ada Example", role: "user", is_active: true,
         })
     })
 

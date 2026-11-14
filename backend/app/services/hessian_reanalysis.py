@@ -622,7 +622,7 @@ def _declares_isotope_under_protium(calc: Calculation, atoms: Sequence[GeometryA
     # The entry's declared isotopes, read through the one helper the upload
     # check uses (``isotope_key``, else the labels on a pre-#66 species SMILES),
     # so a legacy ``[2H][2H]`` entry with a NULL key is not judged protium here
-    # after the upload accepted a deuterated Hessian under it (#680).
+    # after the upload accepted a deuterated Hessian under it.
     declared = entry_isotope_counts(entry, entry.species)
     if declared is None or declared:
         return False

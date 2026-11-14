@@ -9,15 +9,13 @@ reports counts by class and expected outcome.
 
 ## The identity contract being tested
 
-- **Species** (`species`) is keyed on canonical SMILES + charge + multiplicity
-  (unpublished decision record DR-0031, not in the repository).
+- **Species** (`species`) is keyed on canonical SMILES + charge + multiplicity.
   The InChIKey is stored for lookup but is not the key, so tautomers that the
   standard InChIKey merges stay apart, and two spin states of one graph share
   an InChIKey while being two species. Multiplicity is authoritative over the
   radical count RDKit infers from a SMILES; the declared charge is validated
   against the formal charge summed from the SMILES.
-- **Stereo** is classified on the species (`stereo_kind`; unpublished
-  decision record DR-0018, not in the repository) and labelled on the entry
+- **Stereo** is classified on the species (`stereo_kind`) and labelled on the entry
   (`species_entry.stereo_label`), perceived from the deposited 3D geometry by
   `app.chemistry.species.derive_stereo_label_from_3d`. Only configuration
   (R/S, E/Z) is labelled; rotamers of one configuration share one entry.

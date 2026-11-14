@@ -423,7 +423,7 @@ describe("TableOfContents: active-section marking", () => {
         }
     })
 
-    // The gap the #328 "not scrollable at all" test left open: it clicks,
+    // The gap the "not scrollable at all" test left open: it clicks,
     // then fires scroll events on a page where `computeActive` bails out
     // early at the `maxScrollY <= BOTTOM_EPSILON_PX` guard, so the second
     // event is a no-op BY CONSTRUCTION and cannot fail regardless of the

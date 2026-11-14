@@ -243,7 +243,7 @@ def get_species_thermo(
 
     The species_entry_id path parameter is strictly ``species_entry.id``;
     ``species.id`` is rejected with 404. Sort: review_rank ASC, created_at
-    DESC, id DESC (#648; the order the exports list records in).
+    DESC, id DESC (the order the exports list records in).
     ``coverage_temperature_min_k`` / ``coverage_temperature_max_k`` do not filter and do not affect
     the order: they only fill each record's ``temperature_coverage`` field.
     Every matching record is returned; the read never picks one.
@@ -308,7 +308,7 @@ def get_species_thermo(
     points_by_thermo = _load_points(session, [t.id for t in thermo_rows])
     ga_by_thermo = _load_group_additivity(session, [t.id for t in thermo_rows])
     # Only the statmechs the thermo rows are LINKED to by ``thermo.statmech_id``
-    # are loaded. Never an entry-wide pick (#645): a thermo shows the statmech
+    # are loaded. Never an entry-wide pick: a thermo shows the statmech
     # and calculations it links to, nothing else. A record with no link has no
     # statmech provenance and no statmech evidence.
     linked_statmech_ids = {
@@ -458,7 +458,7 @@ def get_species_thermo(
     # can possibly land on (same id set as calc_meta/calc_refs above).
     conformer_links = _conformer_links(session, all_source_calc_ids)
 
-    # Thermo's OWN software/workflow-tool provenance (issue #284): bulk-load
+    # Thermo's OWN software/workflow-tool provenance: bulk-load
     # by the thermo rows' own FKs, completely independent of any calc's
     # software. A record with neither FK set surfaces both as null — never
     # backfilled from a calculation.
@@ -477,9 +477,9 @@ def get_species_thermo(
         session, thermo_workflow_tool_release_ids
     )
 
-    # The declared energy level (#619): the thermo's own stored declaration,
+    # The declared energy level: the thermo's own stored declaration,
     # else its linked statmech's, the same inheritance the derived levels
-    # use (#636). Bulk-loaded for the whole page.
+    # use. Bulk-loaded for the whole page.
     statmech_declared_lot_ids = dict(
         session.execute(
             select(Statmech.id, Statmech.energy_level_of_theory_id).where(
@@ -513,7 +513,7 @@ def get_species_thermo(
     for t, model_kind in classified:
         sources = sources_by_thermo.get(t.id, [])
 
-        # Per-record statmech: ONLY the record's own ``statmech_id`` link (#645).
+        # Per-record statmech: ONLY the record's own ``statmech_id`` link.
         # No entry-wide fallback; an unlinked record has no statmech sources.
         record_statmech_id = t.statmech_id
         record_statmech_sources = (
@@ -588,7 +588,7 @@ def get_species_thermo(
             conformer_links=conformer_links,
             withheld_calc_ids=withheld_calc_ids,
         )
-        # Derived levels (#636): the record's own source calculations, then
+        # Derived levels: the record's own source calculations, then
         # (per role) the statmech it is LINKED to by ``thermo.statmech_id``.
         # An unlinked thermo with no source calculations has no levels (null).
         own_statmech_sources = record_statmech_sources
@@ -709,7 +709,7 @@ def get_species_thermo(
 
     summary = review_summary(badges[t.id] for t, _ in classified)
 
-    # L3 thermo sort (#648): review status, then newest, then id -- the same order the native, CHEMKIN and ML
+    # L3 thermo sort: review status, then newest, then id -- the same order the native, CHEMKIN and ML
     # exports list records in, so the read and an export cannot list different records first (display order,
     # never a preference; nothing is picked).
     #
@@ -920,7 +920,7 @@ def _load_statmech_sources_grouped(
     Each thermo record resolves its statmech basis PER RECORD from its own
     ``thermo.statmech_id``; the caller borrows the freq / SP / opt source
     calcs from that exact statmech (never an entry-wide pick; a record with
-    no link borrows nothing, #645). This helper fetches the
+    no link borrows nothing). This helper fetches the
     ``StatmechSourceCalculation`` rows for the requested statmech ids in a
     single grouped ``SELECT`` and buckets them by ``statmech_id``.
 
@@ -1117,7 +1117,7 @@ def _load_software_release_summaries(
 
     Distinct from ``_calc_lot_meta``, which projects a *calculation's*
     software. This loader is keyed by ``thermo.software_release_id``
-    values and feeds ``ThermoProvenance.software_release`` — issue #284.
+    values and feeds ``ThermoProvenance.software_release``.
     """
     if not software_release_ids:
         return {}
@@ -1285,7 +1285,7 @@ def _build_provenance(
     coming back uniformly ``null``.
 
     ``statmech_id`` is the record's own ``thermo.statmech_id`` FK, or None
-    when it has none (#645: never an entry-wide pick). ``statmech_sources``
+    when it has none (never an entry-wide pick). ``statmech_sources``
     are that same statmech's source calcs (empty when unlinked) — so the
     surfaced ``statmech_ref`` and the statmech-derived source calcs always
     come from the one statmech the record actually links to.
@@ -1294,7 +1294,7 @@ def _build_provenance(
     software/tool provenance, already resolved by the caller from
     ``thermo.software_release_id`` / ``thermo.workflow_tool_release_id``
     (bulk-loaded — never touched here, never substituted with the
-    calculation's). This is the issue #284 fix: the two must never be
+    calculation's). The two must never be
     conflated, in either direction.
 
     ``conformer_links`` maps calculation id -> conformer link tuple (see
@@ -1634,7 +1634,7 @@ def _evidence_breakdown(
     win when present; the rows of the statmech the record is LINKED to
     (``thermo.statmech_id``) fill the roles it lacks. A record with no
     link counts only its own sources and ``has_statmech_source`` is false
-    (#645: never borrow). The predicate names and ``max`` are unchanged.
+    (never borrow). The predicate names and ``max`` are unchanged.
     """
     # Evidence rule: the role targets are chosen from EVERY link, then a withheld target is dropped; a role is
     # never filled from another link because the first was withheld. The role flags count the links that are shown.

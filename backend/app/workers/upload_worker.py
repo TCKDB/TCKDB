@@ -179,7 +179,7 @@ class _LeaseHeartbeat:
 #
 # Every handler reports the warnings the direct ``POST /uploads/<kind>`` route
 # would return for the same record, under ``result["warnings"]`` and in the
-# same order (#647). Each builds its own fresh list on every call, so a retry
+# same order. Each builds its own fresh list on every call, so a retry
 # after a rolled-back attempt starts from nothing and cannot double a warning.
 # The structural guard in tests/workers/test_upload_worker_warnings.py fails if
 # a handler calls a ``persist_*`` workflow that accepts a warnings sink without
@@ -200,7 +200,7 @@ def _request_warnings(job: UploadJob, derive, request) -> list[UploadWarning]:
 
     Read from the job when enqueue recorded them: they were derived from the
     request as sent, and re-deriving from the stored payload loses any warning
-    about a field the first parse rewrote (#670). A job enqueued before they
+    about a field the first parse rewrote. A job enqueued before they
     were recorded (``NULL``) falls back to deriving them from its payload.
     """
     if job.request_warnings is None:

@@ -1,4 +1,4 @@
-"""Find the relabelling that lays one geometry onto another (#679).
+"""Find the relabelling that lays one geometry onto another.
 
 Two geometries can be one structure moved rigidly *and* listed with their atoms
 in a different order. :func:`find_matching_permutation` looks for a
@@ -90,7 +90,7 @@ MAX_WORK_PER_RECORD = 50_000_000
 
 #: Work units a whole record may spend on same-order Kabsch comparisons, kept apart from the
 #: relabelling search's budget so that a record full of mirror-image searches cannot starve the
-#: cheap test that catches a moved copy listed in the same order (#692).
+#: cheap test that catches a moved copy listed in the same order.
 MAX_SAME_ORDER_WORK_PER_RECORD = 50_000_000
 
 

@@ -4,8 +4,7 @@ Covers:
 
 - ``GET /api/v1/scientific/network-kinetics/{ref}/evaluate``
 
-Evaluation happens server-side, not in the browser (owner ruling, see
-``docs/plans/pressure-dependent-network-surface.md`` §2.4): the frontend
+Evaluation happens server-side, not in the browser: the frontend
 has no Chebyshev/PLOG math to build on, the formulas are easy to get
 subtly wrong, and a wrong evaluation publishes a rate coefficient that
 looks entirely plausible. The math itself lives in

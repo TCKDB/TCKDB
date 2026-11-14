@@ -3,7 +3,7 @@
 Why this exists
 ---------------
 SeaweedFS answers a full store with ``InternalError`` at HTTP 500, the same
-code it gives any internal fault (measured against 4.47, #541). The S3 answer
+code it gives any internal fault (measured against 4.47). The S3 answer
 alone therefore cannot say "full", so :mod:`app.services.artifact_storage`
 leaves ``InternalError`` unclassified. This module is the second opinion the
 write path asks for **after** a write was refused, and the number the
@@ -113,7 +113,7 @@ Two facts about the numbers, and the second is a chosen approximation.
 size, so ``Available`` can read 0 while the bucket is still writable. The
 window is **not** about 60 s: deleted objects keep their bytes in the volume
 until it is vacuumed, and ``weed mini`` does not vacuum a volume under 30 %
-garbage. Measured by the reviewer of #594: over five minutes of
+garbage. Measured over five minutes of
 ``Available 0`` while 1 MiB writes succeeded (logical 38.3 MB, gross 46.2 MB,
 quota 41.9 MB). So a bucket that is near its quota by gross size after
 deletions can read as full for as long as that lasts, and any real

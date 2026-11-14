@@ -81,8 +81,8 @@ class ConformerUploadOutcome:
         default_factory=list
     )
     #: Non-blocking warnings raised while persisting this conformer's
-    #: calculations -- currently only the converged-opt-energy guard
-    #: (issue #292); see :func:`collect_converged_opt_energy_warnings`.
+    #: calculations -- currently only the converged-opt-energy guard;
+    #: see :func:`collect_converged_opt_energy_warnings`.
     warnings: list[UploadWarning] = field(default_factory=list)
 
 
@@ -140,7 +140,7 @@ def persist_conformer_upload(
         # into a 422 body.
         context=f"primary calculation (type='{calculation.type.value}')",
         # A one-atom conformer's sp primary carries the atom as its final
-        # geometry, as on the bundle routes (#610).
+        # geometry, as on the bundle routes.
         is_single_atom_primary=geometry.natoms == 1,
         # A named composite method's own optimisation produced the geometry.
         is_conformer_primary=True,

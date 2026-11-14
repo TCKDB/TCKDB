@@ -136,7 +136,7 @@ def qualify_target(
         calculations: tuple[NormalizedCalculation, ...] = ()
     else:
         loaded = load_population(session, scan, request)
-        # The loader to engine seam (guard PR-3): a hidden ref in the captured facts (a declared or anchoring conformer
+        # The loader to engine seam: a hidden ref in the captured facts (a declared or anchoring conformer
         # group, a supersession notice, a calculation's own conformer group) becomes a placeholder token BEFORE any
         # candidate is assessed, decided or written to the manifest.
         loaded.subject, loaded.candidates, loaded.calculations = withhold_selection_facts(

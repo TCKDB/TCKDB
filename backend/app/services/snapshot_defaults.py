@@ -22,7 +22,7 @@ from typing import Any
 #: ``(table, column) -> the value every row had before the column existed``.
 UNCHANGED_DEFAULTS: dict[tuple[str, str], Any] = {
     # kinetics.t0_k: a rate stored before the column existed was A * T**n,
-    # which is T0 = 1 K (#620).
+    # which is T0 = 1 K.
     ("kinetics", "t0_k"): 1.0,
     # level_of_theory.core_treatment: a level stored before the column existed
     # did not state it, which is NULL, and a NULL is not part of its hash

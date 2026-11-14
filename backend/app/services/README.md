@@ -25,7 +25,7 @@ these; services never call routes. ~39 top-level modules + 4 subpackages.
   `hessian_extraction`, `calculation_parameter_extraction`. All are
   banner-sniff dispatched per program, never fail an upload, and stay
   silent when the log cannot be parsed — an absence is not a
-  contradiction (ADR 0008).
+  contradiction.
 - **`record_review.py`** — the human review state machine + `apply_review_policy()`.
 
 ## Subpackages (curation & reads)

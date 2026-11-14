@@ -382,7 +382,7 @@ def test_wrong_owner_source_calc_rejected_by_workflow_check(db_conn) -> None:
 
 
 def test_bundle_transport_refuses_a_calculation_of_another_entry(db_conn) -> None:
-    """The bundle seam enforces the same owner rule, with transport's own code.
+    """The bundle seam enforces the same ownership rule, with transport's own code.
 
     The bundle request schemas refuse this first, with a generic message, so
     the coded guard is provoked here with no schema in front of it.

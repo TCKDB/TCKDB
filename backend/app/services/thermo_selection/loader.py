@@ -7,7 +7,7 @@ Two steps, so a population that is too large is refused before anything heavy is
 2. :func:`load_population` loads that population with the same eager-load graph the evidence
    evaluation needs and normalises each record.
 
-The never-borrow rule (#645/#646) governs what is read. A thermo record's evidence is what
+The never-borrow rule governs what is read. A thermo record's evidence is what
 it links: its own columns, its own declared energy level of theory, its own source
 calculations. Nothing is taken from a sibling record of the same species entry, from an
 entry-wide pick, or from the energy corrections attached to the species entry (which are not

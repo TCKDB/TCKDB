@@ -77,7 +77,7 @@ def normalize_isbn(isbn: str | None) -> str | None:
 # In-process metadata cache
 # ---------------------------------------------------------------------------
 #
-# A bundle dry run rehearses submit (#577), so without a cache every dry run
+# A bundle dry run rehearses submit, so without a cache every dry run
 # of a bundle citing a new DOI repeated the same Crossref request -- and made
 # it while holding the rehearsal's row locks. The cache holds only what the
 # provider returned (no database ids, nothing instance-specific), keyed on
@@ -85,7 +85,7 @@ def normalize_isbn(isbn: str | None) -> str | None:
 # upstream is seen within the TTL. A failed or empty lookup is *not* cached
 # for other callers: the next one retries it, exactly as before.
 #
-# One narrow exception (#592 item 4), scoped to a single request. The bundle
+# One narrow exception, scoped to a single request. The bundle
 # dry run wraps its prefetch and its rehearsal in :func:`failure_scope`. A
 # lookup that fails inside that scope is remembered *for that scope only*, so
 # the rehearsal's own lookup -- made while it holds row locks, and able to

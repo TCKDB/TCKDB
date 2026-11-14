@@ -21,9 +21,9 @@ Two sets, never one
 
 What it does, and refuses to do
 -------------------------------
-It only ever **deletes or blanks**. It never picks another record to fill a gap (the substitution bug
-fixed in #767), because it runs after every service has made its picks and can only subtract from what they
-produced. It does nothing under the default (exploratory) profile.
+It only ever **deletes or blanks**. It never picks another record to fill a gap (a visible sibling would be
+published as though linked), because it runs after every service has made its
+picks and can only subtract from what they produced. It does nothing under the default (exploratory) profile.
 
 How a withheld ref is removed (:func:`withhold_in_model`)
 -------------------------------------------------------
@@ -279,8 +279,8 @@ _REF_IN_TEXT = re.compile("(?<![a-z0-9])(?:" + _GATED_PREFIX_ALT + ")_[a-z0-9]{2
 #: record is hidden the whole block goes, including facts it carries about the hidden record. The visible
 #: record's own facts live elsewhere and stay.
 #:
-#: Seeded with the blocks that #764, #765 and #767 already hid by hand (their per-surface tests pin the
-#: shape). Each family PR registers its own.
+#: Seeded with the blocks already hidden by hand (their per-surface tests pin the
+#: shape). Each family registers its own.
 POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
     {
         StatmechSourceCalculationSummary,
@@ -291,7 +291,7 @@ POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
         CalculationEvidenceSummary,
         # The settings behind a thermo or statmech level: a block about the linked calculation.
         RoleCalculationSettings,
-        # PR-2a: the species-side family.
+        # The species-side family.
         StatmechTransitionStateContext,
         CalculationCompositeInputSummary,
         CalculationConformerSummary,
@@ -311,9 +311,9 @@ POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
         TransportSourceCalculationSummary,
         # A visible observation whose conformer group is hidden stays visible with the group
         # block blanked. Registering the block is what lets the guard blank it; widening the field alone is not
-        # enough (design note, "Correction from the #770 review").
+        # enough.
         ConformerGroupCoreBlock,
-        # PR-2b: the transition-state, reaction-entry (/full) and kinetics families.
+        # The transition-state, reaction-entry (/full) and kinetics families.
         #
         # A visible TS entry whose transition state is hidden stays visible with the owner block
         # blanked. Registering the block is what lets the guard blank it; widening the field alone is not enough.
@@ -346,10 +346,10 @@ POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
         ValidationSummary,
         SCFStabilitySummary,
         StoredKineticsProtocolCalculationRef,
-        # #723: one assessed declared target in the transition-state trust fragment. A unit's subject is the
+        # One assessed declared target in the transition-state trust fragment. A unit's subject is the
         # declaration, so a hidden ref drops the whole unit instead of raising on a read.
         TransitionStateScopedAssessmentUnit,
-        # PR-2c: the network, provenance (level of theory, corrections, literature) and analytics families.
+        # The network, provenance (level of theory, corrections, literature) and analytics families.
         #
         # A visible solve (or fit) whose network is hidden stays visible with the network block
         # blanked. Registering each owner block is what lets the guard blank it; widening the field alone is not enough.
@@ -631,7 +631,7 @@ class WithholdReport:
     #: Document mode only: the withheld copy of the facts passed in (the input is never modified).
     facts: Any = None
     #: Document mode only: ``hidden ref -> token`` for the modes that replace a ref by a stand-in. Always empty in
-    #: ``"null"`` mode (guard PR-3 fills it in ``"placeholder"`` mode).
+    #: ``"null"`` mode (``"placeholder"`` mode fills it).
     tokens: dict[str, str] = field(default_factory=dict)
     #: Document mode only: the sites where free text was blanked whole (a subset of ``sites``).
     blanked: list[WithheldSite] = field(default_factory=list)
@@ -1206,8 +1206,8 @@ def withhold_in_document(
 ) -> WithholdReport:
     """Withhold every ref the profile hides from plain documents, returning a withheld COPY.
 
-    For documents that are not response models: the export streams' records (guard PR-4) and the selection documents
-    (guard PR-3). ``facts`` is a list of plain dicts; it is **not** modified. The withheld copy is
+    For documents that are not response models: the export streams' records and the selection documents.
+    ``facts`` is a list of plain dicts; it is **not** modified. The withheld copy is
     ``report.facts`` (same order, same length), and a caller must use it: ignoring the return value withholds
     nothing. The report also carries ``tokens`` (always empty in ``"null"`` mode) and ``blanked`` (the free-text sites
     that were blanked whole). ``session`` is the leading positional argument and is always passed explicitly: the
@@ -1219,7 +1219,7 @@ def withhold_in_document(
 
     - ``"null"`` (exports): a ref that is a *value* becomes ``None``; a ref that is a string *element of a list* is
       dropped from the list.
-    - ``"placeholder"`` (selection documents, PR-3): ``facts`` is whatever plain data a loader captured (frozen
+    - ``"placeholder"`` (selection documents): ``facts`` is whatever plain data a loader captured (frozen
       dataclasses, tuples, dicts, lists, strings, nested), not only dicts, and is never mutated: the withheld copy shares
       every subtree that held no hidden ref and is the very object passed in when nothing is hidden. A ref that is a whole
       string value, or a dict key, becomes its token ``withheld:<n>``; ``n`` follows the **sorted order of the real refs**,
@@ -1231,13 +1231,13 @@ def withhold_in_document(
       invalidation is the visible record's own claim about itself. The walker builds new immutable structures rather
       than planning in-place actions, so it does not use the typed planner below.
 
-    Rules every mode shares, so PR-3 inherits them:
+    Rules every mode shares:
 
     - **Dict key.** A ref used as a dict key has nowhere to go. In ``"null"`` mode it fails closed
       (:class:`RefGuardUnplaceable`); ``"placeholder"`` mode defines its own rule.
     - **Free text.** A string that merely names a hidden ref anywhere in it (a note, a label, a file name, a URL) is
       blanked whole (never token by token: what was removed would show), and in a list the element is dropped. Text
-      whose percent-encoding never settles is blanked too. The blanking rule is the one PR-2a set for typed models:
+      whose percent-encoding never settles is blanked too. The blanking rule is the one typed models use:
       ``None`` when the field is nullable, ``""`` when it is a required ``str``. Untyped documents such as the
       exports carry no type information, so they always get ``None``.
     - **Unknown refs.** A gated-looking ref that names no row is treated as hidden (``unknown_is_hidden``): hidden

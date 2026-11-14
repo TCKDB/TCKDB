@@ -833,7 +833,7 @@ def browse_species(
         Species.id,
     ).subquery("candidate_species")
 
-    # #277 (see the docstring above): always drop a candidate species that
+    # See the docstring above: always drop a candidate species that
     # has entries but none currently visible, unconditionally -- not just
     # when a specific request field triggered it.
     total = _browse_visible_species_total(
@@ -1026,7 +1026,7 @@ def _validate_provenance_version_parents(request: SpeciesBrowseRequest) -> None:
     unscoped version filter would match calculations run with any of
     them, not the one package the caller has in mind. Mirrors
     ``/meta/software-versions`` / ``/meta/workflow-tool-versions``
-    (``missing_version_parent``, #304) rather than inventing a second
+    (``missing_version_parent``) rather than inventing a second
     way to say the same thing — see
     :class:`~app.schemas.reads.scientific_species.SpeciesBrowseRequest`
     for the full rationale, including why this is stricter than
@@ -1248,13 +1248,11 @@ def _rank_and_slice_species(
 
         Size leads; review status does not disappear, it becomes the
         tiebreak among same-sized species (still ``best_rank ASC`` next in
-        line) rather than the other way around. The owner's request was
-        explicit -- "smallest first ... ending with the largest at the
-        end" -- and putting ``best_rank`` ahead of size would not deliver
-        that: a large *approved* species would still sort before a small
+        line) rather than the other way around. The ordering is smallest
+        first, ending with the largest, and putting ``best_rank`` ahead of
+        size would not deliver that: a large *approved* species would still sort before a small
         *unreviewed* one. Demoting review status to a tiebreak keeps it
-        meaningful (it still decides ties) without breaking the ordering
-        the owner asked for.
+        meaningful (it still decides ties) without breaking that ordering.
 
         A species whose SMILES the cartridge cannot parse gets a NULL
         ``heavy_atom_count`` (:func:`_heavy_atom_count_expr`'s documented
@@ -1302,10 +1300,9 @@ def _rank_and_slice_species(
         -- "CH3 exists but has no approved entries" is a defensible answer
         when the caller named CH3 by identifier). ``/species/browse``
         (:func:`browse_species`) always passes ``True`` unconditionally --
-        see its docstring for why an earlier version of this gated on which
-        request fields were set, and why that was wrong (issue #277
-        follow-up: review-profile-driven narrowing carries no request field
-        to key off of).
+        see its docstring for why gating on which request fields were set is
+        wrong: review-profile-driven narrowing carries no request field
+        to key off of.
     """
     stmt, review = _join_entries_and_reviews(
         select(candidates.c.id),
@@ -1358,12 +1355,11 @@ def _browse_visible_species_total(
     ``count(*) from candidates``, so ``pagination.total`` reports the
     species that survive the same "some entries but none visible get
     dropped; zero entries stays" rule :func:`_rank_and_slice_species`
-    applies with ``require_visible_entries=True`` — the defect reported as
-    issue #277 (``min_review_status=approved`` reporting the full
-    unfiltered species count as ``total`` while every returned record
-    carried an empty ``entries`` list; a later follow-up found the same
-    defect reachable through ``profile=curated``, which narrows visibility
-    with no request field to key a trigger on at all).
+    applies with ``require_visible_entries=True``. A bare count reports the full
+    unfiltered species count as ``total`` (``min_review_status=approved``)
+    while every returned record carries an empty ``entries`` list; the same
+    defect is reachable through ``profile=curated``, which narrows visibility
+    with no request field to key a trigger on at all.
 
     Built over :func:`_visible_rank_expr` and :func:`_has_any_entry_expr`,
     the same two expressions :func:`_rank_and_slice_species` groups,
@@ -1396,7 +1392,7 @@ def _record_hidden_entries(
     """Report how many entries of the candidate species the default visibility hid (one aggregate).
 
     A species has no review status of its own, so what the default hides is entries; a species whose entries are all
-    hidden drops out of the list (#277). The count is of entries, and says so (``counted``).
+    hidden drops out of the list. The count is of entries, and says so (``counted``).
     """
     statuses = excluded_by_default(
         include_rejected=request.include_rejected,

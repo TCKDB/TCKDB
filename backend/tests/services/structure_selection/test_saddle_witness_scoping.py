@@ -1,4 +1,4 @@
-"""Which curvature evidence speaks for a declared saddle: the paired scope cases the council asked for (J3).
+"""Which curvature evidence speaks for a declared saddle: the paired scope cases.
 
 Neither "the latest frequency result decides" nor "every attached frequency result must contradict" is chemically
 sufficient. What a saddle claim rests on is the frequency or Hessian evidence of its *declared target and role bundle*:

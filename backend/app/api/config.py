@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     paging_cursor_key: str | None = None
 
     # -----------------------------------------------------------------
-    # Hosted abuse-control settings (security phase 1).
+    # Hosted abuse-control settings.
     # See ``docs/specs/public_read_abuse_controls.md``.
     # -----------------------------------------------------------------
 
@@ -88,10 +88,10 @@ class Settings(BaseSettings):
     rate_limit_auth_read_per_minute: int = 300
     rate_limit_auth_write_per_minute: int = 30
     # ``bundle_dry_run`` -- ``POST /bundles/dry-run``, which rehearses a
-    # full submit (#584) and so costs the server as much as one. Its own
+    # full submit and so costs the server as much as one. Its own
     # bucket, tighter than ``auth_write``, so test runs neither spend the
     # allowance real uploads need nor let one credential run a full
-    # import's worth of work 30 times a minute (#586).
+    # import's worth of work 30 times a minute.
     rate_limit_bundle_dry_run_per_minute: int = 10
     rate_limit_anon_other_per_minute: int = 20
     # ``name_search`` -- ``GET /scientific/species/name-search``. Its own bucket (anonymous per IP, credentialed per
@@ -110,7 +110,7 @@ class Settings(BaseSettings):
     rate_limit_register_per_hour: int = 10
 
     # Caps on one contribution bundle, shared by ``/bundles/dry-run`` and
-    # ``/bundles/submit`` (#586). Measured on what the repo holds: the
+    # ``/bundles/submit``. Measured on what the repo holds: the
     # example bundles are 1.4 and 1.9 KB with one record each, and the
     # largest ARC run fixture (513 KB of output.yml, whole-run data most of
     # which a bundle never carries) has four species and one reaction. The
@@ -262,7 +262,7 @@ class Settings(BaseSettings):
     # client-name header are not blocked. Bump this when a coordinated
     # client/server change makes older clients incompatible. 0.97.0 is the
     # first client that addresses a calculation by its ``calc_`` ref; the
-    # artifact-upload and rights-attestation routes take refs only (#578).
+    # artifact-upload and rights-attestation routes take refs only.
     min_supported_tckdb_client_version: str = "0.97.0"
     enforce_tckdb_client_version_on_writes: bool = True
 

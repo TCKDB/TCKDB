@@ -1,11 +1,10 @@
 """Service implementation for
 ``POST /api/v1/scientific/networks/{ref}/kinetics/evaluate``.
 
-One surface here: network-scoped batch k(T,P) evaluation. PR 1 of
-``docs/plans/pressure-dependent-network-surface.md`` shipped per-record
-evaluation only (``GET /scientific/network-kinetics/{ref}/evaluate``,
-``app/services/scientific_read/network_kinetics.py``); the k(T,P) chart
-(PR 4) needs one chart for a whole network, and the plan requires one
+One surface here: network-scoped batch k(T,P) evaluation. The per-record
+evaluation (``GET /scientific/network-kinetics/{ref}/evaluate``,
+``app/services/scientific_read/network_kinetics.py``) covers one record only; the
+k(T,P) chart needs one chart for a whole network, and one
 request per page load. With 42 stored fits on the live network (21
 channels, every channel carrying both a Chebyshev and a PLOG fit), the
 per-record endpoint would mean 42 requests. This module is that batch

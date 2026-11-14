@@ -3,8 +3,8 @@
  *
  * Convention: a superscript mass-number prefix (²H, ¹³C), the IUPAC nuclide
  * form, for every labelled atom — not the D/T shorthand. One rule covers
- * H, C and everything else, and matches the stored value (#682 stores a
- * D/T spelling as H + mass number 2/3).
+ * H, C and everything else, and matches the stored value (a
+ * D/T spelling is stored as H + mass number 2/3).
  *
  * Only the server's `isotope_mass_number` counts. This module never infers
  * an isotope from an element symbol or a mass. Legacy rows that still hold

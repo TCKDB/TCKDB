@@ -200,6 +200,6 @@ def request_warnings_for_job_kind(kind: UploadJobKind, request) -> list[UploadWa
 
     The enqueue route calls this on the request the depositor sent, before it is
     re-dumped into the job payload, so a warning about a field the parse rewrote
-    (a banner software version) is still earned (#670).
+    (a banner software version) is still earned.
     """
     return _BY_JOB_KIND[kind](request)

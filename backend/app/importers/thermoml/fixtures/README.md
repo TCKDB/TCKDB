@@ -17,7 +17,7 @@ fixture coverage.
 
 ## The pilot article: benzene
 
-The Phase C plan's pilot article (section C0/C2) is benzene,
+The pilot article is benzene,
 `UHOVQNZJYSORNB-UHFFFAOYSA-N`, DOI `10.1016/j.jct.2013.08.022`: an "Ideal
 gas" Cp block at a 100 kPa `Constraint`, 12 values 200-1000 K,
 `Property-MethodID` carrying ONLY `sMethodName` "statistical

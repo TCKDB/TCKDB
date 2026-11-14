@@ -215,7 +215,7 @@ def _codes(report) -> set[str]:
 
 
 # ---------------------------------------------------------------------------
-# The four cases the brief requires, each with its verdict
+# The four required cases, each with its verdict
 # ---------------------------------------------------------------------------
 
 

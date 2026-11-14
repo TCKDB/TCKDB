@@ -394,8 +394,7 @@ describe("a failed vocabulary fetch degrades ONE select without breaking the oth
 })
 
 const PROVENANCE_LABELS = ["Method", "Basis", "Software", "Software version", "Workflow tool", "Workflow tool version"]
-// The seven `has_*` selects collapsed into one checkbox row (item 4 of the
-// findability change): each checkbox's own accessible name is now just the
+// The seven `has_*` selects collapsed into one checkbox row: each checkbox's own accessible name is now just the
 // evidence kind ("optimization", not "Has optimization") -- the "Show only
 // entries with..." legend supplies the "Has"/"show only" framing instead
 // of repeating it seven times. `Status` is unaffected (still its own
@@ -404,8 +403,8 @@ const EVIDENCE_ONLY_LABELS = [
     "Status", "optimization", "frequency", "single point", "IRC",
     "path search", "geometry validation", "SCF stability",
 ]
-// The TS-only findability fields added alongside the evidence checkboxes
-// (item 4): `/transition-states/browse` now narrows by the reaction's
+// The TS-only findability fields added alongside the evidence checkboxes:
+// `/transition-states/browse` now narrows by the reaction's
 // participant structure and its family, even though a transition state
 // still has no formula/elements axis of its own.
 const FINDABILITY_ONLY_LABELS = ["SMILES", "Family"]
@@ -1029,7 +1028,7 @@ describe("reaction kind: the direction control defaults to the backend's own def
 })
 
 // ---------------------------------------------------------------------------
-// Item 1 (renamed "Reactant structures" / "Product structures", item 2):
+// Renamed "Reactant structures" / "Product structures":
 // the matching-rules prose under these two
 // fields must be fully present -- comma separation, same-side
 // grouping, either-direction matching (the field's OWN explanation for

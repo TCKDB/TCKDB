@@ -1,4 +1,4 @@
-"""Run write code for its verdict, and keep nothing (#577).
+"""Run write code for its verdict, and keep nothing.
 
 ``/bundles/dry-run`` answers "would submit accept this?" by running submit
 itself inside :func:`rehearsal` and rolling it back. This module is the one
@@ -29,8 +29,8 @@ are refused with :class:`RehearsalCommitRefused`:
   refused. Savepoints are tracked by position on PostgreSQL's own stack, so
   reusing a name cannot release the rehearsal's, and a ``U&"..."`` name
   (escapes are not decoded) can be opened but not released or rolled back to;
-* ``commit()`` on the driver connection object under that ``Connection``
-  (#592): that one instance's ``commit`` is replaced by a refusal while the
+* ``commit()`` on the driver connection object under that ``Connection``:
+  that one instance's ``commit`` is replaced by a refusal while the
   rehearsal runs, and restored afterwards.
 
 Out of scope, and only detected, not stopped, by
@@ -254,7 +254,7 @@ def rehearsal(session: Session) -> Iterator[None]:
       role. So the path that runs in deployment is the second one: the
       rehearsal keeps the server's ``deadlock_timeout``, and the window in
       which the submit can still lose is ``lock_timeout`` wide. That path
-      was measured over 108 forced collisions (#592) and the real submit won
+      was measured over 108 forced collisions and the real submit won
       every one. The superuser branch is kept for a deployment that runs the
       API as one; it is not what is tested against the shipped role.
 
@@ -271,7 +271,7 @@ def rehearsal(session: Session) -> Iterator[None]:
     # PostgreSQL's own stack. ``stack[0]`` is the rehearsal's; a name can
     # appear more than once (PostgreSQL allows it, and a RELEASE or
     # ROLLBACK TO addresses the *newest* one), so identity is the position,
-    # never the name (#592).
+    # never the name.
     stack: list[str] = []
     # Set when a refusal fired below the ORM. SQLAlchemy may by then believe
     # the transaction is over, and return the connection to the pool without
@@ -370,7 +370,7 @@ def rehearsal(session: Session) -> Iterator[None]:
     finally:
         # The listeners and the raw-commit shadow live on per-request
         # objects, but a raise from the rollback below must not leave them
-        # attached: they are removed in an inner ``finally`` (#592).
+        # attached: they are removed in an inner ``finally``.
         try:
             if below_orm:
                 # Discard the physical connection: the server aborts its open

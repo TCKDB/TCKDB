@@ -72,12 +72,12 @@ def test_authenticated_legacy_route_succeeds(
     # Mint a fresh raw key + matching hash so the gate's
     # ``authenticate_api_key`` call resolves it.
     import hashlib
-    raw_key = "phase-2-legacy-auth-test-key"
+    raw_key = "legacy-auth-test-key"
     db_session.add(
         ApiKey(
             user_id=_api_test_user,
             key_hash=hashlib.sha256(raw_key.encode()).hexdigest(),
-            label="phase-2-test",
+            label="legacy-auth-test",
         )
     )
     db_session.flush()

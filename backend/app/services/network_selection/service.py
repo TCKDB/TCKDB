@@ -121,7 +121,7 @@ def assess_network(
     isolation = begin_read_snapshot(session, require=require_snapshot)
     scan = scan_population(session, request=request)
     network, solves = load_population(session, scan, request)
-    # The loader to engine seam (guard PR-3): a hidden ref in the captured facts (a validation entry's reference solve)
+    # The loader to engine seam: a hidden ref in the captured facts (a validation entry's reference solve)
     # becomes a placeholder token BEFORE the solves are assessed, decided or sealed into the manifest.
     network, solves = withhold_selection_facts(session, (network, solves))
     check_request_against_network(request, network)

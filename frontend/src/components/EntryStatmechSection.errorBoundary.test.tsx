@@ -125,7 +125,7 @@ describe("EntryStatmechSection — a broken Torsions row", () => {
                     baseRecord({
                         // `point_group` deliberately differs from `sm_bad`'s
                         // "D3h" -- otherwise the two records are
-                        // scientifically IDENTICAL and finding 7's grouping
+                        // scientifically IDENTICAL and the identical-record grouping
                         // (`identicalRecordGroups.ts`) would fold them into
                         // one "2 records with identical values" card,
                         // defeating this file's whole point: proving
@@ -200,12 +200,12 @@ describe("EntryStatmechSection — a broken Torsions row", () => {
         expect(screen.getByText("Source calculations", { selector: "summary" })).toBeVisible()
         // "Electronic levels" has no record on this entry (both fixtures
         // set `has_electronic_levels: false`) -- it collapses to one line,
-        // no heading (finding 6), not a full section over a dashed empty
+        // no heading, not a full section over a dashed empty
         // box.
         expect(screen.queryByRole("heading", { name: "Electronic levels" })).not.toBeInTheDocument()
         expect(screen.getByText("No electronic levels are recorded for any statmech record on this entry.")).toBeVisible()
         // "Frequencies" is no longer its own global section at all -- it
-        // moved onto each record card (finding 6's `FrequenciesBlock`).
+        // moved onto each record card (`FrequenciesBlock`).
         // Proven POSITIVELY, not just by absence: both cards actually carry
         // their own "Frequencies" heading (the mock above returns real
         // `frequencies` data for this very assertion), and neither one

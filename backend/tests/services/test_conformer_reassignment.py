@@ -547,7 +547,7 @@ def test_any_other_declaration_column_is_refused_even_with_the_repair_declared(d
     statmech, declaration = _basin_declaration(session, entry, group, calc_gauche)
     if approved:
         _approve(session, SubmissionRecordType.statmech, statmech.id)
-    # Even declaring more columns than the owner's decision allows does not open them.
+    # Even declaring more columns than the repair path allows does not open them.
     _declare_statmech_repair(session, "statmech_model_declaration", ("conformer_group_id", "schema_version", "content_hash"))
     for statement in (
         "UPDATE statmech_model_declaration SET schema_version = 2 WHERE id = :i",

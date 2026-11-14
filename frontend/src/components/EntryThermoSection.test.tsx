@@ -103,8 +103,8 @@ function mockRecords() {
                 // Population A: a real Gaussian chain on the CALCULATION, but
                 // no software recorded on the thermo itself (software_release
                 // below stays null). The one combination that catches a
-                // reintroduced #284 -- a fallback from software_release to
-                // primary_calculation.software would leak "Gaussian" here.
+                // reintroduced fallback from software_release to
+                // primary_calculation.software, which would leak "Gaussian" here.
                 primary_calculation: { calculation_ref: "calc_alpha_sp", calculation_type: "sp", converged: null, geometry_validation_status: "not_present", scf_stability_status: "not_present", level_of_theory: null, software: { software_release_ref: "srel_gaussian", software: "Gaussian", version: "16, Revision C.02" } },
                 level_of_theory: { method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp", level_of_theory_ref: "lot_alpha" },
                 software_release: null,

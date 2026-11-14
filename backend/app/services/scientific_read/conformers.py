@@ -136,13 +136,13 @@ from app.services.scientific_read.species_identity import (
 # vocabulary, but only the **group** surface's ``observations`` block has
 # two shapes to choose between (see ``build_group_record``); on the
 # observation surface, ``observations`` is always the lean
-# ``ConformerObservationSiblingSummary`` list (issue #269/PR #535), so
+# ``ConformerObservationSiblingSummary`` list, so
 # ``observation_details`` there is legal, accepted, and a no-op -- it
 # gates nothing that surface has. Excluded from the ``all`` expansion for
 # the same reason ``points`` is excluded on the network-kinetics surface:
 # it is the one token whose whole job is to turn on an expensive,
 # multiplying combination, so a caller must name it, never receive it as
-# a side effect of asking for "everything" (issue #537).
+# a side effect of asking for "everything".
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "observations",
     "observation_details",
@@ -200,7 +200,7 @@ def get_conformer_group(
     :class:`~app.schemas.reads.scientific_conformer.ScientificConformerObservationRecord`
     shape (still gated per-field by whichever of ``calculations`` /
     ``geometries`` / ``selections`` / ``review`` were also requested).
-    See :func:`build_group_record` for the mechanics; issue #537.
+    See :func:`build_group_record` for the mechanics.
     """
     includes = validate_includes(
         include or [],
@@ -243,7 +243,7 @@ def build_group_record(
     return identical per-record payloads for the same include set.
 
     The caller is responsible for handing in the resolved include set
-    (post-`validate_includes`, post-Phase-D) and the group's review
+    (after `validate_includes` and the internal-ids policy) and the group's review
     badge. A caller building a whole page may also hand in the group's
     ``levels_map``, resolved for every group on the page in one statement;
     a caller that does not gets it resolved here, which is the right
@@ -263,7 +263,7 @@ def build_group_record(
     ``observation_details`` also present, each entry is instead the full
     :class:`ScientificConformerObservationRecord`, built with
     ``includes - {"observations", "observation_details"}`` — i.e. the
-    same cascade this surface used unconditionally before issue #537,
+    same cascade this surface used to apply unconditionally,
     now opt-in.
     """
     species_context = _build_species_context(session, cg.species_entry_id)
@@ -317,8 +317,8 @@ def build_group_record(
             else {}
         )
         if "observation_details" in includes:
-            # Deliberate, explicit opt-in into the expensive shape (issue
-            # #537). Without ``observations``/``observation_details`` both
+            # Deliberate, explicit opt-in into the expensive shape.
+            # Without ``observations``/``observation_details`` both
             # removed from the nested set, every embedded observation
             # would resolve the same sibling list this block already is.
             nested_includes = includes - {"observations", "observation_details"}
@@ -347,7 +347,7 @@ def build_group_record(
             # note) and nothing that cascades from the group's own
             # ``calculations``/``geometries``/``selections``/``review``
             # tokens -- those govern the group's own same-named fields
-            # only, never the embedded observations (issue #537).
+            # only, never the embedded observations.
             observations_block = [
                 ConformerObservationGroupSummary(
                     conformer_observation=ConformerObservationCoreBlock(
@@ -416,8 +416,7 @@ def get_conformer_observation(
     context + bounded evidence/available_sections summaries.
     ``include=observations`` returns the sibling observations in this
     record's conformer group, always as the lean
-    ``ConformerObservationSiblingSummary`` projection (issue #269/PR
-    #535); ``include=selections`` returns the parent group's selections.
+    ``ConformerObservationSiblingSummary`` projection; ``include=selections`` returns the parent group's selections.
     ``observation_details`` is legal here (one shared vocabulary with the
     group surface) but gates nothing on this surface — the sibling list
     has only the one shape.
@@ -498,7 +497,7 @@ def _build_observation_record(
 
     ``include=observations`` populates the sibling observations in the same
     conformer group, as the lean ``ConformerObservationSiblingSummary``
-    projection (issue #269/PR #535) — never the richer group-surface shape,
+    projection — never the richer group-surface shape,
     regardless of who called this builder or what else is in *includes*.
     What it says is which other
     observations share the basin, which an observation-grained record has
@@ -622,7 +621,7 @@ def _build_sibling_observation_records(
     block and species context) would scale an observation detail
     response linearly with basin size for a UI slice that renders three
     ``<li>`` elements. See :class:`ConformerObservationSiblingSummary`
-    for the measured numbers (issue #269). A sibling's full record —
+    for the measured numbers. A sibling's full record —
     calculations, geometries, selections, review history, its own
     evidence summary — stays one hop away, at that sibling's own detail
     endpoint.

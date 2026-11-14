@@ -308,7 +308,7 @@ def test_reaction_transition_state_calculation_can_carry_the_stability_verdict(
 
 
 def test_reaction_transition_state_stability_may_not_cite_a_species_job(client):
-    """The transition-state half of the owner rule: ``owner_kind`` differs.
+    """The transition-state half of the ownership rule: ``owner_kind`` differs.
 
     Mutation: hard-code ``"species entry"`` as the owner noun in the reaction
     schema's ``owner_mismatch_error`` call.

@@ -195,15 +195,14 @@ def _resolve_existing_calculation(
     it for :func:`assert_statmech_role_compatible`, and re-fetching would
     invite the two checks to run against different rows.
 
-    Since #230 the 404 carries ``unknown_calculation_ref`` and a
+    The 404 carries ``unknown_calculation_ref`` and a
     ``context`` naming this field, instead of the generic
     ``resource_not_found`` with an empty one. It is the same code
     ``/uploads/kinetics`` uses for a ``source_calculation_ref`` that names
     nothing: the same kind of row is missing and the repair is the same,
-    so a code that differed by spelling would recreate one field down the
-    defect #195 removed from the status. The id is logged, not echoed —
-    the sentence above about not disclosing it is now enforced by the seam
-    rather than by this function remembering to omit it.
+    so a code that differed by spelling would give one missing row two
+    different answers depending on how the caller spelled it. The id is logged,
+    not echoed: the seam omits it, so this function does not have to remember to.
     """
     calculation = session.get(Calculation, calculation_id)
     if calculation is None:

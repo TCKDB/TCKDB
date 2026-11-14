@@ -209,7 +209,7 @@ def _run_lot_query(
     if short_circuit:
         return _empty_response(request, includes, offset, limit)
     if lot_id is not None:
-        # A merged row's ref names the row it was merged into (#574).
+        # A merged row's ref names the row it was merged into.
         lot_id = canonical_level_of_theory_id(session, lot_id)
 
     # Usage-derived eligibility rests on the calculations the profile shows: a level used only by hidden calculations

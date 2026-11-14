@@ -52,9 +52,9 @@ const PATCH_BASE = "/api/v1/record-reviews"
 
 const curator = {
     id: 1,
-    username: "calvin",
-    email: "calvin@example.com",
-    full_name: "Calvin Pieters",
+    username: "ada",
+    email: "ada@example.com",
+    full_name: "Ada Example",
     role: "curator",
     is_active: true,
 }

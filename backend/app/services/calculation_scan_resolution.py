@@ -31,7 +31,7 @@ def persist_calculation_scan(
     :returns: Newly created ``CalculationScanResult`` row.
     :raises ValueError: If the calculation does not exist or already has a scan result.
     :raises CodedValueError: If a scan point's geometry disagrees with the calculation's
-        subject in composition or isotopes (#680).
+        subject in composition or isotopes.
     """
 
     calculation = session.get(Calculation, calculation_id)
@@ -91,8 +91,7 @@ def persist_calculation_scan(
 
         if geometry_id is not None:
             # Inline and by-id points alike: a scan point's geometry is a
-            # structure of the calculation's subject, not free-floating data
-            # (#680).
+            # structure of the calculation's subject, not free-floating data.
             field = f"scan_result.points[{point.point_index}].geometry"
             assert_calculation_geometry_composition(
                 session,

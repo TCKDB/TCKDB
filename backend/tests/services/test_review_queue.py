@@ -397,7 +397,7 @@ class TestReactionEntrySubjectCarriesItsEquation:
 
 
 class TestCalculationAndConformerObservationGroupUnderTheirContainer:
-    """The brief's open question: neither stands alone."""
+    """Each groups under its container: neither stands alone."""
 
     def test_a_calculation_groups_under_its_species_entry(self, db_session):
         entry = make_species_entry(db_session, make_species(db_session))

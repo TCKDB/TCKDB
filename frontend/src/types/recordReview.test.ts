@@ -22,8 +22,7 @@ import {
  * record-type table does not read the Python source:
  * vite refuses to load a file outside its root, and widening
  * `server.fs.allow` would let the dev server (which binds 0.0.0.0) serve
- * backend source over the network. Task #255 covers putting that guard
- * where it belongs.
+ * backend source over the network.
  *
  * Drift is survivable here in a way it is not for a route table: the
  * server refuses a transition it does not allow, and

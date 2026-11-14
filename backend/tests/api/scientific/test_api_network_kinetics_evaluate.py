@@ -1,7 +1,6 @@
 """API tests for ``GET /scientific/network-kinetics/{ref}/evaluate``.
 
-Server-side k(T,P) evaluation (owner ruling, see
-``docs/plans/pressure-dependent-network-surface.md`` §2.4). The pure
+Server-side k(T,P) evaluation. The pure
 math is pinned independently in
 ``backend/tests/services/test_network_kinetics_eval.py``; this file
 checks the endpoint's wiring: handle resolution, the grid-of-points

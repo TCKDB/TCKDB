@@ -24,7 +24,7 @@ beforeEach(() => {
 })
 
 const admin = {
-    id: 1, username: "calvin", email: "calvin@example.com", full_name: "Calvin Pieters",
+    id: 1, username: "ada", email: "ada@example.com", full_name: "Ada Example",
     role: "admin", is_active: true,
 }
 const plainUser = { ...admin, id: 2, username: "noah", full_name: null, role: "user" }
@@ -57,13 +57,13 @@ describe("who can see /admin", () => {
     it("an admin sees the accounts and the role each one holds", async () => {
         meIs(admin)
         usersAre([
-            userRow({ id: 1, username: "calvin", full_name: "Calvin Pieters", role: "admin" }),
+            userRow({ id: 1, username: "ada", full_name: "Ada Example", role: "admin" }),
             userRow(),
         ])
         renderPage()
 
         expect(await screen.findByRole("combobox", { name: /^noah/  })).toHaveValue("user")
-        expect(screen.getByRole("combobox", { name: /^calvin/  })).toHaveValue("admin")
+        expect(screen.getByRole("combobox", { name: /^ada/  })).toHaveValue("admin")
     })
 
     it("a signed-in non-admin is told, and no account list is fetched", async () => {
@@ -79,7 +79,7 @@ describe("who can see /admin", () => {
 
     it("a backend outage does not render as 'you are not an admin'", async () => {
         /**
-         * The same distinction #467 drew for the header. A 500 on /auth/me
+         * The same distinction the header draws. A 500 on /auth/me
          * states nothing about this visitor's role, and telling a real admin
          * they lack the role -- or bouncing them to a login form -- is a
          * claim the archive never made.
@@ -116,7 +116,7 @@ describe("changing a role", () => {
 
     it("shows the archive's own sentence when it refuses to remove the last admin", async () => {
         meIs(admin)
-        usersAre([userRow({ id: 1, username: "calvin", full_name: "Calvin Pieters", role: "admin" })])
+        usersAre([userRow({ id: 1, username: "ada", full_name: "Ada Example", role: "admin" })])
         server.use(http.patch("/api/v1/admin/users/:id/role", () => HttpResponse.json({
             code: "last_admin_demotion",
             detail: "last_admin_demotion: this is the archive's only active admin, and no route can grant the role back once nobody holds it. Promote another account to admin first, then change this one.",
@@ -124,7 +124,7 @@ describe("changing a role", () => {
         }, { status: 409 })))
 
         renderPage()
-        const select = await screen.findByRole("combobox", { name: /^calvin/  })
+        const select = await screen.findByRole("combobox", { name: /^ada/  })
         await userEvent.selectOptions(select, "curator")
 
         const alert = await screen.findByRole("alert")
@@ -133,13 +133,13 @@ describe("changing a role", () => {
         expect(alert).toHaveTextContent(/promote another account to admin first/i)
         expect(alert.textContent).not.toContain("last_admin_demotion:")
         // And the row must not pretend the change happened.
-        expect(screen.getByRole("combobox", { name: /^calvin/  })).toHaveValue("admin")
+        expect(screen.getByRole("combobox", { name: /^ada/  })).toHaveValue("admin")
     })
 
     it("a failed change leaves the other rows alone", async () => {
         meIs(admin)
         usersAre([
-            userRow({ id: 1, username: "calvin", full_name: "Calvin Pieters", role: "admin" }),
+            userRow({ id: 1, username: "ada", full_name: "Ada Example", role: "admin" }),
             userRow(),
         ])
         server.use(http.patch("/api/v1/admin/users/:id/role", () =>
@@ -150,7 +150,7 @@ describe("changing a role", () => {
             await screen.findByRole("combobox", { name: /^noah/  }), "curator")
 
         await screen.findByRole("alert")
-        expect(screen.getByRole("combobox", { name: /^calvin/  })).toHaveValue("admin")
+        expect(screen.getByRole("combobox", { name: /^ada/  })).toHaveValue("admin")
         expect(screen.getByRole("combobox", { name: "noah" })).toHaveValue("user")
     })
 })

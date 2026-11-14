@@ -112,7 +112,7 @@ W_TERM_SYMBOL_CONTRADICTS_MULTIPLICITY = "term_symbol_contradicts_multiplicity"
 # A single-atom entry's declared term (its L, or its J) is not the NIST ground
 # term of the element, whatever the multiplicity says. Distinct from the code
 # above, which names only the 2S+1 disagreement and so would misdescribe a
-# wrong J (O 3P0) or a wrong L at the right multiplicity (#631).
+# wrong J (O 3P0) or a wrong L at the right multiplicity.
 W_TERM_SYMBOL_CONTRADICTS_GROUND_TERM = "term_symbol_contradicts_ground_term"
 
 # Charge / multiplicity contradictions are detected against the *output log*
@@ -662,7 +662,7 @@ def reconcile_species_entry_full(
 
 # ``W_CHARGE_MISMATCH`` / ``W_MULTIPLICITY_MISMATCH`` are deliberately
 # absent: ``charge_multiplicity_reconciliation`` is their sole owner and
-# this module no longer imports them (#81).
+# this module no longer imports them.
 __all__ = [
     "TS_IMAGINARY_FREQUENCY_MIN_CM1",
     "W_ELECTRONIC_STATE_CONTRADICTS_METHOD",

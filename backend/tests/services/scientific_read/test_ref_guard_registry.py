@@ -61,7 +61,7 @@ def test_gated_prefixes_come_from_the_public_ref_registry_and_the_handle_gate():
         assert public_refs.PREFIXES[gated.model.__name__] == prefix
     handle_gated = set(handles._REVIEWABLE_HANDLE_TYPES) | set(handles._PARENT_DERIVED_HANDLE_TYPES)
     assert handle_gated <= {g.model for g in ref_guard.GATED_TYPES.values()}
-    # Owner decision D3: records with no detail route are gated too.
+    # Records with no detail route are gated too.
     assert {"thm", "kin", "mpo"} <= set(ref_guard.GATED_TYPES)
 
 
