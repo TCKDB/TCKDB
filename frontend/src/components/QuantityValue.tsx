@@ -10,6 +10,9 @@ export function Stored({ full, children }: { full?: string; children: ReactNode 
 export const ROUNDED_NOTE = "6 significant figures; hover for the stored value."
 
 /** The same line under a computed value, which no record stores. */
+/** The line under a table that mixes stored and computed values. */
+export const MIXED_ROUNDED_NOTE = "6 significant figures; hover for the full value."
+
 export const EVALUATED_NOTE = "6 significant figures; hover for the value as computed."
 
 /**
