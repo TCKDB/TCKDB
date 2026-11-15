@@ -60,22 +60,25 @@ def compare_expected(one: Path, two: Path) -> dict[str, Any]:
     return result
 
 
+def warning_hash(code: str, field: str, message: str, context: Any) -> str:
+    """The server's ``deposit_warnings.content_hash`` formula."""
+    payload = json.dumps([code, field, message, context], sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def masked_warning_hash(values: dict[str, Any]) -> str | None:
     """``deposit_warning.content_hash`` recomputed over the masked message and context."""
     if values.get("content_hash") is None:
         return None
     context = json.loads(mask_refs(canonical(values["context"])))
-    payload = json.dumps(
-        [values["code"], values["field"], mask_refs(values["message"]), context],
-        sort_keys=True, separators=(",", ":"), allow_nan=False,
-    )
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return warning_hash(values["code"], values["field"], mask_refs(values["message"]), context)
 
 
 def open_rows(archive: Path):
     with tarfile.open(archive) as tar:
         manifest = json.load(tar.extractfile("manifest.json"))
         rows: dict[str, Counter] = {}
+        mismatched_hashes: list[int] = []
         for line in tar.extractfile("rows.ndjson"):
             record = json.loads(line)
             if record.get("record_type") != "row":
@@ -84,15 +87,18 @@ def open_rows(archive: Path):
                 k: v for k, v in record["values"].items()
                 if k not in TIMESTAMP_KEYS and not (isinstance(v, str) and TIMESTAMP.match(v))
             }
-            if record["table"] == "deposit_warning":
+            if record["table"] == "deposit_warning" and values.get("content_hash") is not None:
+                unmasked = warning_hash(values["code"], values["field"], values["message"], values["context"])
+                if unmasked != values["content_hash"]:
+                    mismatched_hashes.append(values["id"])
                 values["content_hash"] = masked_warning_hash(values)
             rows.setdefault(record["table"], Counter())[mask_refs(canonical(values))] += 1
-    return manifest, rows
+    return manifest, rows, mismatched_hashes
 
 
 def compare_archives(one: Path, two: Path) -> dict[str, Any]:
-    ma, ra = open_rows(one / "tckdb.archive")
-    mb, rb = open_rows(two / "tckdb.archive")
+    ma, ra, bad_a = open_rows(one / "tckdb.archive")
+    mb, rb, bad_b = open_rows(two / "tckdb.archive")
     blobs_a = {(b["sha256"], b["bytes"]) for b in ma["blobs"]}
     blobs_b = {(b["sha256"], b["bytes"]) for b in mb["blobs"]}
     tables = sorted(set(ra) | set(rb))
@@ -117,6 +123,7 @@ def compare_archives(one: Path, two: Path) -> dict[str, Any]:
         "tables_compared": len(tables),
         "rows_one": sum(sum(c.values()) for c in ra.values()),
         "rows_two": sum(sum(c.values()) for c in rb.values()),
+        "deposit_warning_hashes_not_matching_their_content": {"one": len(bad_a), "two": len(bad_b)},
         "tables_that_differ": differing,
     }
 
@@ -131,8 +138,14 @@ def main(argv: list[str] | None = None) -> int:
     archive = compare_archives(one, two)
     print(json.dumps({"expected_outputs": expected, "archive": archive}, indent=2, sort_keys=True))
     bad = [n for n, v in expected.items() if v.startswith("DIFFERS")]
-    ok = not bad and archive["blob_sets_equal"] and not archive["tables_that_differ"] and archive["database_revisions_equal"]
-    print("\nRESULT:", "no difference" if ok else f"DIFFERENCES ({bad or ''} {list(archive['tables_that_differ'])})")
+    ok = (
+        not bad
+        and archive["blob_sets_equal"]
+        and not archive["tables_that_differ"]
+        and archive["database_revisions_equal"]
+        and not any(archive["deposit_warning_hashes_not_matching_their_content"].values())
+    )
+    print("\nRESULT:", "no difference" if ok else f"DIFFERENCES ({bad or ''} {list(archive['tables_that_differ'])} {archive['deposit_warning_hashes_not_matching_their_content']})")
     return 0 if ok else 1
 
 

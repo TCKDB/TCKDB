@@ -64,7 +64,7 @@ def _level_label(lot) -> str:
 _REF = re.compile(r"\b[a-z]{2,6}_[a-z2-7]{26}\b")
 
 
-def _content_key(row: dict[str, Any]) -> str:
+def content_key(row: dict[str, Any]) -> str:
     """The row as canonical JSON with public refs blanked, so ordering does not depend on them."""
 
     return _REF.sub("", json.dumps(row, sort_keys=True, default=str))
@@ -78,7 +78,7 @@ def _side(reaction, role: str) -> str:
     return " + ".join(sorted(names))
 
 
-def _equation(reaction) -> str | None:
+def equation(reaction) -> str | None:
     """``A + B <=> C + D`` (``=>`` when irreversible), each side in SMILES order."""
     if reaction is None:
         return None
@@ -89,7 +89,7 @@ def _equation(reaction) -> str | None:
 def _ts_reaction(calc) -> str | None:
     """The reaction of a calculation's transition-state entry, or None for any other calculation."""
     entry = calc.transition_state_entry if calc is not None else None
-    return _equation(entry.transition_state.reaction_entry.reaction) if entry is not None else None
+    return equation(entry.transition_state.reaction_entry.reaction) if entry is not None else None
 
 
 def _software_label(release) -> str:
@@ -122,7 +122,7 @@ def _largest(records: list[dict[str, Any]]) -> dict[str, Any] | None:
     analysed = [r for r in records if r.get("max_abs_deviation_cm1") is not None]
     if not analysed:
         return None
-    top = max(analysed, key=lambda r: (r["max_abs_deviation_cm1"], _content_key(r)))
+    top = max(analysed, key=lambda r: (r["max_abs_deviation_cm1"], content_key(r)))
     return {
         "max_abs_deviation_cm1": top["max_abs_deviation_cm1"],
         "within_tolerance": top.get("within_tolerance"),
@@ -192,7 +192,7 @@ def hessian_reanalysis(session: Session) -> dict[str, Any]:
             r["reaction"] or "",
             r["level_of_theory"] or "",
             r["calculation_type"] or "",
-            _content_key(r),
+            content_key(r),
         )
     )
     out["summary"] = _hessian_summary(session, out["records"], by_ref)
@@ -252,7 +252,7 @@ def conformer_basins(session: Session) -> dict[str, Any]:
                     "number_of_levels": len(levels),
                 }
             )
-        group_rows.sort(key=lambda g: (g["number_of_levels"], sorted(g["levels_observing"].items()), g["observations"], _content_key(g)))
+        group_rows.sort(key=lambda g: (g["number_of_levels"], sorted(g["levels_observing"].items()), g["observations"], content_key(g)))
         total_groups += len(groups)
         total_observations += entry_observations
         rows.append(
@@ -267,7 +267,7 @@ def conformer_basins(session: Session) -> dict[str, Any]:
                 "groups": group_rows,
             }
         )
-    rows.sort(key=lambda r: (r["species_smiles"], r["multiplicity"], _content_key(r)))
+    rows.sort(key=lambda r: (r["species_smiles"], r["multiplicity"], content_key(r)))
     return {
         "species_entries_with_conformers": len(rows),
         "conformer_groups": total_groups,
@@ -414,7 +414,7 @@ def thermo_selection_outcomes(session: Session) -> dict[str, Any]:
                     "reason_codes": sorted({r["code"] for c in candidates for r in c["assessment"]["reasons"]}),
                 }
             )
-        rows.sort(key=lambda r: (r["species_smiles"], r["multiplicity"], _content_key(r)))
+        rows.sort(key=lambda r: (r["species_smiles"], r["multiplicity"], content_key(r)))
         return {
             "species_entries_assessed": len(rows),
             "outcomes": dict(sorted(tally.items())),
@@ -478,7 +478,7 @@ def structure_selection_outcomes(session: Session) -> dict[str, Any]:
                     "unestablished_recipe_facts": _unestablished_facts(manifest),
                 }
             rows.append(row)
-        rows.sort(key=lambda r: (r["species_smiles"], r["multiplicity"], _content_key(r)))
+        rows.sort(key=lambda r: (r["species_smiles"], r["multiplicity"], content_key(r)))
         return {
             "species_entries_assessed": len(rows),
             "outcomes_by_grain": {grain: dict(sorted(counts.items())) for grain, counts in tally.items()},

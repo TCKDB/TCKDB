@@ -2,7 +2,7 @@
 
 Each is exercised on rows seeded through the test factories. They were also run
 against a full build of the snapshot;
-these tests pin the shape and the rules (public refs only, ordered by ref, a
+these tests pin the shape and the rules (public refs only, ordered by content, a
 refusal counted rather than dropped).
 """
 

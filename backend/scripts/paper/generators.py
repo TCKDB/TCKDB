@@ -55,7 +55,7 @@ from app.db.models.workflow import WorkflowToolRelease
 from app.services.external_comparison.cp import RUNNER as EXTERNAL_CP_COMPARISON_RUNNER
 from app.services.external_comparison.cp import latest_cp_comparison_for_thermo
 from app.services.machine_review.query import SCIENTIFIC_CHECK_PROVIDER
-from scripts.paper.snapshot_generators import _content_key, _equation
+from scripts.paper.snapshot_generators import content_key, equation
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
@@ -276,7 +276,7 @@ def selected_thermo_by_species(session: Session) -> dict[str, Any]:
                     "scientific_origin": thermo.scientific_origin.value,
                 }
             )
-    rows.sort(key=lambda row: (row["release_tag"], row["species_smiles"], _content_key(row)))
+    rows.sort(key=lambda row: (row["release_tag"], row["species_smiles"], content_key(row)))
     return {"selected_thermo": rows, "selections": len(rows)}
 
 
@@ -353,7 +353,7 @@ def candidate_lineage(session: Session) -> dict[str, Any]:
                             {"submission_ref": s.public_ref, "submission_kind": getattr(s.submission_kind, "value", s.submission_kind)}
                             for s in submissions
                         ),
-                        key=_content_key,
+                        key=content_key,
                     ),
                     "source_calculation_refs": [c.public_ref for c in source_calculations],
                     "workflow_tool_release_commits": sorted(commits),
@@ -361,7 +361,7 @@ def candidate_lineage(session: Session) -> dict[str, Any]:
                 }
             )
         rows.sort(
-            key=lambda row: (row["h298_kj_mol"] is None, row["h298_kj_mol"] or 0.0, _content_key(row))
+            key=lambda row: (row["h298_kj_mol"] is None, row["h298_kj_mol"] or 0.0, content_key(row))
         )
         out.append(
             {
@@ -378,7 +378,7 @@ def candidate_lineage(session: Session) -> dict[str, Any]:
                 "candidates": rows,
             }
         )
-    out.sort(key=lambda row: (row["species_smiles"], row["multiplicity"], _content_key(row)))
+    out.sort(key=lambda row: (row["species_smiles"], row["multiplicity"], content_key(row)))
     return {"species_entries_with_multiple_candidates": len(out), "lineage": out}
 
 
@@ -423,7 +423,7 @@ def transition_state_evidence(session: Session) -> dict[str, Any]:
             {
                 "transition_state_entry_ref": entry.public_ref,
                 "transition_state_ref": entry.transition_state.public_ref,
-                "reaction": _equation(entry.transition_state.reaction_entry.reaction),
+                "reaction": equation(entry.transition_state.reaction_entry.reaction),
                 "label": entry.transition_state.label,
                 "review_state": _review_status(session, SubmissionRecordType.transition_state_entry, entry.id),
                 "calculations": len(calculations),
@@ -432,7 +432,7 @@ def transition_state_evidence(session: Session) -> dict[str, Any]:
                 "has_stored_hessian": hessian_count > 0,
             }
         )
-    rows.sort(key=lambda row: (row["reaction"] or "", row["label"] or "", _content_key(row)))
+    rows.sort(key=lambda row: (row["reaction"] or "", row["label"] or "", content_key(row)))
     return {
         "transition_state_entries": len(rows),
         "with_exactly_one_imaginary_mode": sum(1 for r in rows if r["has_exactly_one_imaginary_mode"]),

@@ -54,30 +54,31 @@ sources:
   #   rights: {license: CC-BY-4.0, depositor_attests_right_to_license: true}
   #   runs_root: /path/to/arc/runs
   #   recorded_hosts: [tckdb.example.org]
+  # The list is the snapshot's fixed run order; replace each entry with a folder under runs_root.
   #   runs:
-  #   - snapshot_reruns_20261110/rotor_scan_rmg_rxn_1142
-  #   - snapshot_reruns_20261110/rotor_scan_rxn_188
-  #   - snapshot_reruns_20261110/rotor_scan_rxn_209
-  #   - snapshot_reruns_20261110/rotor_scan_rxn_298
-  #   - snapshot_reruns_20261110/rotor_scan_rxn_998
-  #   - snapshot_reruns_20261110/rotor_scan_rxn_30_r2
-  #   - snapshot_reruns_20261110/arc_tckdb_neb
-  #   - snapshot_reruns_20261111/arc_tckdb_demo_reaction
-  #   - snapshot_reruns_20261109/rotor_scan_rxn_210
-  #   - snapshot_reruns_20261109/rotor_scan_rxn_392
-  #   - snapshot_reruns_20261109/rotor_scan_rxn_476
-  #   - snapshot_reruns_20261109/rotor_scan_rxn_682
-  #   - tckdb_test_20261109/04_ho2_elimination_from_peroxyradical
-  #   - tckdb_test_20261109/06_intra_disproportionation
-  #   - tckdb_test_20261109/14_r_addition_multiplebond
-  #   - tckdb_test_20261109/r2_05_h_abstraction
-  #   - tckdb_test_20261109/r2_14_r_addition_multiplebond
-  #   - tckdb_test_20261109/r4_14_xy_addition_multiplebond
-  #   - tckdb_test_20261109/r4_15_intra_h_migration
-  #   - tckdb_test_20261109_thermo/09_intra_r_add_endocyclic
-  #   - tckdb_test_20261109_thermo/13_ketoenol
-  #   - tckdb_test_20261110/19_intra_no2_ono_conversion
-  #   - snapshot_reruns_20261110/rotor_scan_rxn_30
+  #   - set_1/run_1
+  #   - set_1/run_2
+  #   - set_1/run_3
+  #   - set_1/run_4
+  #   - set_1/run_5
+  #   - set_1/run_6
+  #   - set_1/run_7
+  #   - set_1/run_8
+  #   - set_1/run_9
+  #   - set_1/run_10
+  #   - set_1/run_11
+  #   - set_1/run_12
+  #   - set_2/run_13
+  #   - set_2/run_14
+  #   - set_2/run_15
+  #   - set_2/run_16
+  #   - set_2/run_17
+  #   - set_2/run_18
+  #   - set_2/run_19
+  #   - set_2/run_20
+  #   - set_2/run_21
+  #   - set_2/run_22
+  #   - set_2/run_23
 
   # Source 3: the N2H3 pressure-dependent network (Keslin et al., PCCP 2025), through the PDep ingester. The directory
   # must hold the Arkane run's input.py, output.py and supporting_information.csv.
@@ -88,7 +89,7 @@ sources:
 # Optional: curation beyond approving every submission (needs arc_runs). See "Curation is a demonstration" in README.md.
 # curation:
 #   caught_error:
-#     run: snapshot_reruns_20261110/rotor_scan_rxn_30
+#     run: set_2/run_23
 #     finding:
 #       kind: path_incompatibility
 #       verdict: invalidates
@@ -112,13 +113,13 @@ sources:
 #         one ARC run of CH4 + OH -> CH3 + H2O, and the CH3 thermochemistry of the same run. Not an independent review.
 #       criteria: {requires_review_status: approved}
 #     selections:
-#       - run: snapshot_reruns_20261110/rotor_scan_rxn_188
+#       - run: set_1/run_2
 #         record: kinetics
 #         rationale: Rate coefficient of CH4 + OH -> CH3 + H2O from the ARC run of the use case.
-#       - run: snapshot_reruns_20261110/rotor_scan_rxn_188
+#       - run: set_1/run_2
 #         record: transition_state_entry
 #         rationale: The transition state behind that rate coefficient, from the same ARC run.
-#       - run: snapshot_reruns_20261110/rotor_scan_rxn_188
+#       - run: set_1/run_2
 #         record: thermo
 #         smiles: "[CH3]"
 #         rationale: CH3 thermochemistry from the same ARC run, computed at the levels of its rate coefficient.

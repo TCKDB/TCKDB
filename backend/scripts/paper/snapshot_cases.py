@@ -54,12 +54,12 @@ from scripts.paper.generators import (
     _standing_selections,
 )
 from scripts.paper.snapshot_generators import (
-    _content_key,
-    _equation,
     _level_label,
     _selection_session,
     _side,
     _software_label,
+    content_key,
+    equation,
 )
 
 USE_CASE_REACTANTS = ("C", "[OH]")
@@ -137,7 +137,7 @@ def _reactions_with(session: Session, reactants: tuple[str, ...], products: tupl
         )
         if sides == wanted:
             found.append(reaction)
-    return sorted(found, key=lambda r: (_equation(r), r.reversible))
+    return sorted(found, key=lambda r: (equation(r), r.reversible))
 
 
 def _review_status(session: Session, record_type: SubmissionRecordType, record_id: int) -> str:
@@ -172,7 +172,7 @@ def _calculation_owner(calc: Calculation) -> str:
         species = calc.species_entry.species
         return f"{species.smiles} (multiplicity {species.multiplicity})"
     if calc.transition_state_entry is not None:
-        return "transition state of " + (_equation(calc.transition_state_entry.transition_state.reaction_entry.reaction) or "")
+        return "transition state of " + (equation(calc.transition_state_entry.transition_state.reaction_entry.reaction) or "")
     return "(no owner)"
 
 
@@ -230,7 +230,7 @@ def _submission_context(session: Session, submissions: list[Submission]) -> dict
             if link.record_type is SubmissionRecordType.reaction_entry:
                 entry = session.get(ReactionEntry, link.record_id)
                 if entry is not None:
-                    reactions.add(_equation(entry.reaction) or "")
+                    reactions.add(equation(entry.reaction) or "")
             elif link.record_type is SubmissionRecordType.transition_state:
                 ts = session.get(TransitionState, link.record_id)
                 if ts is not None and ts.label:
@@ -403,7 +403,7 @@ def _transition_state_rows(session: Session, entry: ReactionEntry) -> list[dict[
                     }
                     for ev in ts_entry.validation_evidence
                 ),
-                key=lambda r: (r["kind"], _content_key(r)),
+                key=lambda r: (r["kind"], content_key(r)),
             )
             irc_evidence = [ev for ev in evidence if ev["kind"] == "irc"]
             if irc_evidence:
@@ -420,13 +420,13 @@ def _transition_state_rows(session: Session, entry: ReactionEntry) -> list[dict[
                     "label": ts.label,
                     "review_status": _review_status(session, SubmissionRecordType.transition_state_entry, ts_entry.id),
                     "calculations_by_type": dict(sorted(Counter(_v(c.type) for c in calcs).items())),
-                    "frequency_calculations": sorted(freq_rows, key=_content_key),
+                    "frequency_calculations": sorted(freq_rows, key=content_key),
                     "irc_calculations": len(irc_calcs),
                     "validation_evidence": evidence,
                     "irc_outcome": outcome,
                 }
             )
-    return sorted(rows, key=lambda r: (r["label"] or "", _content_key(r)))
+    return sorted(rows, key=lambda r: (r["label"] or "", content_key(r)))
 
 
 def _selection_assessment(session: Session, kinetics: Kinetics) -> dict[str, Any]:
@@ -461,12 +461,12 @@ def _use_case_record(session: Session, kinetics: Kinetics) -> dict[str, Any]:
     )
     sources = sorted(
         (_calculation_row(link.calculation, role=_v(link.role)) for link in links),
-        key=lambda r: (r["role"], r["subject"], r["level_of_theory"], r["type"], _content_key(r)),
+        key=lambda r: (r["role"], r["subject"], r["level_of_theory"], r["type"], content_key(r)),
     )
     submissions = _submissions_of(session, SubmissionRecordType.kinetics, kinetics.id)
     return {
         "kinetics_ref": kinetics.public_ref,
-        "reaction": _equation(kinetics.reaction_entry.reaction),
+        "reaction": equation(kinetics.reaction_entry.reaction),
         "scientific_origin": _v(kinetics.scientific_origin),
         "review_status": _review_status(session, SubmissionRecordType.kinetics, kinetics.id),
         "released_in": _released_in(session, SubmissionRecordType.kinetics, kinetics.id),
@@ -502,7 +502,7 @@ def _use_case_record(session: Session, kinetics: Kinetics) -> dict[str, Any]:
 def _brief_kinetics(session: Session, kinetics: Kinetics) -> dict[str, Any]:
     return {
         "kinetics_ref": kinetics.public_ref,
-        "reaction": _equation(kinetics.reaction_entry.reaction),
+        "reaction": equation(kinetics.reaction_entry.reaction),
         "scientific_origin": _v(kinetics.scientific_origin),
         "model_kind": _v(kinetics.model_kind),
         "source": _source_label(kinetics),
@@ -527,15 +527,15 @@ def use_case_ch4_oh(session: Session) -> dict[str, Any]:
     records = _kinetics_on(session, forward)
     computed = [k for k in records if _v(k.scientific_origin) == "computed"]
     others = [k for k in records if _v(k.scientific_origin) != "computed"]
-    rows = sorted((_use_case_record(session, k) for k in computed), key=_content_key)
+    rows = sorted((_use_case_record(session, k) for k in computed), key=content_key)
     return {
         "reaction_asked": " + ".join(USE_CASE_REACTANTS) + " => " + " + ".join(USE_CASE_PRODUCTS),
-        "stored_reactions": [_equation(r) for r in forward],
+        "stored_reactions": [equation(r) for r in forward],
         "computed_records": rows,
         "computed_record_count": len(rows),
-        "other_origin_records_of_this_reaction": sorted((_brief_kinetics(session, k) for k in others), key=_content_key),
+        "other_origin_records_of_this_reaction": sorted((_brief_kinetics(session, k) for k in others), key=content_key),
         "records_of_the_reverse_reaction": sorted(
-            (_brief_kinetics(session, k) for k in _kinetics_on(session, reverse)), key=_content_key
+            (_brief_kinetics(session, k) for k in _kinetics_on(session, reverse)), key=content_key
         ),
         "note": (
             "Records of other origin on this reaction are listed separately, not in computed_records. "
@@ -563,7 +563,7 @@ def _thermo_selection_summary(manifest: dict[str, Any], h298_by_ref: dict[str, A
             }
             for c in manifest["candidates"]
         ),
-        key=_content_key,
+        key=content_key,
     )
     return {
         "outcome": manifest["outcome"],
@@ -638,7 +638,7 @@ def ch3_enthalpy_of_formation(session: Session) -> dict[str, Any]:
                     "released_in": _released_in(session, SubmissionRecordType.thermo, thermo.id),
                 }
             )
-    rows.sort(key=lambda r: (r["scientific_origin"], r.get("level_of_theory") or "", r["h298_kj_mol"] or 0.0, _content_key(r)))
+    rows.sort(key=lambda r: (r["scientific_origin"], r.get("level_of_theory") or "", r["h298_kj_mol"] or 0.0, content_key(r)))
     selections = []
     for entry in sorted(entries_with_thermo, key=lambda e: e.public_ref):
         without = _run_thermo_selection(session, entry, {}, h298_by_ref)
@@ -654,7 +654,7 @@ def ch3_enthalpy_of_formation(session: Session) -> dict[str, Any]:
                     "without_filter_candidates": len(without["candidates"]),
                 }
             )
-    selections.sort(key=lambda r: (r["level_filter"], _content_key(r)))
+    selections.sort(key=lambda r: (r["level_filter"], content_key(r)))
     return {
         "species": smiles,
         "multiplicity": multiplicity,
@@ -729,7 +729,7 @@ def network_n2h3(session: Session) -> dict[str, Any]:
                 }
                 for c in channels
             ),
-            key=lambda r: (r["kind"], r["source"], r["sink"], _content_key(r)),
+            key=lambda r: (r["kind"], r["source"], r["sink"], content_key(r)),
         )
         forms = Counter(_v(k.model_kind) for c in channels for k in c.kinetics_records)
         target = []
@@ -751,10 +751,10 @@ def network_n2h3(session: Session) -> dict[str, Any]:
                 "channels": channel_rows,
                 "kinetics_forms_by_model_kind": dict(sorted(forms.items())),
                 "solves": len(network.solves),
-                "nh3n_to_n2h3": sorted(target, key=_content_key),
+                "nh3n_to_n2h3": sorted(target, key=content_key),
             }
         )
-    out.sort(key=lambda r: (r["name"] or "", _content_key(r)))
+    out.sort(key=lambda r: (r["name"] or "", content_key(r)))
     return {
         "networks": out,
         "network_count": len(out),
@@ -891,7 +891,7 @@ def chemkin_reconciliation(session: Session) -> dict[str, Any]:
                     "explanation": "a DUPLICATE line summed with its partner into one multi_arrhenius rate record",
                     "merged_into_line": head.line_no,
                     "merged_into_equation": _chemkin_equation(head),
-                    "stored_reaction": _equation(stored_keys.get(key_of(head))),
+                    "stored_reaction": equation(stored_keys.get(key_of(head))),
                     "stored_as": "a term of the partner's multi_arrhenius record",
                 }
             )
@@ -914,7 +914,7 @@ def chemkin_reconciliation(session: Session) -> dict[str, Any]:
                     "explanation": explanation,
                     "merged_into_line": first.line_no,
                     "merged_into_equation": _chemkin_equation(by_line[first.line_no]),
-                    "stored_reaction": _equation(stored_keys[key]),
+                    "stored_reaction": equation(stored_keys[key]),
                     "stored_as": "its own rate record on the reaction stored for the earlier line",
                 }
             )
@@ -990,7 +990,7 @@ def species_thermo_sources(session: Session) -> dict[str, Any]:
         species = session.get(Species, species_id)
         record_rows = sorted(
             (_thermo_source_row(session, t, fixture_notes) for t in records),
-            key=lambda r: (r["scientific_origin"], r["source"], r.get("level_of_theory") or "", _content_key(r)),
+            key=lambda r: (r["scientific_origin"], r["source"], r.get("level_of_theory") or "", content_key(r)),
         )
         rows.append(
             {
@@ -1001,7 +1001,7 @@ def species_thermo_sources(session: Session) -> dict[str, Any]:
                 "records": record_rows,
             }
         )
-    rows.sort(key=lambda r: (r["species"], r["multiplicity"], _content_key(r)))
+    rows.sort(key=lambda r: (r["species"], r["multiplicity"], content_key(r)))
     return {
         "species_with_several_sources": len(rows),
         "species_list": [f"{r['species']} (multiplicity {r['multiplicity']})" for r in rows],
@@ -1032,7 +1032,7 @@ def _describe(session: Session, record_type: SubmissionRecordType, record) -> di
         return {}
     if record_type is SubmissionRecordType.kinetics:
         return {
-            "reaction": _equation(record.reaction_entry.reaction),
+            "reaction": equation(record.reaction_entry.reaction),
             "scientific_origin": _v(record.scientific_origin),
             "model_kind": _v(record.model_kind),
             "source": _source_label(record),
@@ -1047,11 +1047,11 @@ def _describe(session: Session, record_type: SubmissionRecordType, record) -> di
             "energy_level_of_theory": _lot_label(session, record.energy_level_of_theory_id),
         }
     if record_type is SubmissionRecordType.transition_state:
-        return {"reaction": _equation(record.reaction_entry.reaction), "label": record.label}
+        return {"reaction": equation(record.reaction_entry.reaction), "label": record.label}
     if record_type is SubmissionRecordType.transition_state_entry:
         freqs = sorted(f for c in record.calculations for f in _imaginary_frequencies(session, c))
         return {
-            "reaction": _equation(record.transition_state.reaction_entry.reaction),
+            "reaction": equation(record.transition_state.reaction_entry.reaction),
             "label": record.transition_state.label,
             "imaginary_frequencies_cm1": freqs,
         }
@@ -1063,7 +1063,7 @@ def _describe(session: Session, record_type: SubmissionRecordType, record) -> di
     if record_type is SubmissionRecordType.species_entry:
         return {"species": record.species.smiles, "multiplicity": record.species.multiplicity}
     if record_type is SubmissionRecordType.reaction_entry:
-        return {"reaction": _equation(record.reaction)}
+        return {"reaction": equation(record.reaction)}
     return {}
 
 
@@ -1077,7 +1077,7 @@ def _described_key(row: dict[str, Any]) -> tuple:
         record.get("multiplicity") or 0,
         h298 is None,
         h298 if h298 is not None else 0.0,
-        _content_key(row),
+        content_key(row),
     )
 
 
@@ -1109,11 +1109,11 @@ def _kinetics_selection(session: Session, entry: ReactionEntry, rejected_refs: s
             }
             for c in manifest["candidates"]
         ),
-        key=_content_key,
+        key=content_key,
     )
     excluded = sorted(
         ({"kinetics_ref": e["kinetics_ref"], "review_status": e["review_status"], "reason": e["reason"]} for e in population.get("excluded_by_review", [])),
-        key=_content_key,
+        key=content_key,
     )
     records = sorted(
         (
@@ -1124,11 +1124,11 @@ def _kinetics_selection(session: Session, entry: ReactionEntry, rejected_refs: s
             }
             for k in entry.kinetics_records
         ),
-        key=_content_key,
+        key=content_key,
     )
     candidate_refs = {c["kinetics_ref"] for c in candidates}
     return {
-        "reaction": _equation(entry.reaction),
+        "reaction": equation(entry.reaction),
         "kinetics_records": records,
         "outcome": manifest["outcome"],
         "kinetics_rows_for_entry": population.get("kinetics_rows_for_entry"),
@@ -1154,7 +1154,7 @@ def _finding_row(session: Session, finding: StructureEvidenceFinding) -> dict[st
         )
         subject_calcs = sorted(
             (_describe(session, SubmissionRecordType.calculation, session.get(Calculation, cid)) for cid in set(calc_ids)),
-            key=_content_key,
+            key=content_key,
         )
     if finding.subject_calculation_id is not None:
         subject_calcs.append(
@@ -1235,23 +1235,23 @@ def caught_error(session: Session) -> dict[str, Any]:
                         "on_a_rejected_record": (warning.record_type, warning.record_id) in rejected_keys,
                     }
                 )
-        warnings.sort(key=lambda r: (r["code"], r["record_type"] or "", _content_key(r)))
+        warnings.sort(key=lambda r: (r["code"], r["record_type"] or "", content_key(r)))
         entries = _same_reaction_entries(session, kinetics.reaction_entry.reaction)
         deposits.append(
             {
                 "rejected_kinetics_ref": kinetics.public_ref,
-                "reaction": _equation(kinetics.reaction_entry.reaction),
+                "reaction": equation(kinetics.reaction_entry.reaction),
                 "deposit_warnings": warnings,
                 "warning_codes": dict(sorted(Counter(w["code"] for w in warnings).items())),
                 "kinetics_question": KINETICS_QUESTION,
                 "selection_by_reaction_entry": sorted(
-                    (_kinetics_selection(session, entry, rejected_refs) for entry in entries), key=_content_key
+                    (_kinetics_selection(session, entry, rejected_refs) for entry in entries), key=content_key
                 ),
             }
         )
-    deposits.sort(key=_content_key)
+    deposits.sort(key=content_key)
     findings = sorted(
-        (_finding_row(session, f) for f in session.scalars(select(StructureEvidenceFinding))), key=_content_key
+        (_finding_row(session, f) for f in session.scalars(select(StructureEvidenceFinding))), key=content_key
     )
     return {
         "rejected_records": rejected,
@@ -1384,7 +1384,7 @@ def dataset_release(session: Session) -> dict[str, Any]:
                 "cite_as": {"tag": release.tag, "citation_text": release.citation_text, "doi": release.doi},
             }
         )
-    releases.sort(key=lambda r: (r["tag"], _content_key(r)))
+    releases.sort(key=lambda r: (r["tag"], content_key(r)))
     return {"releases": releases, "release_count": len(releases)}
 
 
