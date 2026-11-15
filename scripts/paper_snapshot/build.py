@@ -7,7 +7,7 @@ Steps:
 1. validate the sources config, then check the instance is reachable and empty;
 2. register a depositor and mint its API key;
 3. deposit each configured source through its public route;
-4. create a curator and approve every submission (a demonstration, recorded as such);
+4. create a curator and curate: approval, the caught error, the release (a demonstration, recorded as such);
 5. export the archive and the expected outputs;
 6. write ``build_report.json`` (warnings and refusals by code) and ``snapshot_record.json``.
 """
@@ -65,7 +65,7 @@ NOT_RUN_UNTIL_FED = ("selected_thermo_by_species", "candidate_lineage", "transit
 
 #: Config keys holding local paths; omitted from ``snapshot_record.json``.
 PATH_KEYS = frozenset({"root", "fixture_dir", "adapter_path", "arc_path", "runs_root", "arkane_dir"})
-TOP_LEVEL_KEYS = frozenset({"instance", "sources", "accounts", "expected_outputs"})
+TOP_LEVEL_KEYS = frozenset({"instance", "sources", "accounts", "expected_outputs", "curation"})
 
 #: Deposit order.
 SOURCES = (
@@ -89,6 +89,33 @@ def registered_generators() -> set[str]:
     return set(re.findall(r'^\s+"([a-z0-9_]+)":\s', text, flags=re.MULTILINE))
 
 
+def curation_problems(config: dict[str, Any]) -> list[str]:
+    """The curation plan names only deposited ARC runs and states every text it writes."""
+    plan = config.get("curation") or {}
+    arc = (config.get("sources") or {}).get("arc_runs") or {}
+    runs = set(arc.get("runs") or []) if arc.get("enabled", True) else set()
+    problems = [f"curation: unknown key {k!r}" for k in sorted(set(plan) - {"caught_error", "release"})]
+    caught = plan.get("caught_error")
+    if caught:
+        if caught.get("run") not in runs:
+            problems.append(f"curation.caught_error: run {caught.get('run')!r} is not in sources.arc_runs.runs")
+        finding = caught.get("finding") or {}
+        problems += [f"curation.caught_error.finding: {k!r} is required" for k in ("kind", "verdict", "rationale") if not finding.get(k)]
+        problems += [f"curation.caught_error: {k!r} is required" for k in ("reject_note", "approve_note") if not caught.get(k)]
+    release = plan.get("release")
+    if release:
+        needed = ("tag", "title", "citation_text", "contact", "policy", "selections")
+        problems += [f"curation.release: {k!r} is required" for k in needed if not release.get(k)]
+        for item in release.get("selections") or []:
+            if item.get("run") not in runs:
+                problems.append(f"curation.release: selection run {item.get('run')!r} is not in sources.arc_runs.runs")
+            if item.get("record") not in ("kinetics", "transition_state_entry", "thermo") or not item.get("rationale"):
+                problems.append(f"curation.release: selection {item} needs a record kind and a rationale")
+            if item.get("record") == "thermo" and not item.get("smiles"):
+                problems.append(f"curation.release: thermo selection {item} names no smiles")
+    return problems
+
+
 def validate_config(config: dict[str, Any]) -> list[str]:
     """Return the problems in the whole config, enabled stub sources included."""
     problems = [f"unknown top-level key {k!r}" for k in sorted(set(config) - TOP_LEVEL_KEYS)]
@@ -101,6 +128,7 @@ def validate_config(config: dict[str, Any]) -> list[str]:
             problems += module.validate(entry)
     if not any(e and e.get("enabled", True) for e in sources.values()):
         problems.append("no source is enabled; there is nothing to build")
+    problems += curation_problems(config)
     wanted = config.get("expected_outputs")
     if wanted:
         problems += [f"unknown generator {n!r}" for n in wanted if n not in registered_generators()]
@@ -247,10 +275,26 @@ def main(argv: list[str] | None = None) -> int:
         if not args.skip_approval:
             print("[curation] creating curator and approving submissions ...")
             created = curation.create_curator(db_env, curator["username"], curator["password"], curator["email"], curator["full_name"])
-            outcome = curation.approve_all(session, curator["username"], curator["password"], report)
-            approval = {"performed": True, "curator_account": created, **outcome,
-                        "statement": "approval was done by the build script for a demonstration; it is not an independent review"}
-            print(f"[curation] approved {outcome['approved_submissions']} submissions; none pending")
+            plan = config.get("curation") or {}
+            caught = plan.get("caught_error")
+            hold = frozenset({curation.arc_response(report, caught["run"])["submission_ref"]}) if caught else frozenset()
+            reviewer = curation.Curator(session, curator["username"], curator["password"])
+            try:
+                outcome = curation.approve_all(reviewer, report, hold=hold)
+                approval = {"performed": True, "curator_account": created, **outcome,
+                            "statement": "approval was done by the build script for a demonstration; it is not an independent review"}
+                print(f"[curation] approved {outcome['approved_submissions']} submissions; held {len(hold)} for record review")
+                if caught:
+                    approval["caught_error"] = curation.review_caught_error(reviewer, report, caught)
+                    print(f"[curation] {caught['run']}: {len(approval['caught_error']['rejected'])} records rejected, "
+                          f"{len(approval['caught_error']['approved'])} approved")
+                if plan.get("release"):
+                    approval["release"] = curation.cut_release(
+                        reviewer, report, plan["release"], export.subprocess_env(db_env, PACKAGE_PATHS)
+                    )
+                    print(f"[curation] release {plan['release']['tag']} published")
+            finally:
+                reviewer.close()
 
         if not args.skip_export:
             env = export.subprocess_env(db_env, PACKAGE_PATHS)

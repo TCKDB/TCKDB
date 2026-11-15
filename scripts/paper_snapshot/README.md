@@ -111,13 +111,33 @@ the registry or from the sources file (`title_source`), and the number of author
 author field, and in the build checked the stored row had no authors (`authors_stored` in the record). Rebuilding offline, or after the registry changes the
 record, can change that row and nothing else.
 
-## Approval is a demonstration
+## Curation is a demonstration
 
-After the deposits, the build creates a curator account and approves every submission through
-`POST /submissions/{id}/approve`. It pages through the whole pending list, and stops with an error if any approval
-fails or anything is still pending at the end. The summary on every approval says the build script did it for a
-demonstration and that it is not an independent review. The curator account is created with the operator CLI
-(`backend/scripts/bootstrap_admin.py --role curator`) (no public route grants that role).
+After the deposits, the build creates a curator account with the operator CLI
+(`backend/scripts/bootstrap_admin.py --role curator`; no public route grants that role). Everything below goes through
+the public curator routes as that account, never as the depositor, and every summary, note and rationale it writes says
+the build script wrote it for a demonstration and that it is not an independent review. The plan is the `curation`
+block of the sources file.
+
+- **Approval.** Every pending submission is approved with `POST /submissions/{id}/approve`, paged to the end, except the
+  caught-error run's submission. The build stops if an approval fails or anything else is still pending.
+- **The caught error** (`curation.caught_error`): one ARC run whose transition state is wrong.
+  - A structure-evidence finding on the transition state's optimised geometry (`POST /curation/structure-evidence-findings`),
+    citing its frequency calculation.
+  - Its transition state, transition-state entry, kinetics and transition-state calculations are rejected, and its other
+    records approved, record by record (`PATCH /record-reviews/{record_type}/{record_id}`). The grain is the record: the
+    run's species records are sound, and approving its submission would approve every record it holds, so the
+    submission itself stays unapproved.
+- **One dataset release** (`curation.release`), following `backend/docs/deployment/cutting_a_dataset_release.md`:
+  - a curation policy, a draft release, and one selection per listed record (`kinetics`, `transition_state_entry`, or
+    `thermo` with a SMILES), each named by its ARC run;
+  - the custody check (`backend/scripts/ops/verify_artifact_integrity.py --release`);
+  - publication. No DOI is minted.
+  - Rights: the ARC deposits carry the depositor's `rights` fragment (`sources.arc_runs.rights`, tckdb-arc 0.15.6 or
+    later). A deposit the release ships that has no rights basis is attested by the curator with `source_terms` when it
+    came from a source named in `curation.release.source_terms`; any other stops the build.
+- `snapshot_record.json` (`approval`) holds the calls' answers: the finding, every record review, the selections, the
+  attestations and the manifest's verification.
 
 ## Check it
 

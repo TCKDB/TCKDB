@@ -9,6 +9,9 @@ The run folders are read, never written: payloads, sidecars and the adapter's lo
 in a payload directory emptied before each run, so upload state left in a folder by an earlier upload is never read.
 A digest of each folder's file list (path, size, modification time) is taken before the run and checked after it.
 
+``rights`` is sent as every upload's ``rights`` fragment: the depositor's attestation, made at deposit (tckdb-arc 0.15.6
+or later carries it; the runner refuses an adapter that does not).
+
 Entry::
 
     arc_runs:
@@ -17,6 +20,7 @@ Entry::
       adapter_path: /path/to/tckdb-adapters
       arc_path: /path/to/ARC
       timeout_seconds: 900
+      rights: {license: CC-BY-4.0, depositor_attests_right_to_license: true}
       runs_root: /path/to/runs
       recorded_hosts: [tckdb.example.org]
       runs: [set_a/run_1, set_b/run_2]
@@ -46,8 +50,8 @@ CONFIG_FILES = ("tckdb_upload.yml", "input.yml")
 DEFAULT_TIMEOUT_SECONDS = 900
 #: Fields of a computed-reaction response kept in the build report.
 RESPONSE_KEYS = (
-    "submission_ref", "reaction_id", "reaction_entry_id", "kinetics_ids", "transition_state_entry_id", "thermo_ids",
-    "species_entry_ids",
+    "submission_ref", "submission_id", "reaction_id", "reaction_entry_id", "kinetics_ids", "transition_state_entry_id",
+    "thermo_ids", "species_entry_ids", "calculation_key_refs",
 )
 
 
@@ -170,6 +174,8 @@ def _environment(cfg: dict[str, Any], key: str) -> dict[str, str]:
     env["PATH"] = os.pathsep.join(p for p in env.get("PATH", "").split(os.pathsep) if p and p != own_bin)
     env["PYTHONPATH"] = os.pathsep.join(str(p) for p in paths)
     env["TCKDB_SNAPSHOT_API_KEY"] = key
+    if cfg.get("rights"):
+        env["TCKDB_SNAPSHOT_RIGHTS"] = json.dumps(cfg["rights"], sort_keys=True)
     return env
 
 
