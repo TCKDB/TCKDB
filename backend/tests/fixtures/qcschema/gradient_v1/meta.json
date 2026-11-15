@@ -3,7 +3,7 @@
   "expected_calculation_type": "sp",
   "family": "v1",
   "generator": {
-    "adapter_version": "0.2.0",
+    "adapter_version": "0.9.1",
     "qcelemental_version": "0.51.2",
     "source_fixture": "clients/python/adapters/qcschema/tests/fixtures/gradient_v1"
   },
@@ -11,5 +11,5 @@
     "electronic_energy_hartree": -74.96475172227329,
     "first_xyz_line": "O 0.0000000000 0.0000000000 -0.0685162194"
   },
-  "raw_sha256": "531b2847f28fe932bf808d8f1365c372c32af35b06470f8be422317fe1a36030"
+  "raw_sha256": "34cf0a3641860be0eb2df47525275535b63c6961461995aa3dfa363fc387dde2"
 }

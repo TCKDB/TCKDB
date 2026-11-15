@@ -7,7 +7,7 @@
   "idempotency_replayed": true,
   "is_partial": false,
   "last_error": null,
-  "payload_file": "/home/calvin/code/arc_rotor_scan/rxn_209/tckdb_payloads/computed_reaction/rxn_209_C-rxn_209_CO-O-rxn_209_-CH3-rxn_209_COO.payload.json",
+  "payload_file": "rxn_209_C-rxn_209_CO-O-rxn_209_-CH3-rxn_209_COO.payload.json",
   "payload_kind": "computed_reaction",
   "response_body": {
     "kinetics_ids": [

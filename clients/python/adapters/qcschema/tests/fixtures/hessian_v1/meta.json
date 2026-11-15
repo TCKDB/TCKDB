@@ -3,7 +3,7 @@
   "expected": "freq",
   "family": "v1",
   "driver": "hessian",
-  "raw_sha256": "1edac17be79b381771fb6c8889ec147bdbaaf12fbb6403a3d9052b6b1196522e",
+  "raw_sha256": "060043628c30527053d3c64aeae7d79388b49e072c20b5aaf4ab1f86fbdb59d4",
   "generator": "psi4-via-qcengine",
   "psi4": "1.11",
   "qcengine": "0.51.0",

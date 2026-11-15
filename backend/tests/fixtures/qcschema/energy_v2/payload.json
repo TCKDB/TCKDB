@@ -17,28 +17,74 @@
       "tckdb_origin": {
         "independent_ess_job": true,
         "origin_kind": "imported",
-        "producer": "tckdb-qcschema/0.2.0",
+        "producer": "tckdb-qcschema/0.9.1",
         "reason": "Imported from a MolSSI QCSchema atomic document (family=v2, driver=energy)."
       },
       "tckdb_qcschema": {
-        "adapter_version": "0.2.0",
+        "adapter_version": "0.9.1",
         "bohr_to_angstrom": 0.52917721067,
-        "canonical_document_sha256": "68cca6d737c1927c08c53d69b7b7730a19b66966a40e0b47aabe27c7890c4188",
+        "canonical_document_sha256": "1cd38da8b63d92d0d397536e4f031b0c35f100b94bc4778a50b7b7f8b71ac128",
         "driver": "energy",
         "identity_source": "depositor_declared",
         "mapping_report": {
           "rejected": [],
-          "retained_only": [],
+          "retained_only": [
+            "provenance.routine",
+            "provenance.memory",
+            "provenance.wall_time",
+            "provenance.nthreads",
+            "provenance.hostname",
+            "schema_name",
+            "schema_version",
+            "input_data.schema_name",
+            "input_data.schema_version",
+            "input_data.molecule",
+            "input_data.specification.schema_name",
+            "input_data.specification.protocols",
+            "input_data.provenance",
+            "molecule.schema_name",
+            "molecule.schema_version",
+            "molecule.validated",
+            "molecule.name",
+            "molecule.atom_labels",
+            "molecule.atomic_numbers",
+            "molecule.fragment_charges",
+            "molecule.fragment_multiplicities",
+            "molecule.fix_com",
+            "molecule.fix_orientation",
+            "molecule.provenance",
+            "properties.schema_name",
+            "properties.calcinfo_nbasis",
+            "properties.calcinfo_nmo",
+            "properties.calcinfo_nalpha",
+            "properties.calcinfo_nbeta",
+            "properties.calcinfo_natom",
+            "properties.nuclear_repulsion_energy",
+            "properties.scf_one_electron_energy",
+            "properties.scf_two_electron_energy",
+            "properties.scf_dipole_moment",
+            "properties.scf_total_energy",
+            "properties.scf_iterations",
+            "extras.qcvars"
+          ],
           "transformed": [
             "molecule.geometry",
             "provenance.creator",
             "provenance.version",
-            "model.method",
-            "model.basis",
+            "input_data.specification.model.method",
+            "input_data.specification.model.basis",
             "return_result",
+            "properties.return_energy",
             "--smiles",
             "molecule.molecular_charge",
-            "molecule.molecular_multiplicity"
+            "molecule.molecular_multiplicity",
+            "input_data.specification.driver",
+            "molecule.symbols",
+            "molecule.masses",
+            "molecule.real",
+            "molecule.mass_numbers",
+            "molecule.fragments",
+            "success"
           ],
           "unsupported": [
             "stdout",
@@ -60,7 +106,7 @@
         },
         "qcelemental_version": "0.51.2",
         "raw_artifact_filename": "energy_v2.qcschema.json",
-        "raw_artifact_sha256": "78d53638e7434a146810b86f588b9430603087702517e02fddb212018a642329",
+        "raw_artifact_sha256": "16aacd721f78e62d973981e9b512033679ffb2498327647f7ab1785ac8390c27",
         "record_kind": "atomic",
         "schema_name": "qcschema_atomic_result",
         "schema_version": 2,
@@ -69,13 +115,14 @@
     },
     "parameters_parser": {
       "name": "tckdb-qcschema",
-      "version": "0.2.0;qcelemental/0.51.2"
+      "version": "0.9.1;qcelemental/0.51.2"
     },
     "quality": "raw",
     "software_release": {
       "name": "Psi4",
       "version": "1.11"
     },
+    "sp_energy_components": [],
     "sp_result": {
       "electronic_energy_hartree": -74.96475172227183
     },
@@ -93,5 +140,6 @@
     "smiles": "O",
     "species_entry_kind": "minimum",
     "stereo_kind": "unspecified"
-  }
+  },
+  "structure_determinations": []
 }

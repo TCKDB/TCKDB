@@ -30,15 +30,11 @@ from app.importers.cccbdb.diagnostics.form_discovery import (
     discover_forms,
 )
 from app.parser_registry import PARSERS
+from app.user_agent import tckdb_user_agent
 
 DIAGNOSTIC_NAME = "cccbdb_resolver_diagnostics"
 DIAGNOSTIC_VERSION = str(PARSERS.get(DIAGNOSTIC_NAME).version)
-_DEFAULT_USER_AGENT = (
-    "tckdb-cccbdb-resolver-diagnostics/0.1 "
-    "(+https://github.com/TCKDB/TCKDB; "
-    "mailto:calvin.p@campus.technion.ac.il) "
-    "mode=resolver-debug"
-)
+_DEFAULT_USER_AGENT = tckdb_user_agent("mode=resolver-debug")
 
 
 # ---------------------------------------------------------------------------

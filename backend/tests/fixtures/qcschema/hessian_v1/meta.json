@@ -3,7 +3,7 @@
   "expected_calculation_type": "freq",
   "family": "v1",
   "generator": {
-    "adapter_version": "0.2.0",
+    "adapter_version": "0.9.1",
     "qcelemental_version": "0.51.2",
     "source_fixture": "clients/python/adapters/qcschema/tests/fixtures/hessian_v1"
   },
@@ -12,5 +12,5 @@
     "hessian_first_value": -0.001533616561028961,
     "hessian_length": 45
   },
-  "raw_sha256": "1edac17be79b381771fb6c8889ec147bdbaaf12fbb6403a3d9052b6b1196522e"
+  "raw_sha256": "060043628c30527053d3c64aeae7d79388b49e072c20b5aaf4ab1f86fbdb59d4"
 }

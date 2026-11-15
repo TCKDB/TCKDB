@@ -108,7 +108,7 @@ unknown
 unknown
 
 >  <arkane_path>  (1) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ZEUS_Converged/rmg_rxn_10626/output/Species/rmg_rxn_10626_r2_CC=CONrbr-N-rbrC/arkane/output.py
+/home/user/ZEUS_Converged/rmg_rxn_10626/output/Species/rmg_rxn_10626_r2_CC=CONrbr-N-rbrC/arkane/output.py
 
 >  <path_exists>  (1) 
 True
@@ -174,7 +174,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (1) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ZEUS_Converged/rmg_rxn_10626/output/Species/rmg_rxn_10626_r2_CC=CONrbr-N-rbrC/rmg_rxn_10626_r2_CC=CONrbr-N-rbrC.yml
+/home/user/ZEUS_Converged/rmg_rxn_10626/output/Species/rmg_rxn_10626_r2_CC=CONrbr-N-rbrC/rmg_rxn_10626_r2_CC=CONrbr-N-rbrC.yml
 
 >  <frequencies_cm1>  (1) 
 [42.90492427935999, 70.94969232623998, 121.85465450339998, 166.71666959895998, 253.87244728039994, 301.92074356444, 373.40606074563993, 419.64833989052, 445.81842094504, 504.72342102, 549.00174236336, 631.06908392268, 758.13578028396, 848.92419319968, 869.8822323963199, 938.1057315505199, 966.4663809221199, 985.6939398181199, 1045.86246519196, 1060.8324931895597, 1129.8319616849199, 1145.91444130436, 1177.50257377636, 1255.0720399510801, 1275.68672988172, 1357.8776771768, 1378.40309629828, 1417.9431977708398, 1431.4368239246398, 1469.8713407606797, 1474.3760831306, 1478.2284618951198, 1482.71260330908, 1665.8688357641197, 1738.5215404497199, 2975.03898606616, 3009.26404090104, 3062.7647235291597, 3097.66960991072, 3105.09968802696, 3145.0998775159596, 3146.5076095065597, 3168.9763854735997, 3405.2006804816, 3560.0443324622797]
@@ -274,7 +274,7 @@ unknown
 unknown
 
 >  <arkane_path>  (2) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ZEUS_Converged/rmg_rxn_10626/output/Species/rmg_rxn_10626_p1_sbr-SH-sbr/arkane/output.py
+/home/user/ZEUS_Converged/rmg_rxn_10626/output/Species/rmg_rxn_10626_p1_sbr-SH-sbr/arkane/output.py
 
 >  <path_exists>  (2) 
 True
@@ -340,7 +340,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (2) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ZEUS_Converged/rmg_rxn_10626/output/Species/rmg_rxn_10626_p1_sbr-SH-sbr/rmg_rxn_10626_p1_sbr-SH-sbr.yml
+/home/user/ZEUS_Converged/rmg_rxn_10626/output/Species/rmg_rxn_10626_p1_sbr-SH-sbr/rmg_rxn_10626_p1_sbr-SH-sbr.yml
 
 >  <frequencies_cm1>  (2) 
 [2684.5517730595197]
@@ -486,7 +486,7 @@ cm^-1
 unknown
 
 >  <arkane_path>  (3) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ZEUS_Converged/rmg_rxn_10626/output/rxns/TS0/arkane/output.py
+/home/user/ZEUS_Converged/rmg_rxn_10626/output/rxns/TS0/arkane/output.py
 
 >  <path_exists>  (3) 
 True
@@ -582,7 +582,7 @@ unknown
 -1123.6735
 
 >  <ts_freq_out_path>  (3) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ZEUS_Converged/rmg_rxn_10626/output/rxns/TS0/geometry/freq.out
+/home/user/ZEUS_Converged/rmg_rxn_10626/output/rxns/TS0/geometry/freq.out
 
 >  <E0_kJmol>  (3) 
 -1.94564e+06
@@ -697,7 +697,7 @@ unknown
 unknown
 
 >  <arkane_path>  (4) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ZEUS_Converged/rmg_rxn_10626/output/Species/rmg_rxn_10626_p2_CC=CONrbr-sbr-NH-sbr-rbrC/arkane/output.py
+/home/user/ZEUS_Converged/rmg_rxn_10626/output/Species/rmg_rxn_10626_p2_CC=CONrbr-sbr-NH-sbr-rbrC/arkane/output.py
 
 >  <path_exists>  (4) 
 True
@@ -763,7 +763,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (4) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ZEUS_Converged/rmg_rxn_10626/output/Species/rmg_rxn_10626_p2_CC=CONrbr-sbr-NH-sbr-rbrC/rmg_rxn_10626_p2_CC=CONrbr-sbr-NH-sbr-rbrC.yml
+/home/user/ZEUS_Converged/rmg_rxn_10626/output/Species/rmg_rxn_10626_p2_CC=CONrbr-sbr-NH-sbr-rbrC/rmg_rxn_10626_p2_CC=CONrbr-sbr-NH-sbr-rbrC.yml
 
 >  <frequencies_cm1>  (4) 
 [39.766711988119994, 75.63297631448, 123.26238649399998, 170.50724549560002, 210.75464645612, 275.49658405307997, 409.25172411604, 436.20464149704003, 468.50694044231994, 500.21867865008005, 576.8748357772399, 635.10687129084, 759.24136492048, 839.57822617916, 939.32118795216, 961.2680730348799, 1009.44684204, 1040.7534281138799, 1058.9372052412398, 1116.31086758984, 1136.6302771517198, 1158.60463017572, 1269.5201770643598, 1302.9417946168, 1381.1704913822398, 1418.63676328816, 1428.2162078095598, 1447.1828212633998, 1467.8867820031996, 1473.94346305544, 1477.12974424392, 1484.2920099326798, 1743.06061774624, 3013.6108426086, 3018.15678689044, 3068.4780553153996, 3106.953774063359, 3110.6619461361597, 3147.0088994349203, 3149.9479691518795, 3171.6476427630796, 3452.55541124832]
@@ -856,7 +856,7 @@ unknown
 unknown
 
 >  <arkane_path>  (5) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ZEUS_Converged/rmg_rxn_10626/output/Species/rmg_rxn_10626_r1_sbr-S-sbr/arkane/output.py
+/home/user/ZEUS_Converged/rmg_rxn_10626/output/Species/rmg_rxn_10626_r1_sbr-S-sbr/arkane/output.py
 
 >  <path_exists>  (5) 
 True
@@ -922,7 +922,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (5) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ZEUS_Converged/rmg_rxn_10626/output/Species/rmg_rxn_10626_r1_sbr-S-sbr/rmg_rxn_10626_r1_sbr-S-sbr.yml
+/home/user/ZEUS_Converged/rmg_rxn_10626/output/Species/rmg_rxn_10626_r1_sbr-S-sbr/rmg_rxn_10626_r1_sbr-S-sbr.yml
 
 >  <frequencies_cm1>  (5) 
 []

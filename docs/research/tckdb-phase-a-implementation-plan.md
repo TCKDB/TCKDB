@@ -10,7 +10,7 @@ Acceptance of an inconsistent-looking H/S/G triple establishes no unconditional 
 
 ## Required impact analysis
 
-Bind `TCKDB` to `/home/calvin/code/TCKDB_v2`. The original index was at `ffe304ba38362bff9eb38bf52144b8975d0da6b9`, 186 commits behind; engine/storage versions 42/43 caused UNKNOWN results. Restore the runner/index before edits, run upstream analysis for changed functions/classes, inspect callers/processes and report HIGH/CRITICAL risks. UNKNOWN is unresolved; corroborate graph boundaries with source references. Vtrace is supplementary, not a complete replacement. Complete `detect_changes(scope="all")` is required before any commit; partial/truncated output does not pass.
+Bind `TCKDB` to `<checkout>`. The original index was at `ffe304ba38362bff9eb38bf52144b8975d0da6b9`, 186 commits behind; engine/storage versions 42/43 caused UNKNOWN results. Restore the runner/index before edits, run upstream analysis for changed functions/classes, inspect callers/processes and report HIGH/CRITICAL risks. UNKNOWN is unresolved; corroborate graph boundaries with source references. Vtrace is supplementary, not a complete replacement. Complete `detect_changes(scope="all")` is required before any commit; partial/truncated output does not pass.
 
 ## A1 — projections
 

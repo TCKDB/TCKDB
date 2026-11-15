@@ -99,7 +99,7 @@ unknown
 unknown
 
 >  <arkane_path>  (1) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ATLAS_Converged/rmg_rxn_1345/output/Species/rmg_rxn_1345_r2_COCCC=O/arkane/output.py
+/home/user/ATLAS_Converged/rmg_rxn_1345/output/Species/rmg_rxn_1345_r2_COCCC=O/arkane/output.py
 
 >  <path_exists>  (1) 
 True
@@ -165,7 +165,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (1) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ATLAS_Converged/rmg_rxn_1345/output/Species/rmg_rxn_1345_r2_COCCC=O/rmg_rxn_1345_r2_COCCC=O.yml
+/home/user/ATLAS_Converged/rmg_rxn_1345/output/Species/rmg_rxn_1345_r2_COCCC=O/rmg_rxn_1345_r2_COCCC=O.yml
 
 >  <frequencies_cm1>  (1) 
 [119.45120964139998, 126.72334709527999, 181.116737815, 228.09378438912, 254.05098889872, 316.95257442992, 441.25187570724, 683.77319625368, 694.6779689418399, 886.61707562116, 906.60000290236, 959.42772096912, 1080.58194296988, 1116.1185920008797, 1122.2714108475998, 1168.5411579337601, 1202.02457835408, 1219.26071150728, 1296.5280303279199, 1314.7186744406, 1384.4597773505197, 1408.2744824402798, 1440.37763881128, 1463.0798922791998, 1479.6361938857199, 1483.0628195603997, 1499.1178312385598, 1681.9513153835596, 2935.04566356248, 2975.2106606991597, 2980.62871211664, 3013.01341488576, 3021.32933410828, 3049.1680925955598, 3058.9329457206, 3074.12271724844]
@@ -284,7 +284,7 @@ unknown
 unknown
 
 >  <arkane_path>  (2) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ATLAS_Converged/rmg_rxn_1345/output/Species/rmg_rxn_1345_p1_CCO/arkane/output.py
+/home/user/ATLAS_Converged/rmg_rxn_1345/output/Species/rmg_rxn_1345_p1_CCO/arkane/output.py
 
 >  <path_exists>  (2) 
 True
@@ -350,7 +350,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (2) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ATLAS_Converged/rmg_rxn_1345/output/Species/rmg_rxn_1345_p1_CCO/rmg_rxn_1345_p1_CCO.yml
+/home/user/ATLAS_Converged/rmg_rxn_1345/output/Species/rmg_rxn_1345_p1_CCO/rmg_rxn_1345_p1_CCO.yml
 
 >  <frequencies_cm1>  (2) 
 [300.61601635363996, 438.80722893331995, 519.8857246065601, 815.3652359408399, 905.02059627876, 1069.79390903216, 1082.6077036392799, 1147.3839761628399, 1278.72880437848, 1370.0047732519197, 1403.41265683372, 1418.8427728477598, 1476.07909548996, 1485.5280672902798, 1506.6989830318398, 2989.0339021483196, 2998.4554060073597, 3042.4384469819593, 3067.69521898892, 3075.2214348996404, 3657.3838493732796]
@@ -509,7 +509,7 @@ cm^-1
 unknown
 
 >  <arkane_path>  (3) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ATLAS_Converged/rmg_rxn_1345/output/rxns/TS0/arkane/output.py
+/home/user/ATLAS_Converged/rmg_rxn_1345/output/rxns/TS0/arkane/output.py
 
 >  <path_exists>  (3) 
 True
@@ -605,7 +605,7 @@ unknown
 -1675.2971
 
 >  <ts_freq_out_path>  (3) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ATLAS_Converged/rmg_rxn_1345/output/rxns/TS0/geometry/freq.out
+/home/user/ATLAS_Converged/rmg_rxn_1345/output/rxns/TS0/geometry/freq.out
 
 >  <E0_kJmol>  (3) 
 -1.21266e+06
@@ -711,7 +711,7 @@ unknown
 unknown
 
 >  <arkane_path>  (4) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ATLAS_Converged/rmg_rxn_1345/output/Species/rmg_rxn_1345_p2_sbr-CH2-sbrOCCC=O/arkane/output.py
+/home/user/ATLAS_Converged/rmg_rxn_1345/output/Species/rmg_rxn_1345_p2_sbr-CH2-sbrOCCC=O/arkane/output.py
 
 >  <path_exists>  (4) 
 True
@@ -777,7 +777,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (4) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ATLAS_Converged/rmg_rxn_1345/output/Species/rmg_rxn_1345_p2_sbr-CH2-sbrOCCC=O/rmg_rxn_1345_p2_sbr-CH2-sbrOCCC=O.yml
+/home/user/ATLAS_Converged/rmg_rxn_1345/output/Species/rmg_rxn_1345_p2_sbr-CH2-sbrOCCC=O/rmg_rxn_1345_p2_sbr-CH2-sbrOCCC=O.yml
 
 >  <frequencies_cm1>  (4) 
 [136.21352080751998, 205.837884967, 226.22596438207998, 282.70005165376, 343.22566026423993, 493.44783112455997, 683.39551206108, 700.78271889132, 817.63820808176, 887.17330143208, 910.562253432, 984.2175379743198, 1086.60428909552, 1114.2507719938399, 1134.06202464204, 1217.44096039748, 1289.09108522636, 1298.6842637184, 1307.69374845824, 1330.11445552804, 1385.4142883099998, 1413.0882391496, 1444.51843095924, 1495.6843385785598, 1501.4457392620398, 1681.2783508221999, 1686.83374194608, 2455.7712901383993, 2883.4128009413994, 2934.66797936988, 2953.5727899558397, 3113.5117450439598, 3127.9392812012798]
@@ -892,7 +892,7 @@ unknown
 unknown
 
 >  <arkane_path>  (5) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ATLAS_Converged/rmg_rxn_1345/output/Species/rmg_rxn_1345_r1_CCsbr-O-sbr/arkane/output.py
+/home/user/ATLAS_Converged/rmg_rxn_1345/output/Species/rmg_rxn_1345_r1_CCsbr-O-sbr/arkane/output.py
 
 >  <path_exists>  (5) 
 True
@@ -958,7 +958,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (5) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ATLAS_Converged/rmg_rxn_1345/output/Species/rmg_rxn_1345_r1_CCsbr-O-sbr/rmg_rxn_1345_r1_CCsbr-O-sbr.yml
+/home/user/ATLAS_Converged/rmg_rxn_1345/output/Species/rmg_rxn_1345_r1_CCsbr-O-sbr/rmg_rxn_1345_r1_CCsbr-O-sbr.yml
 
 >  <frequencies_cm1>  (5) 
 [300.60914936832, 468.21852705888, 815.8733928545199, 907.07382488944, 1062.40503282784, 1086.9751063028, 1131.43196926448, 1292.3941051652798, 1299.0482139403598, 1361.6888540294, 1409.66848046024, 1481.5177478633998, 1487.32721744412, 2924.60097889076, 2942.33840197232, 2969.44926001568, 3038.38692564316, 3046.5449042033197]

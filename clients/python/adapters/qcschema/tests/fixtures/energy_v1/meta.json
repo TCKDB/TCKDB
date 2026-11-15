@@ -3,7 +3,7 @@
   "expected": "sp",
   "family": "v1",
   "driver": "energy",
-  "raw_sha256": "6e0de7881187c554a4a03d52b7713343c1228a96123eb2bb1b991adad7f30743",
+  "raw_sha256": "fd8a3da93a52da247bf403fe668b1d0875294a06e958f48ab7658056664b4400",
   "generator": "psi4-via-qcengine",
   "psi4": "1.11",
   "qcengine": "0.51.0",

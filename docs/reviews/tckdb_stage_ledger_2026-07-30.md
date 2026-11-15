@@ -359,10 +359,10 @@ substitute for this contract, corpus, restore, or claim baseline.
 
 ## Restore evidence recorded 2026-07-30
 
-- PostgreSQL backup: `/home/calvin/tckdb_backups/tckdb_20260730_174102.sql.gz`;
+- PostgreSQL backup: `<backup-dir>/tckdb_20260730_174102.sql.gz`;
   downloaded verification copy `/tmp/tckdb_stage0_db_20260730_174102.sql.gz`;
   SHA-256 `bbb001335ddd5d76f2807f264cd284ad93d76af099c4e05c81ccaedd159a3bbc`.
-- MinIO backup: `/home/calvin/tckdb_backups/tckdb_minio_20260730_174101.tar.gz`;
+- MinIO backup: `<backup-dir>/tckdb_minio_20260730_174101.tar.gz`;
   SHA-256 `2fa1d921f98a5cb3529863fd3857965ec403c9aa66a1b51b6578b427efabbc31`.
 - The DB restore used `ON_ERROR_STOP` into isolated
   `tckdb_stage0_restore_20260730_174102`: Alembic `a8b9c0d1e2f3`, RDKit SQL

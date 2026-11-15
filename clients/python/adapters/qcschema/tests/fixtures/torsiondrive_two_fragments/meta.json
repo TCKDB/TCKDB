@@ -8,5 +8,5 @@
   "smiles_arg": "OO",
   "parent_opt_case": "torsiondrive_parent_opt_v2",
   "edit": "torsiondrive_v2 with initial_molecule[0] and every final_molecules entry declaring two fragments [[0, 2], [1, 3]] (two OH doublets); atoms and coordinates unchanged; scan_results emptied and input_data.specification.protocols.scan_results set to 'none' (QCSchema's own way of dropping the per-point histories) to keep the fixture small",
-  "raw_sha256": "33448e555ee4521d27ed073a98417caed566fa222ab54679bf5018aff1e83ca6"
+  "raw_sha256": "045ac8a723ee8a20d958ead8bf69c17a33b0af8baf322347ac6edfd5f3a28834"
 }

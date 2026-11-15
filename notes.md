@@ -4,7 +4,7 @@
 
 - ISBN metadata lookup currently expects the `isbnlib` import path, but the package we are installing in `tckdb_env` is:
   `pip install isbnlib2`
-- `isbnlib2` provides the `isbnlib` module used by [app/services/literature_metadata.py](/home/calvin/code/TCKDB_v2/app/services/literature_metadata.py).
+- `isbnlib2` provides the `isbnlib` module used by [app/services/literature_metadata.py](backend/app/services/literature_metadata.py).
 
 Think of a DAG as “the receipts”. You already store **facts** (energies, frequencies, geometries). A DAG stores **how one fact was produced from other facts**.
 

@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Outbound User-Agent names the project (Unreleased)
+
+- **Behaviour:** requests to Crossref and CCCBDB send `TCKDB/<version> (+https://github.com/TCKDB/TCKDB)`; setting `TCKDB_CONTACT_EMAIL` adds `; mailto:<address>`. Test fixtures and docs carry no personal paths or addresses.
+- **Schema and migration:** none. New optional environment variable `TCKDB_CONTACT_EMAIL`.
+- **Versions:** no distributed package changed.
+
 ## Reaction-entry reads carry `deposit_position` (Unreleased)
 
 - **Behaviour:** the reaction-entry summary in `GET /scientific/reactions/search`, `GET /scientific/reactions/browse` and `GET /scientific/reaction-entries/{id}/full` gains `deposit_position`, a 1-based integer: the entry's place among all entries of the same reaction, ordered by `(created_at, id)`. It is computed over every entry of the reaction, so it ignores the read filter, paging, the hidden-by-default rule and review status: a hidden entry leaves a gap, a later page reports the global number, and a review change never renumbers.

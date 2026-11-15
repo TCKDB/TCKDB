@@ -3,7 +3,7 @@
   "expected": "opt",
   "family": "v2",
   "driver": null,
-  "raw_sha256": "9c7bb8c30737fc5c79f8f6b386d57686aedee98b46332618ff5621a1f556b92a",
+  "raw_sha256": "b2b6ee6971fb27f72e90a133dd580e69884f61edfb00fa234ad6c13d17b2433e",
   "generator": "psi4-via-qcengine",
   "psi4": "1.11",
   "qcengine": "0.51.0",

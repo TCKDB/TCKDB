@@ -149,19 +149,19 @@
           }
         ]
       },
-      "raw_sha256": "90a765d36c8f863c94802553af678bd651d7a6f42f2c8bd1eeafa853b3e27074",
+      "raw_sha256": "d10f93f930a77e1e0b96eebedcdc57fe7d47eee83f6fe4dfb016a86958369735",
       "source_case": "torsiondrive_2d_v2"
     }
   ],
   "expected_calculation_type": "scan",
   "family": "v2",
   "generator": {
-    "adapter_version": "0.6.0",
+    "adapter_version": "0.9.1",
     "qcelemental_version": "0.51.2",
     "source_fixtures": [
       "clients/python/adapters/qcschema/tests/fixtures/torsiondrive_2d_v2"
     ]
   },
   "parent_opt_case": "torsiondrive_2d_parent_opt_v2",
-  "parent_raw_sha256": "caa3ea7400b720794bf5aa5b3628d375b2286311c8b45aad79fe95c3cf7fb3d1"
+  "parent_raw_sha256": "26d0e73d1a0793815b10d37aa5144dee6f9c4466a71870e58bfa2a167d4e430f"
 }

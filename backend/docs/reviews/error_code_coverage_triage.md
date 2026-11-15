@@ -312,7 +312,7 @@ measurements and is what caught findings 1 and 4 above. The probes are
 
 > **Coverage caveat, recorded because it nearly produced a wrong answer.**
 > `tckdb_schemas` is an editable install pointing at the *main* checkout, so
-> in a worktree `import tckdb_schemas` loads `/home/calvin/code/TCKDB_v2/schemas/…`
+> in a worktree `import tckdb_schemas` loads `<checkout>/schemas/…`
 > and coverage records that path, not the worktree's. Keyed on the worktree
 > path, all three `atom_map_*` codes looked unexecuted; keyed on the real path
 > (files verified byte-identical at this commit) all three are executed. Any

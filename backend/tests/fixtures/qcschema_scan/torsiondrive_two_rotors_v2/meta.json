@@ -43,7 +43,7 @@
           }
         ]
       },
-      "raw_sha256": "791b7fcfb4e6f019ab835b1e72e36df56597931b2b5bd70fa9af3951bc3dba9e",
+      "raw_sha256": "ada53c5d2243a8056a9449f4de8fcdc5887f8f118b6e2362fe1868ab0daf782f",
       "source_case": "torsiondrive_rotor1_v2"
     },
     {
@@ -89,14 +89,14 @@
           }
         ]
       },
-      "raw_sha256": "568cc62bce195d1876a42d185e09b94380d65e4b78f2dec142d4b6902db78b81",
+      "raw_sha256": "2f8d25d479f2b11673facb92726598e27aed48a6e18489c27f54e3f24d713709",
       "source_case": "torsiondrive_rotor2_v2"
     }
   ],
   "expected_calculation_type": "scan",
   "family": "v2",
   "generator": {
-    "adapter_version": "0.6.0",
+    "adapter_version": "0.9.1",
     "qcelemental_version": "0.51.2",
     "source_fixtures": [
       "clients/python/adapters/qcschema/tests/fixtures/torsiondrive_rotor1_v2",
@@ -104,5 +104,5 @@
     ]
   },
   "parent_opt_case": "torsiondrive_2d_parent_opt_v2",
-  "parent_raw_sha256": "caa3ea7400b720794bf5aa5b3628d375b2286311c8b45aad79fe95c3cf7fb3d1"
+  "parent_raw_sha256": "26d0e73d1a0793815b10d37aa5144dee6f9c4466a71870e58bfa2a167d4e430f"
 }

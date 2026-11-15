@@ -9,15 +9,12 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any
 
+from app.user_agent import tckdb_user_agent
+
 # Note: the runtime import path remains `isbnlib`, but in this project we
 # install the replacement package via `pip install isbnlib2`.
 
 _CROSSREF_BASE_URL = "https://api.crossref.org/works/"
-_CROSSREF_USER_AGENT = (
-    "tckdb-literature/1.0 "
-    "(https://github.com/TCKDB/TCKDB; "
-    "mailto:calvin.p@campus.technion.ac.il)"
-)
 
 
 def normalize_doi(doi: str | None) -> str | None:
@@ -172,7 +169,7 @@ def _fetch_doi_metadata_uncached(normalized_doi: str) -> dict[str, Any] | None:
     except ImportError:
         return None
 
-    headers = {"User-Agent": _CROSSREF_USER_AGENT}
+    headers = {"User-Agent": tckdb_user_agent()}
     try:
         response = requests.get(
             f"{_CROSSREF_BASE_URL}{normalized_doi}",
