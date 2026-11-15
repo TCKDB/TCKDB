@@ -7,8 +7,8 @@ One sample per configured source:
 * E2: n-butane. Its calculation count equals the sources'; one output log is downloaded by digest and its SHA-256
   equals the digest requested and a source file's.
 * Formic acid model: HOCHO. Its stored NASA-7 coefficients and temperature ranges equal the CHEMKIN file's.
-* ARC runs: CH4 + OH (``rotor_scan_rxn_188``). Its transition state's output logs are files of the run folder's
-  ``calcs/TSs``; one is downloaded by digest and its SHA-256 equals the digest requested.
+* ARC runs: CH4 + OH (``rotor_scan_rxn_188``), the computed record stored in that orientation. Its transition state's
+  output logs are files of the run folder's ``calcs/TSs``; one is downloaded by digest and its SHA-256 equals the digest requested.
 
 Registers a reader account through open registration. A source with no entry is skipped.
 """
@@ -114,7 +114,11 @@ def check_arc(client, cfg: dict[str, Any]) -> dict[str, Any]:
     source_digests = {
         hashlib.sha256(p.read_bytes()).hexdigest() for p in (run_dir / "calcs" / "TSs").rglob("*") if p.is_file()
     }
-    kinetics = client.search_kinetics(reactants=["C", "[OH]"], products=["[CH3]", "O"])["records"]
+    kinetics = [
+        r for r in client.search_kinetics(reactants=["C", "[OH]"], products=["[CH3]", "O"])["records"]
+        if sorted(p["smiles"] for p in r["reaction"]["reactants"]) == ["C", "[OH]"]
+        and r["kinetics"]["scientific_origin"] == "computed"
+    ]
     reaction_ref = kinetics[0]["reaction"]["reaction_ref"]
     states = client.search_transition_states(reaction_ref=reaction_ref)["records"]
     entry_ref = states[0]["transition_state_entry"]["transition_state_entry_ref"]
