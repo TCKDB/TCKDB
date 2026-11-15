@@ -64,7 +64,7 @@ EXPECTED_OUTPUTS = (
 NOT_RUN_UNTIL_FED = ("selected_thermo_by_species", "candidate_lineage", "transition_state_evidence")
 
 #: Config keys holding local paths; omitted from ``snapshot_record.json``.
-PATH_KEYS = frozenset({"root", "fixture_dir", "adapter_path", "runs_root", "arkane_dir"})
+PATH_KEYS = frozenset({"root", "fixture_dir", "adapter_path", "arc_path", "runs_root", "arkane_dir"})
 TOP_LEVEL_KEYS = frozenset({"instance", "sources", "accounts", "expected_outputs"})
 
 #: Deposit order.

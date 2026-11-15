@@ -27,9 +27,22 @@ instance, and the script is the deliverable, not the database.
   - Where to get it: the files are in this repository, `backend/tests/integration/fixtures/rmg_formic_acid_wu2026/`.
   - The adapter's own import warnings (wrong `DUPLICATE` flags) are kept in the report; the importer never
     repairs them.
-- **Source 2, ARC runs** and **source 3, N2H3 pressure-dependent network**: stubs (`source_arc.py`,
-  `source_pdep.py`). No entry in the sources file means the step is skipped and the build says so. An enabled
-  entry is a configuration error: the deposit step is not written yet.
+- **Source 2, ARC runs** (`source_arc.py`): a fixed, ordered list of ARC run folders, each deposited through the ARC
+  adapter (`tckdb_arc` in `tckdb-adapters`) with its `output/output.yml`.
+  - Route: `arc_upload.py`, run per folder by `adapter_command` (a Python that imports `tckdb_arc` and ARC; without
+    ARC the adapter leaves out the Hessian, IRC and GSM parts, so the runner refuses), posts each
+    `computed_reaction` bundle.
+  - The folder's `tckdb` block (`tckdb_upload.yml`, else `input.yml`) is reused. The API URL, the API key, the payload
+    directory and the request timeout come from the build; every key setting of the block is dropped. A block naming a
+    host outside `recorded_hosts` stops the build before anything is deposited.
+  - The folders are read, never written. Payloads, sidecars and the adapter's output go to `<work-dir>/arc_payloads`
+    and `<work-dir>/arc_logs`, in a payload directory emptied before each run, so upload state an earlier upload left
+    in a folder is never read. A digest of each folder's file list is taken before its run and checked after it; a
+    change stops the build. The build also stops if the API key appears in the adapter's output or a sidecar.
+  - `snapshot_record.json` records the adapter's and ARC's commits and the adapter's declared versions.
+- **Source 3, N2H3 pressure-dependent network**: a stub (`source_pdep.py`). No entry in the sources file means the
+  step is skipped and the build says so. An enabled entry is a configuration error: the deposit step is not written
+  yet.
 
 ## Run it
 
