@@ -835,9 +835,9 @@ def chemkin_reconciliation(session: Session) -> dict[str, Any]:
     Species names are matched to stored species through identical NASA7 coefficients; a line's stored reaction is
     the stored reaction with the same participants, direction and reversibility. Lines are listed in file order.
     """
+    mechanism = _parse_fixture_mechanism()
     from tckdb_chemkin.normalizer import normalize_mechanism
 
-    mechanism = _parse_fixture_mechanism()
     normalized = normalize_mechanism(mechanism).reactions
     lines = sorted(r.line_no for r in mechanism.reactions)
     record_lines = {r.line_no for r in normalized}
