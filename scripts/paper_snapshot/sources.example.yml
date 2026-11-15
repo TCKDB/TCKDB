@@ -52,7 +52,7 @@ sources:
   #   timeout_seconds: 900
   #   rights: {license: CC-BY-4.0, depositor_attests_right_to_license: true}
   #   runs_root: /path/to/arc/runs
-  #   recorded_hosts: [tckdb.homecalvin.com]
+  #   recorded_hosts: [tckdb.example.org]
   #   runs:
   #   - snapshot_reruns_20261110/rotor_scan_rmg_rxn_1142
   #   - snapshot_reruns_20261110/rotor_scan_rxn_188
