@@ -10,7 +10,7 @@ Constraints (the crawler constraints in
 ``backend/docs/specs/cccbdb_importer.md``):
 
 * explicit allowlist of 1-3 URLs
-* clear User-Agent identifying TCKDB + a contact mailto
+* clear User-Agent identifying TCKDB
 * short request timeout
 * at most one conservative retry
 * no automatic writing of downloaded HTML back into the repo

@@ -1,6 +1,6 @@
  Entering Gaussian System, Link 0=g09
  Initial command:
- /usr/local/g09/l1.exe "/gtmp/calvin.p/scratch/g09/2796934.zeus-master/Gau-3724312.inp" -scrdir="/gtmp/calvin.p/scratch/g09/2796934.zeus-master/"
+ /usr/local/g09/l1.exe "/gtmp/user/scratch/g09/2796934.zeus-master/Gau-3724312.inp" -scrdir="/gtmp/user/scratch/g09/2796934.zeus-master/"
  Entering Link 1 = /usr/local/g09/l1.exe PID=   3724313.
   
  Copyright (c) 1988,1990,1992,1993,1995,1998,2003,2009,2013,
@@ -2156,7 +2156,7 @@
  (Enter /usr/local/g09/l9999.exe)
 
  Test job not archived.
- 1\1\GINC-N017\Freq\UwB97XD\def2TZVP\C3H7N2(2)\CALVIN.P\18-Jun-2025\0\\
+ 1\1\GINC-N017\Freq\UwB97XD\def2TZVP\C3H7N2(2)\USER\18-Jun-2025\0\\
  #P guess=read uwb97xd/def2tzvp freq IOp(7/33=1) integral=(grid=ultrafi
  ne, Acc2E=12) IOp(2/9=2000) scf=(direct,tight)\\rmg_rxn_10695_r1_sbr-N
  --sbrsbr-NHp-sbr=CCC\\0,2\N,1.503509,1.181696,1.176668\N,1.558026,-0.0

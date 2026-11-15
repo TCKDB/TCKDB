@@ -78,7 +78,7 @@ unknown
 unknown
 
 >  <arkane_path>  (1) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/Kfir_HAb_Converged/kfir_rxn_10391/output/Species/CtCC/arkane/output.py
+/home/user/Kfir_HAb_Converged/kfir_rxn_10391/output/Species/CtCC/arkane/output.py
 
 >  <path_exists>  (1) 
 True
@@ -144,7 +144,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (1) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/Kfir_HAb_Converged/kfir_rxn_10391/output/Species/CtCC/CtCC.yml
+/home/user/Kfir_HAb_Converged/kfir_rxn_10391/output/Species/CtCC/CtCC.yml
 
 >  <frequencies_cm1>  (1) 
 [349.98964080443994, 351.7269880904, 682.36546426308, 684.3225550792799, 939.0877104512799, 1047.6066794632397, 1048.12170336224, 1402.15599852016, 1465.4009333173599, 1465.7236816273999, 2229.1813755343596, 3023.21775507128, 3095.5957803440792, 3095.92539563944, 3438.2308798707995]
@@ -261,7 +261,7 @@ unknown
 unknown
 
 >  <arkane_path>  (2) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/Kfir_HAb_Converged/kfir_rxn_10391/output/Species/Oc1nocn1/arkane/output.py
+/home/user/Kfir_HAb_Converged/kfir_rxn_10391/output/Species/Oc1nocn1/arkane/output.py
 
 >  <path_exists>  (2) 
 True
@@ -327,7 +327,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (2) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/Kfir_HAb_Converged/kfir_rxn_10391/output/Species/Oc1nocn1/Oc1nocn1.yml
+/home/user/Kfir_HAb_Converged/kfir_rxn_10391/output/Species/Oc1nocn1/Oc1nocn1.yml
 
 >  <frequencies_cm1>  (2) 
 [345.0271191659805, 452.00303589781515, 617.7011064102679, 736.9337718159109, 778.238717025863, 925.9098514582051, 967.5824167558319, 980.8957679917546, 1038.007195154923, 1174.9532546565456, 1222.2337036279862, 1316.879297557162, 1465.7964419129835, 1577.7977897557316, 1650.1080080141571, 3240.720083288435, 3813.9574981891656]
@@ -463,7 +463,7 @@ cm^-1
 unknown
 
 >  <arkane_path>  (3) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/Kfir_HAb_Converged/kfir_rxn_10391/output/rxns/TS0/arkane/output.py
+/home/user/Kfir_HAb_Converged/kfir_rxn_10391/output/rxns/TS0/arkane/output.py
 
 >  <path_exists>  (3) 
 True
@@ -559,7 +559,7 @@ unknown
 -1887.4123
 
 >  <ts_freq_out_path>  (3) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/Kfir_HAb_Converged/kfir_rxn_10391/output/rxns/TS0/geometry/freq.out
+/home/user/Kfir_HAb_Converged/kfir_rxn_10391/output/rxns/TS0/geometry/freq.out
 
 >  <E0_kJmol>  (3) 
 -1.18993e+06
@@ -644,7 +644,7 @@ unknown
 unknown
 
 >  <arkane_path>  (4) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/Kfir_HAb_Converged/kfir_rxn_10391/output/Species/CtC_CH2_/arkane/output.py
+/home/user/Kfir_HAb_Converged/kfir_rxn_10391/output/Species/CtC_CH2_/arkane/output.py
 
 >  <path_exists>  (4) 
 True
@@ -710,7 +710,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (4) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/Kfir_HAb_Converged/kfir_rxn_10391/output/Species/CtC_CH2_/CtC_CH2_.yml
+/home/user/Kfir_HAb_Converged/kfir_rxn_10391/output/Species/CtC_CH2_/CtC_CH2_.yml
 
 >  <frequencies_cm1>  (4) 
 [355.94331707688, 407.51437683008004, 504.51054447508, 653.44172209524, 683.5053838262, 1024.2589293752399, 1075.37676809732, 1445.76135530216, 1997.3313501752, 3133.58394313432, 3230.4359040876, 3427.03082681388]
@@ -823,7 +823,7 @@ unknown
 unknown
 
 >  <arkane_path>  (5) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/Kfir_HAb_Converged/kfir_rxn_10391/output/Species/_O_c1nocn1/arkane/output.py
+/home/user/Kfir_HAb_Converged/kfir_rxn_10391/output/Species/_O_c1nocn1/arkane/output.py
 
 >  <path_exists>  (5) 
 True
@@ -889,7 +889,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (5) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/Kfir_HAb_Converged/kfir_rxn_10391/output/Species/_O_c1nocn1/_O_c1nocn1.yml
+/home/user/Kfir_HAb_Converged/kfir_rxn_10391/output/Species/_O_c1nocn1/_O_c1nocn1.yml
 
 >  <frequencies_cm1>  (5) 
 [259.20122788872, 512.9569364186799, 538.77680122188, 747.73229752416, 753.4524962957199, 869.4015434239199, 894.5965125629999, 946.21564121344, 987.3076813683199, 1085.8626546809598, 1174.2201547934, 1309.1907512579999, 1613.3363980661197, 1722.5077306834798, 3235.18785792904]

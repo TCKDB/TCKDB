@@ -14,7 +14,7 @@
 #     tckdb_payloads/     pre-generated upload payloads + meta files
 #
 # Source-of-truth identifiers:
-#   source_path        absolute path on contributor's machine when copied
+#   source_path        run directory relative to the producer workspace
 #   arc_version        ARC release at the time the run completed
 #   arc_git_commit     full ARC commit hash from output.yml
 #   project            ARC project name from output.yml
@@ -22,11 +22,11 @@
 #   feature_focus      what this scenario stresses in the upload path
 
 extracted_on: 2026-05-12
-extracted_by: calvinpieters@gmail.com
+extracted_by: TCKDB maintainers
 
 scenarios:
   reaction_1:
-    source_path: /home/calvin/code/arc_tckdb
+    source_path: arc_tckdb
     arc_version: 1.1.0
     arc_git_commit: 8f3a9131d6f6bd148c5e6f50034626741ceb0528
     project: demo_reaction
@@ -34,7 +34,7 @@ scenarios:
     feature_focus: baseline H-abstraction with IRC-derived TS
 
   scan_1:
-    source_path: /home/calvin/code/arc_tckdb_scan
+    source_path: arc_tckdb_scan
     arc_version: 1.1.0
     arc_git_commit: 8f3a9131d6f6bd148c5e6f50034626741ceb0528
     project: rmg_rxn_1142
@@ -42,7 +42,7 @@ scenarios:
     feature_focus: heavy rotor-scan coverage (32 rotor references)
 
   neb_1:
-    source_path: /home/calvin/code/arc_tckdb_neb
+    source_path: arc_tckdb_neb
     arc_version: 1.1.0
     arc_git_commit: e8775551f3
     project: OrcaNEB_Test
@@ -50,7 +50,7 @@ scenarios:
     feature_focus: NEB-based TS search (intramolecular H migration)
 
   rotor_scan_1:
-    source_path: /home/calvin/code/arc_rotor_scan/rxn_188
+    source_path: arc_rotor_scan/rxn_188
     arc_version: 1.1.0
     arc_git_commit: 8f3a9131d6f6bd148c5e6f50034626741ceb0528
     project: rxn_188
@@ -58,7 +58,7 @@ scenarios:
     feature_focus: methane + hydroxyl (overlap with reaction_1, scan_1)
 
   rotor_scan_2:
-    source_path: /home/calvin/code/arc_rotor_scan/rxn_209
+    source_path: arc_rotor_scan/rxn_209
     arc_version: 1.1.0
     arc_git_commit: e8775551f3
     project: rxn_209
@@ -66,7 +66,7 @@ scenarios:
     feature_focus: peroxyl chemistry (CH3OO + CH4)
 
   rotor_scan_3:
-    source_path: /home/calvin/code/arc_rotor_scan/rxn_210
+    source_path: arc_rotor_scan/rxn_210
     arc_version: 1.1.0
     arc_git_commit: 8f3a9131d6f6bd148c5e6f50034626741ceb0528
     project: rxn_210
@@ -74,7 +74,7 @@ scenarios:
     feature_focus: H atom + ethane (monatomic species + simple alkane)
 
   rotor_scan_4:
-    source_path: /home/calvin/code/arc_rotor_scan/rxn_298
+    source_path: arc_rotor_scan/rxn_298
     arc_version: 1.1.0
     arc_git_commit: b0afc86a7c
     project: rxn_298
@@ -82,7 +82,7 @@ scenarios:
     feature_focus: hydroperoxyl + isobutane (peroxide bond chemistry)
 
   rotor_scan_5:
-    source_path: /home/calvin/code/arc_rotor_scan/rxn_30
+    source_path: arc_rotor_scan/rxn_30
     arc_version: 1.1.0
     arc_git_commit: 8f3a9131d6f6bd148c5e6f50034626741ceb0528
     project: rxn_30
@@ -90,7 +90,7 @@ scenarios:
     feature_focus: isobutyraldehyde + H (carbonyl + H atom)
 
   rotor_scan_6:
-    source_path: /home/calvin/code/arc_rotor_scan/rxn_392
+    source_path: arc_rotor_scan/rxn_392
     arc_version: 1.1.0
     arc_git_commit: 8f3a9131d6f6bd148c5e6f50034626741ceb0528
     project: rxn_392
@@ -98,7 +98,7 @@ scenarios:
     feature_focus: vinyl radical + methanol
 
   rotor_scan_7:
-    source_path: /home/calvin/code/arc_rotor_scan/rxn_476
+    source_path: arc_rotor_scan/rxn_476
     arc_version: 1.1.0
     arc_git_commit: 8f3a9131d6f6bd148c5e6f50034626741ceb0528
     project: rxn_476
@@ -106,7 +106,7 @@ scenarios:
     feature_focus: sulfur + oxygen heteroatom chemistry
 
   rotor_scan_8:
-    source_path: /home/calvin/code/arc_rotor_scan/rxn_682
+    source_path: arc_rotor_scan/rxn_682
     arc_version: 1.1.0
     arc_git_commit: 8f3a9131d6f6bd148c5e6f50034626741ceb0528
     project: rxn_682
@@ -114,7 +114,7 @@ scenarios:
     feature_focus: methylamine + H (nitrogen + H atom)
 
   rotor_scan_9:
-    source_path: /home/calvin/code/arc_rotor_scan/rxn_998
+    source_path: arc_rotor_scan/rxn_998
     arc_version: 1.1.0
     arc_git_commit: b0afc86a7c
     project: rxn_998
@@ -122,7 +122,7 @@ scenarios:
     feature_focus: propene + iso-propyl (overlap with neb_1)
 
   rotor_scan_10:
-    source_path: /home/calvin/code/arc_rotor_scan/rmg_rxn_1142
+    source_path: arc_rotor_scan/rmg_rxn_1142
     arc_version: 1.1.0
     arc_git_commit: 8f3a9131d6f6bd148c5e6f50034626741ceb0528
     project: rmg_rxn_1142

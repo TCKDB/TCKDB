@@ -70,28 +70,78 @@
       "tckdb_origin": {
         "independent_ess_job": true,
         "origin_kind": "imported",
-        "producer": "tckdb-qcschema/0.2.0",
+        "producer": "tckdb-qcschema/0.9.6",
         "reason": "Imported from a MolSSI QCSchema atomic document (family=v2, driver=hessian)."
       },
       "tckdb_qcschema": {
-        "adapter_version": "0.2.0",
+        "adapter_version": "0.9.6",
         "bohr_to_angstrom": 0.52917721067,
-        "canonical_document_sha256": "09a691dcbc7c36a10d9c54c18933bf1ad9535bab11971501856765167b06edb3",
+        "canonical_document_sha256": "c77dffadb6126202df56df2eb85747d1c42b63ff15a7e33c112926955b4f008b",
         "driver": "hessian",
         "identity_source": "depositor_declared",
         "mapping_report": {
           "rejected": [],
-          "retained_only": [],
+          "retained_only": [
+            "extras.qcvars",
+            "input_data.molecule",
+            "input_data.provenance",
+            "input_data.schema_name",
+            "input_data.schema_version",
+            "input_data.specification.protocols",
+            "input_data.specification.schema_name",
+            "molecule.atom_labels",
+            "molecule.atomic_numbers",
+            "molecule.fix_com",
+            "molecule.fix_orientation",
+            "molecule.fragment_charges",
+            "molecule.fragment_multiplicities",
+            "molecule.name",
+            "molecule.provenance",
+            "molecule.schema_name",
+            "molecule.schema_version",
+            "molecule.validated",
+            "properties.calcinfo_nalpha",
+            "properties.calcinfo_natom",
+            "properties.calcinfo_nbasis",
+            "properties.calcinfo_nbeta",
+            "properties.calcinfo_nmo",
+            "properties.nuclear_repulsion_energy",
+            "properties.return_energy",
+            "properties.return_gradient",
+            "properties.return_hessian",
+            "properties.scf_dipole_moment",
+            "properties.scf_iterations",
+            "properties.scf_one_electron_energy",
+            "properties.scf_total_energy",
+            "properties.scf_total_gradient",
+            "properties.scf_total_hessian",
+            "properties.scf_two_electron_energy",
+            "properties.schema_name",
+            "provenance.hostname",
+            "provenance.memory",
+            "provenance.nthreads",
+            "provenance.routine",
+            "provenance.wall_time",
+            "schema_name",
+            "schema_version"
+          ],
           "transformed": [
             "molecule.geometry",
             "provenance.creator",
             "provenance.version",
-            "model.method",
-            "model.basis",
+            "input_data.specification.model.method",
+            "input_data.specification.model.basis",
             "return_result",
             "--smiles",
             "molecule.molecular_charge",
-            "molecule.molecular_multiplicity"
+            "molecule.molecular_multiplicity",
+            "input_data.specification.driver",
+            "molecule.symbols",
+            "molecule.masses",
+            "molecule.real",
+            "molecule.mass_numbers",
+            "molecule.fragments",
+            "success"
           ],
           "unsupported": [
             "stdout",
@@ -113,7 +163,7 @@
         },
         "qcelemental_version": "0.51.2",
         "raw_artifact_filename": "hessian_v2.qcschema.json",
-        "raw_artifact_sha256": "592a0398123ae159b5c64479fff1c30cd0c20e667f30e2fb661b0a8c23b426e6",
+        "raw_artifact_sha256": "d8aa18c7fc9b709e11242a41e36d97797648f41487cf29b3d884a65770672c69",
         "record_kind": "atomic",
         "schema_name": "qcschema_atomic_result",
         "schema_version": 2,
@@ -122,13 +172,14 @@
     },
     "parameters_parser": {
       "name": "tckdb-qcschema",
-      "version": "0.2.0;qcelemental/0.51.2"
+      "version": "0.9.6;qcelemental/0.51.2"
     },
     "quality": "raw",
     "software_release": {
       "name": "Psi4",
       "version": "1.11"
     },
+    "sp_energy_components": [],
     "type": "freq"
   },
   "geometry": {
@@ -143,5 +194,6 @@
     "smiles": "O",
     "species_entry_kind": "minimum",
     "stereo_kind": "unspecified"
-  }
+  },
+  "structure_determinations": []
 }

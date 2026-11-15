@@ -6,7 +6,7 @@
   "idempotency_key": "arc:rxn_30:rxn_30_CC-C-C-O-rxn_30_-H-rxn_30_C-C-C-C-O-rxn_30_-H-H-:TS0:computed_reaction:fdf1a80b718d8a9c",
   "idempotency_replayed": false,
   "last_error": null,
-  "payload_file": "/home/calvin/code/arc_rotor_scan/rxn_30/tckdb_payloads/computed_reaction/rxn_30_CC-C-C-O-rxn_30_-H-rxn_30_C-C-C-C-O-rxn_30_-H-H.payload.json",
+  "payload_file": "rxn_30_CC-C-C-O-rxn_30_-H-rxn_30_C-C-C-C-O-rxn_30_-H-H.payload.json",
   "payload_kind": "computed_reaction",
   "response_body": {
     "kinetics_ids": [

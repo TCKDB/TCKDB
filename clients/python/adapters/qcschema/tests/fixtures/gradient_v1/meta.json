@@ -3,7 +3,7 @@
   "expected": "sp",
   "family": "v1",
   "driver": "gradient",
-  "raw_sha256": "531b2847f28fe932bf808d8f1365c372c32af35b06470f8be422317fe1a36030",
+  "raw_sha256": "34cf0a3641860be0eb2df47525275535b63c6961461995aa3dfa363fc387dde2",
   "generator": "psi4-via-qcengine",
   "psi4": "1.11",
   "qcengine": "0.51.0",

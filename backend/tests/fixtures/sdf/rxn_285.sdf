@@ -63,7 +63,7 @@ unknown
 unknown
 
 >  <arkane_path>  (1) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/HAb_Converged/rxn_285/output/Species/rxn_285_[H][H]/arkane/output.py
+/home/user/HAb_Converged/rxn_285/output/Species/rxn_285_[H][H]/arkane/output.py
 
 >  <path_exists>  (1) 
 True
@@ -129,7 +129,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (1) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/HAb_Converged/rxn_285/output/Species/rxn_285_[H][H]/rxn_285_HH.yml
+/home/user/HAb_Converged/rxn_285/output/Species/rxn_285_[H][H]/rxn_285_HH.yml
 
 >  <frequencies_cm1>  (1) 
 [4384.97527895388]
@@ -229,7 +229,7 @@ unknown
 unknown
 
 >  <arkane_path>  (2) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/HAb_Converged/rxn_285/output/Species/rxn_285_[OH]/arkane/output.py
+/home/user/HAb_Converged/rxn_285/output/Species/rxn_285_[OH]/arkane/output.py
 
 >  <path_exists>  (2) 
 True
@@ -295,7 +295,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (2) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/HAb_Converged/rxn_285/output/Species/rxn_285_[OH]/rxn_285_OH.yml
+/home/user/HAb_Converged/rxn_285/output/Species/rxn_285_[OH]/rxn_285_OH.yml
 
 >  <frequencies_cm1>  (2) 
 [3725.55927963024]
@@ -397,7 +397,7 @@ cm^-1
 unknown
 
 >  <arkane_path>  (3) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/HAb_Converged/rxn_285/output/rxns/TS0/arkane/output.py
+/home/user/HAb_Converged/rxn_285/output/rxns/TS0/arkane/output.py
 
 >  <path_exists>  (3) 
 True
@@ -493,7 +493,7 @@ unknown
 -1524.3928
 
 >  <ts_freq_out_path>  (3) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/HAb_Converged/rxn_285/output/rxns/TS0/geometry/freq.out
+/home/user/HAb_Converged/rxn_285/output/rxns/TS0/geometry/freq.out
 
 >  <E0_kJmol>  (3) 
 -200126
@@ -562,7 +562,7 @@ unknown
 unknown
 
 >  <arkane_path>  (4) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/HAb_Converged/rxn_285/output/Species/rxn_285_[H]/arkane/output.py
+/home/user/HAb_Converged/rxn_285/output/Species/rxn_285_[H]/arkane/output.py
 
 >  <path_exists>  (4) 
 True
@@ -628,7 +628,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (4) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/HAb_Converged/rxn_285/output/Species/rxn_285_[H]/rxn_285_H.yml
+/home/user/HAb_Converged/rxn_285/output/Species/rxn_285_[H]/rxn_285_H.yml
 
 >  <frequencies_cm1>  (4) 
 []
@@ -721,7 +721,7 @@ unknown
 unknown
 
 >  <arkane_path>  (5) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/HAb_Converged/rxn_285/output/Species/rxn_285_[O]/arkane/output.py
+/home/user/HAb_Converged/rxn_285/output/Species/rxn_285_[O]/arkane/output.py
 
 >  <path_exists>  (5) 
 True
@@ -787,7 +787,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (5) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/HAb_Converged/rxn_285/output/Species/rxn_285_[O]/rxn_285_O.yml
+/home/user/HAb_Converged/rxn_285/output/Species/rxn_285_[O]/rxn_285_O.yml
 
 >  <frequencies_cm1>  (5) 
 []

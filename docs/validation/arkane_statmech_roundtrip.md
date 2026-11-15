@@ -210,7 +210,7 @@ explicit statmech `modes`:
 * `spinMultiplicity=1`, `opticalIsomers=1`;
 * `E0 = E_elec + ZPE` (no atom-energy / bond corrections applied).
 
-Arkane is run in `rmg_env` (`python /home/calvin/code/RMG-Py/Arkane.py input.py`).
+Arkane is run in `rmg_env` (`python <RMG-Py checkout>/Arkane.py input.py`).
 
 ## Results
 

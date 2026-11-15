@@ -8,5 +8,5 @@
   "smiles_arg": "OO",
   "parent_opt_case": "torsiondrive_parent_opt_v2",
   "edit": "torsiondrive_v2 (input_data-bearing, so v2 by shape) with schema_version changed from 2 to 1; scan_results emptied and input_data.specification.protocols.scan_results set to 'none' (QCSchema's own way of dropping the per-point histories) to keep the fixture small",
-  "raw_sha256": "88f5b662862508e314f8ec12ca26aa72c19a459596e1b617e46e0dec709f2124"
+  "raw_sha256": "93afea1f3a833c58538c8450f8e84a916cc9f9ee5579512af3ddbb0a1c09de35"
 }

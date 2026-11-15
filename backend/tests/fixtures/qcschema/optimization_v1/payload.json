@@ -29,19 +29,49 @@
       "tckdb_origin": {
         "independent_ess_job": true,
         "origin_kind": "imported",
-        "producer": "tckdb-qcschema/0.2.0",
+        "producer": "tckdb-qcschema/0.9.6",
         "reason": "Imported from a MolSSI QCSchema optimization document (family=v1, driver=n/a)."
       },
       "tckdb_qcschema": {
-        "adapter_version": "0.2.0",
+        "adapter_version": "0.9.6",
         "bohr_to_angstrom": 0.52917721067,
-        "canonical_document_sha256": "441a83d395301227d00cc12f530e3fd7627c34a6b41345a71be1242da8a7e064",
+        "canonical_document_sha256": "2f5efcf188b885ec91d661a7f42356d75fb50bb9ab786bb9423b3159d3f21ce2",
         "driver": null,
         "identity_source": "depositor_declared",
         "mapping_report": {
           "rejected": [],
           "retained_only": [
-            "energies (per-step)",
+            "energies",
+            "final_molecule.atom_labels",
+            "final_molecule.atomic_numbers",
+            "final_molecule.fix_com",
+            "final_molecule.fix_orientation",
+            "final_molecule.fragment_charges",
+            "final_molecule.fragment_multiplicities",
+            "final_molecule.name",
+            "final_molecule.provenance",
+            "final_molecule.schema_name",
+            "final_molecule.schema_version",
+            "final_molecule.validated",
+            "initial_molecule.fix_com",
+            "initial_molecule.fix_orientation",
+            "initial_molecule.molecular_charge",
+            "initial_molecule.molecular_multiplicity",
+            "initial_molecule.name",
+            "initial_molecule.provenance",
+            "initial_molecule.schema_name",
+            "initial_molecule.schema_version",
+            "initial_molecule.validated",
+            "input_specification.driver",
+            "input_specification.schema_name",
+            "input_specification.schema_version",
+            "keywords",
+            "protocols",
+            "provenance.hostname",
+            "provenance.routine",
+            "provenance.wall_time",
+            "schema_name",
+            "schema_version",
             "trajectory"
           ],
           "transformed": [
@@ -51,14 +81,20 @@
             "trajectory[-1].provenance.version",
             "provenance.creator",
             "provenance.version",
-            "model.method",
-            "model.basis",
+            "input_specification.model.method",
+            "input_specification.model.basis",
             "success",
             "trajectory (length)",
-            "trajectory[-1].properties.return_energy",
+            "energies[-1]",
             "--smiles",
-            "molecule.molecular_charge",
-            "molecule.molecular_multiplicity"
+            "final_molecule.molecular_charge",
+            "final_molecule.molecular_multiplicity",
+            "initial_molecule.symbols",
+            "final_molecule.symbols",
+            "final_molecule.masses",
+            "final_molecule.real",
+            "final_molecule.mass_numbers",
+            "final_molecule.fragments"
           ],
           "unsupported": [
             "stdout",
@@ -77,7 +113,7 @@
         },
         "qcelemental_version": "0.51.2",
         "raw_artifact_filename": "optimization_v1.qcschema.json",
-        "raw_artifact_sha256": "b8e0088697c0a1402ec2231ceaf25299cbe85ebb5eadd4af977e51969ba9cbba",
+        "raw_artifact_sha256": "b520ce9afe4df4eb4fc608e68e6fe398122398bfeef96ca9b162935be2045925",
         "record_kind": "optimization",
         "schema_name": "qcschema_optimization_output",
         "schema_version": 1,
@@ -86,13 +122,14 @@
     },
     "parameters_parser": {
       "name": "tckdb-qcschema",
-      "version": "0.2.0;qcelemental/0.51.2"
+      "version": "0.9.6;qcelemental/0.51.2"
     },
     "quality": "raw",
     "software_release": {
       "name": "Psi4",
       "version": "1.11"
     },
+    "sp_energy_components": [],
     "type": "opt",
     "workflow_tool_release": {
       "name": "geomeTRIC",
@@ -111,5 +148,6 @@
     "smiles": "O",
     "species_entry_kind": "minimum",
     "stereo_kind": "unspecified"
-  }
+  },
+  "structure_determinations": []
 }

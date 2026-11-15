@@ -6,7 +6,7 @@ evidence, not a production rollout approval or a corpus accuracy claim.
 
 ## Impact analysis
 
-Repository/worktree: `TCKDB`, `/home/calvin/code/TCKDB_v2`. GitNexus 1.6.12
+Repository/worktree: `TCKDB`, `<checkout>`. GitNexus 1.6.12
 rebuilt the stale index at the baseline (49,618 nodes, 103,700 edges, 1,173
 reported flows). The first rebuild failed with a WAL error; the retry succeeded.
 CLI queries used the rebuilt runner because the MCP engine could not open its

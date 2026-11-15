@@ -422,7 +422,7 @@ cancelled and rerun (the rerun took the usual eight to nine minutes).
 
 | Step | Evidence |
 | --- | --- |
-| Pre-deploy dump | `/home/calvin/backups/tckdb-predeploy-20260920-155627.dump` (2.7 MB, custom format) |
+| Pre-deploy dump | `<backup-dir>/tckdb-predeploy-20260920-155627.dump` (2.7 MB, custom format) |
 | Migration upgrade to `d2f4a7c1b8e6` | Alembic ran `9b1c7e2d4a68 -> 0b4a3afabfd3` then `0b4a3afabfd3 -> d2f4a7c1b8e6` from the new image while the old container served |
 | Container swap | `tckdb-api` now runs `laxzal/tckdb-api:sha-2f7f23b25b8d0ae3b54077fdbe1d67d34271550d` (digest `sha256:574da58f...`) |
 | `status` | `ok`; `alembic_revision` `d2f4a7c1b8e6`; database, worker and artifact storage healthy; confirmed again from the public `/api/v1/status` |

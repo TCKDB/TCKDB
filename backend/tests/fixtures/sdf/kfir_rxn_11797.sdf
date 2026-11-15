@@ -78,7 +78,7 @@ unknown
 unknown
 
 >  <arkane_path>  (1) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/Kfir_HAb_Converged/kfir_rxn_11797/output/Species/O=CC[Cl][Cl]Cl/arkane/output.py
+/home/user/Kfir_HAb_Converged/kfir_rxn_11797/output/Species/O=CC[Cl][Cl]Cl/arkane/output.py
 
 >  <path_exists>  (1) 
 True
@@ -144,7 +144,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (1) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/Kfir_HAb_Converged/kfir_rxn_11797/output/Species/O=CC[Cl][Cl]Cl/O=CCClClCl.yml
+/home/user/Kfir_HAb_Converged/kfir_rxn_11797/output/Species/O=CC[Cl][Cl]Cl/O=CCClClCl.yml
 
 >  <frequencies_cm1>  (1) 
 [196.39995238511773, 243.7670319937604, 267.48278818072527, 316.0378229268397, 317.9111119232689, 446.2549760136967, 632.8733054771637, 743.8573752284025, 857.8822273400677, 1011.26742281135, 1032.9662081596734, 1375.4427419023455, 1859.166356325976, 2950.4577548871584]
@@ -262,7 +262,7 @@ unknown
 unknown
 
 >  <arkane_path>  (2) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/Kfir_HAb_Converged/kfir_rxn_11797/output/Species/FC1=C=_NHp__N-_N=N1/arkane/output.py
+/home/user/Kfir_HAb_Converged/kfir_rxn_11797/output/Species/FC1=C=_NHp__N-_N=N1/arkane/output.py
 
 >  <path_exists>  (2) 
 True
@@ -328,7 +328,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (2) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/Kfir_HAb_Converged/kfir_rxn_11797/output/Species/FC1=C=_NHp__N-_N=N1/FC1=C=_NHp__N-_N=N1.yml
+/home/user/Kfir_HAb_Converged/kfir_rxn_11797/output/Species/FC1=C=_NHp__N-_N=N1/FC1=C=_NHp__N-_N=N1.yml
 
 >  <frequencies_cm1>  (2) 
 [134.48304050688, 327.89168204467995, 458.4742748898, 574.70486841612, 586.0628621354, 664.73104596132, 767.6534219374801, 822.0399456718799, 926.47992540376, 956.5847890466399, 1091.43177977548, 1140.7092664318002, 1278.41979003908, 1357.0879738649999, 1444.22315059048, 1548.9240757645198, 1609.52522121352, 3538.90775164732]
@@ -465,7 +465,7 @@ cm^-1
 unknown
 
 >  <arkane_path>  (3) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/Kfir_HAb_Converged/kfir_rxn_11797/output/rxns/TS0/arkane/output.py
+/home/user/Kfir_HAb_Converged/kfir_rxn_11797/output/rxns/TS0/arkane/output.py
 
 >  <path_exists>  (3) 
 True
@@ -561,7 +561,7 @@ unknown
 -2143.1401
 
 >  <ts_freq_out_path>  (3) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/Kfir_HAb_Converged/kfir_rxn_11797/output/rxns/TS0/geometry/freq.out
+/home/user/Kfir_HAb_Converged/kfir_rxn_11797/output/rxns/TS0/geometry/freq.out
 
 >  <E0_kJmol>  (3) 
 -5.0552e+06
@@ -646,7 +646,7 @@ unknown
 unknown
 
 >  <arkane_path>  (4) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/Kfir_HAb_Converged/kfir_rxn_11797/output/Species/O=_C_C[Cl][Cl]Cl/arkane/output.py
+/home/user/Kfir_HAb_Converged/kfir_rxn_11797/output/Species/O=_C_C[Cl][Cl]Cl/arkane/output.py
 
 >  <path_exists>  (4) 
 True
@@ -712,7 +712,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (4) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/Kfir_HAb_Converged/kfir_rxn_11797/output/Species/O=_C_C[Cl][Cl]Cl/O=_C_CClClCl.yml
+/home/user/Kfir_HAb_Converged/kfir_rxn_11797/output/Species/O=_C_C[Cl][Cl]Cl/O=_C_CClClCl.yml
 
 >  <frequencies_cm1>  (4) 
 [179.5718110452967, 255.2038239664777, 262.0790585499345, 312.12677282188014, 383.0967412837594, 444.0995500175247, 588.4165514329612, 785.4789757871064, 821.8982968685588, 834.0211699470397, 1972.788524306137]
@@ -825,7 +825,7 @@ unknown
 unknown
 
 >  <arkane_path>  (5) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/Kfir_HAb_Converged/kfir_rxn_11797/output/Species/FC1=C=_Np__N-_N=N1/arkane/output.py
+/home/user/Kfir_HAb_Converged/kfir_rxn_11797/output/Species/FC1=C=_Np__N-_N=N1/arkane/output.py
 
 >  <path_exists>  (5) 
 True
@@ -891,7 +891,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (5) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/Kfir_HAb_Converged/kfir_rxn_11797/output/Species/FC1=C=_Np__N-_N=N1/FC1=C=_Np__N-_N=N1.yml
+/home/user/Kfir_HAb_Converged/kfir_rxn_11797/output/Species/FC1=C=_Np__N-_N=N1/FC1=C=_Np__N-_N=N1.yml
 
 >  <frequencies_cm1>  (5) 
 [180.17596082615998, 377.2378385542, 437.99692466556, 561.62326138152, 582.32722212132, 590.65000832916, 764.59074648476, 792.4638398986399, 945.9478287859599, 991.88796057676, 1178.0862675285598, 1192.7610151574, 1435.05572518828, 1489.4422489226797, 1693.5359196184]

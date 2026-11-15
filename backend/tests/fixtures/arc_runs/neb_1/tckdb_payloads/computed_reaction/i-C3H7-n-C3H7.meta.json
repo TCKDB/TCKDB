@@ -7,7 +7,7 @@
   "idempotency_replayed": false,
   "is_partial": false,
   "last_error": null,
-  "payload_file": "/home/calvin/code/arc_tckdb_neb/tckdb_payloads/computed_reaction/i-C3H7-n-C3H7.payload.json",
+  "payload_file": "i-C3H7-n-C3H7.payload.json",
   "payload_kind": "computed_reaction",
   "response_body": {
     "kinetics_ids": [

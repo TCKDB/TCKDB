@@ -7,7 +7,7 @@
   "idempotency_replayed": true,
   "is_partial": false,
   "last_error": null,
-  "payload_file": "/home/calvin/code/arc_tckdb/tckdb_payloads/computed_reaction/CHO-CH4-CH2O-CH3.payload.json",
+  "payload_file": "CHO-CH4-CH2O-CH3.payload.json",
   "payload_kind": "computed_reaction",
   "response_body": {
     "kinetics_ids": [

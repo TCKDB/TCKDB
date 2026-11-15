@@ -52,17 +52,13 @@ from app.importers.cccbdb.parsers import (
     parse_species_all_data_page,
 )
 from app.parser_registry import PARSERS
+from app.user_agent import tckdb_user_agent
 
 SNAPSHOT_VERSION = 1
 BUILDER_NAME = "cccbdb_payload_builder"
 BUILDER_VERSION = str(PARSERS.get(BUILDER_NAME).version)
 
-_DEFAULT_USER_AGENT = (
-    "tckdb-cccbdb-importer/0.1 "
-    "(+https://github.com/TCKDB/TCKDB; "
-    "mailto:calvin.p@campus.technion.ac.il) "
-    "mode=snapshot"
-)
+_DEFAULT_USER_AGENT = tckdb_user_agent("mode=snapshot")
 
 _logger = logging.getLogger(__name__)
 

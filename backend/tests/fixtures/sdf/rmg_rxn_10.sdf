@@ -84,7 +84,7 @@ unknown
 unknown
 
 >  <arkane_path>  (1) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ATLAS_Converged/rmg_rxn_10/output/Species/rmg_rxn_10_r2_CCN=O/arkane/output.py
+/home/user/ATLAS_Converged/rmg_rxn_10/output/Species/rmg_rxn_10_r2_CCN=O/arkane/output.py
 
 >  <path_exists>  (1) 
 True
@@ -150,7 +150,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (1) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ATLAS_Converged/rmg_rxn_10/output/Species/rmg_rxn_10_r2_CCN=O/rmg_rxn_10_r2_CCN=O.yml
+/home/user/ATLAS_Converged/rmg_rxn_10/output/Species/rmg_rxn_10_r2_CCN=O/rmg_rxn_10_r2_CCN=O.yml
 
 >  <frequencies_cm1>  (1) 
 [158.20847478748, 231.91869521236, 304.63320276584, 688.52515009512, 725.82661435336, 817.79614874412, 992.8287375655999, 1036.4272273622798, 1118.5151698775599, 1253.84971656412, 1336.8441011416398, 1399.8555584379599, 1435.5776160726, 1473.98466496736, 1481.49027992212, 1699.7642753036398, 3019.11129784992, 3032.8315345192796, 3052.86253069772, 3109.68683422072, 3112.3100226129595]
@@ -269,7 +269,7 @@ unknown
 unknown
 
 >  <arkane_path>  (2) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ATLAS_Converged/rmg_rxn_10/output/Species/rmg_rxn_10_p2_CCS/arkane/output.py
+/home/user/ATLAS_Converged/rmg_rxn_10/output/Species/rmg_rxn_10_p2_CCS/arkane/output.py
 
 >  <path_exists>  (2) 
 True
@@ -335,7 +335,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (2) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ATLAS_Converged/rmg_rxn_10/output/Species/rmg_rxn_10_p2_CCS/rmg_rxn_10_p2_CCS.yml
+/home/user/ATLAS_Converged/rmg_rxn_10/output/Species/rmg_rxn_10_p2_CCS/rmg_rxn_10_p2_CCS.yml
 
 >  <frequencies_cm1>  (2) 
 [202.32885546847996, 256.50936964327997, 331.52431727896, 667.1482247939599, 735.969151671, 875.5955641825599, 988.159187548, 1063.6273562148, 1117.6087278153198, 1273.38628979952, 1303.10660226448, 1402.5542836687198, 1466.616389719, 1477.4456255686398, 1483.85938985752, 2700.25656848636, 3013.3430301811195, 3044.51914353392, 3080.6051513905195, 3088.40604671404, 3107.9357529641197]
@@ -479,7 +479,7 @@ cm^-1
 unknown
 
 >  <arkane_path>  (3) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ATLAS_Converged/rmg_rxn_10/output/rxns/TS0/arkane/output.py
+/home/user/ATLAS_Converged/rmg_rxn_10/output/rxns/TS0/arkane/output.py
 
 >  <path_exists>  (3) 
 True
@@ -575,7 +575,7 @@ unknown
 -1660.4247
 
 >  <ts_freq_out_path>  (3) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ATLAS_Converged/rmg_rxn_10/output/rxns/TS0/geometry/freq.out
+/home/user/ATLAS_Converged/rmg_rxn_10/output/rxns/TS0/geometry/freq.out
 
 >  <E0_kJmol>  (3) 
 -1.80206e+06
@@ -666,7 +666,7 @@ unknown
 unknown
 
 >  <arkane_path>  (4) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ATLAS_Converged/rmg_rxn_10/output/Species/rmg_rxn_10_p1_CC=Nsbr-O-sbr/arkane/output.py
+/home/user/ATLAS_Converged/rmg_rxn_10/output/Species/rmg_rxn_10_p1_CC=Nsbr-O-sbr/arkane/output.py
 
 >  <path_exists>  (4) 
 True
@@ -732,7 +732,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (4) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ATLAS_Converged/rmg_rxn_10/output/Species/rmg_rxn_10_p1_CC=Nsbr-O-sbr/rmg_rxn_10_p1_CC=Nsbr-O-sbr.yml
+/home/user/ATLAS_Converged/rmg_rxn_10/output/Species/rmg_rxn_10_p1_CC=Nsbr-O-sbr/rmg_rxn_10_p1_CC=Nsbr-O-sbr.yml
 
 >  <frequencies_cm1>  (4) 
 [167.29349636583999, 305.41603909232, 336.48228068, 536.4488931984, 789.99859216876, 920.0661611148798, 1055.0848264767199, 1131.0542850718798, 1256.94672694344, 1389.69928714968, 1433.0368315041999, 1463.78719176716, 1488.27486141828, 1754.1988679352798, 3017.2297438722394, 3076.07294107932, 3099.7159715360795, 3119.71263278792]
@@ -847,7 +847,7 @@ unknown
 unknown
 
 >  <arkane_path>  (5) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ATLAS_Converged/rmg_rxn_10/output/Species/rmg_rxn_10_r1_CCsbr-S-sbr/arkane/output.py
+/home/user/ATLAS_Converged/rmg_rxn_10/output/Species/rmg_rxn_10_r1_CCsbr-S-sbr/arkane/output.py
 
 >  <path_exists>  (5) 
 True
@@ -913,7 +913,7 @@ cal/(mol*K)
 K
 
 >  <yaml_path>  (5) 
-/home/calvin/Dropbox/PersonalFolders/Calvin/ATLAS_Converged/rmg_rxn_10/output/Species/rmg_rxn_10_r1_CCsbr-S-sbr/rmg_rxn_10_r1_CCsbr-S-sbr.yml
+/home/user/ATLAS_Converged/rmg_rxn_10/output/Species/rmg_rxn_10_r1_CCsbr-S-sbr/rmg_rxn_10_r1_CCsbr-S-sbr.yml
 
 >  <frequencies_cm1>  (5) 
 [226.21223041144, 334.16123964184, 489.39630978575997, 681.8298394081199, 904.8283206898, 980.8458481821998, 1069.55356454596, 1246.44023940384, 1278.3648541565199, 1403.29591808328, 1419.59814123296, 1475.8250170331198, 1482.3623870577599, 2999.6708624089997, 3016.93446350348, 3020.6083006496797, 3090.0403892202, 3104.30311772984]
