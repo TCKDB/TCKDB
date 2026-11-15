@@ -114,6 +114,10 @@ class _ParsedRun:
     data_files: dict[str, DataFile]
 
 
+#: Treatments that claim hindered rotors; a statmech record stating one lists its torsions.
+ROTOR_AWARE_TREATMENTS = frozenset({"rrho_1d", "rrho_nd", "rrho_1d_nd"})
+
+
 @dataclass
 class GapReport:
     """What did and did not parse from a run (the deliverable gap trail)."""
@@ -130,6 +134,7 @@ class GapReport:
     pdep_non_chebyshev: list[tuple[str, str, str]] = field(default_factory=list)
     micro_reactions: int = 0
     torsions_emitted: list[str] = field(default_factory=list)
+    treatment_unstated: list[str] = field(default_factory=list)
     unstorable_fields: list[str] = field(default_factory=list)
     followups: list[str] = field(default_factory=list)
 
@@ -246,7 +251,9 @@ def _build_statmech(
     (external symmetry, optical isomers, point group, rotor kind, treatment,
     frequency scale factor) and links source calculations owned by THIS
     species. N2H4's hindered rotor is emitted as a torsion referencing the
-    species-local ``scan``-type calculation.
+    species-local ``scan``-type calculation. A rotor-aware treatment
+    (:data:`ROTOR_AWARE_TREATMENTS`) is stated only together with its torsions;
+    without a scan calculation the treatment is left unstated.
     """
     statmech: dict = {"scientific_origin": "computed"}
     if info.symmetry_number is not None:
@@ -312,6 +319,8 @@ def _build_statmech(
                 }
             )
         statmech["torsions"] = torsions
+    if statmech.get("statmech_treatment") in ROTOR_AWARE_TREATMENTS and not statmech.get("torsions"):
+        del statmech["statmech_treatment"]
 
     # Nothing worth persisting beyond scientific_origin/projected-flag?
     meaningful = any(
@@ -371,10 +380,25 @@ def build_network_pdep_request(run_dir: Path, *, include_artifacts: bool = False
         raise
 
 
+def network_species(inp) -> set[str]:
+    """Labels the network names: its isomers, reactant channels, reactions and bath gas."""
+    names = set(inp.isomers) | set(inp.bath_gas)
+    for channel in inp.reactant_channels:
+        names.update(channel)
+    for reaction in inp.reactions:
+        names.update(reaction.reactants)
+        names.update(reaction.products)
+    return names
+
+
 def build_network_pdep_payload(
-    run_dir: Path, *, include_artifacts: bool = False
+    run_dir: Path, *, include_artifacts: bool = False, network_only: bool = False
 ) -> tuple[dict, GapReport]:
     """Build the request as a plain dict plus a :class:`GapReport`.
+
+    With ``network_only``, a species ``input.py`` declares but the network does not name
+    (:func:`network_species`) is skipped and listed in ``GapReport.species_skipped``; the request
+    refuses a species nothing references.
 
     Split out from :func:`build_network_pdep_request` so callers (the CLI and
     tests) can inspect coverage without importing the app / validating.
@@ -398,7 +422,13 @@ def build_network_pdep_payload(
     species_sp_key: dict[str, str] = {}
     species_freq_key: dict[str, str] = {}
 
+    referenced = network_species(inp)
     for label, sp in inp.species.items():
+        if network_only and label not in referenced:
+            gap.species_skipped.append(
+                (label, "not part of the network: no isomer, reactant channel, reaction or bath gas names it")
+            )
+            continue
         if not sp.reactive:
             # Bath gas: identity only, referenced by solve.bath_gas.
             if sp.smiles is None:
@@ -559,6 +589,8 @@ def build_network_pdep_payload(
         )
         if statmech is not None and statmech.get("torsions"):
             gap.torsions_emitted.append(label)
+        if conf and conf.statmech_treatment in ROTOR_AWARE_TREATMENTS and not (statmech or {}).get("torsions"):
+            gap.treatment_unstated.append(label)
 
         species_dict: dict = {
             "key": label,

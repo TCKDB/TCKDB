@@ -7,7 +7,7 @@ module turns a generator's dict into the two files the deposit ships per
 generator -- ``<name>.json`` in canonical JSON and ``<name>.md`` as tables --
 and enforces the determinism rules every generator must obey:
 
-* collections are ordered by public ref (the generator's job; the renderer
+* collections are ordered by a stable key, public ref or content (the generator's job; the renderer
   never sorts rows for it, so a generator that iterates a set is caught by
   the byte comparison, not hidden);
 * no wall-clock values: a generator that stamps ``now()`` produces different

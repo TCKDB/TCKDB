@@ -1074,3 +1074,50 @@ def test_an_unmappable_pair_raises_instead_of_defaulting_to_isomerization(monkey
     monkeypatch.setattr(builder, "derive_channel_kind", cannot_map)
     with pytest.raises(ValueError, match="cannot derive a channel kind"):
         build_network_pdep_payload(FIXTURE_DIR)
+
+
+# ---------------------------------------------------------------------------
+# What a run states and the network names
+# ---------------------------------------------------------------------------
+
+
+def test_network_only_skips_a_species_the_network_does_not_name(tmp_path) -> None:
+    import shutil
+
+    run = tmp_path / "run"
+    shutil.copytree(FIXTURE_DIR, run)
+    (run / "input.py").write_text(
+        (run / "input.py").read_text().replace(
+            "transitionState('TS1'",
+            "species('NH3', 'Data/NH3.py',\n        structure = SMILES('N'),\n)\ntransitionState('TS1'",
+            1,
+        )
+    )
+    payload, gap = build_network_pdep_payload(run, network_only=True)
+    assert "NH3" not in {s["key"] for s in payload["species"]}
+    assert "not part of the network" in dict(gap.species_skipped)["NH3"]
+    NetworkPDepUploadRequest.model_validate(payload)
+
+    _, default_gap = build_network_pdep_payload(run)
+    assert "not part of the network" not in dict(default_gap.species_skipped)["NH3"]
+
+
+def test_a_rotor_treatment_without_a_scan_calculation_is_left_unstated(tmp_path) -> None:
+    import shutil
+
+    run = tmp_path / "run"
+    shutil.copytree(FIXTURE_DIR, run)
+    data = run / "Data" / "N2H4.py"
+    data.write_text(data.read_text().replace("rotors = [HinderedRotor(", "#rotors = [HinderedRotor("))
+
+    payload, gap = build_network_pdep_payload(run)
+    statmech = next(s for s in payload["species"] if s["key"] == "N2H4")["statmech"]
+    assert "torsions" not in statmech
+    assert "statmech_treatment" not in statmech
+    assert gap.treatment_unstated == ["N2H4"]
+    NetworkPDepUploadRequest.model_validate(payload)
+
+    with_scan, scan_gap = build_network_pdep_payload(FIXTURE_DIR)
+    stated = next(s for s in with_scan["species"] if s["key"] == "N2H4")["statmech"]
+    assert stated["statmech_treatment"] == "rrho_1d" and stated["torsions"]
+    assert scan_gap.treatment_unstated == []

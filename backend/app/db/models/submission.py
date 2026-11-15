@@ -176,6 +176,7 @@ class Submission(Base, TimestampMixin, PublicRefMixin):
     record_links: Mapped[list["SubmissionRecordLink"]] = relationship(
         back_populates="submission",
         cascade="save-update, merge",
+        order_by="SubmissionRecordLink.id",
     )
 
     __table_args__ = (

@@ -154,7 +154,8 @@ Determinism
 -----------
 
 :func:`hessian_reanalysis` returns a plain dictionary shaped for a paper
-generator: records ordered by public ref, no wall-clock values, every
+generator: records ordered by public ref (the snapshot wrapper
+in ``scripts.paper.snapshot_generators`` re-sorts them by content), no wall-clock values, every
 float rounded to a fixed number of decimals so that two runs on the same
 database are byte-identical after ``json.dumps(sort_keys=True)``.
 """
@@ -856,8 +857,8 @@ def hessian_reanalysis(
 ) -> dict:
     """The generator: every record in scope, as a canonical dictionary.
 
-    Ordered by public ref, no wall-clock values, floats rounded to fixed
-    decimals -- ``json.dumps(result, sort_keys=True)`` of two runs on the
+    Ordered by public ref (the snapshot wrapper re-sorts by content), no
+    wall-clock values, floats rounded to fixed decimals -- ``json.dumps(result, sort_keys=True)`` of two runs on the
     same database is byte-identical. Registered by the paper generator
     registry under the name ``hessian_reanalysis``.
 

@@ -1,11 +1,14 @@
 """Generators for the demonstration snapshot (``scripts/paper_snapshot``).
 
 * ``hessian_reanalysis``: every calculation with a stored Hessian or frequency list; a missing Hessian is counted.
+  Its ``summary`` gives stored Hessians of minima and of transition states, the largest frequency difference, and
+  every calculation without a Hessian by reason.
 * ``conformer_basins``: per species entry, its conformer groups and the levels that observed each.
 * ``calculation_evidence``: job files, settings read from them, software and level per calculation.
 * ``deposit_warnings``: stored deposit warnings by code.
 * ``thermo_selection_outcomes``: the thermo selection answer per species entry (sole candidate, alternatives, none).
-* ``structure_selection_outcomes``: the calculation and conformer selection answers per species entry.
+* ``structure_selection_outcomes``: the calculation and conformer selection answers per species entry, with the recipe
+  facts a cohort needs that no source established.
 
 Rows are ordered by content, not by public ref; no wall-clock value or database id is emitted.
 """
@@ -23,6 +26,8 @@ from sqlalchemy.orm import Session
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
+    CalculationFreqMode,
+    CalculationHessian,
     CalculationParameter,
 )
 from app.db.models.common import ThermoTargetKind
@@ -59,10 +64,32 @@ def _level_label(lot) -> str:
 _REF = re.compile(r"\b[a-z]{2,6}_[a-z2-7]{26}\b")
 
 
-def _content_key(row: dict[str, Any]) -> str:
+def content_key(row: dict[str, Any]) -> str:
     """The row as canonical JSON with public refs blanked, so ordering does not depend on them."""
 
     return _REF.sub("", json.dumps(row, sort_keys=True, default=str))
+
+
+def _side(reaction, role: str) -> str:
+    names: list[str] = []
+    for participant in reaction.participants:
+        if getattr(participant.role, "value", participant.role) == role:
+            names += [participant.species.smiles] * participant.stoichiometry
+    return " + ".join(sorted(names))
+
+
+def equation(reaction) -> str | None:
+    """``A + B <=> C + D`` (``=>`` when irreversible), each side in SMILES order."""
+    if reaction is None:
+        return None
+    arrow = "<=>" if reaction.reversible else "=>"
+    return f"{_side(reaction, 'reactant')} {arrow} {_side(reaction, 'product')}"
+
+
+def _ts_reaction(calc) -> str | None:
+    """The reaction of a calculation's transition-state entry, or None for any other calculation."""
+    entry = calc.transition_state_entry if calc is not None else None
+    return equation(entry.transition_state.reaction_entry.reaction) if entry is not None else None
 
 
 def _software_label(release) -> str:
@@ -77,8 +104,75 @@ def _software_label(release) -> str:
 # ---------------------------------------------------------------------------
 
 
+HESSIAN_DIFFERENCE_MEASURED = (
+    "per mode, |recovered - stored| in cm-1: the harmonic frequency recovered by diagonalising the stored "
+    "mass-weighted Hessian, against the frequency stored for the same calculation (modes paired in ascending order)"
+)
+
+
+def _owner_kind(calc) -> str:
+    if calc.transition_state_entry_id is not None:
+        return "transition_states"
+    if calc.species_entry_id is not None:
+        return "minima"
+    return "other"
+
+
+def _largest(records: list[dict[str, Any]]) -> dict[str, Any] | None:
+    analysed = [r for r in records if r.get("max_abs_deviation_cm1") is not None]
+    if not analysed:
+        return None
+    top = max(analysed, key=lambda r: (r["max_abs_deviation_cm1"], content_key(r)))
+    return {
+        "max_abs_deviation_cm1": top["max_abs_deviation_cm1"],
+        "within_tolerance": top.get("within_tolerance"),
+        "species_smiles": top["species_smiles"],
+        "reaction": top["reaction"],
+        "level_of_theory": top["level_of_theory"],
+        "calculation_type": top["calculation_type"],
+        "calculation_ref": top["calculation_ref"],
+    }
+
+
+def _hessian_summary(session: Session, records: list[dict[str, Any]], by_ref: dict[str, Calculation]) -> dict[str, Any]:
+    """Stored Hessians by owner, the largest difference by owner, and every calculation without a Hessian by reason."""
+    with_hessian = set(session.scalars(select(CalculationHessian.calculation_id)))
+    with_frequencies = set(session.scalars(select(CalculationFreqMode.calculation_id).distinct()))
+    stored: Counter[str] = Counter()
+    without: dict[str, Counter[str]] = defaultdict(Counter)
+    for calc in session.scalars(select(Calculation)):
+        owner = _owner_kind(calc)
+        if calc.id in with_hessian:
+            stored[owner] += 1
+            continue
+        if calc.id in with_frequencies:
+            reason = "frequency list stored, Hessian not stored"
+        elif calc.type.value == "freq":
+            reason = "frequency calculation with neither a frequency list nor a Hessian stored"
+        else:
+            reason = f"{calc.type.value} calculation: not a frequency calculation"
+        without[reason][owner] += 1
+    owners = ("minima", "transition_states", "other")
+    by_owner = {owner: [r for r in records if _owner_kind(by_ref[r["calculation_ref"]]) == owner] for owner in owners}
+    return {
+        "difference_measured": HESSIAN_DIFFERENCE_MEASURED,
+        "stored_hessians": {owner: stored[owner] for owner in owners},
+        "analysed": {owner: sum(1 for r in by_owner[owner] if r["status"] == "analysed") for owner in owners},
+        "within_tolerance": {owner: sum(1 for r in by_owner[owner] if r.get("within_tolerance")) for owner in owners},
+        "largest_difference": {owner: _largest(by_owner[owner]) for owner in owners},
+        "calculations_without_a_hessian": sum(sum(c.values()) for c in without.values()),
+        "without_a_hessian_by_reason": {
+            reason: {owner: counts[owner] for owner in owners} for reason, counts in sorted(without.items())
+        },
+    }
+
+
 def hessian_reanalysis(session: Session) -> dict[str, Any]:
-    """Return the Hessian reanalysis of every calculation with a stored Hessian or frequency list, ordered by content."""
+    """Return the Hessian reanalysis of every calculation with a stored Hessian or frequency list, ordered by content.
+
+    ``summary`` counts stored Hessians of minima and of transition states, names the largest difference per owner
+    kind, and counts every calculation without a stored Hessian by reason.
+    """
     out = _hessian_reanalysis(session, include_modes=True)
     by_ref = {
         calc.public_ref: calc
@@ -89,16 +183,19 @@ def hessian_reanalysis(session: Session) -> dict[str, Any]:
         entry = calc.species_entry if calc is not None else None
         record["species_smiles"] = entry.species.smiles if entry is not None else None
         record["species_multiplicity"] = entry.species.multiplicity if entry is not None else None
+        record["reaction"] = _ts_reaction(calc)
         record["level_of_theory"] = _level_label(calc.lot) if calc is not None else None
     out["records"].sort(
         key=lambda r: (
             r["species_smiles"] or "",
             r["species_multiplicity"] or 0,
+            r["reaction"] or "",
             r["level_of_theory"] or "",
             r["calculation_type"] or "",
-            _content_key(r),
+            content_key(r),
         )
     )
+    out["summary"] = _hessian_summary(session, out["records"], by_ref)
     return out
 
 
@@ -155,7 +252,7 @@ def conformer_basins(session: Session) -> dict[str, Any]:
                     "number_of_levels": len(levels),
                 }
             )
-        group_rows.sort(key=lambda g: (g["number_of_levels"], sorted(g["levels_observing"].items()), g["observations"], _content_key(g)))
+        group_rows.sort(key=lambda g: (g["number_of_levels"], sorted(g["levels_observing"].items()), g["observations"], content_key(g)))
         total_groups += len(groups)
         total_observations += entry_observations
         rows.append(
@@ -170,7 +267,7 @@ def conformer_basins(session: Session) -> dict[str, Any]:
                 "groups": group_rows,
             }
         )
-    rows.sort(key=lambda r: (r["species_smiles"], r["multiplicity"], _content_key(r)))
+    rows.sort(key=lambda r: (r["species_smiles"], r["multiplicity"], content_key(r)))
     return {
         "species_entries_with_conformers": len(rows),
         "conformer_groups": total_groups,
@@ -317,7 +414,7 @@ def thermo_selection_outcomes(session: Session) -> dict[str, Any]:
                     "reason_codes": sorted({r["code"] for c in candidates for r in c["assessment"]["reasons"]}),
                 }
             )
-        rows.sort(key=lambda r: (r["species_smiles"], r["multiplicity"], _content_key(r)))
+        rows.sort(key=lambda r: (r["species_smiles"], r["multiplicity"], content_key(r)))
         return {
             "species_entries_assessed": len(rows),
             "outcomes": dict(sorted(tally.items())),
@@ -333,6 +430,15 @@ def thermo_selection_outcomes(session: Session) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # structure_selection_outcomes
 # ---------------------------------------------------------------------------
+
+
+def _unestablished_facts(manifest: dict[str, Any]) -> dict[str, int]:
+    """Per recipe fact a cohort needs and no source established, the number of assessed units missing it."""
+    counts: Counter[str] = Counter()
+    for assessment in manifest.get("assessments") or []:
+        for name in (assessment.get("recipe") or {}).get("unestablished") or []:
+            counts[name] += 1
+    return dict(sorted(counts.items()))
 
 
 def structure_selection_outcomes(session: Session) -> dict[str, Any]:
@@ -369,9 +475,10 @@ def structure_selection_outcomes(session: Session) -> dict[str, Any]:
                     "selected_refs": len(decision["selected_refs"]),
                     "administrative_first_named": decision["administrative_first"] is not None,
                     "unresolved": {u["code"]: len(u["refs"]) for u in sorted(decision["unresolved"], key=lambda u: u["code"])},
+                    "unestablished_recipe_facts": _unestablished_facts(manifest),
                 }
             rows.append(row)
-        rows.sort(key=lambda r: (r["species_smiles"], r["multiplicity"], _content_key(r)))
+        rows.sort(key=lambda r: (r["species_smiles"], r["multiplicity"], content_key(r)))
         return {
             "species_entries_assessed": len(rows),
             "outcomes_by_grain": {grain: dict(sorted(counts.items())) for grain, counts in tally.items()},

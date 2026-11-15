@@ -3,15 +3,16 @@
 A generator is ``(Session) -> dict``. It reads the database through the ORM
 and read services -- never raw NDJSON -- because that is what a reproducer
 has after ``tckdb_archive.py restore`` and what the paper describes. The
-rendering rules (canonical JSON, Decimal as string, no wall-clock values,
-rows ordered by public ref) are in
+rendering rules (canonical JSON, Decimal as string, no wall-clock values)
+are in
 :mod:`app.services.deposit.expected_outputs`.
 
 Adding a generator
 ------------------
 1. Write ``def <name>(session: Session) -> dict`` in :mod:`scripts.paper.generators`
-   (or a sibling module). Order every collection by public ref. Emit no
-   ``datetime.now()``-derived value.
+   (or a sibling module). Order every collection by content, never by public
+   ref or database id. Emit no ``datetime.now()``-derived value and no deposit
+   timestamp.
 2. Register it below. The name becomes ``expected_outputs/<name>.json`` and
    ``<name>.md`` in the deposit.
 
@@ -21,7 +22,7 @@ The spectrum-from-Hessian agreement table (``3_results.md:44``,
 ``SI.md:29``) is produced by
 :func:`app.services.hessian_reanalysis.hessian_reanalysis`, registered below
 through :mod:`scripts.paper.snapshot_generators`. It covers every calculation
-with a stored Hessian or a stored frequency list, ordered by public ref; a
+with a stored Hessian or a stored frequency list, ordered by content; a
 calculation whose Hessian cannot be reanalysed is counted under its refusal
 status, not dropped.
 """
@@ -29,7 +30,7 @@ status, not dropped.
 from __future__ import annotations
 
 from app.services.deposit.expected_outputs import Generator
-from scripts.paper import generators, snapshot_generators
+from scripts.paper import generators, snapshot_cases, snapshot_generators
 
 GENERATORS: dict[str, Generator] = {
     "corpus_counts": generators.corpus_counts,
@@ -53,6 +54,13 @@ GENERATORS: dict[str, Generator] = {
     "deposit_warnings": snapshot_generators.deposit_warnings,
     "thermo_selection_outcomes": snapshot_generators.thermo_selection_outcomes,
     "structure_selection_outcomes": snapshot_generators.structure_selection_outcomes,
+    "use_case_ch4_oh": snapshot_cases.use_case_ch4_oh,
+    "ch3_enthalpy_of_formation": snapshot_cases.ch3_enthalpy_of_formation,
+    "network_n2h3": snapshot_cases.network_n2h3,
+    "chemkin_reconciliation": snapshot_cases.chemkin_reconciliation,
+    "species_thermo_sources": snapshot_cases.species_thermo_sources,
+    "caught_error": snapshot_cases.caught_error,
+    "dataset_release": snapshot_cases.dataset_release,
 }
 
 __all__ = ["GENERATORS"]

@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Stable order for record links, a calculation's artifact links and release artifact lines (Unreleased)
+
+- **Behaviour:** a submission's record links, the artifact links written for a calculation's artifacts, and the lines of a release's selected-record, candidate and review-history files follow integer ids, so two databases built by the same sequence of uploads hold the same rows in the same order. Release lines were ordered by public ref, which is random per database.
+- **Behaviour:** a release frozen before this change can report live divergence (its re-rendered files differ in line order) until it is re-cut; `verify_release` is unaffected.
+- **Schema and migration:** none.
+
 ## Outbound User-Agent names the project (Unreleased)
 
 - **Behaviour:** requests to Crossref and CCCBDB send `TCKDB/<version> (+https://github.com/TCKDB/TCKDB)` (the CCCBDB form resolver wraps it as `Mozilla/5.0 (compatible; TCKDB/<version>; +https://github.com/TCKDB/TCKDB; mode=form-resolver)`); setting `TCKDB_CONTACT_EMAIL` adds `; mailto:<address>`, which the CCCBDB diagnostics report never records. Test fixtures and docs carry no personal paths or addresses.

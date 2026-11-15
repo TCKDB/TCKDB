@@ -7,7 +7,7 @@ report on stderr.
 Usage::
 
     conda run -n tckdb_env python -m scripts.pdep_ingestion.cli RUN_DIR \
-        [--out payload.json] [--artifacts] [--no-validate]
+        [--out payload.json] [--artifacts] [--network-only] [--no-validate]
 """
 
 from __future__ import annotations
@@ -28,6 +28,11 @@ def main(argv: list[str] | None = None) -> int:
         "--artifacts", action="store_true", help="Embed ESS log files as artifacts"
     )
     parser.add_argument(
+        "--network-only",
+        action="store_true",
+        help="Skip species input.py declares but the network does not name",
+    )
+    parser.add_argument(
         "--no-validate",
         action="store_true",
         help="Skip Pydantic validation (emit raw dict; no app import)",
@@ -35,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     payload, gap = build_network_pdep_payload(
-        args.run_dir, include_artifacts=args.artifacts
+        args.run_dir, include_artifacts=args.artifacts, network_only=args.network_only
     )
 
     # Coverage / gap report on stderr.
@@ -48,6 +53,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"TS stubs (no geometry -> micro_reaction only): {gap.ts_stub_no_geometry}", file=sys.stderr)
     print(f"species with statmech ({len(gap.species_with_statmech)}): {gap.species_with_statmech}", file=sys.stderr)
     print(f"torsions emitted for: {gap.torsions_emitted}", file=sys.stderr)
+    if gap.treatment_unstated:
+        print(
+            f"rotor treatment not stated (hindered rotors without a scan calculation): {gap.treatment_unstated}",
+            file=sys.stderr,
+        )
     print(f"micro_reactions: {gap.micro_reactions}", file=sys.stderr)
     print(f"channels built: {gap.channels_built}", file=sys.stderr)
     print(
