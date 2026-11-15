@@ -164,11 +164,11 @@ describe("mono is reserved for identifiers and numbers, not prose (item 3)", () 
 describe("calculations table and page-wide guards", () => {
     const code = css.replace(/\/\*[\s\S]*?\*\//g, "")
 
-    it("keeps the calculation tables readable: header cells never break mid-word, cells may wrap anywhere, and the table scrolls inside its box", () => {
+    it("keeps the calculation tables readable: header cells never break mid-word, cells wrap at word breaks, and the table scrolls inside its box", () => {
         expect(extractRule(css, ".shape-energies-table thead th")).toMatch(/overflow-wrap:\s*normal/)
         expect(extractRule(css, ".shape-energies-table thead th")).toMatch(/white-space:\s*nowrap/)
-        expect(extractRule(css, ".shape-energies-table")).toMatch(/min-width:\s*30rem/)
-        expect(css).toMatch(/\.shape-energies-table td \{ overflow-wrap: anywhere; \}/)
+        expect(extractRule(css, ".shape-energies-table")).toMatch(/min-width:\s*40rem/)
+        expect(css).toMatch(/\.shape-energies-table td \{ overflow-wrap: break-word; \}/)
     })
 
     it("scopes the hidden-text utility to this page instead of defining a global class", () => {

@@ -1,6 +1,8 @@
 import { Fragment, type ReactNode } from "react"
 import { calculationDid } from "../domain/calculationTypeFormat"
 import { formatHartree, spreadLines, spreadText, type ShapeCalculation, type ShapeEnergy, type ShapeRow } from "../domain/conformerGallery"
+import { energyKey, foundByKey, groupBy, numberCalculations, type CalculationNumbers } from "../domain/shapeGrouping"
+import { words } from "../domain/provenanceFormat"
 import type { SinglePointsState } from "../hooks/useSpeciesSinglePoints"
 import { LevelLabel } from "./LevelLabel"
 import { RecordLink } from "./RecordLink"
@@ -8,40 +10,36 @@ import { ReviewChip } from "./ReviewChip"
 import { ValueLink } from "./ValueLink"
 
 const KIND_WORDS = { sp: "Single-point energy", opt: "Final energy of the optimisation" } as const
+const USUAL_ENERGY_KIND = { sp: "electronic_energy", opt: "final_energy" } as const
 
-/** Level and program as one run of text; a missing part is said, never filled in. */
+/** Level and program as one run of text; a missing part is said, never filled in. A workflow tool is named when there is one. */
 function Where({ calculation }: { calculation: ShapeCalculation }) {
-    if (calculation.level) {
-        return <><LevelLabel levelOfTheory={calculation.level} program={calculation.program} />{!calculation.program && ", program not recorded"}</>
-    }
-    return <>level not recorded, {calculation.program ? <span className="t-preserve-case">{calculation.program}</span> : "program not recorded"}</>
-}
-
-type Member = { calculation: ShapeCalculation; deposit: number }
-
-/** Calculations that share what a row says, in deposit order; each keeps its own link. */
-function groupBy<T extends ShapeCalculation>(items: readonly { item: T; deposit: number }[], keyOf: (item: T) => string): { first: T; members: Member[] }[] {
-    const groups = new Map<string, { first: T; members: Member[] }>()
-    for (const { item, deposit } of items) {
-        const key = keyOf(item)
-        const group = groups.get(key) ?? { first: item, members: [] }
-        group.members.push({ calculation: item, deposit })
-        groups.set(key, group)
-    }
-    return [...groups.values()]
-}
-
-const levelKeyOf = (calculation: ShapeCalculation) => `${calculation.levelRef ?? calculation.levelLabel ?? "-"}\n${calculation.program ?? "-"}\n${calculation.workflowTool ?? "-"}`
-
-/** "Calculation 1, 2, 3": the number is the deposit's place in the list, and each links to its own calculation. */
-function CalculationLinks({ members }: { members: readonly Member[] }) {
     return (
         <>
-            {members.length === 1 ? "Calculation " : "Calculations "}
-            {members.map((member, index) => (
-                <Fragment key={member.calculation.ref}>
+            {calculation.level
+                ? <><LevelLabel levelOfTheory={calculation.level} program={calculation.program} />{!calculation.program && ", program not recorded"}</>
+                : <>level not recorded, {calculation.program ? <span className="t-preserve-case">{calculation.program}</span> : "program not recorded"}</>}
+            {calculation.workflowTool && <>, run by <span className="t-preserve-case">{calculation.workflowTool}</span></>}
+        </>
+    )
+}
+
+/** The kind of energy in words; the archive's own kind is added when it is not the usual one for the calculation's type. */
+function EnergyKindWords({ energy }: { energy: Pick<ShapeEnergy, "kind" | "energyKind"> }) {
+    const unusual = energy.energyKind && energy.energyKind !== USUAL_ENERGY_KIND[energy.kind] ? words(energy.energyKind) : null
+    return <>{KIND_WORDS[energy.kind]}{unusual && <> ({unusual})</>}</>
+}
+
+/** "Calculation 1, 2, 3": each number links to its own calculation. */
+function CalculationLinks({ members, numbers }: { members: readonly ShapeCalculation[]; numbers: CalculationNumbers }) {
+    const ordered = [...members].sort((a, b) => (numbers.get(a.ref) ?? 0) - (numbers.get(b.ref) ?? 0))
+    return (
+        <>
+            {ordered.length === 1 ? "Calculation " : "Calculations "}
+            {ordered.map((member, index) => (
+                <Fragment key={member.ref}>
                     {index > 0 && ", "}
-                    <RecordLink kind="calculation" to={`/calculations/${member.calculation.ref}`} label={`Calculation ${member.deposit}`}>{member.deposit}</RecordLink>
+                    <RecordLink kind="calculation" to={`/calculations/${member.ref}`} label={`Calculation ${numbers.get(member.ref)}`}>{numbers.get(member.ref)}</RecordLink>
                 </Fragment>
             ))}
         </>
@@ -53,23 +51,19 @@ function Region({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /**
- * The calculations and energies of one shape, in small tables. Calculations that say the same thing (same kind, level
- * and program, and for an energy the same value and review) share one row and each keeps its own link. Nothing is
- * picked or averaged; a spread is stated only between energies of one kind at one level and one program.
+ * The calculations and energies of one shape, in small tables. Calculations that say the same thing share one row and
+ * each keeps its own link: same kind, level (by ref), program, workflow tool and review, and for an energy the same
+ * value and kind of energy too. Each calculation has one number, the same in every table. Nothing is picked or
+ * averaged; a spread is stated only between energies of one kind at one level and one program.
  */
 export function ShapeEnergies({ rows, singlePoints, optimisations }: {
     rows: readonly ShapeRow[]
     singlePoints: SinglePointsState
     optimisations: SinglePointsState
 }) {
-    const found = groupBy(
-        rows.flatMap((row, index) => row.foundBy.map((item) => ({ item, deposit: index + 1 }))),
-        (item) => `${item.type}\n${levelKeyOf(item)}\n${item.review ?? "-"}`,
-    )
-    const energies = groupBy<ShapeEnergy>(
-        rows.flatMap((row, index) => row.energies.map((item) => ({ item, deposit: index + 1 }))),
-        (item) => `${item.kind}\n${item.hartree ?? "none"}\n${levelKeyOf(item)}\n${item.review ?? "-"}`,
-    )
+    const numbers = numberCalculations(rows)
+    const found = groupBy(rows.flatMap((row) => row.foundBy), foundByKey)
+    const energies = groupBy<ShapeEnergy>(rows.flatMap((row) => row.energies), energyKey)
     const spreads = spreadLines(rows)
     return (
         <>
@@ -89,8 +83,8 @@ export function ShapeEnergies({ rows, singlePoints, optimisations }: {
                             {found.map(({ first, members }) => (
                                 <tr key={`${first.type}-${first.ref}`}>
                                     <th scope="row">{calculationDid(first.type) ?? first.type}</th>
-                                    <td><Where calculation={first} />{first.workflowTool && <>, run by <span className="t-preserve-case">{first.workflowTool}</span></>}</td>
-                                    <td><CalculationLinks members={members} /></td>
+                                    <td><Where calculation={first} /></td>
+                                    <td><CalculationLinks members={members} numbers={numbers} /></td>
                                     <td>{first.review ? <ReviewChip status={first.review} explain={false} /> : <span className="shape-energy-absent">Not recorded</span>}</td>
                                 </tr>
                             ))}
@@ -119,9 +113,9 @@ export function ShapeEnergies({ rows, singlePoints, optimisations }: {
                                             ? <span className="shape-energy-absent">{(first.kind === "sp" ? singlePoints : optimisations).status === "failed" ? "Could not be read" : "Energy not recorded"}</span>
                                             : <ValueLink value={formatHartree(first.hartree)} full={String(first.hartree)} to={`/calculations/${first.ref}`} />}
                                     </th>
-                                    <td>{KIND_WORDS[first.kind]}</td>
+                                    <td><EnergyKindWords energy={first} /></td>
                                     <td><Where calculation={first} /></td>
-                                    <td><CalculationLinks members={members} /></td>
+                                    <td><CalculationLinks members={members} numbers={numbers} /></td>
                                     <td>{first.review ? <ReviewChip status={first.review} explain={false} /> : <span className="shape-energy-absent">Not recorded</span>}</td>
                                 </tr>
                             ))}
@@ -145,9 +139,9 @@ export function ShapeEnergies({ rows, singlePoints, optimisations }: {
                         </thead>
                         <tbody>
                             {spreads.map((line) => (
-                                <tr key={`${line.kind}-${line.levelLabel}-${line.program}`}>
+                                <tr key={`${line.kind}-${line.energyKind}-${line.levelLabel}-${line.program}`}>
                                     <th scope="row">{line.level ? <LevelLabel levelOfTheory={line.level} program={line.program} /> : <span className="t-preserve-case">{line.levelLabel} · {line.program}</span>}</th>
-                                    <td>{KIND_WORDS[line.kind]}</td>
+                                    <td><EnergyKindWords energy={line} /></td>
                                     <td>{line.count}</td>
                                     <td className="t-preserve-case">{spreadText(line.kjMol)}</td>
                                 </tr>

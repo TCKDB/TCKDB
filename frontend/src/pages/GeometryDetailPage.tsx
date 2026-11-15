@@ -321,7 +321,7 @@ function CoordinateTableSection({ atoms, atomsAvailability, natoms, unit, onUnit
                         <button type="button" aria-pressed={elementDisplay === "number"} onClick={() => setElementDisplay("number")}>Number</button>
                     </fieldset>
                     <p className="note coordinate-toggle-note">
-                        Stored in ångström; bohr is a display conversion (1 Å = {ANGSTROM_TO_BOHR.toFixed(10)} bohr). Hover for the stored value.
+                        Stored in ångström; bohr is a display conversion (1 Å = {ANGSTROM_TO_BOHR.toFixed(10)} bohr). 6 decimals; hover for the stored value.
                     </p>
                 </div>
             )}

@@ -140,7 +140,7 @@ async function versionsSection(): Promise<HTMLElement> {
 }
 
 async function valuesRegion(): Promise<HTMLElement> {
-    return screen.findByRole("region", { name: "Table of values for this molecule" })
+    return screen.findByRole("region", { name: "All values for this molecule" })
 }
 
 function rowIds(region: HTMLElement): string[] {

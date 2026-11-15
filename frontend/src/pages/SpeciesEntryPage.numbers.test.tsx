@@ -346,7 +346,7 @@ describe("molecule page: numbers for this entry", () => {
         expect(row).toHaveTextContent("Asymmetric top")
         expect(cell(row, "Linear molecule")).toHaveTextContent("No")
         expect(heads(row)).not.toContain("Projected frequencies used")
-        expect(region).toHaveTextContent("Not recorded in any of these records: projected frequencies used")
+        expect(region).toHaveTextContent("Not recorded in this record: projected frequencies used")
     })
 
     it("types the point group with a subscript, never as a link, and shows Not shown for anything else", async () => {
@@ -507,7 +507,7 @@ describe("molecule page: numbers for this entry", () => {
         for (let step = 0; step < 120 && document.activeElement !== toggle; step += 1) await user.tab()
         expect(toggle).toHaveFocus()
         await user.tab()
-        expect(within(region).getByRole("region", { name: "Table of numbers" })).toHaveFocus()
+        expect(within(region).getAllByRole("region", { name: /^Table of numbers/ })[0]).toHaveFocus()
         await user.tab()
         expect(within(region).getByRole("link", { name: "Source: Thermo record 1" })).toHaveFocus()
         await user.tab()

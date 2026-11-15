@@ -59,7 +59,7 @@ describe("a level's disclosure beside prose", () => {
 
     it("an observation's evidence keeps the disclosure out of the sentence", () => {
         const calculation = { ref: "calc_o", type: "opt", levelRef: "lot_q", levelLabel: "ccsd(t)/cc-pvtz", level, program: "Molpro 1", workflowTool: null, review: "approved" }
-        const row: ShapeRow = { observationRef: "co_a", foundBy: [calculation], energies: [{ ...calculation, kind: "sp", hartree: -40.1 }] }
+        const row: ShapeRow = { observationRef: "co_a", foundBy: [calculation], energies: [{ ...calculation, kind: "sp", energyKind: "electronic_energy", hartree: -40.1 }] }
         const { container } = inScope(<ObservationEvidence row={row} singlePoints={ready} optimisations={ready} />)
         expect(container.querySelector("li .level-label details")).toBeNull()
         expect(container.querySelector("li > details")).not.toBeNull()
@@ -86,8 +86,8 @@ describe("a level's disclosure beside prose", () => {
         expect(nestingWarnings()).toEqual([])
         // The label flows inline inside its cell.
         expect(getComputedStyle(spread.querySelector(".level-label") as Element).display).toBe("inline")
-        // The two energies are told apart by the deposit each calculation belongs to.
+        // Each calculation has one number, shared by both tables: the optimisations are 1 and 2, the single points 3 and 4.
         const energies = container.querySelectorAll('[aria-label="Energies on this geometry"] tbody tr')
-        expect([...energies].map((row) => row.querySelector("td:nth-of-type(3)")?.textContent)).toEqual(["Calculations 1, 2", "Calculation 1", "Calculation 2"])
+        expect([...energies].map((row) => row.querySelector("td:nth-of-type(3)")?.textContent)).toEqual(["Calculations 1, 2", "Calculation 3", "Calculation 4"])
     })
 })

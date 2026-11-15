@@ -1,13 +1,14 @@
 import { ROUNDED_NOTE } from "./QuantityValue"
 import { LevelLabel } from "./LevelLabel"
 import { conformerGroupWords, RECORD_KIND_NOUN } from "../domain/recordWords"
-import { Fragment, useMemo, useState, type ReactNode } from "react"
+import { Fragment, useMemo, useRef, useState, type ReactNode } from "react"
+import { useOverflows } from "../hooks/useOverflows"
 import { Link } from "react-router-dom"
 import "../entry-numbers.css"
 import type { HiddenByDefault } from "../api/listEnvelope"
 import {
-    distinctLevelCount, groupByLevel, levelParts, NO_LEVEL_KEY, numberAnchor, pointGroupParts,
-    type Describes, type NumberKind, type NumberRow, type NumberValue,
+    distinctLevelCount, groupByLevel, isOneLevelThroughout, levelParts, NO_LEVEL_KEY, numberAnchor, numberColumns, pointGroupParts,
+    type Describes, type NumberColumn, type NumberKind, type NumberRow, type NumberValue,
 } from "../domain/entryNumbers"
 import { hiddenByDefaultNote } from "../domain/paging"
 import { formatWaitSeconds } from "../domain/rateLimitFormat"
@@ -48,25 +49,9 @@ export function WalkStatus({ state, loading, failed }: {
     return null
 }
 
-/** The columns of one kind's table: every label any record carries, in first-seen order, with a shared unit when there is one. */
-type Column = { label: string; unit: string | null; unitInCell: boolean; allAbsent: boolean }
-
 /** A label read mid-sentence: its first letter lowered unless the word is a symbol. */
 function lowerFirst(label: string): string {
     return /^[A-Z][a-z]/.test(label) ? label.charAt(0).toLowerCase() + label.slice(1) : label
-}
-
-function columnsOf(rows: readonly NumberRow[]): Column[] {
-    const order: string[] = []
-    for (const row of rows) for (const value of row.values) if (!order.includes(value.label)) order.push(value.label)
-    return order.map((label) => {
-        const cells = rows.map((row) => row.values.find((value) => value.label === label))
-        const present = cells.filter((cell): cell is NumberValue => cell !== undefined && cell.value !== null)
-        const units = new Set(present.map((cell) => cell.unit ?? ""))
-        const shared = units.size === 1 ? [...units][0] : ""
-        const allAbsent = present.length === 0 && cells.every((cell) => cell === undefined || cell.absent === undefined)
-        return { label, unit: shared || null, unitInCell: units.size > 1, allAbsent }
-    })
 }
 
 /**
@@ -99,8 +84,7 @@ export function NumbersTable<R extends NumberRow>({ rows, caption, label, groupL
                     {grouped && <span className="note">Rows keep their order inside each group.</span>}
                 </div>
             )}
-            <div className="table-scroll entry-numbers-scroll" tabIndex={0} role="region" aria-label={label}>
-            {rows.some((row) => isOneLevelThroughout(row.levels)) && (
+            {rows.some((row) => isOneLevelThroughout(row)) && (
                 <p className="note">A level with no roles listed was used for geometry, frequency and energy.</p>
             )}
             {kinds.map((kind) => (
@@ -109,6 +93,8 @@ export function NumbersTable<R extends NumberRow>({ rows, caption, label, groupL
                     kind={kind}
                     rows={rows.filter((row) => row.kind === kind)}
                     caption={`${caption}: ${KIND_WORDS[kind].toLowerCase()}`}
+                    label={`${label}, ${KIND_WORDS[kind].toLowerCase()}`}
+                    compact={compact}
                     grouped={grouped}
                     groupLabels={groupLabels}
                     hrefs={hrefs}
@@ -116,32 +102,36 @@ export function NumbersTable<R extends NumberRow>({ rows, caption, label, groupL
                     positions={positions}
                 />
             ))}
-            </div>
             {rows.some((row) => row.values.some((value) => value.full !== undefined)) && <p className="note">{ROUNDED_NOTE}</p>}
         </>
     )
 }
 
-function KindTable<R extends NumberRow>({ kind, rows, caption, grouped, groupLabels, hrefs, version, positions }: {
+function KindTable<R extends NumberRow>({ kind, rows, caption, label, compact, grouped, groupLabels, hrefs, version, positions }: {
     kind: NumberKind
     rows: readonly R[]
     caption: string
+    label: string
+    compact: boolean
     grouped: boolean
     groupLabels: Map<string, string>
     hrefs: (row: R) => { to: string | null; entryPath: string | null }
     version?: (row: R) => ReactNode
     positions: Map<R, number>
 }) {
-    const columns = useMemo(() => columnsOf(rows), [rows])
+    const columns = useMemo(() => numberColumns(rows), [rows])
     const shown = columns.filter((column) => !column.allAbsent)
     const hidden = columns.filter((column) => column.allAbsent)
     const withDescribes = rows.some((row) => row.describes !== null)
     const groups = useMemo(() => (grouped ? groupByLevel(rows) : [{ key: null, rows: [...rows] }]), [grouped, rows])
     const span = 1 + shown.length + (withDescribes ? 1 : 0) + 1
+    const boxRef = useRef<HTMLDivElement | null>(null)
+    const overflows = useOverflows(boxRef)
+    const Heading = compact ? "h4" : "h3"
     return (
         <div className="entry-numbers-kind-block">
-            <h3 className="t-heading-2 entry-numbers-kind-heading">{KIND_WORDS[kind]} <span className="entry-numbers-count">{rows.length} {rows.length === 1 ? "record" : "records"}</span></h3>
-            <div className="entry-numbers-table-box">
+            <Heading className="t-heading-2 entry-numbers-kind-heading">{KIND_WORDS[kind]} <span className="entry-numbers-count">{rows.length} {rows.length === 1 ? "record" : "records"}</span></Heading>
+            <div className="table-scroll entry-numbers-table-box" ref={boxRef} tabIndex={0} role="region" aria-label={label}>
                 <table className="data-table entry-numbers-table">
                     <caption className="entry-numbers-caption">{caption}</caption>
                     <thead>
@@ -183,7 +173,8 @@ function KindTable<R extends NumberRow>({ kind, rows, caption, grouped, groupLab
                     ))}
                 </table>
             </div>
-            {hidden.length > 0 && <p className="note entry-numbers-absent-note">Not recorded in any of these records: {hidden.map((column) => lowerFirst(column.label)).join("; ")}.</p>}
+            {overflows && <p className="note entry-numbers-scroll-hint">Scroll sideways inside the box to see every column.</p>}
+            {hidden.length > 0 && <p className="note entry-numbers-absent-note">{rows.length === 1 ? "Not recorded in this record: " : "Not recorded in any of these records: "}{hidden.map((column) => lowerFirst(column.label)).join("; ")}.</p>}
         </div>
     )
 }
@@ -240,7 +231,7 @@ function DescribesLine({ describes, entryPath, groupLabels }: { describes: Descr
 
 function NumberRowView({ row, columns, withDescribes, entryPath, to, groupLabels, version, position }: {
     row: NumberRow
-    columns: readonly Column[]
+    columns: readonly NumberColumn[]
     withDescribes: boolean
     position?: number
     entryPath: string | null
@@ -273,25 +264,17 @@ function NumberRowView({ row, columns, withDescribes, entryPath, to, groupLabels
                 </td>
             )}
             <td className="entry-numbers-source">
-                <SourceCell levels={row.levels} programs={row.programs} />
+                <SourceCell row={row} />
             </td>
         </tr>
     )
 }
 
-const STAGES = ["geometry", "frequency", "energy"]
-
-/** One level was used for the geometry, the frequencies and the energy: the roles need no listing. */
-function isOneLevelThroughout(levels: NumberRow["levels"]): boolean {
-    const parts = levelParts(levels)
-    return parts.length === 1 && STAGES.every((stage) => parts[0].roles.includes(stage))
-}
-
 /** The levels a record was made at, one label per distinct level with the roles it played, then the programs. */
-function SourceCell({ levels, programs }: { levels: NumberRow["levels"]; programs: readonly string[] }) {
-    const parts = levelParts(levels)
-    const plain = isOneLevelThroughout(levels)
-    const shownPrograms = programs.filter(Boolean)
+function SourceCell({ row }: { row: NumberRow }) {
+    const parts = levelParts(row.levels)
+    const plain = isOneLevelThroughout(row)
+    const shownPrograms = row.programs.filter(Boolean)
     if (parts.length === 0 && shownPrograms.length === 0) return <span className="entry-numbers-absent">Not recorded</span>
     return (
         <>

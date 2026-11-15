@@ -36,7 +36,7 @@
 }
 
 .entry-numbers-toggle:focus-visible,
-.entry-numbers-scroll:focus-visible,
+.entry-numbers-table-box:focus-visible,
 .entry-numbers .section-intro a:focus-visible,
 .entry-numbers-version a:focus-visible,
 .entry-versions a:focus-visible {
@@ -44,7 +44,7 @@
     outline-offset: 2px;
 }
 
-.entry-numbers-scroll {
+.entry-numbers-table-box {
     border: 1px solid var(--line-2);
     border-radius: var(--radius-sm);
 }
@@ -117,7 +117,8 @@
     color: var(--muted);
 }
 
-.entry-numbers-absent-note {
+.entry-numbers-absent-note,
+.entry-numbers-scroll-hint {
     margin-top: var(--s-2);
 }
 

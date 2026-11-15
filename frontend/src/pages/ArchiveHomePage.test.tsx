@@ -287,7 +287,9 @@ describe("ArchiveHomePage: the example record", () => {
         expect(await within(card).findByRole("heading", { name: "Numbers for this entry" })).toBeInTheDocument()
         await waitFor(() => expect(card.textContent).toContain("Enthalpy of formation, 298 K"), { timeout: 2000 }).catch(() => { throw new Error(card.textContent ?? "") })
         expect(card.textContent).not.toMatch(/thm_|spe_/)
-        expect(within(card).getAllByRole("heading").every((heading) => heading.tagName === "H3")).toBe(true)
+        const headings = within(card).getAllByRole("heading")
+        expect(headings[0].tagName).toBe("H3")
+        expect(headings.slice(1).every((heading) => heading.tagName === "H4")).toBe(true)
         expect(screen.queryByRole("link", { name: "Browse molecules" })).not.toBeInTheDocument()
     })
 

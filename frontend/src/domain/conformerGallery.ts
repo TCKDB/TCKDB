@@ -263,7 +263,8 @@ export type ShapeCalculation = {
 }
 
 export type EnergyKind = "sp" | "opt"
-export type ShapeEnergy = ShapeCalculation & { kind: EnergyKind; hartree: number | null; review: string | null }
+/** `kind` is the calculation's type; `energyKind` is the archive's own kind of energy for the value (`electronic_energy`, `final_energy`, ...). */
+export type ShapeEnergy = ShapeCalculation & { kind: EnergyKind; energyKind: string | null; hartree: number | null; review: string | null }
 
 export type ShapeRow = {
     observationRef: string
@@ -328,6 +329,7 @@ export function shapeRows(
                 levelLabel: own.levelLabel ?? fromRecord?.levelLabel ?? null,
                 level: own.level ?? fromRecord?.level ?? null,
                 program: own.program ?? fromRecord?.program ?? null,
+                energyKind: record?.energy?.energy_kind ?? null,
                 hartree: record?.energy?.energy_hartree ?? null,
                 review: reviewOf(record),
             })
@@ -337,6 +339,7 @@ export function shapeRows(
             energies.set(record.calculation.calculation_ref, {
                 ...recordCalculation(record),
                 kind: record.calculation.calculation_type === "opt" ? "opt" : "sp",
+                energyKind: record.energy?.energy_kind ?? null,
                 hartree: record.energy?.energy_hartree ?? null,
                 review: reviewOf(record),
             })
@@ -349,15 +352,15 @@ export function shapeRows(
     })
 }
 
-export type SpreadLine = { kind: EnergyKind; levelLabel: string; level: LevelOfTheory | null; program: string; count: number; kjMol: number }
+export type SpreadLine = { kind: EnergyKind; energyKind: string | null; levelLabel: string; level: LevelOfTheory | null; program: string; count: number; kjMol: number }
 
-/** For each kind of energy, level and program with two or more values in the rows: the largest difference. Other pairs are never compared. */
+/** For each kind of energy (the calculation's and the archive's own), level and program with two or more values in the rows: the largest difference. Other pairs are never compared. */
 export function spreadLines(rows: readonly ShapeRow[]): SpreadLine[] {
-    const groups = new Map<string, { kind: EnergyKind; levelLabel: string; level: LevelOfTheory | null; program: string; values: number[] }>()
+    const groups = new Map<string, { kind: EnergyKind; energyKind: string | null; levelLabel: string; level: LevelOfTheory | null; program: string; values: number[] }>()
     for (const energy of rows.flatMap((row) => row.energies)) {
         if (energy.hartree === null || !energy.levelRef || !energy.program) continue
-        const key = `${energy.kind}\n${energy.levelRef}\n${energy.program}`
-        const group = groups.get(key) ?? { kind: energy.kind, levelLabel: energy.levelLabel ?? "level of theory", level: energy.level, program: energy.program, values: [] }
+        const key = `${energy.kind}\n${energy.energyKind ?? "-"}\n${energy.levelRef}\n${energy.program}`
+        const group = groups.get(key) ?? { kind: energy.kind, energyKind: energy.energyKind, levelLabel: energy.levelLabel ?? "level of theory", level: energy.level, program: energy.program, values: [] }
         group.values.push(energy.hartree)
         groups.set(key, group)
     }
@@ -365,6 +368,7 @@ export function spreadLines(rows: readonly ShapeRow[]): SpreadLine[] {
         .filter((group) => group.values.length >= 2)
         .map((group) => ({
             kind: group.kind,
+            energyKind: group.energyKind,
             levelLabel: group.levelLabel,
             level: group.level,
             program: group.program,

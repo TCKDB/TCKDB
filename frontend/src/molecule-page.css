@@ -254,7 +254,7 @@
 
 .shape-energies-table {
     width: 100%;
-    min-width: 30rem;
+    min-width: 40rem;
     border-collapse: collapse;
 }
 
@@ -266,7 +266,7 @@
     vertical-align: top;
 }
 
-.shape-energies-table td { overflow-wrap: anywhere; }
+.shape-energies-table td { overflow-wrap: break-word; }
 
 .shape-energies-table thead th {
     overflow-wrap: normal;

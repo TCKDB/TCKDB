@@ -19,7 +19,7 @@ describe("entry-numbers.css", () => {
         expect(rule(css, ".entry-numbers-table")).toMatch(/min-width: 36rem/)
         expect(rule(css, ".entry-numbers-table .value-link")).toContain("white-space: nowrap")
         expect(rule(css, ".entry-numbers-table td.entry-numbers-source")).toContain("min-width")
-        expect(rule(css, ".entry-numbers-scroll")).toContain("border")
+        expect(rule(css, ".entry-numbers-table-box")).toContain("border")
     })
 
     it("lets other-version cards shrink and wrap a long ref at 320px", () => {

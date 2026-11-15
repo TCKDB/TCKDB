@@ -475,7 +475,7 @@ describe("NetworkEntryPage -- network map", () => {
         handleEverything({ stateEnergies: [{ state_composition_hash: "hash_well", energy_kj_mol: 0, energy_zero_convention: "lowest_state", correction_convention: "electronic_only" }] })
         page()
         await screen.findByRole("heading", { name: "Energies" })
-        expect(await screen.findByText("Electronic energies relative to the lowest state, not free energies.")).toBeVisible()
+        expect(await screen.findByText("Electronic energies only, relative to the lowest state; not free energies.")).toBeVisible()
         const summary = screen.getByText("Energy coverage", { selector: "summary" })
         expect(summary.closest("details")).not.toHaveAttribute("open")
     })

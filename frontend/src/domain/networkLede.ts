@@ -16,4 +16,4 @@ export function networkLede(counts: { states: number; channels: number; rates: n
 }
 
 /** The one sentence about the energies a network's solve carries. */
-export const NETWORK_ENERGY_LEDE = "Electronic energies relative to the lowest state, not free energies."
+export const NETWORK_ENERGY_LEDE = "Electronic energies only, relative to the lowest state; not free energies."
