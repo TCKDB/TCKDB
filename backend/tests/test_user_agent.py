@@ -1,6 +1,6 @@
 import pytest
 
-from app.user_agent import CONTACT_EMAIL_ENV, PROJECT_URL, tckdb_user_agent, without_contact
+from app.user_agent import CONTACT_EMAIL_ENV, PROJECT_URL, browser_compatible_user_agent, tckdb_user_agent, without_contact
 
 
 def test_user_agent_names_the_project_without_a_contact_by_default(monkeypatch):
@@ -45,3 +45,30 @@ def test_diagnostic_report_never_records_the_contact(monkeypatch):
         created_at="t", user_agent=tckdb_user_agent("mode=resolver-debug"), diagnostic_name="n", diagnostic_version="1"
     )
     assert "ops@example.org" not in str(report.to_json())
+
+
+@pytest.mark.parametrize(
+    "agent",
+    [
+        "tool/1 (mailto:a@b.org)",
+        "tool/1 (+https://x.org; MAILTO:a@b.org)",
+        "tool/1 (+https://x.org; mailto: a@b.org) mode=x",
+        "tool/1 (+https://x.org;mailto:a@b.org)",
+    ],
+)
+def test_without_contact_handles_custom_forms(agent):
+    out = without_contact(agent)
+    assert "@" not in out and "mailto" not in out.lower()
+    assert "()" not in out and "  " not in out
+
+
+def test_browser_compatible_agent_without_and_with_contact(monkeypatch):
+    monkeypatch.delenv(CONTACT_EMAIL_ENV, raising=False)
+    plain = browser_compatible_user_agent("mode=form-resolver")
+    assert plain.startswith("Mozilla/5.0 (compatible; TCKDB/")
+    assert plain.endswith(f"; +{PROJECT_URL}; mode=form-resolver)")
+    assert "mailto" not in plain
+    monkeypatch.setenv(CONTACT_EMAIL_ENV, "ops@example.org")
+    with_contact = browser_compatible_user_agent("mode=form-resolver")
+    assert with_contact.endswith("; mode=form-resolver; mailto:ops@example.org)")
+    assert without_contact(with_contact).endswith("; mode=form-resolver)")
