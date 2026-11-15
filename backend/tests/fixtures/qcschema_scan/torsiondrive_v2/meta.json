@@ -50,7 +50,7 @@
   "expected_calculation_type": "scan",
   "family": "v2",
   "generator": {
-    "adapter_version": "0.9.1",
+    "adapter_version": "0.9.6",
     "qcelemental_version": "0.51.2",
     "source_fixtures": [
       "clients/python/adapters/qcschema/tests/fixtures/torsiondrive_v2"

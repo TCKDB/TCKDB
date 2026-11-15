@@ -65,16 +65,14 @@ from app.importers.cccbdb.parsers.species_selection import (
     structural_to_hill_formula,
 )
 from app.parser_registry import PARSERS
+from app.user_agent import tckdb_user_agent
 
 _logger = logging.getLogger(__name__)
 
 FORM_RESOLVER_NAME = "cccbdb_form_resolver"
 
 
-DEFAULT_USER_AGENT = (
-    "Mozilla/5.0 (compatible; TCKDB-cccbdb-importer/0.1; "
-    "+https://github.com/TCKDB/TCKDB)"
-)
+DEFAULT_USER_AGENT = tckdb_user_agent("mode=form-resolver")
 
 
 # ---------------------------------------------------------------------------

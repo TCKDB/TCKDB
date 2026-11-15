@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from importlib import metadata
 
 PROJECT_URL = "https://github.com/TCKDB/TCKDB"
@@ -27,3 +28,11 @@ def tckdb_user_agent(suffix: str | None = None) -> str:
         agent += f"; mailto:{contact}"
     agent += ")"
     return f"{agent} {suffix}" if suffix else agent
+
+
+_CONTACT = re.compile(r";\s*mailto:[^)\s;]*")
+
+
+def without_contact(user_agent: str) -> str:
+    """``user_agent`` with any ``; mailto:<addr>`` part removed, for anything that is stored or published."""
+    return _CONTACT.sub("", user_agent)

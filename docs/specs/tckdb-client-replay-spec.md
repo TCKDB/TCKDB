@@ -60,7 +60,7 @@ Adds:
 
 | field | type | meaning |
 |---|---|---|
-| `payload_file` | string | Path to the on-disk JSON payload to POST. Engine reads this verbatim and posts it as the request body. |
+| `payload_file` | string | Path to the on-disk JSON payload to POST; a relative path resolves against the sidecar's directory. Engine reads this verbatim and posts it as the request body. |
 
 ### `payload_kind = calculation_artifact`
 
@@ -145,13 +145,15 @@ The engine must not raise on per-sidecar errors. Each sidecar is independent; on
 
 ### Change 2 — Dispatch handlers
 
-Two handlers for v0. Each receives the parsed sidecar dict, the effective base URL, and the client; returns a `(success: bool, response_or_error)` tuple.
+Two handlers for v0. Each receives the parsed sidecar dict, the effective base URL, the client and the sidecar's directory; returns a `(success: bool, response_or_error)` tuple.
 
 ```python
 def _replay_conformer_calculation(
-    sidecar: dict, *, client: TCKDBClient, effective_base_url: str
+    sidecar: dict, *, client: TCKDBClient, effective_base_url: str, sidecar_dir: Path
 ) -> tuple[bool, Any]:
     payload_path = Path(sidecar["payload_file"])
+    if not payload_path.is_absolute():
+        payload_path = sidecar_dir / payload_path  # relative to the sidecar's directory
     if not payload_path.exists():
         return (False, f"payload_file does not exist: {payload_path}")
     payload = json.loads(payload_path.read_text())

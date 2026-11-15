@@ -3,7 +3,7 @@
   "expected_calculation_type": "opt",
   "family": "v2",
   "generator": {
-    "adapter_version": "0.9.1",
+    "adapter_version": "0.9.6",
     "qcelemental_version": "0.51.2",
     "source_fixture": "clients/python/adapters/qcschema/tests/fixtures/optimization_v2"
   },

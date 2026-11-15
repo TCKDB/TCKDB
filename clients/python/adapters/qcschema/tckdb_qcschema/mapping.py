@@ -136,7 +136,7 @@ class MappingReport:
     def to_dict(self) -> dict:
         return {
             "transformed": list(self.transformed),
-            "retained_only": list(self.retained_only),
+            "retained_only": sorted(self.retained_only),
             "unsupported": list(self.unsupported),
             "rejected": list(self.rejected),
         }

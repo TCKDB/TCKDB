@@ -133,7 +133,7 @@ Not strictly required, but strongly recommended for any internet-exposed deploym
 | `MAX_FULL_CALCULATIONS_PUBLIC` | `100` (default) | |
 | `MIN_SUPPORTED_TCKDB_CLIENT_VERSION` | the version you tested against | Older clients are rejected on write paths with `426 Upgrade Required`. |
 | `ENFORCE_TCKDB_CLIENT_VERSION_ON_WRITES` | `true` (default) | |
-| `TCKDB_CONTACT_EMAIL` | unset (default) | When set, outbound requests to Crossref and CCCBDB add `mailto:<address>` to the User-Agent so those services can reach the operator. |
+| `TCKDB_CONTACT_EMAIL` | unset (default) | Puts a contact address in the User-Agent of outbound requests (`mailto:<address>`), which Crossref uses to place lookups in its polite pool; unset, Crossref lookups use the public pool. |
 
 ---
 

@@ -24,9 +24,9 @@ dataset must never require a code release.
 
 ## Outbound User-Agent names the project (Unreleased)
 
-- **Behaviour:** requests to Crossref and CCCBDB send `TCKDB/<version> (+https://github.com/TCKDB/TCKDB)`; setting `TCKDB_CONTACT_EMAIL` adds `; mailto:<address>`. Test fixtures and docs carry no personal paths or addresses.
+- **Behaviour:** requests to Crossref and CCCBDB send `TCKDB/<version> (+https://github.com/TCKDB/TCKDB)`; setting `TCKDB_CONTACT_EMAIL` adds `; mailto:<address>`, which the CCCBDB diagnostics report never records. Test fixtures and docs carry no personal paths or addresses.
 - **Schema and migration:** none. New optional environment variable `TCKDB_CONTACT_EMAIL`.
-- **Versions:** no distributed package changed.
+- **Versions:** `tckdb-qcschema` 0.9.6 (the mapping report's `retained_only` list is now sorted, so output does not depend on hash order).
 
 ## Reaction-entry reads carry `deposit_position` (Unreleased)
 
