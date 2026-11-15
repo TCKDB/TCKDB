@@ -51,7 +51,7 @@ sources:
   #   arc_path: /path/to/ARC
   #   timeout_seconds: 900
   #   runs_root: /path/to/arc/runs
-  #   recorded_hosts: [tckdb.homecalvin.com]
+  #   recorded_hosts: [tckdb.example.org]
   #   runs:
   #   - snapshot_reruns_20261110/rotor_scan_rmg_rxn_1142
   #   - snapshot_reruns_20261110/rotor_scan_rxn_188
