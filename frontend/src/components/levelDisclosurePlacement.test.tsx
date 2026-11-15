@@ -86,8 +86,8 @@ describe("a level's disclosure beside prose", () => {
         expect(nestingWarnings()).toEqual([])
         // The label flows inline inside its cell.
         expect(getComputedStyle(spread.querySelector(".level-label") as Element).display).toBe("inline")
-        // Each calculation has one number, shared by both tables: the optimisations are 1 and 2, the single points 3 and 4.
+        // Each calculation has one number, shared by both tables: numbered by deposit: optimisation 1 and single point 2, then optimisation 3 and single point 4.
         const energies = container.querySelectorAll('[aria-label="Energies on this geometry"] tbody tr')
-        expect([...energies].map((row) => row.querySelector("td:nth-of-type(3)")?.textContent)).toEqual(["Calculations 1, 2", "Calculation 3", "Calculation 4"])
+        expect([...energies].map((row) => row.querySelector("td:nth-of-type(3)")?.textContent)).toEqual(["Calculations 1, 3", "Calculation 2", "Calculation 4"])
     })
 })
