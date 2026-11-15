@@ -26,11 +26,12 @@ instance:
 sources:
   # Source 1: the E2 conformer study, deposited with the client builders.
   # The directory must hold raw_outputs/manifest_union.json, raw_outputs/tasks.txt and
-  # raw_outputs/tasks/<level>/<molecule>/<start>/{job.log,job.gjf}. It is not in this repository.
+  # raw_outputs/tasks/<level>/<molecule>/<start>/ (job.log, job.gjf for Gaussian; xtb.out, g98.out, start.xyz for xtb).
+  # It is not in this repository.
   e2_conformers:
     enabled: true
     root: /path/to/E2
-    levels: [b3lyp_d3bj, wb97xd]
+    levels: [b3lyp_d3bj, wb97xd, gfn2]
 
   # Source 4: the formic acid RMG model (Wu and Grinberg Dana, ACS Omega 2026), unmodified, through the CHEMKIN
   # adapter. The files ship in this repository; the path is relative to the repository root.

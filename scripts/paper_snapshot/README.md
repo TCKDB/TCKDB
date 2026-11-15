@@ -7,13 +7,19 @@ instance, and the script is the deliverable, not the database.
 ## What it deposits
 
 - **Source 1, E2 conformer study** (`source_e2.py`): 16 molecules, 61 starting structures, optimised with
-  frequencies at B3LYP-D3(BJ)/def2-TZVP and wB97X-D/def2-TZVP (Gaussian 16 C.02).
-  - Route: the Python client builders. One `ComputedSpeciesUpload` per optimised minimum, then the job's
-    `job.log` and `job.gjf` attached in the builders' second phase.
-  - Read from the files: the final geometry, last SCF energy, zero-point correction, frequency list, convergence
-    and the start coordinates in the input deck. The server reads the route line and SCF settings itself.
+  frequencies at B3LYP-D3(BJ)/def2-TZVP and wB97X-D/def2-TZVP (Gaussian 16 C.02) and at GFN2-xTB (xtb 6.7.1).
+  - Route: the Python client builders. One `ComputedSpeciesUpload` per optimised minimum, then the job files
+    attached in the builders' second phase: `job.log` (`output_log`) and `job.gjf` (`input`) for Gaussian; `xtb.out`
+    (`output_log`) on both calculations and `g98.out` (`output_log`) on the frequency calculation for xtb.
+  - Read from the files: the final geometry, last energy, zero-point correction, frequency list, convergence and the
+    start coordinates (`job.gjf` or `start.xyz`). The server reads the Gaussian route line and SCF settings itself.
+  - Each Gaussian calculation carries an `actual_protocol_declaration` read from its route line: `Int=` (integration
+    grid), `SCF=` (SCF convergence threshold) and `EmpiricalDispersion=` (dispersion). Nothing else on the line, and
+    nothing in an xtb task's input, maps to a declaration field; the xtb calculations carry none. `build_report.json`
+    lists each declared field with the token and line it was read from.
   - The E2 tree is not in this repository. It must hold `raw_outputs/manifest_union.json`, `raw_outputs/tasks.txt` and
-    `raw_outputs/tasks/<level>/<molecule>/<start>/{job.log,job.gjf}`.
+    `raw_outputs/tasks/<level>/<molecule>/<start>/` with `job.log` and `job.gjf` (Gaussian) or `xtb.out`, `g98.out`,
+    `start.xyz`, `xtbopt.xyz` and `vibspectrum` (xtb).
 - **Source 4, formic acid pyrolysis and oxidation model** (`source_chemkin.py`): Wu and Grinberg Dana,
   *ACS Omega* 2026, 11, 6371 (CC BY 4.0), 123 species and 3002 reactions, deposited unmodified.
   - Route: the CHEMKIN adapter (`clients/python/adapters/chemkin`), which posts to `/uploads/thermo` and
@@ -108,11 +114,13 @@ nothing, so a difference in row order is a difference.
 
 ## What is not deposited
 
-- The GFN2-xTB level of E2: listing `gfn2` in `levels` is refused.
 - `wb97xd/1_propyl/k00`: one imaginary mode, excluded as a non-minimum.
-- `ethylene_glycol/c02` (B3LYP): the continuation from `repair1` is deposited (restart geometry); the first
-  attempt's log is not.
+- `ethylene_glycol/c02` (B3LYP) and `hydroxyacetone/c00` (GFN2): the continuation from `repair1` is deposited
+  (restart geometry); the first attempt's output is not.
 - Gaussian punch files (`fort.7`): no artifact kind admits the name.
+- xtb's `hessian`, `vibspectrum`, `charges`, `wbo`, `xtbrestart`, `start.xyz`, `xtbopt.xyz`, `xtbhess.xyz`, `task.env`
+  and `xtbopt.log`: no artifact kind admits the name, or (`xtbopt.log`) the file carries no program signature.
+  `status.txt` is the worker's record, not a job file.
 
 Every task of the campaign is checked for its output first (`build_report.json`, `e2_conformers.provenance`). A log
 that cannot be read is recorded as a refusal and the build goes on.

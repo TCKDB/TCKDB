@@ -5,7 +5,8 @@
 * ``calculation_evidence``: job files, settings read from them, software and level per calculation.
 * ``deposit_warnings``: stored deposit warnings by code.
 * ``thermo_selection_outcomes``: the thermo selection answer per species entry (sole candidate, alternatives, none).
-* ``structure_selection_outcomes``: the calculation and conformer selection answers per species entry.
+* ``structure_selection_outcomes``: the calculation and conformer selection answers per species entry, with the recipe
+  facts a cohort needs that no source established.
 
 Rows are ordered by content, not by public ref; no wall-clock value or database id is emitted.
 """
@@ -335,6 +336,15 @@ def thermo_selection_outcomes(session: Session) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _unestablished_facts(manifest: dict[str, Any]) -> dict[str, int]:
+    """Per recipe fact a cohort needs and no source established, the number of assessed units missing it."""
+    counts: Counter[str] = Counter()
+    for assessment in manifest.get("assessments") or []:
+        for name in (assessment.get("recipe") or {}).get("unestablished") or []:
+            counts[name] += 1
+    return dict(sorted(counts.items()))
+
+
 def structure_selection_outcomes(session: Session) -> dict[str, Any]:
     """Return the calculation and conformer selection answers for each species entry with conformers."""
     from app.schemas.reads.scientific_structure_selection import (
@@ -369,6 +379,7 @@ def structure_selection_outcomes(session: Session) -> dict[str, Any]:
                     "selected_refs": len(decision["selected_refs"]),
                     "administrative_first_named": decision["administrative_first"] is not None,
                     "unresolved": {u["code"]: len(u["refs"]) for u in sorted(decision["unresolved"], key=lambda u: u["code"])},
+                    "unestablished_recipe_facts": _unestablished_facts(manifest),
                 }
             rows.append(row)
         rows.sort(key=lambda r: (r["species_smiles"], r["multiplicity"], _content_key(r)))

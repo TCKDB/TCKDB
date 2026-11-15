@@ -1,14 +1,22 @@
 """Source 1: the E2 conformer study, deposited through ``tckdb_client.builders``.
 
 One ``ComputedSpeciesUpload`` per optimised minimum (molecule x start x level): an ``opt`` and a ``freq`` calculation,
-the final geometry, and the job's ``job.log`` and ``job.gjf`` attached in the builders' second phase. Read from the
-files: final geometry, last SCF energy, zero-point correction, frequency list, convergence and the start coordinates
-in the input deck. The server reads the route line and SCF settings from the log.
+the final geometry, and the job files attached in the builders' second phase. Read from the files: final geometry,
+last energy, zero-point correction, frequency list, convergence and the start coordinates.
+
+Job files, by level:
+
+* Gaussian levels: ``job.log`` (``output_log``) and ``job.gjf`` (``input``) on both calculations. The server reads the
+  route line and SCF settings from the log.
+* GFN2-xTB: ``xtb.out`` (``output_log``) on both calculations and ``g98.out`` (``output_log``) on the ``freq``. The start
+  geometry comes from ``start.xyz``. Every other file of an xtb task has a name no artifact kind admits.
+
+Each calculation carries an ``actual_protocol_declaration`` holding only what the task's input states
+(:func:`declare_protocol`). A level whose inputs state none of the declaration's facts gets none.
 
 Not deposited:
 
 * ``fort.7``: no artifact kind admits the name.
-* The GFN2-xTB level: listing ``gfn2`` in ``levels`` is refused at validation.
 * A task with a repair directory deposits the continuation's output (restart geometry); the first attempt's log is not
   deposited.
 """
@@ -206,6 +214,17 @@ def parse_gaussian(directory: Path, elements: list[str]) -> Parsed:
     return out
 
 
+def parse_xyz(path: Path, elements: list[str]) -> list[list[Any]] | None:
+    """Return the coordinates of an XYZ file whose atoms are ``elements`` in order."""
+    if not path.is_file():
+        return None
+    rows = path.read_text().splitlines()[2 : 2 + len(elements)]
+    atoms = [row.split()[:4] for row in rows]
+    if len(atoms) != len(elements) or [a[0].capitalize() for a in atoms] != elements:
+        return None
+    return [[e, float(x), float(y), float(z)] for e, (_, x, y, z) in zip(elements, atoms)]
+
+
 def parse_xtb(directory: Path, elements: list[str]) -> Parsed:
     out = Parsed()
     text = (directory / "xtb.out").read_text(errors="replace")
@@ -222,12 +241,8 @@ def parse_xtb(directory: Path, elements: list[str]) -> Parsed:
             parts = line.split()
             if parts and parts[0].isdigit() and abs(float(parts[-3])) > 1e-2:
                 out.freqs.append(float(parts[-3]))
-    final = directory / "xtbopt.xyz"
-    if final.is_file():
-        rows = final.read_text().splitlines()[2 : 2 + len(elements)]
-        atoms = [row.split()[:4] for row in rows]
-        if [a[0].capitalize() for a in atoms] == elements:
-            out.xyz = [[e, float(x), float(y), float(z)] for e, (_, x, y, z) in zip(elements, atoms)]
+    out.xyz = parse_xyz(directory / "xtbopt.xyz", elements)
+    out.input_xyz = parse_xyz(directory / "start.xyz", elements)
     return out
 
 
@@ -243,8 +258,81 @@ def xyz_text(atoms: list[list[Any]], comment: str) -> str:
 
 
 # --------------------------------------------------------------------------
+# protocol declaration
+# --------------------------------------------------------------------------
+
+#: Route keyword -> declared numerical approximation kind.
+ROUTE_APPROXIMATIONS = {"int": "integration_grid", "integral": "integration_grid", "scf": "scf_convergence_threshold"}
+#: ``EmpiricalDispersion`` option -> dispersion label (Gaussian 16 manual, EmpiricalDispersion keyword).
+ROUTE_DISPERSION = {"gd3bj": "D3BJ", "gd3": "D3"}
+_ROUTE_OPTION = re.compile(r"^([A-Za-z]+)=\(?([A-Za-z0-9]+)\)?$")
+
+
+def route_line(path: Path) -> tuple[int, str] | None:
+    """Return the (1-based line number, text) of the route line of a Gaussian input deck."""
+    for number, line in enumerate(path.read_text().splitlines(), 1):
+        if line.lstrip().startswith("#"):
+            return number, line.strip()
+    return None
+
+
+def declare_protocol(task: Task) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    """Return the actual protocol declaration the task's input states, and where each fact was read.
+
+    Read from the Gaussian route line: ``Int=<grid>`` and ``SCF=<threshold>`` (single options only) as numerical
+    approximations, ``EmpiricalDispersion=<option>`` as the dispersion. Nothing else on the line maps to a declaration
+    field. An xtb task's input (``task.env``: charge and unpaired electrons; command line ``--gfn 2 --ohess vtight``)
+    states none of the declaration's facts, so it returns ``None``.
+    """
+    if task.level == "gfn2":
+        return None, []
+    gjf = task.directory / "job.gjf"
+    found = route_line(gjf)
+    if found is None:
+        return None, []
+    number, text = found
+    where = f"{gjf.name}:{number}"
+    approximations: list[dict[str, Any]] = []
+    dispersion: str | None = None
+    sources: list[dict[str, Any]] = []
+    for token in text.lstrip("#").split()[1:]:
+        match = _ROUTE_OPTION.match(token)
+        if not match:
+            continue
+        keyword, option = match.group(1).lower(), match.group(2)
+        if keyword in ROUTE_APPROXIMATIONS:
+            kind = ROUTE_APPROXIMATIONS[keyword]
+            approximations.append({"kind": kind, "setting": option})
+            sources.append({"field": f"numerical_approximations.{kind}", "value": option, "token": token, "line": where})
+        elif keyword == "empiricaldispersion" and option.lower() in ROUTE_DISPERSION:
+            dispersion = ROUTE_DISPERSION[option.lower()]
+            sources.append({"field": "dispersion", "value": dispersion, "token": token, "line": where})
+    if not approximations and dispersion is None:
+        return None, []
+    declaration: dict[str, Any] = {
+        "version": 1,
+        "source": {"origin": "parser_derived", "producer": "Gaussian", "producer_version": "16 C.02"},
+    }
+    if approximations:
+        declaration["numerical_approximations"] = sorted(approximations, key=lambda a: a["kind"])
+    if dispersion is not None:
+        declaration["dispersion"] = {"state": "known", "value": dispersion}
+    return declaration, sources
+
+
+# --------------------------------------------------------------------------
 # deposit
 # --------------------------------------------------------------------------
+
+#: Job files per level: ``(file name, artifact kind, calculations it is attached to)``.
+JOB_FILES: dict[str, tuple[tuple[str, str, tuple[str, ...]], ...]] = {
+    "gaussian": (("job.log", "output_log", ("opt", "freq")), ("job.gjf", "input", ("opt", "freq"))),
+    "gfn2": (("xtb.out", "output_log", ("opt", "freq")), ("g98.out", "output_log", ("freq",))),
+}
+
+
+def job_files(task: Task) -> tuple[tuple[str, str, tuple[str, ...]], ...]:
+    return JOB_FILES["gfn2" if task.level == "gfn2" else "gaussian"]
 
 
 def build_upload(task: Task, parsed: Parsed, levels: dict[str, Any]):
@@ -257,6 +345,7 @@ def build_upload(task: Task, parsed: Parsed, levels: dict[str, Any]):
         if parsed.input_xyz
         else None
     )
+    declaration, _ = declare_protocol(task)
     opt = Calculation.opt(
         software,
         level,
@@ -264,6 +353,7 @@ def build_upload(task: Task, parsed: Parsed, levels: dict[str, Any]):
         output_geometry=final,
         final_energy_hartree=parsed.e_elec,
         converged=True,
+        actual_protocol_declaration=declaration,
     )
     freq = Calculation.freq(
         software,
@@ -273,18 +363,19 @@ def build_upload(task: Task, parsed: Parsed, levels: dict[str, Any]):
         n_imag=parsed.n_imag,
         zpe_hartree=parsed.zpe,
         depends_on=opt,
+        actual_protocol_declaration=declaration,
     )
-    for calc in (opt, freq):
-        calc.add_artifact(task.directory / "job.log", "output_log")
-        calc.add_artifact(task.directory / "job.gjf", "input")
+    calcs = {"opt": opt, "freq": freq}
+    for name, kind, attached_to in job_files(task):
+        for calc_type in attached_to:
+            calcs[calc_type].add_artifact(task.directory / name, kind)
     return ComputedSpeciesUpload(
         species=Species(smiles=task.smiles, charge=task.charge, multiplicity=task.multiplicity),
         calculations=[opt, freq],
     )
 
 
-LEVELS_AVAILABLE = ("b3lyp_d3bj", "wb97xd")
-GFN2_REFUSAL = "the gfn2 level is not deposited: xtb job files are not part of this build"
+LEVELS_AVAILABLE = ("b3lyp_d3bj", "wb97xd", "gfn2")
 
 
 def validate(cfg: dict[str, Any]) -> list[str]:
@@ -299,9 +390,7 @@ def validate(cfg: dict[str, Any]) -> list[str]:
                 problems.append(f"{SOURCE}: {needed} not found under the configured root")
     levels = cfg.get("levels") or list(LEVELS_AVAILABLE)
     for level in levels:
-        if level == "gfn2":
-            problems.append(f"{SOURCE}: {GFN2_REFUSAL}")
-        elif level not in LEVELS_AVAILABLE:
+        if level not in LEVELS_AVAILABLE:
             problems.append(f"{SOURCE}: unknown level {level!r}; available: {list(LEVELS_AVAILABLE)}")
     if "gfn2_log_as" in cfg:
         problems.append(f"{SOURCE}: 'gfn2_log_as' is not an option")
@@ -315,7 +404,9 @@ def describe_inputs(cfg: dict[str, Any]) -> dict[str, Any]:
     tasks, _ = load_tasks(root, levels)
     files = [root / "raw_outputs" / "manifest_union.json", root / "raw_outputs" / "tasks.txt"]
     for task in tasks:
-        files += [task.directory / "job.log", task.directory / "job.gjf"]
+        files += [task.directory / name for name, _, _ in job_files(task)]
+        if task.level == "gfn2":
+            files += [task.directory / name for name in ("start.xyz", "xtbopt.xyz", "vibspectrum")]
     return digest_files(root, files)
 
 
@@ -325,14 +416,15 @@ def deposit(session: Session, cfg: dict[str, Any], report: Report, work_dir: Pat
     wanted = list(cfg.get("levels") or LEVELS_AVAILABLE)
     src = report.source(SOURCE)
 
-    all_levels = ["b3lyp_d3bj", "wb97xd", "gfn2"]
+    all_levels = list(LEVELS_AVAILABLE)
     tasks_all, table = load_tasks(root, all_levels)
     src["campaign_table"] = table
     src["provenance"] = provenance_check(root, tasks_all)
     skipped_levels = [lv for lv in all_levels if lv not in wanted]
     if skipped_levels:
-        report.note(f"{SOURCE}: levels not deposited: {skipped_levels}. For gfn2: {GFN2_REFUSAL}.")
+        report.note(f"{SOURCE}: levels not deposited: {skipped_levels}.")
     tasks = [t for t in tasks_all if t.level in wanted]
+    declared: dict[str, Any] = {}
     if cfg.get("limit_tasks"):  # a smoke-test aid; leave unset for a real build
         tasks = tasks[: int(cfg["limit_tasks"])]
 
@@ -363,6 +455,11 @@ def deposit(session: Session, cfg: dict[str, Any], report: Report, work_dir: Pat
                 )
                 continue
             key = f"paper-snapshot:e2:{slug(task.task)}"
+            declaration, sources = declare_protocol(task)
+            seen = declared.setdefault(task.level, {"declaration": declaration, "read_from": sources, "tasks": 0})
+            seen["tasks"] += 1
+            if seen["declaration"] != declaration:
+                seen.setdefault("differs_in", []).append(task.task)
             try:
                 upload = build_upload(task, parsed, levels_cfg)
                 result = client.upload(upload, idempotency_key=key)
@@ -391,7 +488,13 @@ def deposit(session: Session, cfg: dict[str, Any], report: Report, work_dir: Pat
     src["status"] = "deposited" if sent else "nothing deposited"
     src["levels_deposited"] = wanted
     src["tasks_attempted"] = len(tasks)
+    src["protocol_declarations"] = {level: declared[level] for level in sorted(declared)}
+    src["job_files"] = {level: [{"file": n, "kind": k, "calculations": list(c)} for n, k, c in files]
+                        for level, files in sorted(JOB_FILES.items())}
     src["not_deposited_files"] = {
         "gaussian": "fort.7 (punch file): no artifact kind admits the name",
+        "gfn2": "hessian, vibspectrum, charges, wbo, xtbrestart (no extension), start.xyz, xtbopt.xyz, xtbhess.xyz "
+        "(.xyz), task.env (.env), status.txt (worker status, not a job file), xtbopt.log (no program signature): no "
+        "artifact kind admits them",
         "repairs": "tasks with a repair directory deposit the continuation's output only (listed under provenance)",
     }

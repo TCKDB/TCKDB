@@ -199,6 +199,7 @@ def test_structure_selection_outcomes_report_an_outcome_per_grain_and_name_no_fi
         assert row[grain]["outcome"]  # some outcome, stated
         assert row[grain]["administrative_first_named"] is False  # result_mode all: no record is named first
     assert set(out["outcomes_by_grain"]) == {"calculations", "conformers"}
+    assert row["calculations"]["unestablished_recipe_facts"]["spin_treatment"] == 1
     assert not _no_integer_ids(json.loads(render_json(out)))
 
 
@@ -241,6 +242,7 @@ def test_structure_selection_orders_values_inside_one_established_cohort_and_nam
     calculations = row["calculations"]
     assert calculations["outcome"] == "recorded_minimum"  # ordered inside the one cohort the declarations establish
     assert calculations["cohorts"] == 1 and calculations["unresolved"] == {}
+    assert calculations["unestablished_recipe_facts"] == {}
     assert calculations["administrative_first_named"] is False
 
 
