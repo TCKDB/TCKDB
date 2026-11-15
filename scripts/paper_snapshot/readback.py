@@ -4,8 +4,8 @@
 
 One sample per configured source:
 
-* E2: n-butane. Its calculation count equals the sources'; one output log is downloaded by digest and its SHA-256
-  equals the digest requested and a source file's.
+* E2: n-butane. Its calculation count equals the sources' and its output-log digests equal the source files' (every
+  level listed); one output log is downloaded by digest and its SHA-256 equals the digest requested and a source file's.
 * Formic acid model: HOCHO. Its stored NASA-7 coefficients and temperature ranges equal the CHEMKIN file's.
 
 Registers a reader account through open registration. A source with no entry is skipped.
@@ -42,12 +42,17 @@ from common import Session  # noqa: E402
 
 def check_e2(client, cfg: dict[str, Any]) -> dict[str, Any]:
     root = Path(cfg["root"]).expanduser()
-    levels = list(cfg.get("levels") or ["b3lyp_d3bj", "wb97xd"])
+    levels = list(cfg.get("levels") or source_e2.LEVELS_AVAILABLE)
     tasks, _ = source_e2.load_tasks(root, levels)
     mine = [t for t in tasks if t.molecule == "n_butane"]
     deposited = [t for t in mine if source_e2.parse(t).is_minimum(t.level)]
-    expected_calcs = 2 * len(deposited)  # an opt and a freq per minimum
-    source_digests = {hashlib.sha256((t.directory / "job.log").read_bytes()).hexdigest() for t in deposited}
+    expected_calcs = 2 * len(deposited)
+    source_digests = {
+        hashlib.sha256((t.directory / name).read_bytes()).hexdigest()
+        for t in deposited
+        for name, kind, _ in source_e2.job_files(t)
+        if kind == "output_log"
+    }
 
     species = client.search_species(smiles="CCCC", include=["conformers"])["records"]
     entry = species[0]["entries"][0]
