@@ -62,6 +62,17 @@ describe("numberCalculations", () => {
         expect([...numbers]).toEqual([["c_opt", 1], ["c_freq", 2], ["c_sp", 3]])
     })
 
+    it("keeps every number where it is when an extra energy arrives later", () => {
+        const listed = [row([calculation("c_opt")], [energy("c_sp", -1)], "co_1"), row([calculation("c_opt2")], [energy("c_sp2", -2)], "co_2")]
+        const before = numberCalculations(listed)
+        const after = numberCalculations([
+            { ...listed[0], energies: [...listed[0].energies, energy("c_late", -3, { extra: true })] },
+            listed[1],
+        ])
+        for (const [ref, number] of before) expect(after.get(ref)).toBe(number)
+        expect(after.get("c_late")).toBe(before.size + 1)
+    })
+
     it("numbers two calculations of one observation that share a group separately", () => {
         const rows = [row([calculation("c_a"), calculation("c_b")], [])]
         const groups = groupBy(rows.flatMap((r) => r.foundBy), foundByKey)

@@ -177,9 +177,14 @@ export function numberColumns(rows: readonly Pick<NumberRow, "values">[]): Numbe
     })
 }
 
+/** What tells one level part from another: its ref, else its label. */
+export function levelPartKey(part: { label: string; level?: SourceLevel["level"] }): string {
+    return part.level?.level_of_theory_ref || part.label
+}
+
 function levelKeyOf(levels: SourceLevel[]): string {
     if (levels.length === 0) return NO_LEVEL_KEY
-    return levelParts(levels).map((part) => `${part.label} (${part.roles.join(", ")})`).join(" · ")
+    return levelParts(levels).map((part) => `${levelPartKey(part)} (${part.roles.join(", ")})`).join(" · ")
 }
 
 function programsOf(...labels: (string | null | undefined)[]): string[] {

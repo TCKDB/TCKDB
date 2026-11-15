@@ -1,13 +1,13 @@
 import { ROUNDED_NOTE } from "./QuantityValue"
 import { LevelLabel } from "./LevelLabel"
 import { conformerGroupWords, RECORD_KIND_NOUN } from "../domain/recordWords"
-import { Fragment, useMemo, useRef, useState, type ReactNode } from "react"
+import { Fragment, useId, useMemo, useRef, useState, type ReactNode } from "react"
 import { useOverflows } from "../hooks/useOverflows"
 import { Link } from "react-router-dom"
 import "../entry-numbers.css"
 import type { HiddenByDefault } from "../api/listEnvelope"
 import {
-    distinctLevelCount, groupByLevel, isOneLevelThroughout, levelParts, NO_LEVEL_KEY, numberAnchor, numberColumns, pointGroupParts,
+    distinctLevelCount, groupByLevel, isOneLevelThroughout, levelPartKey, levelParts, NO_LEVEL_KEY, numberAnchor, numberColumns, pointGroupParts,
     type Describes, type NumberColumn, type NumberKind, type NumberRow, type NumberValue,
 } from "../domain/entryNumbers"
 import { hiddenByDefaultNote } from "../domain/paging"
@@ -126,12 +126,14 @@ function KindTable<R extends NumberRow>({ kind, rows, caption, label, compact, g
     const groups = useMemo(() => (grouped ? groupByLevel(rows) : [{ key: null, rows: [...rows] }]), [grouped, rows])
     const span = 1 + shown.length + (withDescribes ? 1 : 0) + 1
     const boxRef = useRef<HTMLDivElement | null>(null)
+    const hintId = useId()
     const overflows = useOverflows(boxRef)
     const Heading = compact ? "h4" : "h3"
     return (
         <div className="entry-numbers-kind-block">
             <Heading className="t-heading-2 entry-numbers-kind-heading">{KIND_WORDS[kind]} <span className="entry-numbers-count">{rows.length} {rows.length === 1 ? "record" : "records"}</span></Heading>
-            <div className="table-scroll entry-numbers-table-box" ref={boxRef} tabIndex={0} role="region" aria-label={label}>
+            {overflows && <p id={hintId} className="note entry-numbers-scroll-hint">Scroll sideways inside the box to see every column.</p>}
+            <div className="table-scroll entry-numbers-table-box" ref={boxRef} tabIndex={0} role="region" aria-label={label} aria-describedby={overflows ? hintId : undefined}>
                 <table className="data-table entry-numbers-table">
                     <caption className="entry-numbers-caption">{caption}</caption>
                     <thead>
@@ -173,7 +175,6 @@ function KindTable<R extends NumberRow>({ kind, rows, caption, label, compact, g
                     ))}
                 </table>
             </div>
-            {overflows && <p className="note entry-numbers-scroll-hint">Scroll sideways inside the box to see every column.</p>}
             {hidden.length > 0 && <p className="note entry-numbers-absent-note">{rows.length === 1 ? "Not recorded in this record: " : "Not recorded in any of these records: "}{hidden.map((column) => lowerFirst(column.label)).join("; ")}.</p>}
         </div>
     )
@@ -198,7 +199,7 @@ function recordPositions<R extends NumberRow>(rows: readonly R[]): Map<R, number
 function LevelHeading({ levels }: { levels: NumberRow["levels"] }) {
     if (levels.length === 0) return <>{NO_LEVEL_KEY}</>
     return <>{levelParts(levels).map((part, index) => (
-        <Fragment key={part.label}>{index > 0 && " · "}{part.level ? <LevelLabel levelOfTheory={part.level} /> : <span className="t-preserve-case">{part.label}</span>} ({part.roles.join(", ")})</Fragment>
+        <Fragment key={levelPartKey(part)}>{index > 0 && " · "}{part.level ? <LevelLabel levelOfTheory={part.level} /> : <span className="t-preserve-case">{part.label}</span>} ({part.roles.join(", ")})</Fragment>
     ))}</>
 }
 
@@ -279,7 +280,7 @@ function SourceCell({ row }: { row: NumberRow }) {
     return (
         <>
             {parts.map((part) => (
-                <span key={part.label} className="entry-numbers-source-level">
+                <span key={levelPartKey(part)} className="entry-numbers-source-level">
                     {part.level ? <LevelLabel levelOfTheory={part.level} /> : <span className="t-preserve-case">{part.label}</span>}
                     {!plain && <span className="entry-numbers-roles"> ({part.roles.join(", ")})</span>}
                 </span>

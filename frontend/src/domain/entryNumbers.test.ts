@@ -3,7 +3,7 @@ import type { SpeciesEntryProjection } from "../api/speciesEntryApi"
 import { entryLede } from "./entryLede"
 import type { LevelOfTheory } from "../api/scientificSchemas"
 import type { ThermoRecord } from "../api/thermoApi"
-import { isOneLevelThroughout, levelParts, numberColumns, numbersOrderSentence, pointGroupParts, thermoRow, type NumberValue } from "./entryNumbers"
+import { groupByLevel, isOneLevelThroughout, levelPartKey, levelParts, numberColumns, numbersOrderSentence, pointGroupParts, thermoRow, type NumberValue } from "./entryNumbers"
 import { THERMO_MODEL_KIND_WORDS } from "./thermoModelKind"
 import { orderWords } from "./paging"
 
@@ -145,5 +145,28 @@ describe("numberColumns", () => {
         expect([agree.unit, agree.unitInCell]).toEqual(["kJ/mol", false])
         const differ = numberColumns([{ values: [value("H", "1")] }, { values: [value("H", "2", { unit: "kcal/mol" })] }])[0]
         expect([differ.unit, differ.unitInCell]).toEqual([null, true])
+    })
+})
+
+describe("grouping by level of theory", () => {
+    const row = (ref: string, levelRef: string) => thermoRow({
+        thermo_ref: ref, scientific_origin: "computed", review: { status: "not_reviewed" }, h298_kj_mol: 1,
+        levels: { geometry: lot(levelRef), frequency: lot(levelRef), energy: lot(levelRef), energy_source: "opt" },
+        provenance: { software_release: { software: "Gaussian", version: "16" } },
+    } as unknown as ThermoRecord)
+
+    it("keeps records whose levels share a label but have different refs in different groups", () => {
+        const a = row("thm_a", "lot_a")
+        const b = row("thm_b", "lot_b")
+        const c = row("thm_c", "lot_a")
+        expect(a.levelKey).not.toBe(b.levelKey)
+        expect(a.levelKey).toBe(c.levelKey)
+        const groups = groupByLevel([a, b, c])
+        expect(groups.map((group) => group.rows.map((member) => member.ref))).toEqual([["thm_a", "thm_c"], ["thm_b"]])
+    })
+
+    it("keys a level part by its ref, else by its label", () => {
+        expect(levelPartKey({ label: "b3lyp/def2tzvp", level: lot("lot_a") })).toBe("lot_a")
+        expect(levelPartKey({ label: "b3lyp/def2tzvp" })).toBe("b3lyp/def2tzvp")
     })
 })

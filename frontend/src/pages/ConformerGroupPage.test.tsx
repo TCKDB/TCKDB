@@ -253,7 +253,8 @@ describe("ConformerGroupPage", () => {
         expect(energy.closest("a")).toHaveAttribute("href", "/calculations/calc_sp")
         expect(energy).toHaveAttribute("title", "-40.123456789")
         const row = energy.closest("tr") as HTMLElement
-        expect(row).toHaveTextContent(/Single-point energy.*ccsd\(t\)\/cc-pvtz · Molpro 2024.*Calculation \d.*approved/)
+        expect(row).toHaveTextContent(/Single-point energy.*ccsd\(t\)\/cc-pvtz · Molpro 2024.*Calculation 3.*approved/)
+        expect(within(row).getByRole("link", { name: "Calculation 3" })).toHaveAttribute("href", "/calculations/calc_sp")
         // The calculations that found the geometry keep their own levels.
         expect(within(section).getAllByText(/^b3lyp\/def2tzvp/).length).toBeGreaterThan(0)
         expect(within(section).getAllByText(/^wb97xd\/def2tzvp/).length).toBeGreaterThan(0)

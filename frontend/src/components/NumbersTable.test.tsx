@@ -108,6 +108,27 @@ describe("NumbersTable levels and fold line", () => {
         expect(screen.getByRole("heading", { level: 3, name: /Thermochemistry/ })).toBeVisible()
     })
 
+    it("puts the scroll hint above an overflowing table and ties it to the box", () => {
+        const original = Object.getOwnPropertyDescriptors(HTMLElement.prototype)
+        Object.defineProperty(HTMLElement.prototype, "scrollWidth", { configurable: true, get: () => 900 })
+        Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 300 })
+        const observe = globalThis.ResizeObserver
+        globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver
+        try {
+            show([record(recorded)])
+            const box = screen.getByRole("region", { name: "Values table, thermochemistry" })
+            const hint = screen.getByText("Scroll sideways inside the box to see every column.")
+            expect(box).toHaveAccessibleDescription("Scroll sideways inside the box to see every column.")
+            expect(hint.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+        } finally {
+            globalThis.ResizeObserver = observe
+            if (original.scrollWidth) Object.defineProperty(HTMLElement.prototype, "scrollWidth", original.scrollWidth)
+            else delete (HTMLElement.prototype as unknown as Record<string, unknown>).scrollWidth
+            if (original.clientWidth) Object.defineProperty(HTMLElement.prototype, "clientWidth", original.clientWidth)
+            else delete (HTMLElement.prototype as unknown as Record<string, unknown>).clientWidth
+        }
+    })
+
     it("heads each kind one level below the section in the compact form", () => {
         show([record(recorded)], true)
         expect(screen.getByRole("heading", { level: 4, name: /Thermochemistry/ })).toBeVisible()

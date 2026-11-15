@@ -264,7 +264,14 @@ export type ShapeCalculation = {
 
 export type EnergyKind = "sp" | "opt"
 /** `kind` is the calculation's type; `energyKind` is the archive's own kind of energy for the value (`electronic_energy`, `final_energy`, ...). */
-export type ShapeEnergy = ShapeCalculation & { kind: EnergyKind; energyKind: string | null; hartree: number | null; review: string | null }
+export type ShapeEnergy = ShapeCalculation & {
+    kind: EnergyKind
+    energyKind: string | null
+    hartree: number | null
+    review: string | null
+    /** The energy read named this calculation for the observation; the observation's own list did not. */
+    extra?: boolean
+}
 
 export type ShapeRow = {
     observationRef: string
@@ -342,6 +349,7 @@ export function shapeRows(
                 energyKind: record.energy?.energy_kind ?? null,
                 hartree: record.energy?.energy_hartree ?? null,
                 review: reviewOf(record),
+                extra: true,
             })
         }
         return {

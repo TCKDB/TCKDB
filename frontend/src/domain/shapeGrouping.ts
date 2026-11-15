@@ -1,13 +1,17 @@
 import type { ShapeCalculation, ShapeEnergy, ShapeRow } from "./conformerGallery"
 
-/** The same calculation always has the same number: its place in the order the calculations are first met on this shape. */
+/** The same calculation always has the same number: its place in the order the calculations are first met on this shape, listed ones before extra energies. */
 export type CalculationNumbers = ReadonlyMap<string, number>
 
 export function numberCalculations(rows: readonly ShapeRow[]): CalculationNumbers {
     const numbers = new Map<string, number>()
     const meet = (ref: string) => { if (!numbers.has(ref)) numbers.set(ref, numbers.size + 1) }
-    for (const row of rows) for (const calculation of row.foundBy) meet(calculation.ref)
-    for (const row of rows) for (const energy of row.energies) meet(energy.ref)
+    // The calculations each observation lists come first, so an energy that an energy read adds later never shifts them.
+    for (const row of rows) {
+        for (const calculation of row.foundBy) meet(calculation.ref)
+        for (const energy of row.energies) if (!energy.extra) meet(energy.ref)
+    }
+    for (const row of rows) for (const energy of row.energies) if (energy.extra) meet(energy.ref)
     return numbers
 }
 
