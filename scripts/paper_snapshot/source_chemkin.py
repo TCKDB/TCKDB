@@ -173,6 +173,7 @@ def deposit(session: Session, cfg: dict[str, Any], report: Report, work_dir: Pat
     summary = upload.summary()
     src["upload"] = summary
     src["distinct_submissions"] = len(set(recorder.submission_refs))
+    src["submission_refs"] = sorted(set(recorder.submission_refs))
     src["status"] = "deposited" if summary["errored_total"] == 0 else f"deposited with {summary['errored_total']} refused records"
     for kind, counts in summary["by_kind"].items():
         report.count(SOURCE, f"{kind}_accepted", counts["ok"])

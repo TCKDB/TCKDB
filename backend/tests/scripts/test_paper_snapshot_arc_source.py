@@ -82,3 +82,43 @@ def test_the_adapter_environment_carries_the_key_and_no_build_variable(source_ar
     assert env["TCKDB_SNAPSHOT_API_KEY"] == "instance-key"
     assert "TCKDB_API_KEY" not in env
     assert str(Path(sys.executable).parent) not in env["PATH"].split(os.pathsep)
+
+
+@pytest.fixture(scope="module")
+def build():
+    sys.path.insert(0, str(SNAPSHOT_DIR))
+    try:
+        import build as module
+
+        yield module
+    finally:
+        sys.path.remove(str(SNAPSHOT_DIR))
+
+
+def _plan(run: str, selection_run: str) -> dict:
+    return {
+        "sources": {"arc_runs": {"runs": ["set/a"]}},
+        "curation": {
+            "caught_error": {
+                "run": run,
+                "finding": {"kind": "path_incompatibility", "verdict": "invalidates", "rationale": "r"},
+                "reject_note": "n",
+                "approve_note": "n",
+            },
+            "release": {
+                "tag": "t", "title": "t", "citation_text": "c", "contact": "c", "policy": {"name": "p"},
+                "selections": [{"run": selection_run, "record": "thermo", "rationale": "r"}],
+            },
+        },
+    }
+
+
+def test_a_curation_plan_naming_deposited_runs_passes_except_a_thermo_selection_without_smiles(build):
+    problems = build.curation_problems(_plan("set/a", "set/a"))
+    assert len(problems) == 1 and "names no smiles" in problems[0]
+
+
+def test_a_curation_plan_naming_a_run_that_is_not_deposited_is_refused(build):
+    problems = build.curation_problems(_plan("set/b", "set/c"))
+    assert any("caught_error: run 'set/b'" in p for p in problems)
+    assert any("selection run 'set/c'" in p for p in problems)

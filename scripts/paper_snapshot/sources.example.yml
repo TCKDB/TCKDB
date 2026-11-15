@@ -50,6 +50,7 @@ sources:
   #   adapter_path: /path/to/tckdb-adapters
   #   arc_path: /path/to/ARC
   #   timeout_seconds: 900
+  #   rights: {license: CC-BY-4.0, depositor_attests_right_to_license: true}
   #   runs_root: /path/to/arc/runs
   #   recorded_hosts: [tckdb.homecalvin.com]
   #   runs:
@@ -81,6 +82,46 @@ sources:
   # pdep_network:
   #   enabled: true
   #   arkane_dir: /path/to/Final_Final_CCSDT_F12_Aug_F12
+
+# Optional: curation beyond approving every submission (needs arc_runs). See "Curation is a demonstration" in README.md.
+# curation:
+#   caught_error:
+#     run: snapshot_reruns_20261110/rotor_scan_rxn_30
+#     finding:
+#       kind: path_incompatibility
+#       verdict: invalidates
+#       rationale: >-
+#         The saddle point's reaction coordinate is a torsion, not the H transfer of CC(C)C=O + [H] <=> C[C](C)C=O + [H][H].
+#         Its frequency calculation has two imaginary modes, 99.7i and 6.7i cm-1. The 99.7i mode is dominated by the formyl
+#         hydrogen moving across its C-H bond (a CHO torsion), and the abstracting H atom is 4.7 Angstrom from every other atom.
+#     reject_note: Rejected because the transition state does not lie on the H-transfer path of this reaction.
+#     approve_note: Approved because the reactant and product records of this run are not affected by the transition-state finding.
+#   release:
+#     tag: snapshot-demo-1
+#     title: "TCKDB demonstration release: CH4 + OH -> CH3 + H2O and CH3 thermochemistry"
+#     citation_text: TCKDB demonstration release snapshot-demo-1, made by the paper-snapshot build script.
+#     contact: curator@snapshot.invalid
+#     changelog_entry: First demonstration release of the snapshot build.
+#     policy:
+#       name: snapshot-demonstration
+#       version: "1"
+#       description: >-
+#         Selections made by the snapshot build script for a demonstration: the rate coefficient and transition state of
+#         one ARC run of CH4 + OH -> CH3 + H2O, and the CH3 thermochemistry of the same run. Not an independent review.
+#       criteria: {requires_review_status: approved}
+#     selections:
+#       - run: snapshot_reruns_20261110/rotor_scan_rxn_188
+#         record: kinetics
+#         rationale: Rate coefficient of CH4 + OH -> CH3 + H2O from the ARC run of the use case.
+#       - run: snapshot_reruns_20261110/rotor_scan_rxn_188
+#         record: transition_state_entry
+#         rationale: The transition state behind that rate coefficient, from the same ARC run.
+#       - run: snapshot_reruns_20261110/rotor_scan_rxn_188
+#         record: thermo
+#         smiles: "[CH3]"
+#         rationale: CH3 thermochemistry from the same ARC run, computed at the levels of its rate coefficient.
+#     source_terms:
+#       chemkin_formic_acid: Wu and Grinberg Dana, ACS Omega 2026, 11, 6371; published under CC BY 4.0.
 
 # Optional: the generators to run (default: the list in build.py).
 # expected_outputs: [corpus_counts, conformer_basins]
