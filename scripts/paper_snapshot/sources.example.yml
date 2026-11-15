@@ -41,11 +41,41 @@ sources:
     species_dictionary: species_dictionary.txt
     scientific_origin: estimated
 
-  # Source 2: ARC runs through the ARC adapter. Not implemented; an enabled entry stops the build.
+  # Source 2: ARC runs through the ARC adapter, deposited in the order listed. Each folder holds output/output.yml and a
+  # tckdb block (tckdb_upload.yml, else input.yml); the block's API URL, key settings and payload directory are replaced
+  # by the build's, and a block naming a host not in recorded_hosts stops the build.
   # arc_runs:
   #   enabled: true
+  #   adapter_command: [conda, run, --no-capture-output, -n, arc_env, python]
   #   adapter_path: /path/to/tckdb-adapters
+  #   arc_path: /path/to/ARC
+  #   timeout_seconds: 900
   #   runs_root: /path/to/arc/runs
+  #   recorded_hosts: [tckdb.homecalvin.com]
+  #   runs:
+  #   - snapshot_reruns_20261110/rotor_scan_rmg_rxn_1142
+  #   - snapshot_reruns_20261110/rotor_scan_rxn_188
+  #   - snapshot_reruns_20261110/rotor_scan_rxn_209
+  #   - snapshot_reruns_20261110/rotor_scan_rxn_298
+  #   - snapshot_reruns_20261110/rotor_scan_rxn_998
+  #   - snapshot_reruns_20261110/rotor_scan_rxn_30_r2
+  #   - snapshot_reruns_20261110/arc_tckdb_neb
+  #   - snapshot_reruns_20261111/arc_tckdb_demo_reaction
+  #   - snapshot_reruns_20261109/rotor_scan_rxn_210
+  #   - snapshot_reruns_20261109/rotor_scan_rxn_392
+  #   - snapshot_reruns_20261109/rotor_scan_rxn_476
+  #   - snapshot_reruns_20261109/rotor_scan_rxn_682
+  #   - tckdb_test_20261109/04_ho2_elimination_from_peroxyradical
+  #   - tckdb_test_20261109/06_intra_disproportionation
+  #   - tckdb_test_20261109/14_r_addition_multiplebond
+  #   - tckdb_test_20261109/r2_05_h_abstraction
+  #   - tckdb_test_20261109/r2_14_r_addition_multiplebond
+  #   - tckdb_test_20261109/r4_14_xy_addition_multiplebond
+  #   - tckdb_test_20261109/r4_15_intra_h_migration
+  #   - tckdb_test_20261109_thermo/09_intra_r_add_endocyclic
+  #   - tckdb_test_20261109_thermo/13_ketoenol
+  #   - tckdb_test_20261110/19_intra_no2_ono_conversion
+  #   - snapshot_reruns_20261110/rotor_scan_rxn_30
 
   # Source 3: the N2H3 pressure-dependent network. Not implemented.
   # pdep_network:
