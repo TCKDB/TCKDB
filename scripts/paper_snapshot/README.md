@@ -20,13 +20,6 @@ instance, and the script is the deliverable, not the database.
   - The E2 tree is not in this repository. It must hold `raw_outputs/manifest_union.json`, `raw_outputs/tasks.txt` and
     `raw_outputs/tasks/<level>/<molecule>/<start>/` with `job.log` and `job.gjf` (Gaussian) or `xtb.out`, `g98.out`,
     `start.xyz`, `xtbopt.xyz` and `vibspectrum` (xtb).
-- **Source 4, formic acid pyrolysis and oxidation model** (`source_chemkin.py`): Wu and Grinberg Dana,
-  *ACS Omega* 2026, 11, 6371 (CC BY 4.0), 123 species and 3002 reactions, deposited unmodified.
-  - Route: the CHEMKIN adapter (`clients/python/adapters/chemkin`), which posts to `/uploads/thermo` and
-    `/uploads/kinetics`.
-  - Where to get it: the files are in this repository, `backend/tests/integration/fixtures/rmg_formic_acid_wu2026/`.
-  - The adapter's own import warnings (wrong `DUPLICATE` flags) are kept in the report; the importer never
-    repairs them.
 - **Source 2, ARC runs** (`source_arc.py`): a fixed, ordered list of ARC run folders, each deposited through the ARC
   adapter (`tckdb_arc` in `tckdb-adapters`) with its `output/output.yml`.
   - Route: `arc_upload.py`, run per folder by `adapter_command` (a Python that imports `tckdb_arc` and ARC; without
@@ -53,6 +46,13 @@ instance, and the script is the deliverable, not the database.
     (`pdep_network.ingestion`).
   - The server fetches the DOI's metadata and stores the fetched title (`literature_title_mismatch`: the registry's
     title carries subscript markup).
+- **Source 4, formic acid pyrolysis and oxidation model** (`source_chemkin.py`): Wu and Grinberg Dana,
+  *ACS Omega* 2026, 11, 6371 (CC BY 4.0), 123 species and 3002 reactions, deposited unmodified.
+  - Route: the CHEMKIN adapter (`clients/python/adapters/chemkin`), which posts to `/uploads/thermo` and
+    `/uploads/kinetics`.
+  - Where to get it: the files are in this repository, `backend/tests/integration/fixtures/rmg_formic_acid_wu2026/`.
+  - The adapter's own import warnings (wrong `DUPLICATE` flags) are kept in the report; the importer never
+    repairs them.
 
 ## Run it
 

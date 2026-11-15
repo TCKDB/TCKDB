@@ -80,7 +80,7 @@ KINETICS_QUESTION = {
     "coefficient_basis": "elementary_coefficient",
     "temperature_min_k": 300.0,
     "temperature_max_k": 1000.0,
-    "pressure": {"kind": "independent"},
+    "pressure": {"kind": "high_pressure_limit"},
 }
 
 ARRHENIUS_FORMS = (KineticsModelKind.arrhenius, KineticsModelKind.modified_arrhenius)
