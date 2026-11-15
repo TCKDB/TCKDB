@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import io
 import json
 import sys
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -128,3 +130,63 @@ def test_masked_release_rows_ignore_refs_and_timestamps_but_not_content_or_order
     two = masked("thm_" + "b" * 26, "2026-02-02T01:01:01.000002", [1, 2])
     assert one == two
     assert masked("thm_" + "a" * 26, "2026-01-01T00:00:00.000001", [2, 1]) != one
+
+
+def _with_bytes(artifact: dict, manifest: dict, data: bytes) -> None:
+    artifact["content"] = {"$bytes": base64.b64encode(data).decode()}
+    artifact["sha256"] = hashlib.sha256(data).hexdigest()
+    artifact["byte_count"] = len(data)
+    manifest["document_json"]["artifacts"][0].update(sha256=artifact["sha256"], byte_count=artifact["byte_count"])
+    manifest["content_sha256"] = server_manifest_digest(manifest["document_json"])
+
+
+def test_a_line_that_is_not_in_canonical_form_is_reported(compare):
+    artifact, manifest = _release([{"a": 1}])
+    _with_bytes(artifact, manifest, b'{"b":2,"a":1}\n')
+    assert any("not in canonical form" in p for p in compare.release_problems([artifact], [manifest]))
+    _with_bytes(artifact, manifest, b'{"a": 1}\n')
+    assert any("not in canonical form" in p for p in compare.release_problems([artifact], [manifest]))
+    _with_bytes(artifact, manifest, b'{"a":1}')
+    assert any("newline" in p for p in compare.release_problems([artifact], [manifest]))
+
+
+def test_the_servers_own_line_writer_output_is_canonical(compare):
+    from app.services.release.artifacts import _ndjson
+
+    data, _ = _ndjson([{"z": "é", "a": [1, 2.5, None], "m": {"y": True, "b": "x"}}, {"k": 1}])
+    assert compare.non_canonical_lines(data) == []
+
+
+# --- main() end to end -------------------------------------------------------------------------------------------
+
+
+def _build(tmp_path: Path, name: str, artifact: dict, manifest: dict) -> Path:
+    build = tmp_path / name
+    (build / "expected_outputs").mkdir(parents=True)
+    (build / "expected_outputs" / "one.json").write_text("{}")
+    rows = [
+        {"record_type": "row", "table": "release_artifact", "values": artifact},
+        {"record_type": "row", "table": "release_manifest", "values": manifest},
+    ]
+    with tarfile.open(build / "tckdb.archive", "w") as tar:
+        for member, payload in (
+            ("manifest.json", json.dumps({"database_revisions": ["r1"], "blobs": []}).encode()),
+            ("rows.ndjson", "\n".join(json.dumps(r) for r in rows).encode()),
+        ):
+            info = tarfile.TarInfo(member)
+            info.size = len(payload)
+            tar.addfile(info, io.BytesIO(payload))
+    return build
+
+
+def test_main_exits_zero_for_a_clean_pair_and_non_zero_for_a_release_hash_problem(compare, tmp_path, capsys):
+    one = _build(tmp_path, "one", *_release([{"record_ref": "a", "n": 1}]))
+    two = _build(tmp_path, "two", *_release([{"record_ref": "a", "n": 1}]))
+    assert compare.main([str(one), str(two)]) == 0
+    assert "RESULT: no difference" in capsys.readouterr().out
+
+    artifact, manifest = _release([{"record_ref": "a", "n": 1}])
+    artifact["sha256"] = "0" * 64
+    bad = _build(tmp_path, "bad", artifact, manifest)
+    assert compare.main([str(one), str(bad)]) == 1
+    assert "RESULT: DIFFERENCES" in capsys.readouterr().out
