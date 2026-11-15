@@ -207,7 +207,7 @@ describe("ConformerGroupPage", () => {
         serve()
         page()
         await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
-        expect(screen.getByText(/One 3D shape this molecule can take, deposited as 2 observations and 3 calculations/)).toBeVisible()
+        expect(screen.getByText(/One 3D shape: 2 observations and 3 calculations/)).toBeVisible()
     })
 
     it("shows the review status as a word beside the glyph", async () => {
@@ -252,8 +252,9 @@ describe("ConformerGroupPage", () => {
         const energy = await within(section).findByText("−40.123457")
         expect(energy.closest("a")).toHaveAttribute("href", "/calculations/calc_sp")
         expect(energy).toHaveAttribute("title", "-40.123456789")
-        const source = energy.closest("li") as HTMLElement
-        expect(source).toHaveTextContent(/Source Single-point energy · single-point · at ccsd\(t\)\/cc-pvtz · Molpro 2024 · Review of this record: approved/)
+        const row = energy.closest("tr") as HTMLElement
+        expect(row).toHaveTextContent(/Single-point energy.*ccsd\(t\)\/cc-pvtz · Molpro 2024.*Calculation 3.*approved/)
+        expect(within(row).getByRole("link", { name: "Calculation 3" })).toHaveAttribute("href", "/calculations/calc_sp")
         // The calculations that found the geometry keep their own levels.
         expect(within(section).getAllByText(/^b3lyp\/def2tzvp/).length).toBeGreaterThan(0)
         expect(within(section).getAllByText(/^wb97xd\/def2tzvp/).length).toBeGreaterThan(0)
@@ -310,8 +311,10 @@ describe("ConformerGroupPage", () => {
         serve(withSps("Molpro", "Molpro"), { sp: [sp("calc_sp_0", -40.123, "Molpro"), sp("calc_sp_1", -40.1, "Molpro")] })
         page()
         await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
-        const spread = await screen.findByText(/differ by up to/)
-        expect(spread).toHaveTextContent(/at ccsd\(t\)\/cc-pvtz · Molpro 1 differ by up to 60\.39 kJ\/mol across 2 calculations/)
+        const table = await screen.findByRole("region", { name: "Spread of energies at one level and program" })
+        const row = within(table).getAllByRole("row")[1]
+        expect(row).toHaveTextContent(/ccsd\(t\)\/cc-pvtz · Molpro 1.*Single-point energy.*2.*60\.39/)
+        expect(within(table).getByRole("columnheader", { name: /Spread \(kJ\/mol\)/ })).toBeVisible()
     })
 
     it("keeps the level's disclosure out of the spread sentence and raises no DOM nesting warning", async () => {
@@ -324,9 +327,9 @@ describe("ConformerGroupPage", () => {
             serve(record, { sp: [sp("calc_sp_0", -40.123, "Molpro"), sp("calc_sp_1", -40.1, "Molpro")] })
             page()
             await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
-            const line = (await screen.findByText(/differ by up to/)).closest("li") as HTMLElement
-            expect(line.querySelector(".level-label details")).toBeNull()
-            expect(line.querySelector(":scope > details")?.textContent).toContain("dispersion")
+            const table = await screen.findByRole("region", { name: "Spread of energies at one level and program" })
+            expect(table.querySelector("details")).toBeNull()
+            expect(table.querySelector(".level-label-toggle")).not.toBeNull()
             const warnings = errors.mock.calls.map((call) => call.map(String).join(" ")).filter((message) => /validateDOMNesting|cannot be a descendant|cannot contain/.test(message))
             expect(warnings).toEqual([])
         } finally {
@@ -344,7 +347,7 @@ describe("ConformerGroupPage", () => {
         const levelLink = within(section).getAllByRole("link", { name: /^b3lyp\/def2tzvp/ })[0]
         expect(levelLink.getAttribute("href")).toContain("lot_b3")
         expect(within(section).getAllByText(/run by/)[0]).toHaveTextContent("run by ARC")
-        const found = within(section).getAllByRole("link", { name: "Calculation" })[0].closest("li") as HTMLElement
+        const found = within(section).getAllByRole("link", { name: "Calculation 1" })[0].closest("tr") as HTMLElement
         expect(within(found).getByText("reviewed")).toBeVisible()
         const head = within(section).getByRole("link", { name: "Observation 1" }).closest("p") as HTMLElement
         expect(head.textContent).not.toContain("co_one")

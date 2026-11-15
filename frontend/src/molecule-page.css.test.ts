@@ -164,17 +164,11 @@ describe("mono is reserved for identifiers and numbers, not prose (item 3)", () 
 describe("calculations table and page-wide guards", () => {
     const code = css.replace(/\/\*[\s\S]*?\*\//g, "")
 
-    it("keeps the deposit column readable: header cells never break mid-word, the row header has a floor, cells may wrap anywhere", () => {
-        expect(extractRule(css, ".shape-calculations-table thead th")).toMatch(/overflow-wrap:\s*normal/)
-        expect(extractRule(css, ".shape-calculations-table thead th")).toMatch(/white-space:\s*nowrap/)
-        expect(extractRule(css, ".shape-calculations-table tbody th")).toMatch(/min-width:\s*8rem/)
-        expect(extractRule(css, ".shape-calculations-table tbody th")).not.toMatch(/(^|[\s;])width:/)
-        expect(css).toMatch(/\.shape-calculations-table td \{ overflow-wrap: anywhere; \}/)
-    })
-
-    it("stacks the rows on a phone", () => {
-        const phone = extractBlock(css, /@media \(max-width: 680px\) \{/)
-        expect(phone).toMatch(/\.shape-calculations-table th,[^{]*\{[^}]*display:\s*block/)
+    it("keeps the calculation tables readable: header cells never break mid-word, cells wrap at word breaks, and the table scrolls inside its box", () => {
+        expect(extractRule(css, ".shape-energies-table thead th")).toMatch(/overflow-wrap:\s*normal/)
+        expect(extractRule(css, ".shape-energies-table thead th")).toMatch(/white-space:\s*nowrap/)
+        expect(extractRule(css, ".shape-energies-table")).toMatch(/min-width:\s*40rem/)
+        expect(css).toMatch(/\.shape-energies-table td \{ overflow-wrap: break-word; \}/)
     })
 
     it("scopes the hidden-text utility to this page instead of defining a global class", () => {

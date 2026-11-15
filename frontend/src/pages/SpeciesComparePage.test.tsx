@@ -115,7 +115,7 @@ describe("molecule compare page", () => {
         expect(crumbs.getByRole("link", { name: "CH3" })).toHaveAttribute("href", `/species/${speciesRef}`)
         expect(document.querySelector(".breadcrumbs [aria-current='page']")).toHaveTextContent("Compare")
         expect(screen.getByRole("note")).toHaveTextContent("Side by side, not ranked")
-        expect(screen.getByRole("note")).toHaveTextContent("No differences across levels or programs; nothing is filled in from another record")
+        expect(screen.getByRole("note")).toHaveTextContent("not ranked. No differences across levels or programs; nothing is filled in from another record")
         expect(document.body.textContent).toContain("Columns are grouped by version; within a version, the archive's display order.")
     })
 
@@ -258,7 +258,7 @@ describe("links to the compare page", () => {
         cleanup()
         resetAllRequestCaches()
         await open({ thermo: thermoRows(THERMO()).slice(0, 1), statmech: STATMECH().slice(0, 1) }, `/species/${speciesRef}`)
-        await screen.findByRole("region", { name: "Table of values for this molecule" })
+        await screen.findByRole("region", { name: "All values for this molecule" })
         expect(screen.queryByRole("link", { name: "Compare these values" })).not.toBeInTheDocument()
     })
 })

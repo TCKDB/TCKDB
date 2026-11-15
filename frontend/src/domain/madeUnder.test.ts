@@ -8,7 +8,7 @@ describe("describeMadeUnder", () => {
         const w = describeMadeUnder({ ...base, assessed_version: 2, current_version: 2, state: "current", inputs_checked: true })
         expect(w.state).toBe("current")
         expect(w.badge).toBeNull()
-        expect(w.sentence).toBe("Assessed under rubric tckdb reproducibility, version 2, the current version.")
+        expect(w.sentence).toBe("Assessed under rubric tckdb reproducibility, version 2 (current).")
     })
 
     it("inputs_unchecked: the rubric is the current one and nothing is claimed about the inputs", () => {

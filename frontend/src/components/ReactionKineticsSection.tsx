@@ -228,7 +228,6 @@ function KineticsRecordCard({ record, position, calculationsByRef, dependencyEdg
                     own
                     levels={sourceLevels}
                     programs={sourceProgram ? [sourceProgram] : []}
-                    review={record.review.status}
                 />
             </p>
 

@@ -15,13 +15,11 @@ describe("entry-numbers.css", () => {
         expect(rule(css, ".entry-numbers .section-intro a:focus-visible")).toContain("outline: 3px solid var(--focus-ring)")
     })
 
-    it("stacks the record above its values on a phone, each label above its value", () => {
-        const phone = css.slice(css.indexOf("@media (max-width: 40rem)"))
-        expect(phone).toContain("display: block")
-        expect(phone).toMatch(/\.entry-numbers-values \{[^}]*grid-template-columns: 1fr/)
-        expect(phone).toMatch(/\.entry-numbers-table \{[^}]*min-width: 0/)
-        // Long wording (a statmech treatment) must wrap on a phone instead of forcing a sideways scroll.
-        expect(phone).toMatch(/\.entry-numbers-values dd \{[^}]*white-space: normal/)
+    it("keeps the table at a readable width inside its own scroll box, with values unbroken and the source column free to wrap", () => {
+        expect(rule(css, ".entry-numbers-table")).toMatch(/min-width: 36rem/)
+        expect(rule(css, ".entry-numbers-table .value-link")).toContain("white-space: nowrap")
+        expect(rule(css, ".entry-numbers-table td.entry-numbers-source")).toContain("min-width")
+        expect(rule(css, ".entry-numbers-table-box")).toContain("border")
     })
 
     it("lets other-version cards shrink and wrap a long ref at 320px", () => {

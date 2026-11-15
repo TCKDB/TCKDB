@@ -12,7 +12,7 @@ describe("MadeUnderLine", () => {
         const { container } = render(<MadeUnderLine madeUnder={{ ...base, assessed_version: 1, current_version: 1, state: "current" }} />)
         const line = container.querySelector('[data-component="made-under"]')
         expect(line).toHaveAttribute("data-state", "current")
-        expect(screen.getByText(/version 1, the current version/)).toBeVisible()
+        expect(screen.getByText(/version 1 \(current\)/)).toBeVisible()
         expect(container.querySelector(".value-pill")).toBeNull()
     })
 

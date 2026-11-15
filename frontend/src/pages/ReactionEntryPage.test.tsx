@@ -481,18 +481,14 @@ describe("ReactionEntryPage -- transition-state dependency graph", () => {
         page()
         await screen.findAllByText("Model kind")
         expect(screen.queryByText("ts_test1")).not.toBeInTheDocument()
-        const strip = screen.getByTestId("ts-status-strip")
-        expect(strip.querySelector("[aria-current=step]")?.textContent).toContain("Optimized")
+        expect(screen.getByTestId("ts-status")).toHaveTextContent("Optimized")
     })
 
-    it("renders the guess/optimized/validated status strip with the served status selected", async () => {
+    it("states the served status as one word", async () => {
         handleFull(mockFull())
         page()
         await screen.findAllByText("Model kind")
-        const strip = screen.getByTestId("ts-status-strip")
-        const selected = strip.querySelector("[aria-current=step]")
-        expect(selected?.textContent).toContain("Optimized")
-        expect(strip.querySelectorAll("li")).toHaveLength(3)
+        expect(screen.getByTestId("ts-status")).toHaveTextContent("Optimized")
     })
 
     it("renders Geometry/Frequencies/Energy facts for the TS block (ProductLevelsFact is not silently dropped)", async () => {
@@ -1274,7 +1270,7 @@ describe("ReactionEntryPage -- the energy hill, the scheme and the numbers", () 
         // The card is Record 1 already; its source line does not name it again.
         expect(section.querySelector(".value-source")?.textContent).not.toMatch(/Source|Record 1/)
         expect(section.querySelector(".value-source a")).toBeNull()
-        expect(section.querySelector(".value-source")).toHaveTextContent("Review of this record: not reviewed")
+        expect(section.querySelector(".value-source")).not.toHaveTextContent("Review of this record")
     })
 
     it("spells the equation out for a screen reader and links each molecule of the scheme", async () => {
@@ -1304,7 +1300,7 @@ describe("ReactionEntryPage -- the energy hill, the scheme and the numbers", () 
         const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" })
         expect(within(crumbs).getByRole("link", { name: "Reactions" })).toHaveAttribute("href", "/reactions")
         expect(crumbs.querySelector('a[href="/reactions/rxn_test1"]')).not.toBeNull()
-        expect(document.querySelector(".record-lede")).toHaveTextContent("One deposited version of this reaction: reversible, family H Abstraction, 1 rate record and 1 transition-state entry.")
+        expect(document.querySelector(".record-lede")).toHaveTextContent("Reversible, family H Abstraction, 1 rate record and 1 transition-state entry.")
         expect(screen.getAllByText("not reviewed").length).toBeGreaterThan(0)
         expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1)
     })
@@ -1406,11 +1402,9 @@ describe("ReactionEntryPage -- the energy hill, the scheme and the numbers", () 
     it("shows a rejected transition state as the word, not as a step", async () => {
         const base = mockFull()
         handleFull(mockFull({ transition_states: [{ ...base.transition_states[0], status: "rejected" }] }))
-        const { container } = page()
+        page()
         await screen.findAllByText("Model kind")
-        const stages = container.querySelector(".reaction-ts-stages") as HTMLElement
-        expect(stages).toHaveTextContent("rejected")
-        expect(stages.querySelectorAll("li")).toHaveLength(0)
+        expect(screen.getByTestId("ts-status")).toHaveTextContent("Rejected")
     })
 })
 

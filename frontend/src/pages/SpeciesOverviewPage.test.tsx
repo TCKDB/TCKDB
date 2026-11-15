@@ -140,7 +140,7 @@ async function versionsSection(): Promise<HTMLElement> {
 }
 
 async function valuesRegion(): Promise<HTMLElement> {
-    return screen.findByRole("region", { name: "Table of values for this molecule" })
+    return screen.findByRole("region", { name: "All values for this molecule" })
 }
 
 function rowIds(region: HTMLElement): string[] {
@@ -302,7 +302,7 @@ describe("molecule overview: versions", () => {
         const region = await valuesRegion()
         await waitFor(() => expect(rowIds(region)).toHaveLength(1))
         const row = region.querySelector("#thermo-thm_c1") as HTMLElement
-        const link = within(row).getByRole("link", { name: "Version 2 · minimum · ground state" })
+        const link = within(row).getByRole("link", { name: "Version 2" })
         expect(link).toHaveAccessibleDescription("")
         expect(link).toHaveAttribute("href", "/species-entries/spe_secondgroundentryrecordabcdefgh")
         expect(row.textContent).not.toContain("spe_secondgroundentryrecordabcdefgh")
@@ -318,11 +318,11 @@ describe("molecule overview: all values for this molecule", () => {
         expect(calls.length).toBeGreaterThanOrEqual(2)
         for (const call of calls) expect(call.searchParams.get("species_ref")).toBe(speciesRef)
         const ground = region.querySelector("#thermo-thm_g1") as HTMLElement
-        const link = within(ground).getByRole("link", { name: "Version 1 · minimum · ground state" })
+        const link = within(ground).getByRole("link", { name: "Version 1" })
         expect(link).toHaveAttribute("href", `/species-entries/${entryRef}`)
-        expect(ground).toHaveTextContent("Version: Version 1 · minimum · ground state")
+        expect(ground).toHaveTextContent("Version 1")
         expect(within(region.querySelector("#thermo-thm_e1") as HTMLElement).getByRole("link", { name: /excited state/ })).toHaveAttribute("href", `/species-entries/${excitedEntryRef}`)
-        expect(within(region.querySelector("#statmech-stm_g1") as HTMLElement).getByRole("link", { name: /ground state/ })).toBeVisible()
+        expect(within(region.querySelector("#statmech-stm_g1") as HTMLElement).getByRole("link", { name: "Version 1" })).toBeVisible()
         expect(within(ground).getByText("143.90")).toBeVisible()
         expect(within(region.querySelector("#thermo-thm_e1") as HTMLElement).getByText("−12.34")).toBeVisible()
     })
@@ -343,14 +343,18 @@ describe("molecule overview: all values for this molecule", () => {
         await open()
         const region = await valuesRegion()
         await waitFor(() => expect(rowIds(region)).toHaveLength(4))
-        const source = (id: string) => (region.querySelector(`#${id} .value-source`) as HTMLElement)
-        expect(source("thermo-thm_g1")).toHaveTextContent("geometry, frequency, energy at wb97xd/def2tzvp")
+        const source = (id: string) => (region.querySelector(`#${id} .entry-numbers-source`) as HTMLElement)
+        expect(source("thermo-thm_g1")).toHaveTextContent("wb97xd/def2tzvp")
+        expect(source("thermo-thm_g1")).not.toHaveTextContent("(geometry")
         expect(source("thermo-thm_g1")).toHaveTextContent("Arkane")
-        expect(source("statmech-stm_g1")).toHaveTextContent("energy ccsdt/ccpvtz")
+        expect(source("statmech-stm_g1")).toHaveTextContent("ccsdt/ccpvtz (energy)")
         expect(source("statmech-stm_g1")).toHaveTextContent("Gaussian")
         expect(within(region.querySelector("#thermo-thm_e1 th") as HTMLElement).getByText("approved")).toBeVisible()
         expect(within(region.querySelector("#thermo-thm_g1 th") as HTMLElement).getByText("not reviewed")).toBeVisible()
-        expect(Array.from(region.querySelectorAll("thead th")).map((cell) => cell.textContent)).toEqual(["Record", "Values"])
+        for (const table of Array.from(region.querySelectorAll("table"))) {
+            const columns = Array.from(table.querySelectorAll("thead th")).map((head) => head.textContent)
+            expect([columns[0], columns[columns.length - 1]]).toEqual(["Record", "Source"])
+        }
     })
 
     it("states the order the archive served, once, and says so when it stated none", async () => {
@@ -375,7 +379,7 @@ describe("molecule overview: all values for this molecule", () => {
         const region = await valuesRegion()
         await waitFor(() => expect(rowIds(region)).toHaveLength(4))
         const row = region.querySelector("#thermo-thm_g2") as HTMLElement
-        expect(within(row).getAllByText("Not recorded").length).toBeGreaterThanOrEqual(3)
+        expect(within(row).getAllByText("Not recorded").length).toBeGreaterThanOrEqual(2)
         expect(row).not.toHaveTextContent("0.00")
         expect(row).not.toHaveTextContent("143.90")
     })
@@ -443,13 +447,13 @@ describe("molecule overview: all values for this molecule", () => {
         expect(second).toHaveFocus()
         const firstRow = region.querySelector("#thermo-thm_g1") as HTMLElement
         const stops: string[] = []
-        for (let index = 0; index < 40 && !stops.includes("thm_g1 value"); index++) {
+        for (let index = 0; index < 40 && stops.length < 3; index++) {
             await user.tab()
             const active = document.activeElement as HTMLElement
             if (firstRow.contains(active) && active.getAttribute("href")?.includes("#thermo-heading-thm_g1")) stops.push("thm_g1 value")
             if (firstRow.contains(active) && active.getAttribute("href") === `/species-entries/${entryRef}`) stops.push("thm_g1 version")
         }
-        expect(stops).toEqual(["thm_g1 version", "thm_g1 value"])
+        expect(stops).toEqual(["thm_g1 value", "thm_g1 version", "thm_g1 value"])
     })
 })
 

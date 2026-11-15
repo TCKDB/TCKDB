@@ -498,7 +498,7 @@ describe("TransitionStateEntryPage", () => {
         await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         const line = document.querySelector('[data-component="made-under"]')
         expect(line).toHaveAttribute("data-state", "current")
-        expect(line).toHaveTextContent("Assessed under rubric computed transition state, version 2, the current version.")
+        expect(line).toHaveTextContent("Assessed under rubric computed transition state, version 2 (current).")
         // It sits under the Trust fact it describes, not under the structure assessment beside it.
         const trustFact = screen.getByText("Trust").closest("div") as HTMLElement
         expect(trustFact).toContainElement(line as HTMLElement)

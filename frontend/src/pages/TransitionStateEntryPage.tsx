@@ -3,6 +3,7 @@ import { calculationWords, versionWords } from "../domain/recordWords"
 import { numberRefs } from "../domain/recordNumbers"
 import { transitionStateWords } from "../domain/recordWords"
 import { RecordLink } from "../components/RecordLink"
+import { Term } from "../components/Term"
 import { geometryWords } from "../domain/recordWords"
 import { useMemo, type ReactNode } from "react"
 import { Link, useParams } from "react-router-dom"
@@ -27,7 +28,6 @@ import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
 import { RefsDisclosure } from "../components/RefsDisclosure"
 import { MadeUnderLine } from "../components/MadeUnderLine"
-import { Term } from "../components/Term"
 import { TransitionStateStage } from "../components/TransitionStateStage"
 import { ValueLink } from "../components/ValueLink"
 import { liveMadeUnder } from "../domain/madeUnder"
@@ -499,10 +499,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
             </section>
 
             <section className="ledger-section" aria-labelledby="geometry-ledger">
-                <SectionHeading
-                    id="geometry-ledger"
-                    intro="Saddle point and, where an IRC ran, its endpoints."
-                >
+                <SectionHeading id="geometry-ledger">
                     Geometry records
                 </SectionHeading>
                 {geometriesAvailability === "populated" ? (

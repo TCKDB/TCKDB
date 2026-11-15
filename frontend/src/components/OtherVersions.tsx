@@ -23,6 +23,7 @@ export function OtherVersions({ entry }: { entry: SpeciesEntryProjection }) {
     const listed = species?.entries ?? []
     const versions = listed.some((candidate) => candidate.species_entry_ref === entry.species_entry_ref) ? listed : [entry, ...listed]
     const hidden = species ? hiddenVersionsNote(species.entriesHiddenByDefault) : null
+    if (species && versions.length <= 1 && !hidden) return null
     return (
         <section className="entry-versions" aria-labelledby="entry-versions">
             <SectionHeading id="entry-versions">Other versions of this molecule</SectionHeading>

@@ -924,8 +924,7 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         render(<App />)
         // co_1 has two sp calculations -- both must render as their OWN row
         // (two "co_1" observation links), not just the first.
-        // (the tab's two rows plus the shape's own calculations row)
-        expect(await linksTo("/conformer-observations/co_1")).toHaveLength(3)
+        expect(await linksTo("/conformer-observations/co_1")).toHaveLength(2)
         expect(linksNow("/conformer-observations/co_2").length).toBeGreaterThan(0)
         expect(linksNow("/calculations/calc_sp_1").length).toBeGreaterThan(0)
         expect(linksNow("/calculations/calc_sp_1b").length).toBeGreaterThan(0)
@@ -1678,28 +1677,33 @@ describe("species-entry page: which records use each shape", () => {
 })
 
 describe("species-entry page: calculations of the selected shape", () => {
-    it("lists one row per deposit with how it was found and every energy on it, and states a spread only within one level and program", async () => {
+    const shapeSection = () => screen.getByRole("heading", { name: "Calculations of this shape" }).closest("section") as HTMLElement
+
+    it("groups the calculations of the shape and every energy on it, and states a spread only within one level and program", async () => {
         await openEntry()
-        const region = await screen.findByRole("region", { name: "Table of calculations" })
-        const rows = within(region).getAllByRole("row")
-        expect(rows).toHaveLength(3)
-        expect(within(rows[1]).getByRole("link", { name: "Conformer observation: Observation 1" })).toHaveAttribute("href", "/conformer-observations/co_1")
-        expect(rows[1].querySelectorAll('a[href="/calculations/calc_opt_1a"]').length).toBeGreaterThan(0)
-        // Two single-point energies and the final energy of each of two optimisations, on one geometry.
-        await waitFor(() => expect(within(rows[1]).getAllByRole("link", { name: /^[\u2212-]7\d\.\d+ hartree/ })).toHaveLength(4))
-        expect(within(rows[1]).getAllByText(/final energy of the optimisation/)).toHaveLength(2)
-        expect(rows[2].querySelectorAll('a[href="/calculations/calc_opt_2"]').length).toBeGreaterThan(0)
-        expect(rows[2].querySelector('a[href="/calculations/calc_sp_1"]')).toBeNull()
-        await waitFor(() => expect(document.querySelector(".shape-spread")).toHaveTextContent(/Single-point energies at b3lyp\/def2tzvp · Gaussian 16 differ by up to 291\.\d{2} kJ\/mol across 2 calculations/))
-        expect(document.querySelector(".shape-spread")).toHaveTextContent(/Final energies of the optimisations at b3lyp\/def2tzvp · Gaussian 16 differ by up to 393\.\d{2} kJ\/mol across 3 calculations/)
-        expect(screen.getAllByText(/This order is not a recommendation/).length).toBeGreaterThan(1)
+        const found = await screen.findByRole("region", { name: "Calculations that found this geometry" })
+        expect(found.querySelectorAll('a[href="/calculations/calc_opt_1a"]').length).toBeGreaterThan(0)
+        expect(found.querySelectorAll('a[href="/calculations/calc_opt_2"]').length).toBeGreaterThan(0)
+        const energies = await screen.findByRole("region", { name: "Energies on this geometry" })
+        // Five distinct values on this shape: the first deposit's two single points and two optimisations, and the second deposit's optimisation.
+        await waitFor(() => expect(within(energies).getAllByRole("link", { name: /^[\u2212-]7\d\.\d+$/ })).toHaveLength(5))
+        const valueOf = (ref: string) => energies.querySelector(`a.value-link[href="/calculations/${ref}"]`)
+        expect(["calc_opt_1a", "calc_opt_1b", "calc_sp_1", "calc_sp_1b"].map(valueOf).filter(Boolean)).toHaveLength(4)
+        const finalRows = within(energies).getAllByText("Final energy of the optimisation").map((cell) => cell.closest("tr") as HTMLElement)
+        expect(finalRows.filter((row) => row.querySelector('a.value-link[href="/calculations/calc_opt_1a"], a.value-link[href="/calculations/calc_opt_1b"]'))).toHaveLength(2)
+        expect(finalRows).toHaveLength(3)
+        const spread = await screen.findByRole("region", { name: "Spread of energies at one level and program" })
+        await waitFor(() => expect(spread.textContent).toMatch(/b3lyp\/def2tzvp · Gaussian 16Single-point energy2291\.\d{2}/))
+        expect(spread.textContent).toMatch(/b3lyp\/def2tzvp · Gaussian 16Final energy of the optimisation3393\.\d{2}/)
+        expect(within(shapeSection()).getAllByText(/This order is not a recommendation/).length).toBeGreaterThan(0)
     })
 
     it("states no spread between energies at different levels", async () => {
         await openEntry({ twoLevels: true })
-        const region = await screen.findByRole("region", { name: "Table of calculations" })
-        await waitFor(() => expect(within(region).getAllByRole("link", { name: /^[\u2212-]76\.\d+ hartree/ })).toHaveLength(2))
-        await waitFor(() => expect(document.querySelector(".shape-spread")?.textContent ?? "").not.toMatch(/Single-point/))
+        const energies = await screen.findByRole("region", { name: "Energies on this geometry" })
+        await waitFor(() => expect(within(energies).getAllByRole("link", { name: /^[\u2212-]76\.\d+$/ })).toHaveLength(2))
+        const spread = screen.queryByRole("region", { name: "Spread of energies at one level and program" })
+        expect(spread?.textContent ?? "").not.toMatch(/Single-point/)
     })
 })
 
@@ -1722,8 +1726,8 @@ describe("species-entry page: the stage and the keyboard", () => {
         await user.keyboard("{Enter}")
         await waitFor(() => expect(second).toHaveAttribute("aria-pressed", "true"))
         expect(await screen.findByRole("heading", { name: "Evidence for Conformer Group 2" })).toBeVisible()
-        const region = await screen.findByRole("region", { name: "Table of calculations" })
-        expect(region.querySelector('a[href="/conformer-observations/co_3"]')).toBeVisible()
+        const region = await screen.findByRole("region", { name: "Calculations that found this geometry" })
+        expect(region.querySelector('a[href="/calculations/calc_opt_3"]')).toBeVisible()
     })
 
     it("moves between the evidence tabs with the arrow keys", async () => {
@@ -1782,7 +1786,7 @@ describe("species-entry page: depositor text and request counts", () => {
 describe("species-entry page: failed energy reads, pictures and announcements", () => {
     it("says the single-point energies could not be read, instead of showing them as not recorded", async () => {
         await openEntry({ spEnergiesFail: true })
-        const region = await screen.findByRole("region", { name: "Table of calculations" })
+        const region = await screen.findByRole("region", { name: "Energies on this geometry" })
         await waitFor(() => expect(screen.getAllByText("The single-point energies could not be read.").length).toBeGreaterThan(0))
         expect(within(region).queryAllByText("Energy not recorded")).toHaveLength(0)
         expect(within(region).getAllByText("Could not be read").length).toBeGreaterThan(0)

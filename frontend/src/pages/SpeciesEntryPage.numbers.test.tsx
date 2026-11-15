@@ -187,6 +187,19 @@ async function open(options: Options = {}) {
     return screen.findByRole("region", { name: "Numbers for this entry" })
 }
 
+/** The cell of a record row under the column whose header starts with `label`. */
+function cell(row: HTMLElement, label: string): HTMLElement {
+    const table = row.closest("table") as HTMLElement
+    const heads = Array.from(table.querySelectorAll("thead th")).map((head) => head.textContent ?? "")
+    const index = heads.findIndex((text) => text.startsWith(label))
+    if (index < 0) throw new Error(`no column ${label}`)
+    return row.querySelectorAll("th, td")[index] as HTMLElement
+}
+
+function heads(row: HTMLElement): string[] {
+    return Array.from((row.closest("table") as HTMLElement).querySelectorAll("thead th")).map((head) => head.textContent ?? "")
+}
+
 function rowRefs(region: HTMLElement): string[] {
     return Array.from(region.querySelectorAll("tbody tr[id]")).map((row) => row.id)
 }
@@ -206,7 +219,7 @@ describe("molecule page: header", () => {
         expect(screen.getByText("Conformers · Thermochemistry · Statistical mechanics")).toBeVisible()
         expect(screen.queryByText("Entry kind / state")).toBeNull()
         expect(document.querySelector(".record-lede")).toHaveTextContent(
-            "One version of this molecule: charge 0, doublet, ground state, an energy minimum.",
+            "Charge 0, doublet, ground state, an energy minimum.",
         )
         expect(document.title).toBe("CH3 · Molecule · TCKDB")
     })
@@ -252,13 +265,20 @@ describe("molecule page: numbers for this entry", () => {
         await waitFor(() => expect(orderNote()).toHaveTextContent("Thermochemistry: the archive did not state an order."))
     })
 
-    it("lays each record out as a record column and a values column, with review under the ref", async () => {
+    it("lays each kind out as one table, a row per record and a column per field, with review under the ref", async () => {
         const region = await open()
         await waitFor(() => expect(rowRefs(region)).toHaveLength(4))
-        expect(Array.from(region.querySelectorAll("thead th")).map((cell) => cell.textContent)).toEqual(["Record", "Values"])
+        expect(region.querySelectorAll("table")).toHaveLength(2)
+        for (const table of Array.from(region.querySelectorAll("table"))) {
+            const columns = Array.from(table.querySelectorAll("thead th")).map((head) => head.textContent)
+            expect(columns[0]).toBe("Record")
+            expect(columns[columns.length - 1]).toBe("Source")
+        }
+        expect(heads(region.querySelector("#thermo-thm_a1") as HTMLElement)).toContain("Enthalpy of formation, 298 K (kJ/mol)")
         const row = region.querySelector("#thermo-thm_a2") as HTMLElement
         expect(within(row.querySelector("th") as HTMLElement).getByText("approved")).toBeVisible()
         expect(region.querySelector("caption")).toHaveTextContent("Numbers for this entry")
+        expect(within(row).queryByText("kJ/mol")).toBeNull()
     })
 
     it("offers the level toggle only for two or more levels, and groups without re-ordering inside a group", async () => {
@@ -293,85 +313,91 @@ describe("molecule page: numbers for this entry", () => {
             ],
         })
         await waitFor(() => expect(rowRefs(region)).toHaveLength(7))
-        const describes = (id: string) => (region.querySelector(`#${id} .entry-numbers-describes`) as HTMLElement)
-        expect(describes("thermo-thm_a1")).toHaveTextContent("Describes: all shapes together")
-        expect(describes("thermo-thm_a2")).toHaveTextContent("Describes: not stated by the depositor")
-        expect(describes("thermo-thm_b1")).toHaveTextContent("Describes: one shape, Conformer Group 1")
+        const describes = (id: string) => cell(region.querySelector(`#${id}`) as HTMLElement, "Describes")
+        expect(describes("thermo-thm_a1")).toHaveTextContent("all shapes together")
+        expect(describes("thermo-thm_a2")).toHaveTextContent("not stated by the depositor")
+        expect(describes("thermo-thm_b1")).toHaveTextContent("one shape, Conformer Group 1")
         expect(within(describes("thermo-thm_b1")).getByRole("link")).toHaveAttribute("href", expect.stringContaining("conformer=cg_1"))
-        expect(describes("thermo-thm_u")).toHaveTextContent("Describes: one shape (not named)")
-        expect(describes("thermo-thm_k")).toHaveTextContent("Describes: mystery_kind")
-        expect(describes("thermo-thm_c")).toHaveTextContent("Describes: all shapes together (implied by the CHEMKIN format)")
-        expect(region.querySelector("#statmech-stm_1 .entry-numbers-describes")).toBeNull()
+        expect(describes("thermo-thm_u")).toHaveTextContent("one shape (not named)")
+        expect(describes("thermo-thm_k")).toHaveTextContent("mystery_kind")
+        expect(describes("thermo-thm_c")).toHaveTextContent("all shapes together (implied by the CHEMKIN format)")
+        expect(heads(region.querySelector("#statmech-stm_1") as HTMLElement)).not.toContain("Describes")
     })
 
     it("says Not recorded for a missing value and never shows zero", async () => {
         const region = await open()
         await waitFor(() => expect(rowRefs(region)).toHaveLength(4))
         const row = region.querySelector("#thermo-thm_a2") as HTMLElement
-        expect(within(row).getAllByText("Not recorded").length).toBeGreaterThanOrEqual(3)
+        expect(cell(row, "Enthalpy of formation, 298 K")).toHaveTextContent("Not recorded")
+        expect(cell(row, "Entropy, 298 K")).toHaveTextContent("Not recorded")
         expect(row).not.toHaveTextContent("0.00")
+        expect(region).toHaveTextContent("Not recorded in any of these records: enthalpy of formation, 0 K.")
     })
 
     it("lists the single values the API sends: phase, pressure, range, model form, treatment, rotor kind and the flags", async () => {
         const region = await open()
         await waitFor(() => expect(rowRefs(region)).toHaveLength(4))
         const thermoRow = region.querySelector("#thermo-thm_a1") as HTMLElement
-        for (const label of ["Phase", "Reference pressure", "Temperature range covered", "Form of the model"]) expect(within(thermoRow).getByText(label)).toBeVisible()
+        for (const label of ["Phase", "Reference pressure (bar)", "Temperature range covered (K)", "Form of the model"]) expect(heads(thermoRow)).toContain(label)
         expect(within(thermoRow).getByText("Gas")).toBeVisible()
-        expect(thermoRow).toHaveTextContent("300–2000 K")
+        expect(cell(thermoRow, "Temperature range covered")).toHaveTextContent("300–2000")
         const row = region.querySelector("#statmech-stm_1") as HTMLElement
         expect(row).toHaveTextContent("Rigid rotor, harmonic oscillator, one-dimensional hindered rotors")
         expect(row).toHaveTextContent("Asymmetric top")
-        expect(within(row).getByText("Linear molecule").nextElementSibling).toHaveTextContent("No")
-        expect(within(row).getByText("Projected frequencies used").nextElementSibling).toHaveTextContent("Not recorded")
+        expect(cell(row, "Linear molecule")).toHaveTextContent("No")
+        expect(heads(row)).not.toContain("Projected frequencies used")
+        expect(region).toHaveTextContent("Not recorded in this record: projected frequencies used")
     })
 
     it("types the point group with a subscript, never as a link, and shows Not shown for anything else", async () => {
         const region = await open({ statmechRecords: [statmech("stm_1"), statmech("stm_2", { point_group: "PISS", rigid_rotor_kind: "odd_top", statmech_treatment: "rrho_ad" })] })
         await waitFor(() => expect(rowRefs(region)).toContain("statmech-stm_2"))
-        const good = within(region.querySelector("#statmech-stm_1") as HTMLElement).getByText("Point group").nextElementSibling as HTMLElement
+        const good = cell(region.querySelector("#statmech-stm_1") as HTMLElement, "Point group")
         expect(good.querySelector("sub")).toHaveTextContent("2v")
         expect(good).toHaveTextContent("C2v")
         expect(good.querySelector("a")).toBeNull()
         const bad = region.querySelector("#statmech-stm_2") as HTMLElement
-        expect(within(bad).getByText("Point group").nextElementSibling).toHaveTextContent("Not shown")
+        expect(cell(bad, "Point group")).toHaveTextContent("Not shown")
         expect(bad).not.toHaveTextContent("PISS")
         expect(within(bad).getByText("rrho_ad").tagName).toBe("CODE")
         expect(within(bad).getByText("odd_top").tagName).toBe("CODE")
-        expect(within(bad).getByText("External symmetry number").nextElementSibling?.querySelector("a")).not.toBeNull()
+        expect(cell(bad, "External symmetry number").querySelector("a")).not.toBeNull()
     })
 
     it("formats numbers through their specs: significant figures for constants, as deposited for transport", async () => {
         const region = await open({ transportRecords: [transportRecord] })
         await waitFor(() => expect(rowRefs(region)).toContain("transport-trn_1"))
         const statmechRow = region.querySelector("#statmech-stm_1") as HTMLElement
-        expect(within(statmechRow).getByText("Rotational constant A").nextElementSibling).toHaveTextContent("9.5 cm⁻¹")
-        expect(within(statmechRow).getByText("Rotational constant B").nextElementSibling).toHaveTextContent("1.23 × 10−3 cm⁻¹")
+        expect(heads(statmechRow)).toContain("Rotational constant A (cm⁻¹)")
+        expect(cell(statmechRow, "Rotational constant A")).toHaveTextContent("9.5")
+        expect(cell(statmechRow, "Rotational constant B")).toHaveTextContent("1.23 × 10−3")
         const transportRow = region.querySelector("#transport-trn_1") as HTMLElement
-        expect(within(transportRow).getByText("Polarizability").nextElementSibling).toHaveTextContent("2.6 Å³")
-        expect(within(transportRow).getByText("Rotational relaxation").nextElementSibling).toHaveTextContent("1.5")
+        expect(heads(transportRow)).toContain("Polarizability (Å³)")
+        expect(cell(transportRow, "Polarizability")).toHaveTextContent("2.6")
+        expect(cell(transportRow, "Rotational relaxation")).toHaveTextContent("1.5")
     })
 
     it("takes transport levels from the record's own source calculations", async () => {
         const region = await open({ transportRecords: [transportRecord, { ...transportRecord, transport: { ...transportRecord.transport, transport_ref: "trn_2" }, source_calculations: [] }] })
         await waitFor(() => expect(rowRefs(region)).toContain("transport-trn_2"))
-        expect(region.querySelector("#transport-trn_1 .value-source")).toHaveTextContent("dipole ccsdt/ccpvtz")
-        expect(region.querySelector("#transport-trn_2 .value-source")).not.toHaveTextContent("ccsdt")
+        expect(region.querySelector("#transport-trn_1 .entry-numbers-source")).toHaveTextContent("ccsdt/ccpvtz (dipole)")
+        expect(region.querySelector("#transport-trn_2 .entry-numbers-source")).not.toHaveTextContent("ccsdt")
     })
 
     it("gives every record the full source line, linked to the record's card in its tab and keeping its row anchor", async () => {
         const region = await open({ transportRecords: [transportRecord] })
         await waitFor(() => expect(rowRefs(region)).toHaveLength(5))
-        const source = region.querySelector("#thermo-thm_b1 .value-source") as HTMLElement
-        expect(source).toHaveTextContent(/Source Thermo record \d/)
-        expect(source).toHaveTextContent("geometry, frequency, energy at ccsdt/ccpvtz")
+        const source = region.querySelector("#thermo-thm_b1 .entry-numbers-source") as HTMLElement
+        expect(source).toHaveTextContent("ccsdt/ccpvtz")
+        expect(source).not.toHaveTextContent("(geometry")
+        expect(screen.getByText("A level with no roles listed was used for geometry, frequency and energy.")).toBeVisible()
         expect(source).toHaveTextContent("Arkane 1.1.0")
         expect(source).not.toHaveTextContent("Review of this record")
-        expect(within(source).getByRole("link", { name: /^Source: Thermo record \d$/ })).toHaveAttribute("href", `/species-entries/${entryRef}/thermo?conformer=cg_1#thermo-heading-thm_b1`)
+        expect(within(region.querySelector("#thermo-thm_b1") as HTMLElement).getByRole("link", { name: /^Source: Thermo record \d$/ })).toHaveAttribute("href", `/species-entries/${entryRef}/thermo?conformer=cg_1#thermo-heading-thm_b1`)
         const value = region.querySelector("#thermo-thm_b1 .value-link") as HTMLElement
         expect(value).toHaveAttribute("href", `/species-entries/${entryRef}/thermo?conformer=cg_1#thermo-heading-thm_b1`)
-        expect(region.querySelector("#statmech-stm_1 .value-source")).toHaveTextContent("Gaussian 16")
-        expect(region.querySelector("#transport-trn_1 .value-source")).toHaveTextContent("Source Transport record")
+        expect(region.querySelector("#statmech-stm_1 .entry-numbers-source")).toHaveTextContent("Gaussian 16")
+        expect(region.querySelector("#transport-trn_1 th")).toHaveTextContent("Transport record")
     })
 
     it("links each record to its own card, including two identical records on different shapes", async () => {
@@ -389,7 +415,7 @@ describe("molecule page: numbers for this entry", () => {
     it("words the model form and shows a code it has no wording for as a code", async () => {
         const region = await open({ thermoRecords: [thermo("thm_w", lotA, 1, ensemble, "not_reviewed", null, "wilhoit"), thermo("thm_z", lotA, 1, ensemble, "not_reviewed", null, "mystery_form")] })
         await waitFor(() => expect(region.querySelector("#thermo-thm_z")).not.toBeNull())
-        expect(within(region.querySelector("#thermo-thm_w") as HTMLElement).getByText("Form of the model").nextElementSibling).toHaveTextContent("Wilhoit polynomial")
+        expect(cell(region.querySelector("#thermo-thm_w") as HTMLElement, "Form of the model")).toHaveTextContent("Wilhoit polynomial")
         expect(within(region.querySelector("#thermo-thm_z") as HTMLElement).getByText("mystery_form").tagName).toBe("CODE")
     })
 
@@ -454,7 +480,7 @@ describe("molecule page: numbers for this entry", () => {
         cleanup()
         resetAllRequestCaches()
         await open({ listing: [entrySummary(entryRef, "ground", 4)] })
-        expect(await screen.findByText("This is the only version listed for this molecule.")).toBeVisible()
+        await waitFor(() => expect(screen.queryByRole("heading", { name: "Other versions of this molecule" })).not.toBeInTheDocument())
     })
 
     it("keeps depositor text, and a point group that is not one, out of everything but a depositor note", async () => {
@@ -466,8 +492,8 @@ describe("molecule page: numbers for this entry", () => {
         setAt(planted.value, "statmech.0.statmech.point_group", ADVERSARIAL.pointGroup)
         const region = await open({ thermoRecords: planted.value.thermo, statmechRecords: planted.value.statmech, entries: planted.value.entries })
         await waitFor(() => expect(rowRefs(region)).toHaveLength(4))
-        await screen.findByText("This is the only version listed for this molecule.")
-        expect(within(region.querySelector("#statmech-stm_1") as HTMLElement).getByText("Point group").nextElementSibling).toHaveTextContent("Not shown")
+        await waitFor(() => expect(screen.queryByRole("heading", { name: "Other versions of this molecule" })).not.toBeInTheDocument())
+        expect(cell(region.querySelector("#statmech-stm_1") as HTMLElement, "Point group")).toHaveTextContent("Not shown")
         expect(document.body.innerHTML).not.toContain(DEPOSITOR_SENTINEL)
         expectDepositorTextOnlyInNotes()
         expectNoAdversarialText()
@@ -481,7 +507,9 @@ describe("molecule page: numbers for this entry", () => {
         for (let step = 0; step < 120 && document.activeElement !== toggle; step += 1) await user.tab()
         expect(toggle).toHaveFocus()
         await user.tab()
-        expect(within(region).getByRole("region", { name: "Table of numbers" })).toHaveFocus()
+        expect(within(region).getAllByRole("region", { name: /^Table of numbers/ })[0]).toHaveFocus()
+        await user.tab()
+        expect(within(region).getByRole("link", { name: "Source: Thermo record 1" })).toHaveFocus()
         await user.tab()
         const first = region.querySelector(".value-link") as HTMLElement
         expect(first).toHaveFocus()

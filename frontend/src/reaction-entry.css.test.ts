@@ -46,16 +46,6 @@ describe("reaction-entry.css: k(T) table header is not uppercased, and the fix i
     })
 })
 
-describe("reaction-entry.css: transition-state status stages", () => {
-    it("marks the current stage with weight, not only colour", () => {
-        expect(stylesheet).toMatch(/\.reaction-ts-stage--current\s*\{[^}]*font-weight:\s*600/)
-    })
-
-    it("lays the stages out as a wrapping row so they never force sideways scroll", () => {
-        expect(stylesheet).toMatch(/\.reaction-ts-stages\s*\{[^}]*flex-wrap:\s*wrap/)
-    })
-})
-
 describe("reaction-entry.css: the reaction-entries table fits a narrow screen", () => {
     it("stacks its cells under their labels at phone width instead of scrolling sideways", () => {
         const block = /@media \(max-width: 680px\)\s*\{\s*\.reaction-entries-table \{ min-width: 0; \}([\s\S]*?)\n\}/.exec(stylesheet)?.[1] ?? ""

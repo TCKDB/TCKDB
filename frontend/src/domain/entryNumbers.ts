@@ -43,6 +43,8 @@ export type NumberRow = {
     review: string
     values: NumberValue[]
     levels: SourceLevel[]
+    /** The levels were not recorded per stage: one provenance level stands in for all three. */
+    levelsFromProvenance: boolean
     /** The group key for "Group by level of theory": the record's own levels, never another record's. */
     levelKey: string
     programs: string[]
@@ -129,17 +131,60 @@ function levelsOf(levels: ProductLevels): SourceLevel[] {
 /** Levels as "label (roles)" parts, one per distinct label, in first-seen order. */
 export function levelParts(levels: readonly SourceLevel[]): { label: string; level?: SourceLevel["level"]; roles: string[] }[] {
     const parts: { label: string; level?: SourceLevel["level"]; roles: string[] }[] = []
+    const same = (candidate: { label: string; level?: SourceLevel["level"] }, level: SourceLevel) => {
+        const ref = level.level?.level_of_theory_ref
+        const candidateRef = candidate.level?.level_of_theory_ref
+        return ref || candidateRef ? ref === candidateRef : candidate.label === level.label
+    }
     for (const level of levels) {
-        const part = parts.find((candidate) => candidate.label === level.label)
+        const part = parts.find((candidate) => candidate.label === level.label && same(candidate, level))
         if (part) part.roles.push(level.role)
         else parts.push({ label: level.label, level: level.level, roles: [level.role] })
     }
     return parts
 }
 
+const STAGES = ["geometry", "frequency", "energy"]
+
+/**
+ * One level was recorded for the geometry, the frequencies and the energy, so the roles need no listing: all three
+ * stages carry a level with a ref, the refs are one, the record names exactly one program, and the levels were
+ * recorded per stage (not a single provenance level copied into all three).
+ */
+export function isOneLevelThroughout(row: Pick<NumberRow, "levels" | "programs" | "levelsFromProvenance">): boolean {
+    if (row.levelsFromProvenance || row.programs.length !== 1) return false
+    const refs = STAGES.map((stage) => row.levels.find((level) => level.role === stage)?.level?.level_of_theory_ref)
+    return refs.every((ref) => Boolean(ref)) && new Set(refs).size === 1
+}
+
+/** A column of one kind's table: a label any record carries, its shared unit, and whether it is "Not recorded" in every record. */
+export type NumberColumn = { label: string; unit: string | null; unitInCell: boolean; allAbsent: boolean }
+
+/**
+ * The columns of one kind's table, in first-seen order. A column whose value is missing in every record (and that has
+ * no wording of its own for a value kept back, like "Not shown") is `allAbsent` and is named once under the table.
+ */
+export function numberColumns(rows: readonly Pick<NumberRow, "values">[]): NumberColumn[] {
+    const order: string[] = []
+    for (const row of rows) for (const value of row.values) if (!order.includes(value.label)) order.push(value.label)
+    return order.map((label) => {
+        const cells = rows.map((row) => row.values.find((value) => value.label === label))
+        const present = cells.filter((cell): cell is NumberValue => cell !== undefined && cell.value !== null)
+        const units = new Set(present.map((cell) => cell.unit ?? ""))
+        const shared = units.size === 1 ? [...units][0] : ""
+        const allAbsent = present.length === 0 && cells.every((cell) => cell === undefined || cell.absent === undefined)
+        return { label, unit: shared || null, unitInCell: units.size > 1, allAbsent }
+    })
+}
+
+/** What tells one level part from another: its ref, else its label. */
+export function levelPartKey(part: { label: string; level?: SourceLevel["level"] }): string {
+    return part.level?.level_of_theory_ref || part.label
+}
+
 function levelKeyOf(levels: SourceLevel[]): string {
     if (levels.length === 0) return NO_LEVEL_KEY
-    return levelParts(levels).map((part) => `${part.label} (${part.roles.join(", ")})`).join(" · ")
+    return levelParts(levels).map((part) => `${levelPartKey(part)} (${part.roles.join(", ")})`).join(" · ")
 }
 
 function programsOf(...labels: (string | null | undefined)[]): string[] {
@@ -167,6 +212,11 @@ export function describesOf(record: ThermoRecord): Describes {
     return { kind: "unknown", code: target.kind, implied }
 }
 
+/** The record carries no per-stage levels, so its levels are one provenance level standing in for all three. */
+export function thermoLevelsFromProvenance(record: ThermoRecord): boolean {
+    return !record.levels && !(record.source_calculations && record.source_calculations.length > 0)
+}
+
 export function thermoRow(record: ThermoRecord): NumberRow {
     const shown = levelsOf(thermoRecordProductLevels(record))
     const formation = record.enthalpy_reference_kind === "formation_298k"
@@ -190,6 +240,7 @@ export function thermoRow(record: ThermoRecord): NumberRow {
             wordOrCode("Form of the model", record.model_kind, THERMO_MODEL_KIND_WORDS),
         ],
         levels: shown,
+        levelsFromProvenance: thermoLevelsFromProvenance(record),
         levelKey: levelKeyOf(shown),
         programs: programsOf(
             softwareLabel(provenance?.primary_calculation?.software),
@@ -222,6 +273,7 @@ export function statmechRow(record: StatmechRecord): NumberRow {
             quantity("Frequency scale factor", "statmech_frequency_scale_factor", core.frequency_scale_factor_value),
         ],
         levels: shown,
+        levelsFromProvenance: false,
         levelKey: levelKeyOf(shown),
         programs: programsOf(softwareLabel(record.software_release), toolReleaseLabel(record.workflow_tool_release)),
         describes: null,
@@ -257,6 +309,7 @@ export function transportRow(record: TransportRecord): NumberRow {
             quantity("Rotational relaxation", "transport_rotational_relaxation", core.rotational_relaxation),
         ],
         levels: shown,
+        levelsFromProvenance: false,
         levelKey: levelKeyOf(shown),
         programs: programsOf(
             softwareLabel(record.software_release),

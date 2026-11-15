@@ -23,6 +23,12 @@ export function versionName(version: ScientificSpeciesEntrySummary, position: nu
     return facts ? `${versionWords(position)} · ${facts}` : versionWords(position)
 }
 
+/** A version's name in a table row: its position alone when it is the plain ground-state minimum, else with the facts that tell it apart. */
+export function versionRowName(version: ScientificSpeciesEntrySummary, position: number): string {
+    const plain = version.species_entry_kind === "minimum" && version.electronic_state_kind === "ground" && facetChips(version).length === 2
+    return plain ? versionWords(position) : versionName(version, position)
+}
+
 /** What a version holds: its calculation count and the kinds of result deposited. */
 export function versionHolds(entry: ScientificSpeciesEntrySummary): string {
     const kinds = [

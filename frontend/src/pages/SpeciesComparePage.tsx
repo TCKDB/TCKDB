@@ -16,7 +16,7 @@ import { OrderNote } from "../components/OrderNote"
 import { SectionHeading } from "../components/PageSections"
 import { PageShell } from "../components/PageShell"
 import { ReviewChip } from "../components/ReviewChip"
-import { levelParts, numbersOrderSentence } from "../domain/entryNumbers"
+import { levelPartKey, levelParts, numbersOrderSentence } from "../domain/entryNumbers"
 import { versionName } from "../domain/entryVersions"
 import { formatWaitSeconds } from "../domain/rateLimitFormat"
 import {
@@ -70,7 +70,7 @@ function Head({ column, position }: { column: CompareColumn; position: number })
             {to ? <RecordLink kind={column.kind} to={to} label={words} /> : words}
             <span>{column.kind === "thermo" ? "Thermochemistry" : "Statistical mechanics"}</span>
             {row.levels.length > 0
-                ? <span>{levelParts(row.levels).map((part) => <span key={part.label} className="compare-level">{part.level ? <LevelLabel levelOfTheory={part.level} program={program} /> : <><span className="t-preserve-case">{part.label}</span>{program && ` · ${program}`}</>} ({part.roles.join(", ")})</span>)}</span>
+                ? <span>{levelParts(row.levels).map((part) => <span key={levelPartKey(part)} className="compare-level">{part.level ? <LevelLabel levelOfTheory={part.level} program={program} /> : <><span className="t-preserve-case">{part.label}</span>{program && ` · ${program}`}</>} ({part.roles.join(", ")})</span>)}</span>
                 : <span>No level of theory recorded</span>}
             <ReviewChip status={row.review} explain={false} />
         </span>
