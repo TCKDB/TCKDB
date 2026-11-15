@@ -593,7 +593,7 @@ def _render_selected(
     actors: dict[int, dict[str, Any]],
 ) -> RenderedArtifact:
     lines = []
-    for row in sorted(state.active, key=lambda r: r.public_ref):
+    for row in sorted(state.active, key=lambda r: r.id):
         key = (row.record_type, row.record_id)
         subject_key = (row.subject_type, row.subject_id)
         lines.append(
@@ -646,7 +646,7 @@ def _render_candidates(
     actors: dict[int, dict[str, Any]],
 ) -> RenderedArtifact:
     lines = []
-    for key in sorted(payloads, key=lambda k: (k[0].value, refs.get(k) or "", k[1])):
+    for key in sorted(payloads, key=lambda k: (k[0].value, k[1])):
         subject_key = candidates_by_subject.get(key)
         lines.append(
             {
@@ -694,7 +694,7 @@ def _render_review_history(
             events_by_review.setdefault(event.record_review_id, []).append(event)
 
     lines = []
-    for key in sorted(pairs, key=lambda k: (k[0].value, refs.get(k) or "", k[1])):
+    for key in sorted(pairs, key=lambda k: (k[0].value, k[1])):
         review = reviews.get(key)
         events = events_by_review.get(review.id, []) if review is not None else []
         lines.append(

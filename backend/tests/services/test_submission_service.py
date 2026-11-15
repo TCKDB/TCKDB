@@ -748,3 +748,28 @@ class TestAppendAuditEvent:
         )
         assert event.details_json == {"is_public": True}
         assert event.actor_kind is SubmissionActorKind.system
+
+
+class TestRecordLinkOrder:
+    def test_record_links_load_in_id_order_after_a_row_is_rewritten(self, db_session):
+        alice = _uploader(db_session)
+        sub = _open_pending(db_session, alice.id)
+        links = link_records(
+            db_session,
+            submission=sub,
+            records=[
+                (SubmissionRecordType.thermo, 9, None),
+                (SubmissionRecordType.species_entry, 3, None),
+                (SubmissionRecordType.thermo, 5, None),
+            ],
+        )
+        ids = [link.id for link in links]
+        assert ids == sorted(ids)
+
+        # Rewriting a row moves it in the table's physical order; the relationship must not follow.
+        links[0].role = "rewritten"
+        db_session.flush()
+        db_session.expire_all()
+
+        loaded = db_session.get(Submission, sub.id)
+        assert [link.id for link in loaded.record_links] == ids

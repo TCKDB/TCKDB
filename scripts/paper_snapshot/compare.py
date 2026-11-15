@@ -7,13 +7,16 @@ Each directory is a ``build.py`` output. Compared:
 * ``expected_outputs/``: per file, byte-identical, or identical after masking public refs (no list is re-sorted).
 * Archive blobs: the set of (SHA-256, size) pairs.
 * Archive rows: per table, the multiset of rows after removing timestamps and masking public refs and the bucket name
-  in artifact URIs. Integer ids are kept.
+  in artifact URIs. Integer ids are kept. A ``deposit_warning`` row's ``content_hash`` covers its message and context,
+  which name public refs, so it is recomputed over the masked message and context (same formula as the server) before
+  the rows are compared.
 
 Exit status 0 only if nothing differs.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sys
@@ -57,6 +60,18 @@ def compare_expected(one: Path, two: Path) -> dict[str, Any]:
     return result
 
 
+def masked_warning_hash(values: dict[str, Any]) -> str | None:
+    """``deposit_warning.content_hash`` recomputed over the masked message and context."""
+    if values.get("content_hash") is None:
+        return None
+    context = json.loads(mask_refs(canonical(values["context"])))
+    payload = json.dumps(
+        [values["code"], values["field"], mask_refs(values["message"]), context],
+        sort_keys=True, separators=(",", ":"), allow_nan=False,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def open_rows(archive: Path):
     with tarfile.open(archive) as tar:
         manifest = json.load(tar.extractfile("manifest.json"))
@@ -69,6 +84,8 @@ def open_rows(archive: Path):
                 k: v for k, v in record["values"].items()
                 if k not in TIMESTAMP_KEYS and not (isinstance(v, str) and TIMESTAMP.match(v))
             }
+            if record["table"] == "deposit_warning":
+                values["content_hash"] = masked_warning_hash(values)
             rows.setdefault(record["table"], Counter())[mask_refs(canonical(values))] += 1
     return manifest, rows
 
