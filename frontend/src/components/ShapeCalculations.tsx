@@ -1,32 +1,13 @@
-import { RecordLink } from "./RecordLink"
-import { LevelDetails, LevelLabel } from "./LevelLabel"
-import { calculationWords, observationWords } from "../domain/recordWords"
 import type { ConformerProjection } from "../api/speciesEntryApi"
-import { conformerLabel } from "../domain/conformerEvidence"
-import { calculationDid } from "../domain/calculationTypeFormat"
-import { formatHartree, shapeRows, spreadLines, type ShapeCalculation } from "../domain/conformerGallery"
+import { shapeRows } from "../domain/conformerGallery"
 import type { SinglePointsState } from "../hooks/useSpeciesSinglePoints"
 import { OrderNote } from "./OrderNote"
 import { SectionHeading } from "./PageSections"
-import { ReviewChip } from "./ReviewChip"
-import { ValueLink } from "./ValueLink"
-
-function Where({ calculation }: { calculation: ShapeCalculation }) {
-    return (
-        <>
-            {calculation.level
-                ? <>at <LevelLabel levelOfTheory={calculation.level} program={calculation.program} plain />{!calculation.program && ", program not recorded"}</>
-                : <>level not recorded, {calculation.program ? <>with <span className="t-preserve-case">{calculation.program}</span></> : "program not recorded"}</>}
-        </>
-    )
-}
-
-const KIND_WORDS = { sp: "single-point energy", opt: "final energy of the optimisation" } as const
+import { ShapeEnergies } from "./ShapeEnergies"
 
 /**
- * One row per observation of the selected shape: how its geometry was found, and every energy computed on it
- * (single-point energies and the final energy of each optimisation). Nothing is picked or averaged; a spread is stated
- * only between energies of one kind at one level and one program.
+ * The calculations of the selected shape and every energy computed on its geometry (single-point energies and the
+ * final energy of each optimisation), grouped where they say the same thing. Nothing is picked or averaged.
  */
 export function ShapeCalculations({ conformer, singlePoints, optimisations }: {
     conformer: ConformerProjection
@@ -36,10 +17,8 @@ export function ShapeCalculations({ conformer, singlePoints, optimisations }: {
     const spRecords = singlePoints.status === "ready" ? singlePoints.records : []
     const optRecords = optimisations.status === "ready" ? optimisations.records : []
     const rows = shapeRows(conformer, spRecords, optRecords)
-    const spreads = spreadLines(rows)
     const waiting = singlePoints.status === "loading" || optimisations.status === "loading"
     const capped = (singlePoints.status === "ready" && singlePoints.capped) || (optimisations.status === "ready" && optimisations.capped)
-    const label = conformerLabel(conformer)
     return (
         <section className="shape-calculations" aria-labelledby="shape-calculations">
             <SectionHeading id="shape-calculations">Calculations of this shape</SectionHeading>
@@ -56,66 +35,7 @@ export function ShapeCalculations({ conformer, singlePoints, optimisations }: {
             ) : (
                 <>
                     {rows.length > 1 && <OrderNote />}
-                    {spreads.length > 0 && (
-                        <ul className="shape-spread">
-                            {spreads.map((line) => (
-                                <li key={`${line.kind}-${line.levelLabel}-${line.program}`}>
-                                    {line.kind === "sp" ? "Single-point energies" : "Final energies of the optimisations"} at {line.level ? <LevelLabel levelOfTheory={line.level} program={line.program} plain /> : <span className="t-preserve-case">{line.levelLabel} · {line.program}</span>} differ by up to {line.kjMol.toFixed(2)} <span className="t-preserve-case">kJ/mol</span> across{" "}
-                                    {line.count} calculations.
-                                    {line.level && <LevelDetails levelOfTheory={line.level} program={line.program} />}
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                    <div className="table-scroll" tabIndex={0} role="region" aria-label="Table of calculations">
-                        <table className="data-table shape-calculations-table">
-                            <caption className="molecule-page-visually-hidden">Calculations of {label}, one row per deposit</caption>
-                            <thead>
-                                <tr>
-                                    <th scope="col">Deposit</th>
-                                    <th scope="col">Optimisation and frequency calculations</th>
-                                    <th scope="col">Energies on this geometry</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {rows.map((row, index) => (
-                                    <tr key={row.observationRef}>
-                                        <th scope="row"><RecordLink kind="conformer-observation" to={`/conformer-observations/${row.observationRef}`} label={observationWords(index + 1)} /></th>
-                                        <td data-label="Optimisation and frequency calculations">
-                                            {row.foundBy.length === 0 ? <span className="shape-energy-absent">No calculation recorded.</span> : (
-                                                <ul className="shape-cell-list">
-                                                    {row.foundBy.map((calculation) => (
-                                                        <li key={calculation.ref}>
-                                                            {calculationDid(calculation.type) ?? calculation.type} <Where calculation={calculation} />{" "}
-                                                            <RecordLink kind="calculation" to={`/calculations/${calculation.ref}`} label={calculationWords(calculation.type)} />
-                                                            {calculation.level && <LevelDetails levelOfTheory={calculation.level} program={calculation.program} />}
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            )}
-                                        </td>
-                                        <td data-label="Energies on this geometry">
-                                            {row.energies.length === 0 ? <span className="shape-energy-absent">No energy recorded.</span> : (
-                                                <ul className="shape-cell-list">
-                                                    {row.energies.map((energy) => (
-                                                        <li key={energy.ref}>
-                                                            {energy.hartree === null
-                                                                ? <span className="shape-energy-absent">{(energy.kind === "sp" ? singlePoints : optimisations).status === "failed" ? "Could not be read" : "Energy not recorded"}</span>
-                                                                : <ValueLink value={formatHartree(energy.hartree)} unit="hartree" to={`/calculations/${energy.ref}`} />}
-                                                            {" "}({KIND_WORDS[energy.kind]}){" "}{!row.foundBy.some((calculation) => calculation.ref === energy.ref) && <><Where calculation={energy} />{" "}</>}
-                                                            <RecordLink kind="calculation" to={`/calculations/${energy.ref}`} label={calculationWords(energy.kind)} />
-                                                            {energy.review && <>{" "}<ReviewChip status={energy.review} explain={false} /></>}
-                                                            {energy.level && !row.foundBy.some((calculation) => calculation.ref === energy.ref) && <LevelDetails levelOfTheory={energy.level} program={energy.program} />}
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                    <ShapeEnergies rows={rows} singlePoints={singlePoints} optimisations={optimisations} />
                 </>
             )}
         </section>

@@ -56,8 +56,7 @@ export function SpeciesValues({ species }: { species: SpeciesOverview }) {
                         hrefs={valueRecordLinks}
                         version={(row) => (row.entryRef
                             ? <>
-                                <span className="entry-numbers-key">Version:</span>{" "}
-                                <Link to={`/species-entries/${row.entryRef}`}>{labels.get(row.entryRef) ?? "Another version"}</Link>
+                                <Link to={`/species-entries/${row.entryRef}`}>{(labels.get(row.entryRef) ?? "Another version").replace(/ · minimum · ground state$/, "")}</Link>
                             </>
                             : <>Version not stated by the archive</>)}
                     />

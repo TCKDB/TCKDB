@@ -33,12 +33,12 @@ describe("NumbersTable source lines", () => {
                 <NumbersTable rows={named("thm_a", "thm_b", "thm_c")} caption="Values" label="Values table" groupLabels={new Map()} hrefs={() => ({ to: null, entryPath: null })} />
             </MemoryRouter>,
         )
-        expect([...document.querySelectorAll(".value-source")].map((source) => source.textContent?.match(/Thermo record( \d)?/)?.[0])).toEqual(["Thermo record", "Thermo record", "Thermo record"].map((text, index) => `${text} ${index + 1}`))
+        expect([...document.querySelectorAll("tbody th[scope=row] .entry-numbers-record")].map((cell) => cell.textContent)).toEqual(["Thermo record 1", "Thermo record 2", "Thermo record 3"])
     })
 
     it("leaves the only record of its kind unnumbered", () => {
         setup(1)
-        expect(document.querySelector(".value-source")?.textContent).toMatch(/^Source Thermo record(?! \d)/)
+        expect(document.querySelector("tbody th[scope=row] .entry-numbers-record")?.textContent).toBe("Thermo record")
     })
 })
 

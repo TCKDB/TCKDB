@@ -38,7 +38,6 @@
 .entry-numbers-toggle:focus-visible,
 .entry-numbers-scroll:focus-visible,
 .entry-numbers .section-intro a:focus-visible,
-.entry-numbers-describes a:focus-visible,
 .entry-numbers-version a:focus-visible,
 .entry-versions a:focus-visible {
     outline: 3px solid var(--focus-ring);
@@ -52,7 +51,7 @@
 
 .entry-numbers-table {
     width: 100%;
-    min-width: 30rem;
+    min-width: 36rem;
     border-collapse: collapse;
 }
 
@@ -76,31 +75,50 @@
     color: var(--ink);
 }
 
-.entry-numbers-kind,
-.entry-numbers-key {
-    display: block;
-    color: var(--ink-2);
-    font-weight: 600;
+.entry-numbers-kind-block {
+    margin-top: var(--s-5);
 }
 
-.entry-numbers-key {
-    display: inline;
-}
-
-.entry-numbers-values {
-    display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: var(--s-1) var(--s-4);
+.entry-numbers-kind-heading {
     margin: 0 0 var(--s-2);
 }
 
-.entry-numbers-values dt {
-    color: var(--ink-2);
+.entry-numbers-count {
+    color: var(--muted);
+    font-weight: 400;
+    font-size: .875em;
 }
 
-.entry-numbers-values dd {
-    margin: 0;
+.entry-numbers-unit {
+    color: var(--muted);
+    font-weight: 400;
+}
+
+.entry-numbers-record {
+    display: block;
+    font-weight: 600;
+}
+
+.entry-numbers-table .value-link {
     white-space: nowrap;
+}
+
+.entry-numbers-table td.entry-numbers-source {
+    min-width: 12rem;
+}
+
+.entry-numbers-source-level,
+.entry-numbers-programs {
+    display: block;
+}
+
+.entry-numbers-roles,
+.entry-numbers-programs {
+    color: var(--muted);
+}
+
+.entry-numbers-absent-note {
+    margin-top: var(--s-2);
 }
 
 .entry-numbers-review {
@@ -130,16 +148,11 @@
     clip: rect(0, 0, 0, 0);
 }
 
-.entry-numbers-describes {
-    margin: 0 0 var(--s-1);
-}
-
 .entry-numbers-absent {
     color: var(--muted);
 }
 
 .entry-numbers .section-intro a,
-.entry-numbers-describes a,
 .entry-numbers-version a,
 .entry-versions a {
     color: var(--accent);
@@ -189,7 +202,7 @@
     color: var(--ink-2);
 }
 
-/* On a phone the record sits above its values and each label above its value, so nothing needs sideways scrolling. */
+/* On a phone the table scrolls inside its own box. */
 @media (max-width: 40rem) {
     .entry-versions-title a,
     .entry-numbers-version a,
@@ -201,44 +214,5 @@
 
     .entry-numbers-toggle {
         min-height: 44px;
-    }
-
-    .entry-numbers-table {
-        min-width: 0;
-    }
-
-    .entry-numbers-table thead {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-    }
-
-    .entry-numbers-table tbody,
-    .entry-numbers-table tr,
-    .entry-numbers-table th,
-    .entry-numbers-table td {
-        display: block;
-    }
-
-    .entry-numbers-table tbody th[scope="row"],
-    .entry-numbers-table tbody td {
-        padding: var(--s-2) var(--s-3);
-        border-bottom: 0;
-    }
-
-    .entry-numbers-table tbody tr {
-        border-bottom: 1px solid var(--line-2);
-    }
-
-    .entry-numbers-values {
-        grid-template-columns: 1fr;
-        gap: 0;
-    }
-
-    .entry-numbers-values dd {
-        margin: 0 0 var(--s-2);
-        white-space: normal;
     }
 }

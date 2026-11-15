@@ -232,7 +232,7 @@ function CompareDocument({ reactionRef, first, labels }: { reactionRef: string; 
                         { label: "Compare" },
                     ]} />
                     <h1>Compare rate coefficients for {equation}</h1>
-                    <p className="note" role="note">Side by side, not ranked; nothing is filled in from another record.</p>
+                    <p className="note" role="note">Side by side, not ranked. Differences only within a group; nothing is filled in from another record.</p>
                 </>}
             >
                 <WalkStatus

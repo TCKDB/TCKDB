@@ -373,6 +373,11 @@ export function spreadLines(rows: readonly ShapeRow[]): SpreadLine[] {
         }))
 }
 
+/** The spread is stated to two decimals; below that it reads as less than 0.01. */
+export function spreadText(kjMol: number): string {
+    return kjMol < 0.005 ? "< 0.01" : kjMol.toFixed(2)
+}
+
 const CARD_ORDER = "Cards by conformer number."
 
 /** One statement of both orders: the order the pages follow, and the card order inside a page. */

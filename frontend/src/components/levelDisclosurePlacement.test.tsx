@@ -80,14 +80,14 @@ describe("a level's disclosure beside prose", () => {
         const record = (ref: string, hartree: number) => ({ calculation: { calculation_ref: ref, calculation_type: "sp" }, energy: { energy_hartree: hartree, energy_kind: "electronic" }, level_of_theory: level, software_release: { software: "Molpro", version: "1" } })
         const sp = { status: "ready", records: [record("calc_s1", -40.1), record("calc_s2", -40.2)], capped: false } as unknown as SinglePointsState
         const { container } = inScope(<ShapeCalculations conformer={conformer} singlePoints={sp} optimisations={ready} />)
-        expect(container.querySelector(".shape-spread li")?.textContent).toMatch(/differ by up to/)
-        expect(container.querySelector("li .level-label details")).toBeNull()
-        expect(container.querySelector(".shape-spread li > details")).not.toBeNull()
+        const spread = container.querySelector('[aria-label="Spread of energies at one level and program"] tbody tr') as HTMLElement
+        expect(spread.textContent).toMatch(/Single-point energy.*2.*\d/)
         expect(container.querySelectorAll("p details")).toHaveLength(0)
         expect(nestingWarnings()).toEqual([])
-        // The label flows with the sentence, so the sentence does not break around it.
-        expect(getComputedStyle(container.querySelector(".shape-spread li .level-label") as Element).display).toBe("inline")
-        // Rows are told apart by position.
-        expect([...container.querySelectorAll("tbody th a")].map((link) => link.textContent)).toEqual(["Observation 1", "Observation 2"])
+        // The label flows inline inside its cell.
+        expect(getComputedStyle(spread.querySelector(".level-label") as Element).display).toBe("inline")
+        // The two energies are told apart by the deposit each calculation belongs to.
+        const energies = container.querySelectorAll('[aria-label="Energies on this geometry"] tbody tr')
+        expect([...energies].map((row) => row.querySelector("td:nth-of-type(3)")?.textContent)).toEqual(["Calculations 1, 2", "Calculation 1", "Calculation 2"])
     })
 })

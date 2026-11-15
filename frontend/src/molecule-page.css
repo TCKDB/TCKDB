@@ -252,35 +252,32 @@
     border-top: 1px solid var(--line);
 }
 
-.shape-spread {
-    margin: .8rem 0 0;
-    padding-left: 1.2rem;
-    color: var(--ink-2);
-}
-
-.shape-calculations-table {
+.shape-energies-table {
     width: 100%;
-    min-width: 36rem;
+    min-width: 30rem;
     border-collapse: collapse;
 }
 
-.shape-calculations-table th,
-.shape-calculations-table td {
+.shape-energies-table th,
+.shape-energies-table td {
     padding: var(--s-3);
     border-bottom: 1px solid var(--line-2);
     text-align: left;
     vertical-align: top;
 }
 
-.shape-calculations-table td { overflow-wrap: anywhere; }
+.shape-energies-table td { overflow-wrap: anywhere; }
 
-.shape-calculations-table thead th {
+.shape-energies-table thead th {
     overflow-wrap: normal;
     white-space: nowrap;
 }
 
-.shape-calculations-table tbody th {
-    min-width: 8rem;
+.shape-energies-table tbody th {
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--ink);
 }
 
 .shape-picture-ask {
@@ -654,17 +651,6 @@
     .entry-facts { gap: .85rem 1.2rem; }
     .entry-tabs { gap: 1.1rem 1.6rem; }
     .conformer-list { grid-template-columns: 1fr; }
-    .shape-calculations-table { min-width: 0; }
-    .shape-calculations-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-    .shape-calculations-table tr,
-    .shape-calculations-table th,
-    .shape-calculations-table td { display: block; width: auto; min-width: 0; }
-    .shape-calculations-table td[data-label]::before {
-        content: attr(data-label);
-        display: block;
-        color: var(--muted);
-        font: var(--type-label-font);
-    }
 }
 
 .shape-usedby a {

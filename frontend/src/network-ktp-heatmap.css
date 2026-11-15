@@ -9,6 +9,7 @@
 
 .ktp-field {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--s-1);
     min-width: 0;
     max-width: 100%;
@@ -23,7 +24,9 @@
 
 .ktp-field select {
     min-height: 44px;
+    width: 100%;
     max-width: 100%;
+    min-width: 0;
     padding: .4rem .6rem;
     border: 1px solid var(--control-border);
     border-radius: var(--radius-sm);

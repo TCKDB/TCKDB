@@ -1,5 +1,4 @@
 import { useMemo } from "react"
-import { LevelDetails, LevelLabel } from "../components/LevelLabel"
 import { RecordLink } from "../components/RecordLink"
 import { geometryWords } from "../domain/recordWords"
 import { Link, useParams } from "react-router-dom"
@@ -15,7 +14,8 @@ import { DepositorNote } from "../components/DepositorNote"
 import { entryCrumbs } from "../components/entryCrumbs"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
 import { Formula } from "../components/Formula"
-import { EnergyNotices, ObservationEvidence } from "../components/ObservationEvidence"
+import { EnergyNotices } from "../components/ObservationEvidence"
+import { ShapeEnergies } from "../components/ShapeEnergies"
 import { OrderNote } from "../components/OrderNote"
 import { PageShell } from "../components/PageShell"
 import { RecordMap } from "../components/RelationshipMap"
@@ -26,14 +26,14 @@ import { RecordStatus } from "../components/RecordStatus"
 import { ReviewChip } from "../components/ReviewChip"
 import { SpeciesEntryLink } from "../components/SpeciesEntryLink"
 import { conformerGroupName } from "../domain/conformerEvidence"
-import { pictureGeometryFromLinks, shapeRows, spreadLines, type ShapeRow } from "../domain/conformerGallery"
+import { pictureGeometryFromLinks, shapeRows } from "../domain/conformerGallery"
 import { groupLede } from "../domain/conformerLede"
 import { words } from "../domain/provenanceFormat"
 import { hiddenByDefaultNote } from "../domain/paging"
 import { useConformerGroup } from "../hooks/useConformerGroup"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
 import { useLoaded } from "../hooks/useLoaded"
-import { useSpeciesOptimisations, useSpeciesSinglePoints, type SinglePointsState } from "../hooks/useSpeciesSinglePoints"
+import { useSpeciesOptimisations, useSpeciesSinglePoints } from "../hooks/useSpeciesSinglePoints"
 
 type Observation = NonNullable<ConformerGroup["observations"]>[number]
 type GeometryLink = NonNullable<ConformerGroup["geometries"]>[number]
@@ -76,7 +76,6 @@ function Ledger({ group }: { group: ConformerGroup }) {
         () => shapeRows({ observations }, singlePoints.status === "ready" ? singlePoints.records : [], optimisations.status === "ready" ? optimisations.records : []),
         [observations, singlePoints, optimisations],
     )
-    const spreads = spreadLines(rows)
     const usageData = usage.status === "ready" ? usage.data : null
     const hidden = usageData ? hiddenByDefaultNote(usageData.hidden, "records") : null
     const depositorLabel = core.label && name === null && core.label.trim() !== "" ? core.label : null
@@ -149,26 +148,13 @@ function Ledger({ group }: { group: ConformerGroup }) {
                         <>
                             <EnergyNotices singlePoints={singlePoints} optimisations={optimisations} />
                             <OrderNote />
-                            {spreads.length > 0 && (
-                                <ul className="shape-spread">
-                                    {spreads.map((line) => (
-                                        <li key={`${line.kind}-${line.levelLabel}-${line.program}`}>
-                                            {line.kind === "sp" ? "Single-point energies" : "Final energies of the optimisations"} at {line.level ? <LevelLabel levelOfTheory={line.level} program={line.program} plain /> : <span className="t-preserve-case">{line.levelLabel} · {line.program}</span>} differ by up to {line.kjMol.toFixed(2)} <span className="t-preserve-case">kJ/mol</span> across{" "}
-                                            {line.count} calculations.
-                                            {line.level && <LevelDetails levelOfTheory={line.level} program={line.program} />}
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
+                            <ShapeEnergies rows={rows} singlePoints={singlePoints} optimisations={optimisations} />
                             <ol className="observation-items">
                                 {observations.map((observation, index) => (
                                     <ObservationItem
                                         key={observation.conformer_observation.conformer_observation_ref}
                                         observation={observation}
                                         position={index + 1}
-                                        row={rows[index]}
-                                        singlePoints={singlePoints}
-                                        optimisations={optimisations}
                                     />
                                 ))}
                             </ol>
@@ -250,12 +236,9 @@ function groupGeometries(links: GeometryLink[]) {
     return [...byRef.values()]
 }
 
-function ObservationItem({ observation, position, row, singlePoints, optimisations }: {
+function ObservationItem({ observation, position }: {
     observation: Observation
     position: number
-    row: ShapeRow | undefined
-    singlePoints: SinglePointsState
-    optimisations: SinglePointsState
 }) {
     const core = observation.conformer_observation
     const geometries = observation.geometries ?? []
@@ -266,11 +249,6 @@ function ObservationItem({ observation, position, row, singlePoints, optimisatio
                 <ReviewChip status={core.review.status} explain={false} />{" "}
                 <span className="observation-origin">Origin: {words(core.scientific_origin) ?? "not recorded"}</span>
             </p>
-            {row ? (
-                <ObservationEvidence row={row} singlePoints={singlePoints} optimisations={optimisations} />
-            ) : (
-                <p className="empty-projection">No calculation rows were returned for this observation.</p>
-            )}
             {geometries.length > 0 && (
                 <p className="observation-geometries">
                     Geometry output: {geometries.map(({ calculation_ref: calculationRef, geometry }) => (
