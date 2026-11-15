@@ -1,6 +1,12 @@
 import pytest
 
-from app.user_agent import CONTACT_EMAIL_ENV, PROJECT_URL, browser_compatible_user_agent, tckdb_user_agent, without_contact
+from app.user_agent import (
+    CONTACT_EMAIL_ENV,
+    PROJECT_URL,
+    browser_compatible_user_agent,
+    tckdb_user_agent,
+    without_contact,
+)
 
 
 def test_user_agent_names_the_project_without_a_contact_by_default(monkeypatch):
