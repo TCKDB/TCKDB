@@ -103,6 +103,6 @@ describe("NetworkKtpHeatmap", () => {
         const { container } = render(mount("net_a"))
         await screen.findByRole("slider", { name: "Pressure" })
         for (const value of Array.from(container.querySelectorAll(".ktp-value"))) expect(value).toHaveAttribute("aria-hidden", "true")
-        expect(container.querySelector(".ktp-caption")!.textContent).toContain("The table has the same values.")
+        expect(container.querySelector(".ktp-caption")!.textContent).toContain("† is outside")
     })
 })

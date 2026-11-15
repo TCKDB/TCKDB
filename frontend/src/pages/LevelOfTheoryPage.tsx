@@ -38,7 +38,7 @@ import type {
 import { publicCitationText } from "../domain/literatureCitation"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
-const LEVEL_OF_THEORY_LEDE = ledeText`How calculations were run: the method, the basis set and the other choices below.`
+const LEVEL_OF_THEORY_LEDE = ledeText`Method, basis set and other settings.`
 
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
@@ -150,12 +150,7 @@ function SoftwareSection({ breakdown, available }: {
     const workflowTools = breakdown?.workflow_tools ?? []
     return (
         <section className="ledger-section" aria-labelledby="lot-software-heading">
-            <SectionHeading
-                id="lot-software-heading"
-                intro="Software seen at this level, with counts."
-            >
-                Observed software
-            </SectionHeading>
+            <SectionHeading id="lot-software-heading">Observed software</SectionHeading>
             {available && (software.length > 0 || workflowTools.length > 0) ? (
                 <div className="table-scroll">
                     <table className="data-table" aria-label="Software and workflow tools observed at this level of theory">

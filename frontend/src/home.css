@@ -202,28 +202,8 @@
 
 .home-read-body {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: var(--s-5);
-    align-items: start;
-}
-
-.home-read-steps {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-.home-read-steps li {
-    padding: var(--s-3) 0;
-    border-top: 1px solid var(--line);
-    color: var(--ink-2);
-    font: var(--type-body-font);
-    letter-spacing: var(--type-body-tracking);
-}
-
-.home-read-steps li:first-child {
-    border-top: 0;
-    padding-top: 0;
+    grid-template-columns: minmax(0, 40rem);
+    gap: var(--s-3);
 }
 
 .home-callout {
@@ -318,10 +298,6 @@
 }
 
 @media (max-width: 760px) {
-    .home-read-body {
-        grid-template-columns: minmax(0, 1fr);
-    }
-
     .home-counts > div {
         padding: var(--s-4) 0;
     }

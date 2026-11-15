@@ -475,7 +475,7 @@ describe("NetworkEntryPage -- network map", () => {
         handleEverything({ stateEnergies: [{ state_composition_hash: "hash_well", energy_kj_mol: 0, energy_zero_convention: "lowest_state", correction_convention: "electronic_only" }] })
         page()
         await screen.findByRole("heading", { name: "Energies" })
-        expect(await screen.findByText("Energies are electronic only, relative to the lowest state; they are not free energies.")).toBeVisible()
+        expect(await screen.findByText("Electronic energies relative to the lowest state, not free energies.")).toBeVisible()
         const summary = screen.getByText("Energy coverage", { selector: "summary" })
         expect(summary.closest("details")).not.toHaveAttribute("open")
     })
@@ -700,7 +700,7 @@ describe("NetworkEntryPage -- k(T,P) heat map", () => {
         await waitFor(() => expect(container.querySelectorAll("svg.ktp-svg .ktp-value").length).toBeGreaterThan(0))
         const marked = Array.from(container.querySelectorAll("svg.ktp-svg .ktp-value")).filter((value) => value.textContent?.endsWith("†"))
         expect(marked).toHaveLength(5)
-        expect(container.querySelector(".ktp-caption")!.textContent).toMatch(/† is outside the stated range \(300–2000 K, 0\.01–100 bar\)\. The table has the same values\./)
+        expect(container.querySelector(".ktp-caption")!.textContent).toMatch(/† is outside 300–2000 K, 0\.01–100 bar\./)
         expect(container.querySelector(".ktp-caption")!.textContent).not.toMatch(/nk_cheb1|nsolve_test1/)
     })
 

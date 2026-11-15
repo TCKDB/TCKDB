@@ -83,7 +83,7 @@ export function describeMadeUnder(m: MadeUnder, kind: MadeUnderKind = "assessmen
         return {
             state: "current",
             badge: null,
-            sentence: `${did} under ${rubricPhrase(m.rubric)}, version ${assessed}, the current version.`,
+            sentence: `${did} under ${rubricPhrase(m.rubric)}, version ${assessed} (current).`,
         }
     }
     if (m.state === "inputs_unchecked") {

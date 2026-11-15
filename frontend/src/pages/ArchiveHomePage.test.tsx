@@ -247,12 +247,10 @@ describe("ArchiveHomePage: how to read a value", () => {
         server.use(...countHandlers())
         page()
         const section = screen.getByRole("heading", { name: "How to read a value" }).closest("section") as HTMLElement
-        const steps = within(section).getAllByRole("listitem")
-        expect(steps).toHaveLength(4)
-        expect(steps[0]).toHaveTextContent("uncertainty")
-        expect(steps[1]).toHaveTextContent("calculation")
-        expect(steps[2]).toHaveTextContent("level of theory")
-        expect(steps[3]).toHaveTextContent("review status")
+        expect(within(section).getByText(/value ± uncertainty unit/)).toBeInTheDocument()
+        expect(within(section).getByText(/Source calculation/)).toBeInTheDocument()
+        expect(within(section).getByText(/Level of theory: method and basis set/)).toBeInTheDocument()
+        expect(within(section).getByText(/“Not reviewed” means not yet checked, not wrong/)).toBeInTheDocument()
         expect(within(section).getByText(/Illustration with placeholder wording/)).toBeInTheDocument()
         const figure = section.querySelector("figure") as HTMLElement
         const sample = figure.cloneNode(true) as HTMLElement

@@ -52,7 +52,7 @@ describe("entryLede", () => {
     }) as unknown as SpeciesEntryProjection
 
     it("words a recorded multiplicity, falling back to the number, never to 'not recorded'", () => {
-        expect(entryLede(entry(3))).toContain("charge −1, triplet, ground state")
+        expect(entryLede(entry(3))).toContain("Charge −1, triplet, ground state")
         expect(entryLede(entry(9))).toContain("multiplicity 9")
         expect(entryLede(entry(9, "doubly_excited"))).toContain("doubly excited")
         expect(entryLede(entry(9))).not.toContain("not recorded")

@@ -195,7 +195,7 @@ function CompareDocument({ species }: { species: SpeciesOverview }) {
                         { label: "Compare" },
                     ]} />
                     <h1>Compare values for {name}</h1>
-                    <p className="note" role="note">Side by side, not ranked. No differences across levels or programs; nothing is filled in from another record.</p>
+                    <p className="note" role="note">Side by side, not ranked; nothing is filled in from another record.</p>
                 </>}
             >
                 <WalkStatus

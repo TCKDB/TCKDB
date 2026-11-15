@@ -179,7 +179,7 @@ function GroupProfiles({ group, position, reads, readRefs, labels, versions, inl
     const matching = profilesOfGroup(group, group.entryRefs.flatMap((ref) => reads.get(ref)?.profiles ?? []))
     let body
     if (!group.level || !group.program) {
-        body = <p className="empty-projection">These records do not state both an energy level of theory and a program, so no energy profile can be matched to them.</p>
+        body = <p className="empty-projection">These records do not state both an energy level of theory and a program; no profile can be matched.</p>
     } else if (matching.length > 0) {
         body = <Profiles read={{ profiles: matching }} labels={labels} showLevel={false} />
     } else {
@@ -232,7 +232,7 @@ function CompareDocument({ reactionRef, first, labels }: { reactionRef: string; 
                         { label: "Compare" },
                     ]} />
                     <h1>Compare rate coefficients for {equation}</h1>
-                    <p className="note" role="note">Side by side, not ranked. Differences only within one group; nothing is filled in from another record.</p>
+                    <p className="note" role="note">Side by side, not ranked; nothing is filled in from another record.</p>
                 </>}
             >
                 <WalkStatus

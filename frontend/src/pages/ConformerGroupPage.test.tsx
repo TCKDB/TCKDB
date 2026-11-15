@@ -207,7 +207,7 @@ describe("ConformerGroupPage", () => {
         serve()
         page()
         await screen.findByRole("heading", { level: 1, name: /^Conformer Group 1/ })
-        expect(screen.getByText(/One 3D shape this molecule can take, deposited as 2 observations and 3 calculations/)).toBeVisible()
+        expect(screen.getByText(/One 3D shape: 2 observations and 3 calculations/)).toBeVisible()
     })
 
     it("shows the review status as a word beside the glyph", async () => {

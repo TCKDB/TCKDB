@@ -206,7 +206,7 @@ describe("molecule page: header", () => {
         expect(screen.getByText("Conformers · Thermochemistry · Statistical mechanics")).toBeVisible()
         expect(screen.queryByText("Entry kind / state")).toBeNull()
         expect(document.querySelector(".record-lede")).toHaveTextContent(
-            "One version of this molecule: charge 0, doublet, ground state, an energy minimum.",
+            "Charge 0, doublet, ground state, an energy minimum.",
         )
         expect(document.title).toBe("CH3 · Molecule · TCKDB")
     })
@@ -454,7 +454,7 @@ describe("molecule page: numbers for this entry", () => {
         cleanup()
         resetAllRequestCaches()
         await open({ listing: [entrySummary(entryRef, "ground", 4)] })
-        expect(await screen.findByText("This is the only version listed for this molecule.")).toBeVisible()
+        await waitFor(() => expect(screen.queryByRole("heading", { name: "Other versions of this molecule" })).not.toBeInTheDocument())
     })
 
     it("keeps depositor text, and a point group that is not one, out of everything but a depositor note", async () => {
@@ -466,7 +466,7 @@ describe("molecule page: numbers for this entry", () => {
         setAt(planted.value, "statmech.0.statmech.point_group", ADVERSARIAL.pointGroup)
         const region = await open({ thermoRecords: planted.value.thermo, statmechRecords: planted.value.statmech, entries: planted.value.entries })
         await waitFor(() => expect(rowRefs(region)).toHaveLength(4))
-        await screen.findByText("This is the only version listed for this molecule.")
+        await waitFor(() => expect(screen.queryByRole("heading", { name: "Other versions of this molecule" })).not.toBeInTheDocument())
         expect(within(region.querySelector("#statmech-stm_1") as HTMLElement).getByText("Point group").nextElementSibling).toHaveTextContent("Not shown")
         expect(document.body.innerHTML).not.toContain(DEPOSITOR_SENTINEL)
         expectDepositorTextOnlyInNotes()

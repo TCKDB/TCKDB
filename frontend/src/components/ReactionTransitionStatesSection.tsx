@@ -20,11 +20,11 @@ const STAGE_LABEL: Record<string, string> = {
     ts_guess: "guess",
 }
 
-const ENTRY_STATUS_STAGES: { key: string; label: string }[] = [
-    { key: "guess", label: "Guess" },
-    { key: "optimized", label: "Optimized" },
-    { key: "validated", label: "Validated" },
-]
+const ENTRY_STATUS_WORDS: Readonly<Record<string, string>> = { guess: "Guess", optimized: "Optimized", validated: "Validated", rejected: "Rejected" }
+
+function statusWord(status: string | null | undefined): string {
+    return status ? (ENTRY_STATUS_WORDS[status] ?? status) : "Not recorded"
+}
 
 /**
  * The Transition states section: one block per
@@ -130,10 +130,8 @@ function TransitionStateBlock({ ts, words, calculationsByRef }: {
             <dl className="kv-list">
                 <div><dt>Entry</dt><dd><RecordLink kind="transition-state" to={`/transition-state-entries/${ts.transition_state_entry_ref}`} label={words} /></dd></div>
                 <div><dt>Review</dt><dd><ReviewChip status={ts.review.status} explain={false} /></dd></div>
+                <div><dt>Status</dt><dd data-testid="ts-status">{statusWord(ts.status)}</dd></div>
             </dl>
-
-            <p className="t-label reaction-ts-status-label">Status</p>
-            <StatusStages status={ts.status} />
 
             <p className="reaction-ts-picture-link"><Link to={`/transition-state-entries/${ts.transition_state_entry_ref}`}>Picture and 3D view{" "}<span className="reaction-ts-picture-link-for">of {words.toLowerCase()}</span></Link></p>
 
@@ -196,18 +194,5 @@ function TransitionStateBlock({ ts, words, calculationsByRef }: {
                     </p>
                 )}
         </div>
-    )
-}
-
-function StatusStages({ status }: { status: string | null | undefined }) {
-    if (status === "rejected") return <p className="reaction-ts-stages">rejected</p>
-    return (
-        <ol className="reaction-ts-stages" aria-label="Transition-state entry status" data-testid="ts-status-strip">
-            {ENTRY_STATUS_STAGES.map((stage) => (
-                <li key={stage.key} aria-current={stage.key === status ? "step" : undefined} className={stage.key === status ? "reaction-ts-stage--current" : undefined}>
-                    {stage.label}{stage.key === status && <span className="reaction-ts-stage-mark"> (current)</span>}
-                </li>
-            ))}
-        </ol>
     )
 }

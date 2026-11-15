@@ -18,9 +18,9 @@ function composed(text: string): LedeWord {
 
 /** The one sentence under the title, built from codes only. */
 export function entryLede(entry: SpeciesEntryProjection): LedeText {
-    const charge = composed(`charge ${chargeText(entry.charge) ?? "not recorded"}`)
+    const charge = composed(`Charge ${chargeText(entry.charge) ?? "not recorded"}`)
     const spin = composed(spinWord(entry.multiplicity) ?? `multiplicity ${entry.multiplicity}`)
     const state = codeWord(entry.electronic_state_kind, STATE_WORDS)
     const kind = codeWord(entry.species_entry_kind, KIND_WORDS)
-    return ledeText`One version of this molecule: ${charge}, ${spin}, ${state}, ${kind}.`
+    return ledeText`${charge}, ${spin}, ${state}, ${kind}.`
 }

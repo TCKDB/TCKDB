@@ -90,12 +90,6 @@ function ArchiveHomePage() {
         <section className="home-section home-read" aria-labelledby="home-read">
             <h2 id="home-read" className="home-section-title">How to read a value</h2>
             <div className="home-read-body">
-                <ol className="home-read-steps">
-                    <li><span className="home-callout" aria-hidden="true">1</span> Number, uncertainty and unit; computed, measured or estimated.</li>
-                    <li><span className="home-callout" aria-hidden="true">2</span> Its source: the calculation behind it.</li>
-                    <li><span className="home-callout" aria-hidden="true">3</span> Its level of theory: method and basis set.</li>
-                    <li><span className="home-callout" aria-hidden="true">4</span> Its review status. “Not reviewed” means not yet checked, not wrong.</li>
-                </ol>
                 <figure className="home-read-sample">
                     <figcaption>Illustration with placeholder wording. It is not data.</figcaption>
                     <p className="home-read-quantity">Enthalpy of formation</p>
@@ -104,6 +98,7 @@ function ArchiveHomePage() {
                     <p className="home-read-line"><span className="home-callout" aria-hidden="true">3</span> Level of theory: method and basis set</p>
                     <p className="home-read-line"><span className="home-callout" aria-hidden="true">4</span> <ReviewChip status="not_reviewed" explain={false} /></p>
                 </figure>
+                <p className="note">“Not reviewed” means not yet checked, not wrong.</p>
             </div>
         </section>
 
