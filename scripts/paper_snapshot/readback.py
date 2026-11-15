@@ -7,6 +7,8 @@ One sample per configured source:
 * E2: n-butane. Its calculation count equals the sources'; one output log is downloaded by digest and its SHA-256
   equals the digest requested and a source file's.
 * Formic acid model: HOCHO. Its stored NASA-7 coefficients and temperature ranges equal the CHEMKIN file's.
+* ARC runs: CH4 + OH (``rotor_scan_rxn_188``). Its transition state's output logs are files of the run folder's
+  ``calcs/TSs``; one is downloaded by digest and its SHA-256 equals the digest requested.
 
 Registers a reader account through open registration. A source with no entry is skipped.
 """
@@ -106,6 +108,31 @@ def check_chemkin(client, cfg: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def check_arc(client, cfg: dict[str, Any]) -> dict[str, Any]:
+    run = next(r for r in cfg["runs"] if r.endswith("rotor_scan_rxn_188"))
+    run_dir = Path(cfg["runs_root"]).expanduser() / run
+    source_digests = {
+        hashlib.sha256(p.read_bytes()).hexdigest() for p in (run_dir / "calcs" / "TSs").rglob("*") if p.is_file()
+    }
+    kinetics = client.search_kinetics(reactants=["C", "[OH]"], products=["[CH3]", "O"])["records"]
+    reaction_ref = kinetics[0]["reaction"]["reaction_ref"]
+    states = client.search_transition_states(reaction_ref=reaction_ref)["records"]
+    entry_ref = states[0]["transition_state_entry"]["transition_state_entry_ref"]
+    artifacts = client.search_artifacts(transition_state_entry_ref=entry_ref, artifact_kind="output_log", limit=200)
+    digests = sorted({r["artifact"]["sha256"] if "artifact" in r else r["sha256"] for r in artifacts["records"]})
+    asked = digests[0] if digests else None
+    body = client.download_artifact(asked) if asked else b""
+    return {
+        "sample": f"{run}: C + [OH] <=> [CH3] + O, transition state entry {entry_ref}",
+        "kinetics_records_found": len(kinetics),
+        "transition_state_output_logs_found": len(digests),
+        "output_logs_that_are_run_files": sum(1 for d in digests if d in source_digests),
+        "downloaded_digest_matches_request": hashlib.sha256(body).hexdigest() == asked,
+        "pass": bool(kinetics) and bool(digests) and set(digests) <= source_digests
+        and hashlib.sha256(body).hexdigest() == asked,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--api-url", required=True)
@@ -117,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
     session.register_depositor("snapshot_reader", "snapshot-reader-pass", "reader@snapshot.invalid", "Snapshot read-back")
     results: dict[str, Any] = {}
     with session.client() as client:
-        for name, check in (("e2_conformers", check_e2), ("chemkin_formic_acid", check_chemkin)):
+        for name, check in (("e2_conformers", check_e2), ("chemkin_formic_acid", check_chemkin), ("arc_runs", check_arc)):
             entry = sources.get(name)
             if not entry or not entry.get("enabled", True):
                 results[name] = {"skipped": "no entry in the sources config", "pass": True}
