@@ -954,9 +954,9 @@ def _artifact_ids_for_calculations(
         return []
     return list(
         session.scalars(
-            select(CalculationArtifact.id).where(
-                CalculationArtifact.calculation_id.in_(ids)
-            )
+            select(CalculationArtifact.id)
+            .where(CalculationArtifact.calculation_id.in_(ids))
+            .order_by(CalculationArtifact.id)
         ).all()
     )
 
