@@ -4,8 +4,9 @@
 
 One sample per configured source:
 
-* E2: n-butane. Its calculation count equals the sources' and its output-log digests equal the source files' (every
-  level listed); one output log is downloaded by digest and its SHA-256 equals the digest requested and a source file's.
+* E2: n-butane. Every output log of the E2 tasks (every level listed) is stored on its species entry, on as many
+  calculations as the tasks have; other sources' logs on the same entry are counted, not compared. One output log is
+  downloaded by digest and its SHA-256 equals the digest requested.
 * Formic acid model: HOCHO. Its stored NASA-7 coefficients and temperature ranges equal the CHEMKIN file's.
 
 Registers a reader account through open registration. A source with no entry is skipped.
@@ -56,27 +57,25 @@ def check_e2(client, cfg: dict[str, Any]) -> dict[str, Any]:
 
     species = client.search_species(smiles="CCCC", include=["conformers"])["records"]
     entry = species[0]["entries"][0]
-    found_calcs = entry["availability"]["calculation_count"]
 
     artifacts = client.search_artifacts(species_entry_ref=entry["species_entry_ref"], artifact_kind="output_log", limit=200)
-    digests = sorted({r["artifact"]["sha256"] if "artifact" in r else r["sha256"] for r in artifacts["records"]})
+    mine = [r for r in artifacts["records"] if r["artifact"]["sha256"] in source_digests]
+    digests = sorted({r["artifact"]["sha256"] for r in mine})
+    found_calcs = len({r["calculation"]["calculation_ref"] for r in mine})
     asked = digests[0] if digests else None
     body = client.download_artifact(asked) if asked else b""
     recomputed = hashlib.sha256(body).hexdigest()
     return {
         "sample": "n-butane (CCCC), species entry " + entry["species_entry_ref"],
         "calculations_expected": expected_calcs,
-        "calculations_found": found_calcs,
+        "calculations_with_a_source_output_log": found_calcs,
         "output_log_digests_found": len(digests),
         "output_log_digests_expected": len(source_digests),
+        "output_logs_of_the_entry_from_other_sources": len(artifacts["records"]) - len(mine),
         "downloaded_digest": asked,
         "downloaded_bytes": len(body),
         "download_digest_matches_request": recomputed == asked,
-        "download_digest_is_a_source_file": asked in source_digests,
-        "pass": found_calcs == expected_calcs
-        and set(digests) == source_digests
-        and recomputed == asked
-        and asked in source_digests,
+        "pass": found_calcs == expected_calcs and set(digests) == source_digests and recomputed == asked,
     }
 
 
