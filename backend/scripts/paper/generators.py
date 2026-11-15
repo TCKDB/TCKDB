@@ -4,11 +4,11 @@ Each function takes a :class:`~sqlalchemy.orm.Session` on the (restored)
 publication database and returns a plain mapping. Rules, enforced by the byte
 comparison in the deposit round trip rather than by convention:
 
-* every collection is ordered by public ref (or, for the fixture mechanism,
-  by source order), never by set/dict iteration or database id;
-* no wall-clock values -- timestamps that appear are *data* (a submission's
-  ``submitted_at``), never ``now()``;
-* database primary keys never appear; public refs do.
+* every collection is ordered by content (or, for the fixture mechanism,
+  by source order), never by public ref, set/dict iteration or database id,
+  so two databases holding the same science give the same order;
+* no wall-clock values and no deposit or review timestamps;
+* database primary keys never appear; public refs do, as values.
 """
 
 from __future__ import annotations
@@ -55,6 +55,7 @@ from app.db.models.workflow import WorkflowToolRelease
 from app.services.external_comparison.cp import RUNNER as EXTERNAL_CP_COMPARISON_RUNNER
 from app.services.external_comparison.cp import latest_cp_comparison_for_thermo
 from app.services.machine_review.query import SCIENTIFIC_CHECK_PROVIDER
+from scripts.paper.snapshot_generators import _content_key, _equation
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
@@ -275,7 +276,7 @@ def selected_thermo_by_species(session: Session) -> dict[str, Any]:
                     "scientific_origin": thermo.scientific_origin.value,
                 }
             )
-    rows.sort(key=lambda row: (row["release_tag"], row["species_ref"], row["species_entry_ref"], row["thermo_ref"]))
+    rows.sort(key=lambda row: (row["release_tag"], row["species_smiles"], _content_key(row)))
     return {"selected_thermo": rows, "selections": len(rows)}
 
 
@@ -302,16 +303,10 @@ def candidate_lineage(session: Session) -> dict[str, Any]:
         )
         if count > 1
     ]
-    entries = sorted(
-        (session.get(SpeciesEntry, entry_id) for entry_id in multi),
-        key=lambda entry: entry.public_ref,
-    )
+    entries = [session.get(SpeciesEntry, entry_id) for entry_id in multi]
     out: list[dict[str, Any]] = []
     for entry in entries:
-        candidates = sorted(
-            session.scalars(select(Thermo).where(Thermo.species_entry_id == entry.id)),
-            key=lambda thermo: thermo.public_ref,
-        )
+        candidates = list(session.scalars(select(Thermo).where(Thermo.species_entry_id == entry.id)))
         rows = []
         for thermo in candidates:
             submissions = sorted(
@@ -353,19 +348,27 @@ def candidate_lineage(session: Session) -> dict[str, Any]:
                     "h298_kj_mol": thermo.h298_kj_mol,
                     "s298_j_mol_k": thermo.s298_j_mol_k,
                     "review_state": _review_status(session, SubmissionRecordType.thermo, thermo.id),
-                    "submissions": [
-                        {"submission_ref": s.public_ref, "submitted_at": s.submitted_at} for s in submissions
-                    ],
+                    "submissions": sorted(
+                        (
+                            {"submission_ref": s.public_ref, "submission_kind": getattr(s.submission_kind, "value", s.submission_kind)}
+                            for s in submissions
+                        ),
+                        key=_content_key,
+                    ),
                     "source_calculation_refs": [c.public_ref for c in source_calculations],
                     "workflow_tool_release_commits": sorted(commits),
                     "artifact_digests": sorted(digests),
                 }
             )
+        rows.sort(
+            key=lambda row: (row["h298_kj_mol"] is None, row["h298_kj_mol"] or 0.0, _content_key(row))
+        )
         out.append(
             {
                 "species_entry_ref": entry.public_ref,
                 "species_ref": entry.species.public_ref,
                 "species_smiles": entry.species.smiles,
+                "multiplicity": entry.species.multiplicity,
                 "candidate_count": len(rows),
                 "distinct_submissions": len({s["submission_ref"] for r in rows for s in r["submissions"]}),
                 "distinct_workflow_tool_release_commits": len(
@@ -375,6 +378,7 @@ def candidate_lineage(session: Session) -> dict[str, Any]:
                 "candidates": rows,
             }
         )
+    out.sort(key=lambda row: (row["species_smiles"], row["multiplicity"], _content_key(row)))
     return {"species_entries_with_multiple_candidates": len(out), "lineage": out}
 
 
@@ -385,16 +389,11 @@ def candidate_lineage(session: Session) -> dict[str, Any]:
 
 def transition_state_evidence(session: Session) -> dict[str, Any]:
     """TS entries; those with exactly one imaginary mode; those with a stored Hessian."""
-    entries = list(
-        session.scalars(select(TransitionStateEntry).order_by(TransitionStateEntry.public_ref))
-    )
+    entries = list(session.scalars(select(TransitionStateEntry)))
     rows: list[dict[str, Any]] = []
     for entry in entries:
-        calculations = sorted(
-            session.scalars(
-                select(Calculation).where(Calculation.transition_state_entry_id == entry.id)
-            ),
-            key=lambda calculation: calculation.public_ref,
+        calculations = list(
+            session.scalars(select(Calculation).where(Calculation.transition_state_entry_id == entry.id))
         )
         imaginary_counts: list[int] = []
         hessian_count = 0
@@ -424,12 +423,16 @@ def transition_state_evidence(session: Session) -> dict[str, Any]:
             {
                 "transition_state_entry_ref": entry.public_ref,
                 "transition_state_ref": entry.transition_state.public_ref,
+                "reaction": _equation(entry.transition_state.reaction_entry.reaction),
+                "label": entry.transition_state.label,
+                "review_state": _review_status(session, SubmissionRecordType.transition_state_entry, entry.id),
                 "calculations": len(calculations),
-                "imaginary_mode_counts": imaginary_counts,
+                "imaginary_mode_counts": sorted(imaginary_counts),
                 "has_exactly_one_imaginary_mode": 1 in imaginary_counts,
                 "has_stored_hessian": hessian_count > 0,
             }
         )
+    rows.sort(key=lambda row: (row["reaction"] or "", row["label"] or "", _content_key(row)))
     return {
         "transition_state_entries": len(rows),
         "with_exactly_one_imaginary_mode": sum(1 for r in rows if r["has_exactly_one_imaginary_mode"]),
