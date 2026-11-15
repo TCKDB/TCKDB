@@ -59,9 +59,17 @@ EXPECTED_OUTPUTS = (
     "structure_selection_outcomes",
     "mechanism_roundtrip_counts",
     "mechanism_fixture_provenance",
+    "selected_thermo_by_species",
+    "candidate_lineage",
+    "transition_state_evidence",
+    "use_case_ch4_oh",
+    "ch3_enthalpy_of_formation",
+    "network_n2h3",
+    "chemkin_reconciliation",
+    "species_thermo_sources",
+    "caught_error",
+    "dataset_release",
 )
-#: Registered generators not run for these sources (their outputs would be empty).
-NOT_RUN_UNTIL_FED = ("selected_thermo_by_species", "candidate_lineage", "transition_state_evidence")
 
 #: Config keys holding local paths; omitted from ``snapshot_record.json``.
 PATH_KEYS = frozenset({"root", "fixture_dir", "adapter_path", "runs_root", "arkane_dir"})

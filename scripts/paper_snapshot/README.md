@@ -68,10 +68,25 @@ In `--out-dir`:
 
 Generators run for the snapshot: `corpus_counts`, `conformer_basins`, `calculation_evidence`, `deposit_warnings`,
 `hessian_reanalysis`, `thermo_selection_outcomes`, `structure_selection_outcomes`, `mechanism_roundtrip_counts`,
-`mechanism_fixture_provenance`.
+`mechanism_fixture_provenance`, `selected_thermo_by_species`, `candidate_lineage`, `transition_state_evidence`,
+`use_case_ch4_oh`, `ch3_enthalpy_of_formation`, `network_n2h3`, `chemkin_reconciliation`, `species_thermo_sources`,
+`caught_error` and `dataset_release`.
 
-Registered but not run (empty for these sources): `selected_thermo_by_species`, `candidate_lineage` and
-`transition_state_evidence`. The use-case and network generators are not written.
+- `use_case_ch4_oh`: the computed rate coefficient of C + [OH] => O + [CH3], k(300 K) from its stored fit, the
+  transition state's imaginary frequency and IRC evidence, the levels of the cited energies, and the deposit's warnings.
+- `ch3_enthalpy_of_formation`: every [CH3] thermo record (H298, level, the deposit it came from) and the H298
+  selection answer with a level-of-theory filter.
+- `network_n2h3`: wells, channels and k(T, P) forms of the stored network, and k(1000 K, 1 bar) of NH3N -> N2H3 from
+  the stored Chebyshev fit.
+- `chemkin_reconciliation`: the formic acid model file's reactions against the rate records and reactions stored,
+  with every line not stored as its own reaction and why.
+- `species_thermo_sources`: species with thermo from more than one source, with H298, S298 and Cp(300 K) per record.
+- `caught_error`: the rejected records, the structure-evidence finding, the deposit's warnings and the kinetics
+  selection answer.
+- `dataset_release`: each release's handle, selections, shipped candidates, manifest artifacts and version pins.
+
+Every generator orders its rows by content, never by public ref, and emits no timestamp, so two builds compare equal
+once refs are masked.
 
 ## The literature row depends on the network
 

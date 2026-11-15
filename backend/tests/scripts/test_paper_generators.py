@@ -110,6 +110,13 @@ def test_registry_covers_every_data_claim_and_is_callable():
         "calculation_evidence",
         "deposit_warnings",
         "thermo_selection_outcomes",
+        "use_case_ch4_oh",
+        "ch3_enthalpy_of_formation",
+        "network_n2h3",
+        "chemkin_reconciliation",
+        "species_thermo_sources",
+        "caught_error",
+        "dataset_release",
     }
     assert expected <= set(GENERATORS)
     for name, generator in GENERATORS.items():
@@ -224,7 +231,7 @@ def test_candidate_lineage_lists_submissions_commits_and_artifact_digests(db_ses
     lineage = generators.candidate_lineage(db_session)
     row = next(r for r in lineage["lineage"] if r["species_entry_ref"] == entry.public_ref)
     assert row["candidate_count"] == 2
-    assert [c["thermo_ref"] for c in row["candidates"]] == sorted([first.public_ref, second.public_ref])
+    assert sorted(c["thermo_ref"] for c in row["candidates"]) == sorted([first.public_ref, second.public_ref])
     by_ref = {c["thermo_ref"]: c for c in row["candidates"]}
     assert by_ref[first.public_ref]["workflow_tool_release_commits"] == ["b" * 40]
     assert by_ref[second.public_ref]["artifact_digests"] == ["c" * 64]

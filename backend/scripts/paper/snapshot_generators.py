@@ -1,6 +1,8 @@
 """Generators for the demonstration snapshot (``scripts/paper_snapshot``).
 
 * ``hessian_reanalysis``: every calculation with a stored Hessian or frequency list; a missing Hessian is counted.
+  Its ``summary`` gives stored Hessians of minima and of transition states, the largest frequency difference, and
+  every calculation without a Hessian by reason.
 * ``conformer_basins``: per species entry, its conformer groups and the levels that observed each.
 * ``calculation_evidence``: job files, settings read from them, software and level per calculation.
 * ``deposit_warnings``: stored deposit warnings by code.
@@ -23,6 +25,8 @@ from sqlalchemy.orm import Session
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
+    CalculationFreqMode,
+    CalculationHessian,
     CalculationParameter,
 )
 from app.db.models.common import ThermoTargetKind
@@ -65,6 +69,28 @@ def _content_key(row: dict[str, Any]) -> str:
     return _REF.sub("", json.dumps(row, sort_keys=True, default=str))
 
 
+def _side(reaction, role: str) -> str:
+    names: list[str] = []
+    for participant in reaction.participants:
+        if getattr(participant.role, "value", participant.role) == role:
+            names += [participant.species.smiles] * participant.stoichiometry
+    return " + ".join(sorted(names))
+
+
+def _equation(reaction) -> str | None:
+    """``A + B <=> C + D`` (``=>`` when irreversible), each side in SMILES order."""
+    if reaction is None:
+        return None
+    arrow = "<=>" if reaction.reversible else "=>"
+    return f"{_side(reaction, 'reactant')} {arrow} {_side(reaction, 'product')}"
+
+
+def _ts_reaction(calc) -> str | None:
+    """The reaction of a calculation's transition-state entry, or None for any other calculation."""
+    entry = calc.transition_state_entry if calc is not None else None
+    return _equation(entry.transition_state.reaction_entry.reaction) if entry is not None else None
+
+
 def _software_label(release) -> str:
     if release is None:
         return "(no software)"
@@ -77,8 +103,75 @@ def _software_label(release) -> str:
 # ---------------------------------------------------------------------------
 
 
+HESSIAN_DIFFERENCE_MEASURED = (
+    "per mode, |recovered - stored| in cm-1: the harmonic frequency recovered by diagonalising the stored "
+    "mass-weighted Hessian, against the frequency stored for the same calculation (modes paired in ascending order)"
+)
+
+
+def _owner_kind(calc) -> str:
+    if calc.transition_state_entry_id is not None:
+        return "transition_states"
+    if calc.species_entry_id is not None:
+        return "minima"
+    return "other"
+
+
+def _largest(records: list[dict[str, Any]]) -> dict[str, Any] | None:
+    analysed = [r for r in records if r.get("max_abs_deviation_cm1") is not None]
+    if not analysed:
+        return None
+    top = max(analysed, key=lambda r: (r["max_abs_deviation_cm1"], _content_key(r)))
+    return {
+        "max_abs_deviation_cm1": top["max_abs_deviation_cm1"],
+        "within_tolerance": top.get("within_tolerance"),
+        "species_smiles": top["species_smiles"],
+        "reaction": top["reaction"],
+        "level_of_theory": top["level_of_theory"],
+        "calculation_type": top["calculation_type"],
+        "calculation_ref": top["calculation_ref"],
+    }
+
+
+def _hessian_summary(session: Session, records: list[dict[str, Any]], by_ref: dict[str, Calculation]) -> dict[str, Any]:
+    """Stored Hessians by owner, the largest difference by owner, and every calculation without a Hessian by reason."""
+    with_hessian = set(session.scalars(select(CalculationHessian.calculation_id)))
+    with_frequencies = set(session.scalars(select(CalculationFreqMode.calculation_id).distinct()))
+    stored: Counter[str] = Counter()
+    without: dict[str, Counter[str]] = defaultdict(Counter)
+    for calc in session.scalars(select(Calculation)):
+        owner = _owner_kind(calc)
+        if calc.id in with_hessian:
+            stored[owner] += 1
+            continue
+        if calc.id in with_frequencies:
+            reason = "frequency list stored, Hessian not stored"
+        elif calc.type.value == "freq":
+            reason = "frequency calculation with neither a frequency list nor a Hessian stored"
+        else:
+            reason = f"{calc.type.value} calculation: not a frequency calculation"
+        without[reason][owner] += 1
+    owners = ("minima", "transition_states", "other")
+    by_owner = {owner: [r for r in records if _owner_kind(by_ref[r["calculation_ref"]]) == owner] for owner in owners}
+    return {
+        "difference_measured": HESSIAN_DIFFERENCE_MEASURED,
+        "stored_hessians": {owner: stored[owner] for owner in owners},
+        "analysed": {owner: sum(1 for r in by_owner[owner] if r["status"] == "analysed") for owner in owners},
+        "within_tolerance": {owner: sum(1 for r in by_owner[owner] if r.get("within_tolerance")) for owner in owners},
+        "largest_difference": {owner: _largest(by_owner[owner]) for owner in owners},
+        "calculations_without_a_hessian": sum(sum(c.values()) for c in without.values()),
+        "without_a_hessian_by_reason": {
+            reason: {owner: counts[owner] for owner in owners} for reason, counts in sorted(without.items())
+        },
+    }
+
+
 def hessian_reanalysis(session: Session) -> dict[str, Any]:
-    """Return the Hessian reanalysis of every calculation with a stored Hessian or frequency list, ordered by content."""
+    """Return the Hessian reanalysis of every calculation with a stored Hessian or frequency list, ordered by content.
+
+    ``summary`` counts stored Hessians of minima and of transition states, names the largest difference per owner
+    kind, and counts every calculation without a stored Hessian by reason.
+    """
     out = _hessian_reanalysis(session, include_modes=True)
     by_ref = {
         calc.public_ref: calc
@@ -89,16 +182,19 @@ def hessian_reanalysis(session: Session) -> dict[str, Any]:
         entry = calc.species_entry if calc is not None else None
         record["species_smiles"] = entry.species.smiles if entry is not None else None
         record["species_multiplicity"] = entry.species.multiplicity if entry is not None else None
+        record["reaction"] = _ts_reaction(calc)
         record["level_of_theory"] = _level_label(calc.lot) if calc is not None else None
     out["records"].sort(
         key=lambda r: (
             r["species_smiles"] or "",
             r["species_multiplicity"] or 0,
+            r["reaction"] or "",
             r["level_of_theory"] or "",
             r["calculation_type"] or "",
             _content_key(r),
         )
     )
+    out["summary"] = _hessian_summary(session, out["records"], by_ref)
     return out
 
 
