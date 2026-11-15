@@ -7,6 +7,8 @@ One sample per configured source:
 * E2: n-butane. Its calculation count equals the sources'; one output log is downloaded by digest and its SHA-256
   equals the digest requested and a source file's.
 * Formic acid model: HOCHO. Its stored NASA-7 coefficients and temperature ranges equal the CHEMKIN file's.
+* N2H3 network: one network of that name, citing the paper's DOI; every stored Chebyshev fit, evaluated by the server at
+  1000 K and 1 bar, equals the same evaluation of the fits read from the Arkane ``output.py`` (relative 1e-9).
 
 Registers a reader account through open registration. A source with no entry is skipped.
 """
@@ -106,6 +108,44 @@ def check_chemkin(client, cfg: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def check_pdep(client, cfg: dict[str, Any]) -> dict[str, Any]:
+    from app.chemistry.network_kinetics_eval import evaluate_chebyshev
+    from scripts.pdep_ingestion.builder import build_network_pdep_payload
+
+    payload, _ = build_network_pdep_payload(Path(cfg["arkane_dir"]).expanduser(), network_only=True)
+    fits = [c for c in payload["solve"]["channel_kinetics"] if c["model_kind"] == "chebyshev"]
+    temperature, pressure = 1000.0, 1.0
+    expected = sorted(
+        evaluate_chebyshev(
+            temperature, pressure, coefficients=c["chebyshev"]["coefficients"], tmin_k=c["tmin_k"], tmax_k=c["tmax_k"],
+            pmin_bar=c["pmin_bar"], pmax_bar=c["pmax_bar"], stores_log10_k=c["stores_log10_k"],
+        ).k
+        for c in fits
+    )
+    network = client.search_networks(has_chebyshev=True, limit=50)["records"]
+    mine = [r for r in network if r["network"]["name"] == payload["name"]]
+    ref = mine[0]["network"]["network_ref"]
+    doi = (mine[0].get("literature") or {}).get("doi")
+    stored = client.search_network_kinetics(network_ref=ref, limit=200)["records"]
+    found = sorted(
+        client.evaluate_network_kinetics(
+            r["network_kinetics"]["network_kinetics_ref"], temperature_k=temperature, pressure_bar=pressure
+        )["points"][0]["k"]
+        for r in stored
+    )
+    agree = len(found) == len(expected) and all(abs(a - b) <= 1e-9 * abs(b) for a, b in zip(found, expected))
+    cited = (cfg.get("literature") or {}).get("doi", "10.1039/d4cp03837a")
+    return {
+        "sample": f"network {payload['name']} ({ref})",
+        "networks_found": len(mine),
+        "chebyshev_fits_expected": len(expected),
+        "chebyshev_fits_found": len(found),
+        "k_at_1000_K_1_bar_equal_to_the_arkane_fits": agree,
+        "literature_doi": doi,
+        "pass": len(mine) == 1 and agree and (doi or "").lower() == cited.lower(),
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--api-url", required=True)
@@ -117,7 +157,9 @@ def main(argv: list[str] | None = None) -> int:
     session.register_depositor("snapshot_reader", "snapshot-reader-pass", "reader@snapshot.invalid", "Snapshot read-back")
     results: dict[str, Any] = {}
     with session.client() as client:
-        for name, check in (("e2_conformers", check_e2), ("chemkin_formic_acid", check_chemkin)):
+        for name, check in (
+            ("e2_conformers", check_e2), ("chemkin_formic_acid", check_chemkin), ("pdep_network", check_pdep)
+        ):
             entry = sources.get(name)
             if not entry or not entry.get("enabled", True):
                 results[name] = {"skipped": "no entry in the sources config", "pass": True}

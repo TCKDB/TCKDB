@@ -21,9 +21,21 @@ instance, and the script is the deliverable, not the database.
   - Where to get it: the files are in this repository, `backend/tests/integration/fixtures/rmg_formic_acid_wu2026/`.
   - The adapter's own import warnings (wrong `DUPLICATE` flags) are kept in the report; the importer never
     repairs them.
-- **Source 2, ARC runs** and **source 3, N2H3 pressure-dependent network**: stubs (`source_arc.py`,
-  `source_pdep.py`). No entry in the sources file means the step is skipped and the build says so. An enabled
-  entry is a configuration error: the deposit step is not written yet.
+- **Source 2, ARC runs**: a stub (`source_arc.py`). No entry in the sources file means the step is skipped and the
+  build says so. An enabled entry is a configuration error: the deposit step is not written yet.
+- **Source 3, N2H3 pressure-dependent network** (`source_pdep.py`): Keslin, Kaplan and Grinberg Dana, *Phys. Chem.
+  Chem. Phys.* 2025, 27, 2680 (doi:10.1039/d4cp03837a), the Arkane run `Final_Final_CCSDT_F12_Aug_F12`.
+  - Route: the PDep ingester (`backend/scripts/pdep_ingestion`, `network_only=True`) builds one
+    `NetworkPDepUploadRequest` from `input.py`, `output.py` and `supporting_information.csv`, posted to
+    `/uploads/networks/pdep` with the paper as its `literature`.
+  - Deposited: 11 species, 5 transition states with geometry (TS7 has none in the run and enters only its
+    micro-reaction), 6 micro-reactions, 7 states, 21 channels with their Chebyshev fits.
+  - Not deposited: `N` and `NH3`, which `input.py` declares but no isomer, reactant channel, reaction or bath gas names;
+    N2H3's rotor treatment (`rrho_1d` in `output.py`), because the run's files do not state the rotor's torsion atoms
+    and no scan log is in the directory. The ingester's gap report is in `build_report.json`
+    (`pdep_network.ingestion`).
+  - The server fetches the DOI's metadata and stores the fetched title (`literature_title_mismatch`: the registry's
+    title carries subscript markup).
 
 ## Run it
 

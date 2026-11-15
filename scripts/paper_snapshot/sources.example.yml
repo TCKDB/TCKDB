@@ -47,7 +47,8 @@ sources:
   #   adapter_path: /path/to/tckdb-adapters
   #   runs_root: /path/to/arc/runs
 
-  # Source 3: the N2H3 pressure-dependent network. Not implemented.
+  # Source 3: the N2H3 pressure-dependent network (Keslin et al., PCCP 2025), through the PDep ingester. The directory
+  # must hold the Arkane run's input.py, output.py and supporting_information.csv.
   # pdep_network:
   #   enabled: true
   #   arkane_dir: /path/to/Final_Final_CCSDT_F12_Aug_F12
