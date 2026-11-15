@@ -78,7 +78,8 @@ sources:
   #   - tckdb_test_20261110/19_intra_no2_ono_conversion
   #   - snapshot_reruns_20261110/rotor_scan_rxn_30
 
-  # Source 3: the N2H3 pressure-dependent network. Not implemented.
+  # Source 3: the N2H3 pressure-dependent network (Keslin et al., PCCP 2025), through the PDep ingester. The directory
+  # must hold the Arkane run's input.py, output.py and supporting_information.csv.
   # pdep_network:
   #   enabled: true
   #   arkane_dir: /path/to/Final_Final_CCSDT_F12_Aug_F12
