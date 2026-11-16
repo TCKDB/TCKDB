@@ -87,15 +87,21 @@ row into the database, byte-exact.
 
 ## 4. Regenerate the expected outputs and byte-diff them
 
+Check the deposit first: the offline verify refuses a file the manifest does not list,
+which includes a planted `__pycache__`.
+
 ```bash
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=<deposit>/scripts conda run -n tckdb_env python backend/scripts/ops/generate_expected_outputs.py --generators ${generators_spec} --output-dir /tmp/regenerated
+conda run -n tckdb_env python backend/scripts/ops/build_publication_deposit.py verify <deposit>
+PYTHONPYCACHEPREFIX="$$(mktemp -d)" PYTHONPATH=<deposit>/scripts conda run -n tckdb_env python backend/scripts/ops/generate_expected_outputs.py --generators ${generators_spec} --output-dir /tmp/regenerated
 diff -r <deposit>/expected_outputs /tmp/regenerated && echo "expected outputs reproduced byte for byte"
 ```
 
 Run it from the root of the checkout of step 1. `PYTHONPATH` makes the registry
 `${generators_spec}` import from the copy of its package under `<deposit>/scripts/`,
-so the sources that run are the ones the manifest binds; `PYTHONDONTWRITEBYTECODE` keeps
-the deposit directory unchanged.
+so the sources that run are the ones the manifest binds. `PYTHONPYCACHEPREFIX` sends
+compiled bytecode to a fresh directory, so none is read from or written into the deposit.
+Only the Python sources of the registry's package are deposited; a generator reads
+data from the database or the pinned checkout, not from files beside it.
 
 ## 5. Verify the deposit against the restored database
 

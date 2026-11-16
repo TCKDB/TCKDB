@@ -11,7 +11,7 @@ import pytest
 
 from app.services.deposit import DepositError
 from app.services.deposit.expected_outputs import write_expected_outputs
-from app.services.deposit.generator_spec import load_deposit_generators, load_generators
+from app.services.deposit.generator_spec import assert_sources_within, load_deposit_generators, load_generators
 
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
 _counter = itertools.count()
@@ -128,19 +128,33 @@ def test_deposit_loader_requires_a_root():
         load_deposit_generators("gen_pkg.registry:R", None)
 
 
-@pytest.mark.parametrize("top_level", ["scripts", "app", "tests", "alembic", "tckdb_schemas"])
-def test_deposit_loader_refuses_a_top_level_name_the_checkout_uses(top_level, tmp_path):
+@pytest.mark.parametrize(
+    "top_level", ["scripts", "app", "tests", "alembic", "tckdb_schemas", "sqlalchemy", "turtle", "json"]
+)
+def test_deposit_loader_refuses_a_top_level_name_that_already_names_a_module(top_level, tmp_path):
+    (tmp_path / top_level).mkdir()
+    (tmp_path / top_level / "__init__.py").write_text("")
+    (tmp_path / top_level / "registry.py").write_text("R = {'a': lambda session: {}}\n")
+    before = sys.modules.get(top_level)
     with pytest.raises(DepositError, match="generators_name_collision"):
         load_deposit_generators(f"{top_level}.registry:R", tmp_path)
+    assert sys.modules.get(top_level) is before, "the process's own module must not be evicted"
 
 
-def test_deposit_loader_refuses_a_module_outside_the_root(tmp_path, monkeypatch):
+def test_deposit_loader_accepts_a_reload_from_the_same_root(tmp_path):
+    spec = _package(tmp_path, "R = {'a': lambda session: {}}\n")
+    load_deposit_generators(spec, tmp_path)
+    registry, _ = load_deposit_generators(spec, tmp_path)
+    assert set(registry) == {"a"}
+
+
+def test_deposit_loader_refuses_a_package_importable_from_elsewhere(tmp_path, monkeypatch):
     elsewhere = tmp_path / "elsewhere"
     root = tmp_path / "root"
     root.mkdir()
     spec = _package(elsewhere, "R = {'a': lambda session: {}}\n")
     monkeypatch.syspath_prepend(str(elsewhere))
-    with pytest.raises(DepositError, match="generators_outside_root"):
+    with pytest.raises(DepositError, match="generators_name_collision"):
         load_deposit_generators(spec, root)
 
 
@@ -152,6 +166,23 @@ def test_deposit_loader_refuses_a_file_that_resolves_outside_the_root(tmp_path):
     (root / spec.partition(".")[0] / "linked.py").symlink_to(outside)
     with pytest.raises(DepositError, match="generators_outside_root"):
         load_deposit_generators(spec, root)
+
+
+def test_sources_imported_from_outside_the_package_are_refused(tmp_path):
+    (tmp_path / "helpers.py").write_text("VALUE = 1\n")
+    spec = _package(tmp_path, "import helpers\n\nR = {'a': lambda session: {'v': helpers.VALUE}}\n")
+    _, files = load_deposit_generators(spec, tmp_path)
+    try:
+        with pytest.raises(DepositError, match="generators_outside_package"):
+            assert_sources_within(files, tmp_path)
+    finally:
+        sys.modules.pop("helpers", None)
+
+
+def test_sources_all_inside_the_package_pass(tmp_path):
+    spec = _package(tmp_path, "R = {'a': lambda session: {}}\n")
+    _, files = load_deposit_generators(spec, tmp_path)
+    assert_sources_within(files, tmp_path)
 
 
 @pytest.mark.parametrize(

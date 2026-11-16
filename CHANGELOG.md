@@ -24,7 +24,7 @@ dataset must never require a code release.
 
 ## The publication deposit command takes its generators from `--generators` (Unreleased)
 
-- `build_publication_deposit.py build` requires `--generators module:attr` and `--generator-root`, and refuses without either; the deposit's `scripts/` holds the registry's package tree and `REPRODUCE.md` step 4 runs it from there. The generator runner is now `backend/scripts/ops/generate_expected_outputs.py --generators module:attr`.
+- `build_publication_deposit.py build` requires `--generators module:attr` and `--generator-root`, and refuses without either; the deposit's `scripts/` holds the registry's package tree and `REPRODUCE.md` step 4 runs it from there with bytecode kept out of the deposit. The generator runner is now `backend/scripts/ops/generate_expected_outputs.py --generators module:attr`.
 
 ## Stable order for record links, a calculation's artifact links and release artifact lines (Unreleased)
 

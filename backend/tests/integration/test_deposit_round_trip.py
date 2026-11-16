@@ -28,6 +28,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import py_compile
 import shlex
 import shutil
 import subprocess
@@ -118,12 +119,29 @@ def scratch_db():
         conftest._drop_test_database(db_name)
 
 
+@pytest.fixture
+def fresh_sample_registry():
+    """The registry package is imported from a different root in each test; forget earlier imports."""
+
+    def forget() -> None:
+        for name in [n for n in sys.modules if n == "sample_deposit_generators" or n.startswith("sample_deposit_generators.")]:
+            del sys.modules[name]
+
+    forget()
+    yield
+    forget()
+
+
 def _run_reproduce_step_4(deposit_dir: Path, output_dir: Path, db_name: str) -> subprocess.CompletedProcess[str]:
     """Run, from the checkout root, the command line REPRODUCE.md gives for step 4."""
     reproduce = (deposit_dir / "REPRODUCE.md").read_text()
     lines = [line for line in reproduce.splitlines() if "generate_expected_outputs.py" in line]
     assert len(lines) == 1, "REPRODUCE.md must carry exactly one step-4 command"
-    tokens = shlex.split(lines[0].replace("<deposit>", str(deposit_dir)).replace("/tmp/regenerated", str(output_dir)))
+    cache_prefix = output_dir.parent / "pycache_prefix"
+    cache_prefix.mkdir(exist_ok=True)
+    command = lines[0].replace("<deposit>", str(deposit_dir)).replace("/tmp/regenerated", str(output_dir))
+    assert '"$(mktemp -d)"' in command, "step 4 must send bytecode to a fresh directory"
+    tokens = shlex.split(command.replace('"$(mktemp -d)"', str(cache_prefix)))
     env = _subprocess_env(db_name)
     while "=" in tokens[0] and not tokens[0].startswith("-"):
         key, _, value = tokens.pop(0).partition("=")
@@ -131,6 +149,20 @@ def _run_reproduce_step_4(deposit_dir: Path, output_dir: Path, db_name: str) -> 
     assert tokens[:5] == ["conda", "run", "-n", "tckdb_env", "python"], tokens
     argv = [sys.executable, *tokens[5:]]
     return subprocess.run(argv, cwd=REPO_ROOT, env=env, capture_output=True, text=True)
+
+
+def _plant_bytecode(package_dir: Path, marker: Path) -> Path:
+    """Put a ``__pycache__`` entry for ``registry`` that would run other code if it were read."""
+    source = package_dir / "_planted.py"
+    source.write_text(f"open({str(marker)!r}, 'w').write('ran')\nraise SystemExit('planted bytecode ran')\n")
+    cache = package_dir / "__pycache__"
+    cache.mkdir()
+    target = cache / f"registry.{sys.implementation.cache_tag}.pyc"
+    py_compile.compile(
+        str(source), cfile=str(target), invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH, doraise=True
+    )
+    source.unlink()
+    return target
 
 
 def _publish(session, release, curator, thermo, species_entry):
@@ -265,7 +297,7 @@ def test_cli_restore_into_a_fresh_database_reproduces_the_release_bytes(
 
 
 def test_deposit_round_trip_reproduces_expected_outputs_byte_for_byte(
-    db_session, tmp_path, scratch_db, draft_release, curator, thermo_candidates, species_entry
+    db_session, tmp_path, scratch_db, draft_release, curator, thermo_candidates, species_entry, fresh_sample_registry
 ):
     lineage_entry = _seed_evidence(db_session, curator)
     registry_root = tmp_path / "registry_root"
@@ -323,12 +355,18 @@ def test_deposit_round_trip_reproduces_expected_outputs_byte_for_byte(
     shutil.rmtree(registry_root)  # only the deposited copy of the registry may be imported from here on
     assert (deposit_dir / "scripts" / "sample_deposit_generators" / "registry.py").is_file()
     regenerated = tmp_path / "regenerated"
+    assert (deposit_dir / "scripts" / "sample_deposit_generators" / "helpers" / "counting.py").is_file()
+    planted = _plant_bytecode(deposit_dir / "scripts" / "sample_deposit_generators", tmp_path / "planted_marker")
     generate = _run_reproduce_step_4(deposit_dir, regenerated, scratch_db)
     assert generate.returncode == 0, f"generators failed:\n{generate.stdout}\n{generate.stderr}"
     regenerated_files = sorted(p.name for p in regenerated.iterdir())
     assert regenerated_files == expected_files
     for name in expected_files:
         assert (regenerated / name).read_bytes() == (deposit_dir / "expected_outputs" / name).read_bytes(), name
+
+    assert not (tmp_path / "planted_marker").exists(), "a planted .pyc ran instead of the deposited source"
+    assert sorted(deposit_dir.rglob("*.pyc")) == [planted], "step 4 must not write bytecode into the deposit"
+    shutil.rmtree(planted.parent)
 
     # The counts must reflect the seeded evidence, not pass on an empty corpus.
     counts = json.loads((regenerated / "row_counts.json").read_text())

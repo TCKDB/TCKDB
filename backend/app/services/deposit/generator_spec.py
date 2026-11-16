@@ -9,12 +9,13 @@ shadow a package of the checkout it runs beside.
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import re
 import sys
 from collections.abc import Mapping
 from pathlib import Path
 
-from app.services.deposit.build import DepositError
+from app.services.deposit.errors import DepositError
 from app.services.deposit.expected_outputs import Generator
 
 _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
@@ -43,10 +44,34 @@ def parse_spec(spec: str | None) -> tuple[str, str]:
     return module_name, attr
 
 
+def _locations(top_level: str) -> list[str] | None:
+    """Where ``top_level`` is, or would be, imported from; ``None`` when unknown or built in."""
+    loaded = sys.modules.get(top_level)
+    if loaded is not None:
+        origin = getattr(loaded, "__file__", None)
+        places = [origin] if origin else list(getattr(loaded, "__path__", []))
+        return places or None
+    try:
+        found = importlib.util.find_spec(top_level)
+    except (ImportError, ValueError, AttributeError):
+        return []
+    if found is None:
+        return []
+    if found.origin and found.origin not in ("built-in", "frozen"):
+        return [found.origin]
+    return list(found.submodule_search_locations or []) or None
+
+
+def _collides(top_level: str, root: Path) -> bool:
+    """True when ``top_level`` already names something outside ``root`` that a deposit would shadow."""
+    if top_level in reserved_top_level_names() or top_level in sys.stdlib_module_names:
+        return True
+    places = _locations(top_level)
+    return places is None or any(not Path(place).resolve().is_relative_to(root) for place in places)
+
+
 def _purge(top_level: str) -> None:
-    """Forget an earlier import of ``top_level`` so the one under the root is the one loaded."""
-    if top_level in sys.stdlib_module_names:
-        return
+    """Forget an earlier import of ``top_level``; only ever called for modules loaded from the root."""
     for name in [n for n in sys.modules if n == top_level or n.startswith(top_level + ".")]:
         del sys.modules[name]
 
@@ -99,10 +124,10 @@ def load_deposit_generators(
         raise DepositError("generators_root_required: pass --generator-root, the directory the registry imports from")
     root = Path(root).resolve()
     top_level = module_name.partition(".")[0]
-    if top_level in reserved_top_level_names():
+    if _collides(top_level, root):
         raise DepositError(
-            f"generators_name_collision: top-level package {top_level!r} would shadow the checkout's own; "
-            "rename the registry package"
+            f"generators_name_collision: top-level package {top_level!r} already names a module outside "
+            f"{root}; rename the registry package"
         )
     registry, module_file = _import_registry(spec, module_name, attr, root)
     if not module_file.is_relative_to(root):
@@ -116,3 +141,24 @@ def load_deposit_generators(
             raise DepositError(f"generators_outside_root: {path} resolves outside {root}")
         files.append((resolved, path.relative_to(root).as_posix()))
     return registry, files
+
+
+def assert_sources_within(files: list[tuple[Path, str]], root: Path) -> None:
+    """Refuse when the registry ran code from under ``root`` that the deposit does not carry."""
+    root = Path(root).resolve()
+    carried = {path for path, _ in files}
+    missing = sorted(
+        {
+            str(origin)
+            for module in list(sys.modules.values())
+            if (file := getattr(module, "__file__", None))
+            and (origin := Path(file).resolve()).is_relative_to(root)
+            and origin not in carried
+        }
+    )
+    if missing:
+        listed = ", ".join(missing[:5])
+        raise DepositError(
+            f"generators_outside_package: the registry imported {len(missing)} source file(s) under {root} "
+            f"that are not in its top-level package, so the deposit would not carry them: {listed}"
+        )

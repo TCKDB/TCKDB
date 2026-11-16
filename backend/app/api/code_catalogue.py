@@ -1470,6 +1470,13 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "The registry's top-level package has the name of a top-level package of the checkout and would shadow it on a reproducer's import path. "
                 "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) through the deposit service, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
             )),
+    ApiCode("generators_outside_package", 422, Surface.message_prefix,
+            "backend/app/services/deposit/generator_spec.py",
+            reach=Reach.guard,
+            note=(
+                "The registry imported a source file under --generator-root that is not in its top-level package, so the deposit would not carry it. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) through the deposit service, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
     ApiCode("generators_outside_root", 422, Surface.message_prefix,
             "backend/app/services/deposit/generator_spec.py",
             reach=Reach.guard,
@@ -1989,13 +1996,6 @@ CATALOGUE: tuple[ApiCode, ...] = (
             reach=Reach.guard,
             note=(
                 "HEAD carries no exact tag; a deposit must be built from a tagged commit. "
-                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
-            )),
-    ApiCode("no_generators", 422, Surface.message_prefix,
-            "backend/app/services/deposit/build.py",
-            reach=Reach.guard,
-            note=(
-                "The generator registry is empty. "
                 "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
             )),
     ApiCode("non_finite_value", 422, Surface.message_prefix,

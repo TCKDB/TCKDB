@@ -13,12 +13,13 @@ from app.db.models.species import Species, SpeciesEntry
 from app.db.models.submission import SubmissionRecordLink
 from app.db.models.thermo import Thermo
 from app.db.models.transition_state import TransitionStateEntry
+from sample_deposit_generators.helpers.counting import count_rows
 
 
 def row_counts(session: Session) -> dict[str, Any]:
     return {
-        "species": session.scalar(select(func.count()).select_from(Species)),
-        "species_entries": session.scalar(select(func.count()).select_from(SpeciesEntry)),
+        "species": count_rows(session, Species),
+        "species_entries": count_rows(session, SpeciesEntry),
     }
 
 

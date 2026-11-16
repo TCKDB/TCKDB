@@ -78,7 +78,9 @@ from app.db.models.molecular_property_observation import (
     MolecularPropertyObservation,
 )
 from app.services.archive import verify_archive, write_archive
+from app.services.deposit.errors import DepositError
 from app.services.deposit.expected_outputs import write_expected_outputs
+from app.services.deposit.generator_spec import assert_sources_within, load_deposit_generators
 from app.services.document_formats import DEPOSIT, FORMATS, header_of, reads_as
 from app.services.release import versions
 from app.services.release.artifacts import canonical_json, release_record_universe
@@ -140,12 +142,6 @@ RESIDUAL_RISK_PARAGRAPH = (
 # ---------------------------------------------------------------------------
 # Errors
 # ---------------------------------------------------------------------------
-
-
-class DepositError(RuntimeError):
-    """Base class: the deposit was not built, and the message says why."""
-
-    exit_code = 1
 
 
 class ReleaseNotPublishableError(DepositError):
@@ -735,6 +731,8 @@ def write_deposit(
     output_dir = Path(output_dir)
     allowlist = frozenset(author_accounts)
 
+    generators, generator_sources = load_deposit_generators(generator_spec, generator_root)
+
     release = _release_by_tag(session, release_tag)
     if source is None:
         source = source_binding(
@@ -749,14 +747,6 @@ def write_deposit(
         if not candidate.is_file():
             raise SourcePinMissingError(f"source_pin_missing: {relative_source} is not in the checkout")
         pins.append((candidate, deposit_path))
-    from app.services.deposit.generator_spec import (
-        load_deposit_generators,
-    )
-
-    generators, generator_sources = load_deposit_generators(generator_spec, generator_root)
-    if not generator_sources:
-        raise DepositError(f"no_generators: {generator_root} holds no generator sources")
-
     if output_dir.exists() and any(output_dir.iterdir()):
         raise OutputNotEmptyError(f"output_not_empty: {output_dir} already has content; refusing to overwrite")
     created_here = not output_dir.exists()
@@ -806,6 +796,7 @@ def write_deposit(
             content = (expected_dir / name).read_bytes()
             assert hashlib.sha256(content).hexdigest() == digest
             members.append(_member(f"expected_outputs/{name}", content, ROLE_EXPECTED_OUTPUT))
+        assert_sources_within(generator_sources, generator_root)
 
         reproduce = _reproduce_document(
             tag=release.tag, source=source, archive_member=archive_member_path, generator_spec=generator_spec

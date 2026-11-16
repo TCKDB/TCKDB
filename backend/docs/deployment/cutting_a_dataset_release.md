@@ -340,8 +340,11 @@ conda run -n tckdb_env python backend/scripts/ops/build_publication_deposit.py b
 generator) and `--generator-root` the directory it imports from (here
 `/srv/my-generators/my_generators/registry.py`); the build refuses without either.
 The registry's top-level package is copied, layout preserved, under the deposit's
-`scripts/`, and `REPRODUCE.md` puts that directory on `PYTHONPATH`. The package
-name must not be one the checkout uses (`app`, `scripts`, `tests`, ...). The build reads the release from the database (never over HTTP) and refuses,
+`scripts/`, and `REPRODUCE.md` puts that directory on `PYTHONPATH`. Only the package's `*.py` files are deposited, and the build refuses if the registry
+imports a source file under the root that is not among them, so a generator reads data
+from the database or the pinned checkout, never from files beside the registry. The
+package name must not be one that already names a module (`app`, `scripts`, `tests`,
+an installed package or a standard-library module). The build reads the release from the database (never over HTTP) and refuses,
 with a distinct exit code, when:
 
 | exit | refusal |

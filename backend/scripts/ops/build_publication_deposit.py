@@ -33,7 +33,6 @@ if str(BACKEND_ROOT) not in sys.path:
 from app.api.deps import SessionLocal  # noqa: E402
 from app.services.deposit import DepositError, checksum_lines, verify_deposit, write_deposit  # noqa: E402
 from app.services.deposit.build import MANIFEST_NAME  # noqa: E402
-from app.services.deposit.generator_spec import load_deposit_generators  # noqa: E402
 
 EXIT_VERIFICATION_FAILED = 7
 
@@ -88,7 +87,6 @@ def _checksums(args: argparse.Namespace) -> int:
 
 
 def _build(args: argparse.Namespace) -> int:
-    load_deposit_generators(args.generators, args.generator_root)  # refuse before touching the database
     with SessionLocal() as session:
         result = write_deposit(
             session,
