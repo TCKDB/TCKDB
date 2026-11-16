@@ -85,11 +85,22 @@ def masked_export_file(path: Path) -> str:
     return mask_refs(text)
 
 
+def export_found(build: Path) -> bool:
+    """Whether the build's ``use_case_chemkin_export.json`` shows the export was made."""
+    path = build / "expected_outputs" / "use_case_chemkin_export.json"
+    return path.is_file() and json.loads(path.read_text()).get("export") == "found"
+
+
 def compare_chemkin_export(one: Path, two: Path) -> dict[str, str]:
     """Per file of ``chemkin_export/``: byte-identical, identical after masking refs and timestamps, or differing."""
     a, b = one / "chemkin_export", two / "chemkin_export"
-    names = sorted({p.name for p in a.glob("*")} | {p.name for p in b.glob("*")})
     result: dict[str, str] = {}
+    for label, build, directory in (("one", one, a), ("two", two, b)):
+        if not directory.is_dir() and export_found(build):
+            result[f"(build {label})"] = "DIFFERS: the output shows an export but chemkin_export/ is absent"
+    if not a.is_dir() and not b.is_dir():
+        return result or {"(directory)": "absent in both builds"}
+    names = sorted({p.name for p in a.glob("*")} | {p.name for p in b.glob("*")})
     for name in names:
         pa, pb = a / name, b / name
         if not pa.is_file() or not pb.is_file():

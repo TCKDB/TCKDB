@@ -35,7 +35,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.chemistry.arrhenius import GAS_CONSTANT_J_MOL_K
-from app.db.models.common import SubmissionRecordType
+from app.db.models.common import DatasetReleaseStatus, SubmissionRecordType
 from app.db.models.dataset_release import DatasetRelease
 from app.db.models.kinetics import Kinetics
 from app.db.models.species import Species, SpeciesEntry
@@ -148,6 +148,9 @@ def parse_chem_inp(text: str) -> dict[str, Any]:
                     "a": float(match["a"]),
                     "n": float(match["n"]),
                     "ea": float(match["ea"]),
+                    "a_text": match["a"],
+                    "n_text": match["n"],
+                    "ea_text": match["ea"],
                 }
             )
     return {"species": species, "reactions": reactions, "reaction_units": units}
@@ -185,6 +188,67 @@ def parse_therm_dat(text: str) -> dict[str, dict[str, Any]]:
         }
         i += 4
     return out
+
+
+def half_unit_in_last_place(text: str) -> float:
+    """Half a unit in the last written place of a number written as ``text`` (``3.468``, ``1.4598E+03``)."""
+    mantissa, _, exponent = text.lower().partition("e")
+    decimals = len(mantissa.split(".")[1]) if "." in mantissa else 0
+    return 0.5 * 10.0 ** (int(exponent or 0) - decimals)
+
+
+#: cal mol-1 K-1, for the REACTIONS energy unit the export writes.
+GAS_CONSTANT_CAL_MOL_K = 1.987204258
+#: Each of the three reported numbers (Cantera's k, the stored k, their ratio) is rounded to six significant figures.
+REPORTED_FIGURE_RELATIVE_ERROR = 5.0e-6
+
+
+def rate_ratio_bound(written: dict[str, Any] | None, units_line: list[str] | None, temperature_k: float) -> dict[str, Any] | None:
+    """What the digits written in ``chem.inp`` can explain of the ratio of Cantera's k to the stored fit's k.
+
+    k = A T^n exp(-Ea / RT): rounding n to its written place moves ln k by half a unit there times ln T; rounding A moves
+    it by that half unit over A; rounding Ea by half a unit over RT; and each reported number carries six-figure
+    rounding. The parts are added (a bound on |ln ratio|, which is the ratio's distance from 1 to first order).
+    ``None`` when the energy unit is not cal/mol or the line is missing.
+    """
+    if written is None or not units_line or units_line[0].upper() != "CAL/MOLE":
+        return None
+    parts = {
+        "n_rounding": half_unit_in_last_place(written["n_text"]) * math.log(temperature_k),
+        "a_rounding": half_unit_in_last_place(written["a_text"]) / abs(written["a"]),
+        "ea_rounding": half_unit_in_last_place(written["ea_text"]) / (GAS_CONSTANT_CAL_MOL_K * temperature_k),
+        "reported_figures": 3 * REPORTED_FIGURE_RELATIVE_ERROR,
+    }
+    return {**{k: sig(v, 3) for k, v in parts.items()}, "total": sig(sum(parts.values()), 3)}
+
+
+def significant_figures(value: float, limit: int = 9) -> int:
+    """Significant figures of ``value`` as written with ``limit`` digits, trailing zeros dropped."""
+    mantissa = f"{abs(value):.{limit - 1}e}".split("e")[0].replace(".", "").rstrip("0")
+    return max(len(mantissa), 1)
+
+
+def nasa7_h_rounding_bound_kj_mol(record: dict[str, Any], temperature_k: float) -> dict[str, Any]:
+    """What coefficient rounding can explain of H(T) from a ``parse_therm_dat`` record.
+
+    The record's coefficients carry at most ``figures`` significant figures (the most any of the 14 shows, trailing zeros
+    dropped). Each is taken as rounded to that many, so it is uncertain by half a unit in its last place; the
+    uncertainties are propagated through H = R (a1 T + a2 T^2/2 + a3 T^3/3 + a4 T^4/4 + a5 T^5/5 + a6) and added.
+    """
+    a = record["low"] if temperature_k < record["t_mid_k"] else record["high"]
+    figures = max(significant_figures(v) for v in record["low"] + record["high"])
+    total = 0.0
+    for index, value in enumerate(a[:6]):
+        if value == 0:
+            continue
+        half_unit = 0.5 * 10.0 ** (math.floor(math.log10(abs(value))) - (figures - 1))
+        weight = temperature_k**index / (index + 1) * temperature_k if index < 5 else 1.0
+        total += half_unit * weight
+    return {"coefficient_significant_figures": figures, "bound_kj_mol": sig(total * GAS_CONSTANT_J_MOL_K / 1000.0, 3)}
+
+
+#: Cantera and this module evaluate the same polynomial; they differ only in the gas constant's last digits.
+CANTERA_H298_RELATIVE_AGREEMENT = 1.0e-6
 
 
 def nasa7_h_kj_mol(record: dict[str, Any], temperature_k: float) -> float:
@@ -241,7 +305,8 @@ def cantera_load(chem: Path, therm: Path, tran: Path | None, temperature_k: floa
             )
             gas = ct.Solution(yaml_path)
         except Exception as exc:  # the refusal itself is the result
-            return {**base, "status": "refused", "error": f"{type(exc).__name__}: {str(exc)[:600]}"}
+            text = str(exc).replace(tmp, "<tmp>").replace(str(chem.parent), "<tmp>")
+            return {**base, "status": "refused", "error": f"{type(exc).__name__}: {text[:600]}"}
         gas.TP = temperature_k, ct.one_atm
         k = list(gas.forward_rate_constants)
         reactions = []
@@ -298,12 +363,15 @@ def _forward_reaction(cantera: dict[str, Any], names: dict[str, str]) -> dict[st
 def resolve_request(session: Session) -> tuple[dict[str, Any] | None, str | None]:
     """The export request for the use case, found from the database; or ``(None, reason)``.
 
-    The rate record and the [CH3] thermo record are the ones standing in release ``RELEASE_TAG``; the other species'
-    thermo records are the ones the rate record's submission deposited.
+    The release must be published. The rate record is the one standing in it. The [CH3] thermo record must be both
+    standing in the release and deposited by the rate record's submission (a [CH3] record in only one of them is not
+    named); the other species' thermo records are the ones that submission deposited.
     """
     release = session.scalar(select(DatasetRelease).where(DatasetRelease.tag == RELEASE_TAG))
     if release is None:
         return None, f"no release {RELEASE_TAG}"
+    if release.status != DatasetReleaseStatus.published:
+        return None, f"release {RELEASE_TAG} is {release.status.value}, not published"
     standing = _standing_selections(session, release)
     kinetics_ids = [s.record_id for s in standing if s.record_type == SubmissionRecordType.kinetics]
     if len(kinetics_ids) != 1:
@@ -421,19 +489,19 @@ def analyse(session: Session, request: dict[str, Any], files: dict[str, bytes]) 
         )
 
     forward = _forward_reaction(cantera, names) if cantera["status"] == "loaded" else None
-    kinetics = None
-    for ref in request["kinetics_refs"]:
-        kinetics = session.scalar(select(Kinetics).where(Kinetics.public_ref == ref))
+    [kinetics_ref] = request["kinetics_refs"]
+    kinetics = session.scalar(select(Kinetics).where(Kinetics.public_ref == kinetics_ref))
     stored = _rate_at(kinetics, USE_CASE_TEMPERATURE_K) if kinetics is not None else None
     cantera_k = sig(forward["k_forward_cm3_mol_s"]) if forward else None
     written = next((r for r in chem["reactions"] if forward and r["equation"] == forward["equation"]), None)
     rate = {
         "temperature_k": USE_CASE_TEMPERATURE_K,
-        "units": "cm3_mol_s",
+        "units": stored["units"] if stored else None,
         "cantera_k_forward": cantera_k,
         "stored_fit_k": stored["k"] if stored else None,
         "stored_fit_units": stored["units"] if stored else None,
         "cantera_over_stored": ratio(cantera_k, stored["k"] if stored else None),
+        "ratio_explained_by_written_digits": rate_ratio_bound(written, chem["reaction_units"], USE_CASE_TEMPERATURE_K),
         "stored_fit": (
             {"a": kinetics.a, "n": kinetics.n, "ea_kj_mol": kinetics.ea_kj_mol, "t0_k": kinetics.t0_k} if kinetics else None
         ),
@@ -445,17 +513,28 @@ def analyse(session: Session, request: dict[str, Any], files: dict[str, bytes]) 
     ch3_name = next((n for n, s in names.items() if s == ch3), None)
     record = session.scalar(select(Thermo).where(Thermo.public_ref == named[ch3][0])) if named.get(ch3) else None
     stored_h = _thermo_value(record, "h", H298_TEMPERATURE_K) if record is not None else None
-    exported_h = sig(nasa7_h_kj_mol(therm[ch3_name], H298_TEMPERATURE_K)) if ch3_name in therm else None
+    exported_raw = nasa7_h_kj_mol(therm[ch3_name], H298_TEMPERATURE_K) if ch3_name in therm else None
+    record_raw = stored_h["value"] if stored_h else None
+    cantera_raw = cantera["h298_kj_mol"].get(ch3_name) if cantera["status"] == "loaded" else None
     h298 = {
         "species": ch3,
         "temperature_k": H298_TEMPERATURE_K,
-        "record_h298_kj_mol": sig(stored_h["value"]) if stored_h else None,
+        "record_h298_kj_mol": sig(record_raw),
         "record_h298_from": stored_h["from"] if stored_h else None,
-        "exported_nasa_h298_kj_mol": exported_h,
+        "exported_nasa_h298_kj_mol": sig(exported_raw),
         "exported_minus_record_kj_mol": (
-            sig(exported_h - stored_h["value"]) if exported_h is not None and stored_h and stored_h["value"] is not None else None
+            sig(exported_raw - record_raw) if exported_raw is not None and record_raw is not None else None
         ),
-        "cantera_h298_kj_mol": sig(cantera["h298_kj_mol"].get(ch3_name)) if cantera["status"] == "loaded" else None,
+        "exported_minus_record_explained_by_coefficient_rounding": (
+            nasa7_h_rounding_bound_kj_mol(therm[ch3_name], H298_TEMPERATURE_K) if ch3_name in therm else None
+        ),
+        "cantera_h298_kj_mol": sig(cantera_raw),
+        "cantera_minus_exported_kj_mol": (
+            sig(cantera_raw - exported_raw) if cantera_raw is not None and exported_raw is not None else None
+        ),
+        "cantera_agreement_bound_kj_mol": (
+            sig(CANTERA_H298_RELATIVE_AGREEMENT * abs(exported_raw), 3) if exported_raw is not None else None
+        ),
     }
 
     return {
@@ -488,7 +567,11 @@ def check_saved(session: Session, directory: Path) -> dict[str, Any]:
     if request is None:
         return {"match": False, "reason": reason}
     fresh = export_in_process(session, request)
-    saved_request = json.loads((directory / REQUEST_FILE).read_text())
+    request_path = directory / REQUEST_FILE
+    if not request_path.is_file():
+        return {"match": False, "reason": f"{REQUEST_FILE} is missing"}
+    saved_request = json.loads(request_path.read_text())
+    saved_request["thermo_refs"] = sorted(saved_request.get("thermo_refs") or [])
     rows = {}
     for name in sorted(set(fresh) | {n for n in FILES if (directory / n).is_file()}):
         path = directory / name
@@ -496,11 +579,7 @@ def check_saved(session: Session, directory: Path) -> dict[str, Any]:
             rows[name] = "present in only one"
         else:
             rows[name] = "same" if unchanged_by_timestamp(name, path.read_bytes(), fresh[name]) else "DIFFERS"
-    same_request = (
-        sorted(saved_request["thermo_refs"]) == request["thermo_refs"]
-        and saved_request["kinetics_refs"] == request["kinetics_refs"]
-        and saved_request["seed"] == request["seed"]
-    )
+    same_request = saved_request == request
     return {"match": same_request and all(v == "same" for v in rows.values()), "request_same": same_request, "files": rows}
 
 

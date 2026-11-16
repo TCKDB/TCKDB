@@ -104,13 +104,20 @@ Generators run for the snapshot: `corpus_counts`, `conformer_basins`, `calculati
 - `use_case_ch4_oh`: the computed rate coefficient of C + [OH] => O + [CH3], k(300 K) from its stored fit, the
   transition state's imaginary frequency and IRC evidence, the levels of the cited energies, and the deposit's warnings.
 - `use_case_chemkin_export`: the CHEMKIN export of the use case, made in-process by the export route's own function
-  from the database alone (no API, no saved files). The request is found from release `snapshot-demo-1` (the rate
-  record, and the [CH3] thermo record it selects) and the rate record's submission (the thermo records of the other
-  species). The output has the records named, a digest of each file (refs masked, `generated_at` removed), what the
-  manifest says could not be written, the result of loading the files with Cantera's strict `ck2yaml`
-  (`permissive=False`) and its version, k(300 K) of the forward reaction as Cantera evaluates it next to the stored
-  fit's k(300 K) and their ratio, and H298 of [CH3] from the exported polynomial next to the record's. Needs Cantera;
-  without it the output says `cantera_not_installed`, and the build refuses that.
+  from the database alone (no API, no saved files). The request is found from the published release
+  `snapshot-demo-1` and the rate record's submission: the rate record is the one the release selects; the [CH3] thermo
+  record must be both selected by the release and deposited by that submission (a [CH3] record in only one of them is
+  not named); the thermo records of the other species are the ones that submission deposited. The output has the
+  records named, a digest of each file (refs masked, `generated_at` removed), what the manifest says could not be
+  written, the result of loading the files with Cantera 3.2.0's strict `ck2yaml` (`permissive=False`), k(300 K) of the
+  forward reaction as Cantera evaluates it next to the stored fit's k(300 K) with their ratio, and H298 of [CH3] from
+  the exported polynomial next to the record's and Cantera's.
+  - The ratio is reported as it is, next to what the digits written in `chem.inp` can explain of it (half a unit in
+    the last place of n times ln T, of A over A, of Ea over RT, and six-figure rounding of the reported numbers). The
+    H298 difference is reported next to what the coefficients' significant figures can explain.
+  - The build refuses the snapshot unless Cantera loaded the files, the stored fit is in cm3 mol-1 s-1, the ratio is
+    within that bound, H298 of [CH3] agrees with the record within the coefficient bound and with Cantera, and the
+    manifest has no gaps. Without Cantera the output says `cantera_not_installed`, and the build refuses that.
 - `ch3_enthalpy_of_formation`: every [CH3] thermo record (H298, level, the deposit it came from) and the H298
   selection answer with a level-of-theory filter.
 - `network_n2h3`: wells, channels and k(T, P) forms of the stored network, and k(1000 K, 1 bar) of NH3N -> N2H3 from
@@ -172,8 +179,8 @@ deposit; the exporter never picks, and a refusal stops the build with the server
 `export_request.json`.
 
 The build then checks that the saved files equal the in-process export byte for byte, refs included (`manifest.json`
-without its `generated_at`), and that the generator's output shows the files loaded in Cantera, a forward rate and an
-H298 of [CH3]. Run the same comparison on any database holding the snapshot (a restored archive, say):
+without its `generated_at`), and that the generator's output shows the files loaded in Cantera and the rate and H298 agreeing with
+the records (above). Run the same comparison on any database holding the snapshot (a restored archive, say):
 
 ```bash
 cd backend && python -m scripts.paper.chemkin_export --check ../snapshot_out/chemkin_export

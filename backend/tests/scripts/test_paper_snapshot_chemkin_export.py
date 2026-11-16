@@ -1,7 +1,9 @@
 """The CHEMKIN export of the snapshot use case: the generator's own logic and the build step's checks.
 
-None of these tests needs Cantera. The Cantera load itself (strict ``ck2yaml``, k(300 K) and H298 as Cantera
-evaluates them) runs in the build, and the build refuses a snapshot whose output does not show it loaded.
+Cantera is part of the backend CI environment, so one test loads a mechanism with the real strict ``ck2yaml`` and
+checks k(300 K) and H298 as Cantera evaluates them. The other tests fake the loader where they test the generator's
+own logic, so that logic is also checked on its own. The build refuses a snapshot whose output does not show Cantera
+having loaded the files and agreeing with the records.
 """
 
 from __future__ import annotations
@@ -13,10 +15,11 @@ import sys
 import zipfile
 from pathlib import Path
 
+import cantera as ct
 import pytest
 
 from app.db.models.app_user import AppUser
-from app.db.models.common import AppUserRole, ArrheniusAUnits, RecordReviewStatus, SubmissionRecordType
+from app.db.models.common import AppUserRole, ArrheniusAUnits, PhaseKind, RecordReviewStatus, SubmissionRecordType
 from app.services.deposit.expected_outputs import render_json
 from app.services.record_review import set_record_review_status
 from app.services.release.curation import add_selection, create_release, publish_release, resolve_curation_policy
@@ -99,7 +102,17 @@ def test_chem_inp_species_and_the_written_rate_are_read():
     ]
     assert parsed["species"][3]["species_ref"] == _ref("spc", "d")
     assert parsed["reaction_units"] == ["CAL/MOLE", "MOLES"]
-    assert parsed["reactions"] == [{"equation": "C1H4 + H1O1 <=> C1H3 + H2O1", "a": 1459.8, "n": 3.468, "ea": 2033.0521}]
+    assert parsed["reactions"] == [
+        {
+            "equation": "C1H4 + H1O1 <=> C1H3 + H2O1",
+            "a": 1459.8,
+            "n": 3.468,
+            "ea": 2033.0521,
+            "a_text": "1.4598E+03",
+            "n_text": "3.468",
+            "ea_text": "2033.0521",
+        }
+    ]
 
 
 def test_a_species_line_without_its_comment_is_refused_not_skipped():
@@ -210,6 +223,15 @@ def _seed(db_session):
     return entry, entries, kinetics, thermo
 
 
+def _make_exportable(db_session, thermo) -> None:
+    """Give each thermo row a gas-phase, 1 atm NASA-7 polynomial, which is what the exporter writes."""
+    for record in thermo.values():
+        attach_thermo_nasa(db_session, thermo=record)
+        record.phase = PhaseKind.gas
+        record.reference_pressure_bar = 1.01325
+    db_session.flush()
+
+
 def _files(entry, kinetics, thermo, stamp="2026-01-01T00:00:00+00:00") -> tuple[dict, dict[str, bytes]]:
     request = {
         "seed": {"reaction_refs": [entry.public_ref]},
@@ -289,7 +311,7 @@ def test_saved_files_equal_the_in_process_export_apart_from_the_timestamp():
     assert same("manifest.json", one, two) and not same("manifest.json", one, other)
 
 
-def _release_with_the_use_case(db_session, entries, kinetics, thermo, decoys):
+def _release_with_the_use_case(db_session, entries, kinetics, thermo, decoys, *, publish=True, selected_ch3=None):
     """A published release ``snapshot-demo-1`` selecting the rate record and the [CH3] thermo record; every record
     approved and deposited together by one submission, except ``decoys`` (another deposit's records)."""
     curator = AppUser(username="chemkin-export-curator", role=AppUserRole.curator)
@@ -319,13 +341,14 @@ def _release_with_the_use_case(db_session, entries, kinetics, thermo, decoys):
     )
     for record_type, record_id, subject_type, subject_id in (
         (SubmissionRecordType.kinetics, kinetics.id, SubmissionRecordType.reaction_entry, kinetics.reaction_entry_id),
-        (SubmissionRecordType.thermo, thermo["[CH3]"].id, SubmissionRecordType.species_entry, entries["[CH3]"].id),
+        (SubmissionRecordType.thermo, (selected_ch3 or thermo["[CH3]"]).id, SubmissionRecordType.species_entry, entries["[CH3]"].id),
     ):
         add_selection(
             db_session, release=release, record_type=record_type, record_id=record_id,
             subject_type=subject_type, subject_id=subject_id, rationale="r", selected_by=curator.id,
         )
-    publish_release(db_session, release)
+    if publish:
+        publish_release(db_session, release)
 
 
 def test_the_request_is_found_from_the_release_and_the_rate_records_submission(db_session):
@@ -344,8 +367,7 @@ def test_the_request_is_found_from_the_release_and_the_rate_records_submission(d
 
 def test_the_in_process_export_returns_the_routes_files_for_the_request(db_session):
     entry, entries, kinetics, thermo = _seed(db_session)
-    for record in thermo.values():
-        attach_thermo_nasa(db_session, thermo=record)
+    _make_exportable(db_session, thermo)
     _release_with_the_use_case(db_session, entries, kinetics, thermo, [])
     request, _ = chemkin_export.resolve_request(db_session)
 
@@ -356,8 +378,13 @@ def test_the_in_process_export_returns_the_routes_files_for_the_request(db_sessi
     parsed = chemkin_export.parse_chem_inp(files["chem.inp"].decode())
     assert sorted(s["smiles"] for s in parsed["species"]) == ["C", "O", "[CH3]", "[OH]"]
     assert len(parsed["reactions"]) == 1
-    # The factory thermo rows carry no polynomial the exporter writes; the build checks therm.dat against the real deposit.
-    assert files["therm.dat"].decode().startswith("THERMO")
+    names = {s["name"] for s in parsed["species"]}
+    assert set(chemkin_export.parse_therm_dat(files["therm.dat"].decode())) == names
+    assert json.loads(files["manifest.json"])["gaps"] == []
+    # The exporter's own output goes through the generator's analysis (Cantera's loader faked: the files are the point).
+    out = chemkin_export.analyse(db_session, request, files)
+    assert out["export"] == "found" and out["named_thermo_refs_without_a_species_in_chem_inp"] == []
+    assert all(row["has_nasa_in_therm_dat"] and len(row["thermo_refs_named"]) == 1 for row in out["species"])
 
 
 # ---------------------------------------------------------------------------
@@ -376,17 +403,38 @@ def step():
         sys.path.remove(str(SNAPSHOT_DIR))
 
 
-def _config(runs=("run/a",), plan=None):
-    return {"sources": {"arc_runs": {"runs": list(runs)}}, "chemkin_export": plan}
+def _config(runs=("run/a",), plan=None, tag=None, selections=None):
+    tag = tag or chemkin_export.RELEASE_TAG
+    if selections is None:
+        selections = [
+            {"run": "run/a", "record": "kinetics"},
+            {"run": "run/a", "record": "thermo", "smiles": "[CH3]"},
+        ]
+    return {
+        "sources": {"arc_runs": {"runs": list(runs)}},
+        "chemkin_export": plan,
+        "curation": {"release": {"tag": tag, "selections": selections}},
+    }
+
+
+SPECIES = list(chemkin_export.NAMED_SPECIES)
 
 
 def test_the_plan_must_name_a_deposited_run_and_distinct_species(step):
     assert step.problems(_config(plan=None)) == []
-    assert step.problems(_config(plan={"run": "run/a", "species": ["C", "[OH]"]})) == []
-    assert any("not in sources.arc_runs.runs" in p for p in step.problems(_config(plan={"run": "run/z", "species": ["C"]})))
+    assert step.problems(_config(plan={"run": "run/a", "species": SPECIES})) == []
+    assert any("not in sources.arc_runs.runs" in p for p in step.problems(_config(plan={"run": "run/z", "species": SPECIES})))
     assert any("species" in p for p in step.problems(_config(plan={"run": "run/a", "species": ["C", "C"]})))
     assert any("species" in p for p in step.problems(_config(plan={"run": "run/a", "species": []})))
-    assert any("unknown key" in p for p in step.problems(_config(plan={"run": "run/a", "species": ["C"], "pick": 1})))
+    assert any("unknown key" in p for p in step.problems(_config(plan={"run": "run/a", "species": SPECIES, "pick": 1})))
+
+
+def test_the_plan_must_agree_with_the_release_and_species_the_generator_reads(step):
+    plan = {"run": "run/a", "species": SPECIES}
+    assert any("species must be" in p for p in step.problems(_config(plan={"run": "run/a", "species": ["C", "[OH]", "O"]})))
+    assert any("release.tag" in p for p in step.problems(_config(plan=plan, tag="other-release")))
+    assert any("lacks kinetics" in p for p in step.problems(_config(plan=plan, selections=[{"run": "run/a", "record": "thermo", "smiles": "[CH3]"}])))
+    assert any("lacks thermo" in p for p in step.problems(_config(plan=plan, selections=[{"run": "run/a", "record": "kinetics"}])))
 
 
 class _Curator:
@@ -470,28 +518,84 @@ def _good_output() -> dict:
     return {
         "export": "found",
         "cantera": {"status": "loaded"},
-        "forward_rate": {"cantera_k_forward": 1.0},
-        "ch3_h298": {"exported_nasa_h298_kj_mol": 1.0},
+        "manifest": {"gaps": []},
+        "forward_rate": {
+            "cantera_k_forward": 1.87889e10,
+            "stored_fit_k": 1.87469e10,
+            "stored_fit_units": "cm3_mol_s",
+            "units": "cm3_mol_s",
+            "cantera_over_stored": 1.00224,
+            "ratio_explained_by_written_digits": {"total": 0.0029},
+        },
+        "ch3_h298": {
+            "exported_nasa_h298_kj_mol": 144.815,
+            "record_h298_kj_mol": 144.815,
+            "exported_minus_record_kj_mol": -0.00022,
+            "exported_minus_record_explained_by_coefficient_rounding": {"bound_kj_mol": 0.0005},
+            "cantera_minus_exported_kj_mol": 0.0,
+            "cantera_agreement_bound_kj_mol": 0.00014,
+        },
         "species": [{"smiles": "C", "thermo_refs_named": ["thm_a"], "has_nasa_in_therm_dat": True}],
         "named_thermo_refs_without_a_species_in_chem_inp": [],
     }
 
 
+def _with(document: dict, **changes) -> dict:
+    """A copy of ``document`` with ``changes`` applied as ``section.key=value`` (``section__key``)."""
+    out = json.loads(json.dumps(document))
+    for path, value in changes.items():
+        section, _, key = path.partition("__")
+        if key:
+            out[section][key] = value
+        else:
+            out[section] = value
+    return out
+
+
 def test_the_build_accepts_only_an_output_that_shows_the_files_loaded_and_checked(step):
     assert step.verify_output(_good_output()) == []
-    assert step.verify_output({"export": "not_supplied"})
-    absent = _good_output()
-    absent["cantera"] = {"status": "cantera_not_installed", "detail": "no module"}
+    assert step.verify_output({"export": "unresolved", "reason": "no release"})
+    absent = _with(_good_output(), cantera={"status": "cantera_not_installed", "detail": "no module"})
     assert any("Cantera did not load" in r for r in step.verify_output(absent))
-    refused = _good_output()
-    refused["cantera"] = {"status": "refused", "error": "ck2yaml: bad"}
+    refused = _with(_good_output(), cantera={"status": "refused", "error": "ck2yaml: bad"})
     assert any("refused" in r for r in step.verify_output(refused))
-    no_rate = _good_output()
-    no_rate["forward_rate"] = {"cantera_k_forward": None}
+    no_rate = _with(_good_output(), forward_rate={"cantera_k_forward": None})
     assert step.verify_output(no_rate)
     no_nasa = _good_output()
     no_nasa["species"][0]["has_nasa_in_therm_dat"] = False
     assert step.verify_output(no_nasa)
+
+
+def test_a_rate_ratio_the_written_digits_cannot_explain_is_refused(step):
+    wrong = _with(_good_output(), forward_rate__cantera_over_stored=1000.0)
+    assert any("1000.0" in r and "explain" in r for r in step.verify_output(wrong))
+    low = _with(_good_output(), forward_rate__cantera_over_stored=0.99)
+    assert step.verify_output(low)
+    no_bound = _with(_good_output(), forward_rate__ratio_explained_by_written_digits=None)
+    assert step.verify_output(no_bound)
+    inside = _with(_good_output(), forward_rate__cantera_over_stored=1.0028)
+    assert step.verify_output(inside) == []
+
+
+def test_rates_in_other_units_are_refused(step):
+    other = _with(_good_output(), forward_rate__stored_fit_units="cm3_molecule_s")
+    assert any("not cm3_mol_s" in r for r in step.verify_output(other))
+    other_units = _with(_good_output(), forward_rate__units="cm3_molecule_s")
+    assert step.verify_output(other_units)
+
+
+def test_an_h298_off_by_a_kilojoule_is_refused_and_so_is_a_cantera_disagreement(step):
+    off = _with(_good_output(), ch3_h298__exported_minus_record_kj_mol=1.0)
+    assert any("differs from the record by 1.0" in r for r in step.verify_output(off))
+    cantera = _with(_good_output(), ch3_h298__cantera_minus_exported_kj_mol=1.0)
+    assert any("Cantera's H298" in r for r in step.verify_output(cantera))
+    missing = _with(_good_output(), ch3_h298__record_h298_kj_mol=None)
+    assert step.verify_output(missing)
+
+
+def test_a_manifest_with_gaps_is_refused(step):
+    gapped = _with(_good_output(), manifest={"gaps": [{"kind": "thermo_nasa", "ref": "thm_a", "detail": "no NASA"}]})
+    assert any("gaps" in r for r in step.verify_output(gapped))
 
 
 # ---------------------------------------------------------------------------
@@ -529,3 +633,222 @@ def test_compare_masks_refs_and_the_manifest_timestamp_but_not_a_changed_value(c
     assert compare.compare_chemkin_export(one, three)["chem.inp"] == "DIFFERS"
     (three / "chemkin_export" / "manifest.json").unlink()
     assert compare.compare_chemkin_export(one, three)["manifest.json"].startswith("DIFFERS")
+
+
+def test_compare_says_when_neither_build_has_an_export_and_refuses_a_found_export_without_files(compare, tmp_path):
+    for name in ("one", "two"):
+        (tmp_path / name / "expected_outputs").mkdir(parents=True)
+    assert compare.compare_chemkin_export(tmp_path / "one", tmp_path / "two") == {"(directory)": "absent in both builds"}
+    (tmp_path / "one" / "expected_outputs" / "use_case_chemkin_export.json").write_text(json.dumps({"export": "found"}))
+    result = compare.compare_chemkin_export(tmp_path / "one", tmp_path / "two")
+    assert result["(build one)"].startswith("DIFFERS")
+    (tmp_path / "two" / "expected_outputs" / "use_case_chemkin_export.json").write_text(json.dumps({"export": "unresolved"}))
+    assert compare.compare_chemkin_export(tmp_path / "one", tmp_path / "two")["(build one)"].startswith("DIFFERS")
+
+
+# ---------------------------------------------------------------------------
+# bounds from the written digits
+# ---------------------------------------------------------------------------
+
+
+def test_half_a_unit_in_the_last_written_place():
+    half = chemkin_export.half_unit_in_last_place
+    assert half("3.468") == pytest.approx(5e-4)
+    assert half("1.4598E+03") == pytest.approx(0.5e-4 * 1e3)
+    assert half("2033.0521") == pytest.approx(5e-5)
+    assert half("12") == pytest.approx(0.5)
+
+
+def test_the_rate_bound_is_the_sum_of_what_each_written_number_can_move():
+    written = chemkin_export.parse_chem_inp(CHEM_INP)["reactions"][0]
+    bound = chemkin_export.rate_ratio_bound(written, ["CAL/MOLE", "MOLES"], 300.0)
+    assert bound["n_rounding"] == pytest.approx(5e-4 * math.log(300.0), rel=1e-2)
+    assert bound["a_rounding"] == pytest.approx(0.5e-1 / 1459.8, rel=1e-2)
+    assert bound["ea_rounding"] == pytest.approx(5e-5 / (1.987204258 * 300.0), rel=1e-2)
+    assert bound["total"] == pytest.approx(sum(v for k, v in bound.items() if k != "total"), rel=1e-2)
+    # the 3.468 written for 3.46761 is inside it: that is what makes the observed ratio explicable
+    observed = (1459.8 * 300.0**3.468) / (1459.78 * 300.0**3.46761)
+    assert abs(math.log(observed)) < bound["total"]
+    assert chemkin_export.rate_ratio_bound(written, ["KCAL/MOLE"], 300.0) is None
+    assert chemkin_export.rate_ratio_bound(None, ["CAL/MOLE"], 300.0) is None
+
+
+def test_more_digits_written_means_a_smaller_bound():
+    coarse = {"a": 1459.8, "a_text": "1.4598E+03", "n_text": "3.468", "ea_text": "2033.0521"}
+    fine = {"a": 1459.8, "a_text": "1.4598E+03", "n_text": "3.46761", "ea_text": "2033.0521"}
+    units = ["CAL/MOLE", "MOLES"]
+    assert (
+        chemkin_export.rate_ratio_bound(fine, units, 300.0)["total"] < chemkin_export.rate_ratio_bound(coarse, units, 300.0)["total"]
+    )
+
+
+def test_the_h298_bound_follows_the_significant_figures_of_the_coefficients():
+    record = chemkin_export.parse_therm_dat(THERM_DAT)["C1H3"]
+    six = chemkin_export.nasa7_h_rounding_bound_kj_mol(record, 298.15)
+    assert six["coefficient_significant_figures"] == 6
+    assert six["bound_kj_mol"] > 2.2e-4  # covers the -0.00022 kJ/mol between this polynomial and the record's scalar
+    nine = {**record, "low": [v + 1.234567891e-9 for v in record["low"]], "high": [v + 1.234567891e-9 for v in record["high"]]}
+    finer = chemkin_export.nasa7_h_rounding_bound_kj_mol(nine, 298.15)
+    assert finer["coefficient_significant_figures"] > 6
+    assert finer["bound_kj_mol"] < six["bound_kj_mol"]
+
+
+# ---------------------------------------------------------------------------
+# the real Cantera load
+# ---------------------------------------------------------------------------
+
+
+def _card(name: str, elements: str, mid: float, low: list[float], high: list[float]) -> str:
+    def fmt(values):
+        return "".join(f"{v:>15.8E}" for v in values)
+
+    head = f"{name:<18}{'':6}{elements:<20}G{10.0:>10.3f}{3000.0:>10.3f}{mid:>8.2f}{'':6}1"
+    coefficients = high + low
+    return "\n".join(
+        [head, f"{fmt(coefficients[0:5]):<75}    2", f"{fmt(coefficients[5:10]):<75}    3", f"{fmt(coefficients[10:14]):<75}    4"]
+    )
+
+
+CH3_HIGH = [3.24887, 5.01881e-3, -1.26761e-6, 3.21894e-11, 2.01583e-14, 1.6241e4, 3.46319]
+CH3_LOW = [3.99122, 4.27522e-4, 9.38093e-6, -1.09443e-8, 4.2631e-12, 1.6145e4, 0.205281]
+PLAIN = [3.5, 0.0, 0.0, 0.0, 0.0, -1000.0, 4.0]
+
+
+def _four_species_therm() -> str:
+    cards = [
+        _card("H1O1", "O   1H   1", 985.66, PLAIN, PLAIN),
+        _card("H2O1", "O   1H   2", 775.53, PLAIN, PLAIN),
+        _card("C1H4", "C   1H   4", 616.76, PLAIN, PLAIN),
+        _card("C1H3", "C   1H   3", 646.79, CH3_LOW, CH3_HIGH),
+    ]
+    return "THERMO ALL\n   300.000  1000.000  5000.000\n" + "\n".join(cards) + "\nEND\n"
+
+
+def test_cantera_loads_the_files_strictly_and_agrees_with_the_hand_calculation(tmp_path):
+    (tmp_path / "chem.inp").write_text(CHEM_INP)
+    (tmp_path / "therm.dat").write_text(_four_species_therm())
+
+    out = chemkin_export.cantera_load(tmp_path / "chem.inp", tmp_path / "therm.dat", None, 300.0)
+
+    assert out["status"] == "loaded"
+    assert out["version"] == ct.__version__ == "3.2.0"
+    assert out["species"] == ["C1H3", "C1H4", "H1O1", "H2O1"]
+    (reaction,) = out["reactions"]
+    assert reaction["equation"] == "C1H4 + H1O1 <=> C1H3 + H2O1" and reaction["order"] == 2
+    a, n, ea_cal_mol, r_cal = 1459.8, 3.468, 2033.0521, 1.987204258
+    by_hand = a * 300.0**n * math.exp(-ea_cal_mol / (r_cal * 300.0))
+    assert reaction["k_forward_cm3_mol_s"] == pytest.approx(by_hand, rel=1e-6)
+    record = chemkin_export.parse_therm_dat(_four_species_therm())["C1H3"]
+    assert out["h298_kj_mol"]["C1H3"] == pytest.approx(chemkin_export.nasa7_h_kj_mol(record, 298.15), rel=1e-6)
+    assert out["h298_kj_mol"]["C1H3"] == pytest.approx(CH3_H298_KJ_MOL, abs=1e-3)
+
+
+def test_cantera_refuses_a_species_without_thermo_and_the_refusal_is_the_result(tmp_path):
+    (tmp_path / "chem.inp").write_text(CHEM_INP)
+    (tmp_path / "therm.dat").write_text(THERM_DAT)  # only C1H3
+
+    out = chemkin_export.cantera_load(tmp_path / "chem.inp", tmp_path / "therm.dat", None, 300.0)
+
+    assert out["status"] == "refused"
+    assert str(tmp_path) not in out["error"]
+
+
+def test_the_full_analysis_with_real_cantera_passes_the_builds_checks(db_session, tmp_path, step):
+    entry, entries, kinetics, thermo = _seed(db_session)
+    request, files = _files(entry, kinetics, thermo)
+    files["therm.dat"] = _four_species_therm().encode()
+
+    out = chemkin_export.analyse(db_session, request, files)
+
+    assert out["cantera"]["status"] == "loaded"
+    assert step.verify_output(out) == []
+    rate = out["forward_rate"]
+    assert abs(math.log(rate["cantera_over_stored"])) < rate["ratio_explained_by_written_digits"]["total"]
+    assert rate["stored_fit_units"] == "cm3_mol_s" and rate["units"] == "cm3_mol_s"
+
+
+# ---------------------------------------------------------------------------
+# the saved files against the in-process export
+# ---------------------------------------------------------------------------
+
+
+def _saved(db_session, tmp_path, *, with_release=True):
+    entry, entries, kinetics, thermo = _seed(db_session)
+    _make_exportable(db_session, thermo)
+    _release_with_the_use_case(db_session, entries, kinetics, thermo, [])
+    request, _ = chemkin_export.resolve_request(db_session)
+    directory = tmp_path / "saved"
+    directory.mkdir()
+    for name, data in chemkin_export.export_in_process(db_session, request).items():
+        (directory / name).write_bytes(data)
+    (directory / chemkin_export.REQUEST_FILE).write_text(json.dumps({**request, "thermo_refs": list(reversed(request["thermo_refs"]))}))
+    return directory, request
+
+
+def test_saved_files_that_equal_the_in_process_export_match(db_session, tmp_path):
+    directory, _ = _saved(db_session, tmp_path)
+    result = chemkin_export.check_saved(db_session, directory)
+    assert result["match"] is True and result["request_same"] is True
+    assert set(result["files"].values()) == {"same"}
+
+
+def test_one_flipped_byte_in_chem_inp_is_a_mismatch(db_session, tmp_path):
+    directory, _ = _saved(db_session, tmp_path)
+    data = bytearray((directory / "chem.inp").read_bytes())
+    data[-5] ^= 0x01
+    (directory / "chem.inp").write_bytes(bytes(data))
+    result = chemkin_export.check_saved(db_session, directory)
+    assert result["match"] is False and result["files"]["chem.inp"] == "DIFFERS"
+
+
+def test_a_deleted_therm_dat_is_a_mismatch(db_session, tmp_path):
+    directory, _ = _saved(db_session, tmp_path)
+    (directory / "therm.dat").unlink()
+    result = chemkin_export.check_saved(db_session, directory)
+    assert result["match"] is False and result["files"]["therm.dat"] == "present in only one"
+
+
+def test_a_stray_tran_dat_is_a_mismatch(db_session, tmp_path):
+    directory, _ = _saved(db_session, tmp_path)
+    (directory / "tran.dat").write_text("TRANSPORT\nEND\n")
+    result = chemkin_export.check_saved(db_session, directory)
+    assert result["match"] is False and result["files"]["tran.dat"] == "present in only one"
+
+
+def test_a_changed_thermo_ref_in_the_saved_request_is_a_mismatch(db_session, tmp_path):
+    directory, request = _saved(db_session, tmp_path)
+    saved = json.loads((directory / chemkin_export.REQUEST_FILE).read_text())
+    saved["thermo_refs"][0] = _ref("thm", "z")
+    (directory / chemkin_export.REQUEST_FILE).write_text(json.dumps(saved))
+    result = chemkin_export.check_saved(db_session, directory)
+    assert result["match"] is False and result["request_same"] is False
+    assert set(result["files"].values()) == {"same"}
+
+
+def test_any_other_difference_in_the_saved_request_is_a_mismatch(db_session, tmp_path):
+    directory, _ = _saved(db_session, tmp_path)
+    saved = json.loads((directory / chemkin_export.REQUEST_FILE).read_text())
+    saved["naming_policy"] = "public_ref"
+    (directory / chemkin_export.REQUEST_FILE).write_text(json.dumps(saved))
+    assert chemkin_export.check_saved(db_session, directory)["match"] is False
+
+
+# ---------------------------------------------------------------------------
+# finding the request
+# ---------------------------------------------------------------------------
+
+
+def test_a_draft_release_is_not_read(db_session):
+    entry, entries, kinetics, thermo = _seed(db_session)
+    _release_with_the_use_case(db_session, entries, kinetics, thermo, [], publish=False)
+    request, reason = chemkin_export.resolve_request(db_session)
+    assert request is None and "not published" in reason
+
+
+def test_a_ch3_record_must_be_both_selected_and_deposited_by_the_rate_records_submission(db_session):
+    entry, entries, kinetics, thermo = _seed(db_session)
+    # the release selects a [CH3] record that the rate record's submission did not deposit
+    elsewhere = make_thermo_scalar(db_session, species_entry=entries["[CH3]"], h298_kj_mol=1.0)
+    _release_with_the_use_case(db_session, entries, kinetics, thermo, [elsewhere], selected_ch3=elsewhere)
+    request, reason = chemkin_export.resolve_request(db_session)
+    assert request is None and "thermo records for [CH3]" in reason

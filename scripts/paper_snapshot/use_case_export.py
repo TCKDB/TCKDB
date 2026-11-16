@@ -20,6 +20,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import math
 import subprocess
 import sys
 import zipfile
@@ -48,6 +49,24 @@ def problems(config: dict[str, Any]) -> list[str]:
     species = plan.get("species")
     if not species or not all(isinstance(s, str) and s for s in species) or len(set(species)) != len(species):
         out.append("chemkin_export: species must be a non-empty list of distinct SMILES")
+    out += _release_problems(config, plan)
+    return out
+
+
+def _release_problems(config: dict[str, Any], plan: dict[str, Any]) -> list[str]:
+    """The generator finds its records from release ``RELEASE_TAG`` and the species ``NAMED_SPECIES``; the plan must agree."""
+    from scripts.paper.chemkin_export import NAMED_SPECIES, RELEASE_TAG, SELECTED_SPECIES
+
+    out = []
+    if sorted(plan.get("species") or []) != sorted(NAMED_SPECIES):
+        out.append(f"chemkin_export: species must be {sorted(NAMED_SPECIES)}, the ones the generator names")
+    release = (config.get("curation") or {}).get("release") or {}
+    if release.get("tag") != RELEASE_TAG:
+        out.append(f"chemkin_export: curation.release.tag must be {RELEASE_TAG!r}, the release the generator reads")
+    chosen = {(s.get("run"), s.get("record"), s.get("smiles")) for s in release.get("selections") or []}
+    for wanted in ((plan.get("run"), "kinetics", None), (plan.get("run"), "thermo", SELECTED_SPECIES)):
+        if wanted not in chosen:
+            out.append(f"chemkin_export: curation.release.selections lacks {wanted[1]} {wanted[2] or ''} of run {wanted[0]}".replace("  ", " "))
     return out
 
 
@@ -141,6 +160,39 @@ def check_saved(directory: Path, env: dict[str, str]) -> dict[str, Any]:
     return result
 
 
+def _rate_problems(rate: dict[str, Any]) -> list[str]:
+    """The forward rate must be evaluated, in the stored fit's units, and agree within what the written digits explain."""
+    if rate.get("cantera_k_forward") is None or rate.get("stored_fit_k") is None:
+        return ["no forward rate coefficient was compared with the stored fit"]
+    out = []
+    if rate.get("stored_fit_units") != "cm3_mol_s" or rate.get("units") != "cm3_mol_s":
+        out.append(f"the stored fit is in {rate.get('stored_fit_units')!r}, not cm3_mol_s; Cantera's value is not comparable")
+    bound = (rate.get("ratio_explained_by_written_digits") or {}).get("total")
+    ratio = rate.get("cantera_over_stored")
+    if bound is None or ratio is None or ratio <= 0:
+        out.append("the rate ratio or the bound from the written digits is missing")
+    elif abs(math.log(ratio)) > bound:
+        out.append(f"k(300 K) from Cantera is {ratio} times the stored fit's; the written digits explain at most {bound}")
+    return out
+
+
+def _h298_problems(h298: dict[str, Any]) -> list[str]:
+    """H298 of [CH3] must be evaluated, agree with the record within coefficient rounding and with Cantera."""
+    if h298.get("exported_nasa_h298_kj_mol") is None or h298.get("record_h298_kj_mol") is None:
+        return ["no H298 of [CH3] was compared with the record"]
+    out = []
+    bound = (h298.get("exported_minus_record_explained_by_coefficient_rounding") or {}).get("bound_kj_mol")
+    difference = h298.get("exported_minus_record_kj_mol")
+    if bound is None or difference is None or abs(difference) > bound:
+        out.append(f"H298 of [CH3] from the exported polynomial differs from the record by {difference} kJ/mol; "
+                   f"coefficient rounding explains at most {bound}")
+    agreement = h298.get("cantera_agreement_bound_kj_mol")
+    cantera_difference = h298.get("cantera_minus_exported_kj_mol")
+    if agreement is None or cantera_difference is None or abs(cantera_difference) > agreement:
+        out.append(f"Cantera's H298 of [CH3] differs from the exported polynomial's by {cantera_difference} kJ/mol (bound {agreement})")
+    return out
+
+
 def verify_output(document: dict[str, Any]) -> list[str]:
     """Reasons the generator's output does not show a loaded, checked export; empty when it does."""
     if document.get("export") != "found":
@@ -149,10 +201,10 @@ def verify_output(document: dict[str, Any]) -> list[str]:
     cantera = document.get("cantera") or {}
     if cantera.get("status") != "loaded":
         out.append(f"Cantera did not load the files: {cantera.get('status')}: {cantera.get('error') or cantera.get('detail')}")
-    if (document.get("forward_rate") or {}).get("cantera_k_forward") is None:
-        out.append("no forward rate coefficient was evaluated")
-    if (document.get("ch3_h298") or {}).get("exported_nasa_h298_kj_mol") is None:
-        out.append("no H298 of [CH3] was evaluated from the exported polynomial")
+    out += _rate_problems(document.get("forward_rate") or {})
+    out += _h298_problems(document.get("ch3_h298") or {})
+    if (document.get("manifest") or {}).get("gaps"):
+        out.append(f"the manifest lists gaps: {document['manifest']['gaps']}")
     for row in document.get("species") or []:
         if len(row.get("thermo_refs_named") or []) != 1 or not row.get("has_nasa_in_therm_dat"):
             out.append(f"species {row.get('smiles')}: needs one named thermo record and a NASA entry in therm.dat")
