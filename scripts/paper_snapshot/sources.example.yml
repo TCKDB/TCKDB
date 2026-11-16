@@ -126,6 +126,12 @@ sources:
 #     source_terms:
 #       chemkin_formic_acid: Wu and Grinberg Dana, ACS Omega 2026, 11, 6371; published under CC BY 4.0.
 
+# Optional: export the reaction of one ARC run as a CHEMKIN mechanism, as the curator (needs curation). The request names
+# that run's rate record and one of its thermo records per species; the files are loaded in Cantera. See README.md.
+# chemkin_export:
+#   run: set_1/run_2
+#   species: [C, "[OH]", O, "[CH3]"]
+
 # Optional: the generators to run (default: the list in build.py).
 # expected_outputs: [corpus_counts, conformer_basins]
 

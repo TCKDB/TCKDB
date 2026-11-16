@@ -99,10 +99,18 @@ Generators run for the snapshot: `corpus_counts`, `conformer_basins`, `calculati
 `hessian_reanalysis`, `thermo_selection_outcomes`, `structure_selection_outcomes`, `mechanism_roundtrip_counts`,
 `mechanism_fixture_provenance`, `selected_thermo_by_species`, `candidate_lineage`, `transition_state_evidence`,
 `use_case_ch4_oh`, `ch3_enthalpy_of_formation`, `network_n2h3`, `chemkin_reconciliation`, `species_thermo_sources`,
-`caught_error` and `dataset_release`.
+`use_case_chemkin_export`, `caught_error` and `dataset_release`.
 
 - `use_case_ch4_oh`: the computed rate coefficient of C + [OH] => O + [CH3], k(300 K) from its stored fit, the
   transition state's imaginary frequency and IRC evidence, the levels of the cited energies, and the deposit's warnings.
+- `use_case_chemkin_export`: the CHEMKIN export of the use case, made in-process by the export route's own function
+  from the database alone (no API, no saved files). The request is found from release `snapshot-demo-1` (the rate
+  record, and the [CH3] thermo record it selects) and the rate record's submission (the thermo records of the other
+  species). The output has the records named, a digest of each file (refs masked, `generated_at` removed), what the
+  manifest says could not be written, the result of loading the files with Cantera's strict `ck2yaml`
+  (`permissive=False`) and its version, k(300 K) of the forward reaction as Cantera evaluates it next to the stored
+  fit's k(300 K) and their ratio, and H298 of [CH3] from the exported polynomial next to the record's. Needs Cantera;
+  without it the output says `cantera_not_installed`, and the build refuses that.
 - `ch3_enthalpy_of_formation`: every [CH3] thermo record (H298, level, the deposit it came from) and the H298
   selection answer with a level-of-theory filter.
 - `network_n2h3`: wells, channels and k(T, P) forms of the stored network, and k(1000 K, 1 bar) of NH3N -> N2H3 from
@@ -154,6 +162,23 @@ block of the sources file.
 - `snapshot_record.json` (`approval`) holds the calls' answers: the finding, every record review, the selections, the
   attestations and the manifest's verification.
 
+## The CHEMKIN export
+
+When the sources file has a `chemkin_export` block (`use_case_export.py`; example in `sources.example.yml`), the build
+calls `POST /scientific/export/chemkin` as the curator after the release. The request seeds the reaction of the named
+ARC run and names that run's rate record and one thermo record per listed species (found through the API from the run's
+deposit; the exporter never picks, and a refusal stops the build with the server's answer). The returned `chem.inp`,
+`therm.dat` and `manifest.json` (`tran.dat` when written) are saved in `<out-dir>/chemkin_export/` with
+`export_request.json`.
+
+The build then checks that the saved files equal the in-process export byte for byte, refs included (`manifest.json`
+without its `generated_at`), and that the generator's output shows the files loaded in Cantera, a forward rate and an
+H298 of [CH3]. Run the same comparison on any database holding the snapshot (a restored archive, say):
+
+```bash
+cd backend && python -m scripts.paper.chemkin_export --check ../snapshot_out/chemkin_export
+```
+
 ## Check it
 
 ```bash
@@ -168,7 +193,8 @@ python scripts/paper_snapshot/readback.py --api-url http://127.0.0.1:8103 --sour
 
 `compare.py` does not expect identical bytes: public refs are random and timestamps differ. It masks public refs in
 the expected outputs and, for the archive, timestamps, refs and the bucket name in artifact URIs. It re-sorts
-nothing, so a difference in row order is a difference.
+nothing, so a difference in row order is a difference. The files in `chemkin_export/` are compared the same way (refs,
+and the manifest's `generated_at`, masked).
 
 ## What is not deposited
 

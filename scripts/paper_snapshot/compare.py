@@ -5,6 +5,8 @@
 Each directory is a ``build.py`` output. Compared:
 
 * ``expected_outputs/``: per file, byte-identical, or identical after masking public refs (no list is re-sorted).
+* ``chemkin_export/``: per file, byte-identical, or identical after masking public refs (and, in ``.json`` files,
+  timestamps such as the manifest's ``generated_at``).
 * Archive blobs: the set of (SHA-256, size) pairs.
 * Archive rows: per table, the multiset of rows after removing timestamps and masking public refs and the bucket name
   in artifact URIs. Integer ids are kept. A ``deposit_warning`` row's ``content_hash`` covers its message and context,
@@ -70,6 +72,32 @@ def compare_expected(one: Path, two: Path) -> dict[str, Any]:
             result[name] = "byte-identical"
         elif mask_refs(pa.read_text()) == mask_refs(pb.read_text()):
             result[name] = "identical after masking public refs"
+        else:
+            result[name] = "DIFFERS"
+    return result
+
+
+def masked_export_file(path: Path) -> str:
+    """An exported CHEMKIN file with public refs masked; a ``.json`` file is parsed and its timestamps masked first."""
+    text = path.read_text()
+    if path.suffix == ".json":
+        return mask_refs(canonical(mask_json(json.loads(text))))
+    return mask_refs(text)
+
+
+def compare_chemkin_export(one: Path, two: Path) -> dict[str, str]:
+    """Per file of ``chemkin_export/``: byte-identical, identical after masking refs and timestamps, or differing."""
+    a, b = one / "chemkin_export", two / "chemkin_export"
+    names = sorted({p.name for p in a.glob("*")} | {p.name for p in b.glob("*")})
+    result: dict[str, str] = {}
+    for name in names:
+        pa, pb = a / name, b / name
+        if not pa.is_file() or not pb.is_file():
+            result[name] = "DIFFERS: present in only one build"
+        elif pa.read_bytes() == pb.read_bytes():
+            result[name] = "byte-identical"
+        elif masked_export_file(pa) == masked_export_file(pb):
+            result[name] = "identical after masking public refs and timestamps"
         else:
             result[name] = "DIFFERS"
     return result
@@ -354,12 +382,16 @@ def main(argv: list[str] | None = None) -> int:
     one, two = Path(args[0]), Path(args[1])
     expected = compare_expected(one, two)
     archive = compare_archives(one, two)
+    chemkin = compare_chemkin_export(one, two)
     print(
         json.dumps(
-            {"expected_outputs": expected, "archive": archive}, indent=2, sort_keys=True
+            {"expected_outputs": expected, "chemkin_export": chemkin, "archive": archive},
+            indent=2,
+            sort_keys=True,
         )
     )
     bad = [n for n, v in expected.items() if v.startswith("DIFFERS")]
+    bad += [f"chemkin_export/{n}" for n, v in chemkin.items() if v.startswith("DIFFERS")]
     ok = (
         not bad
         and archive["blob_sets_equal"]

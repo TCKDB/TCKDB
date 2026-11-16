@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Snapshot build exports the use case as a CHEMKIN mechanism (Unreleased)
+
+- **Behaviour:** the paper snapshot build requests `POST /scientific/export/chemkin` as its curator for the CH4 + OH use case, saves the files, and refuses a snapshot whose export does not load in Cantera. A new generator, `use_case_chemkin_export`, makes the same export in-process from the database and reports the Cantera load, k(300 K) against the stored fit, and H298 of [CH3] from the exported polynomial; `compare.py` also compares the saved files.
+- **Schema and migration:** none.
+
 ## Stable order for record links, a calculation's artifact links and release artifact lines (Unreleased)
 
 - **Behaviour:** a submission's record links, the artifact links written for a calculation's artifacts, and the lines of a release's selected-record, candidate and review-history files follow integer ids, so two databases built by the same sequence of uploads hold the same rows in the same order. Release lines were ordered by public ref, which is random per database.

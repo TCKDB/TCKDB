@@ -8,8 +8,9 @@ Steps:
 2. register a depositor and mint its API key;
 3. deposit each configured source through its public route;
 4. create a curator and curate: approval, the caught error, the release (a demonstration, recorded as such);
-5. export the archive and the expected outputs;
-6. write ``build_report.json`` (warnings and refusals by code) and ``snapshot_record.json``.
+5. export the use case as a CHEMKIN mechanism as the curator (``chemkin_export`` in the sources file);
+6. export the archive and the expected outputs; the CHEMKIN output must show the files loaded in Cantera;
+7. write ``build_report.json`` (warnings and refusals by code) and ``snapshot_record.json``.
 """
 
 from __future__ import annotations
@@ -46,6 +47,7 @@ import source_arc  # noqa: E402
 import source_chemkin  # noqa: E402
 import source_e2  # noqa: E402
 import source_pdep  # noqa: E402
+import use_case_export  # noqa: E402
 from common import Report, Session  # noqa: E402
 
 #: Generators run for the snapshot.
@@ -63,6 +65,7 @@ EXPECTED_OUTPUTS = (
     "candidate_lineage",
     "transition_state_evidence",
     "use_case_ch4_oh",
+    "use_case_chemkin_export",
     "ch3_enthalpy_of_formation",
     "network_n2h3",
     "chemkin_reconciliation",
@@ -73,7 +76,7 @@ EXPECTED_OUTPUTS = (
 
 #: Config keys holding local paths; omitted from ``snapshot_record.json``.
 PATH_KEYS = frozenset({"root", "fixture_dir", "adapter_path", "arc_path", "runs_root", "arkane_dir"})
-TOP_LEVEL_KEYS = frozenset({"instance", "sources", "accounts", "expected_outputs", "curation"})
+TOP_LEVEL_KEYS = frozenset({"instance", "sources", "accounts", "expected_outputs", "curation", "chemkin_export"})
 
 #: Deposit order.
 SOURCES = (
@@ -137,6 +140,9 @@ def validate_config(config: dict[str, Any]) -> list[str]:
     if not any(e and e.get("enabled", True) for e in sources.values()):
         problems.append("no source is enabled; there is nothing to build")
     problems += curation_problems(config)
+    problems += use_case_export.problems(config)
+    if config.get("chemkin_export") and not config.get("curation"):
+        problems.append("chemkin_export needs the curation block: the export is requested as the curator")
     wanted = config.get("expected_outputs")
     if wanted:
         problems += [f"unknown generator {n!r}" for n in wanted if n not in registered_generators()]
@@ -301,6 +307,11 @@ def main(argv: list[str] | None = None) -> int:
                         reviewer, report, plan["release"], export.subprocess_env(db_env, PACKAGE_PATHS)
                     )
                     print(f"[curation] release {plan['release']['tag']} published")
+                if config.get("chemkin_export"):
+                    approval["chemkin_export"] = use_case_export.export_use_case(
+                        reviewer, report, config["chemkin_export"], out_dir, approval.get("release")
+                    )
+                    print(f"[chemkin_export] {sorted(approval['chemkin_export']['files'])} written")
             finally:
                 reviewer.close()
 
@@ -315,6 +326,16 @@ def main(argv: list[str] | None = None) -> int:
             print("[export] expected outputs ...")
             wanted = list(config.get("expected_outputs") or EXPECTED_OUTPUTS)
             printed = export.expected_outputs(out_dir / "expected_outputs", env, only=wanted).splitlines()
+            if config.get("chemkin_export"):
+                if use_case_export.OUTPUT_NAME not in wanted:
+                    raise SystemExit(f"chemkin_export is configured but expected_outputs does not list {use_case_export.OUTPUT_NAME}")
+                document = json.loads((out_dir / "expected_outputs" / f"{use_case_export.OUTPUT_NAME}.json").read_text())
+                refused = use_case_export.verify_output(document)
+                if refused:
+                    raise SystemExit("the CHEMKIN export is not shown loaded and checked:\n  - " + "\n  - ".join(refused))
+                exports["chemkin_export_saved_files_vs_in_process_export"] = use_case_export.check_saved(
+                    out_dir / use_case_export.DIRECTORY, env
+                )
             exports["expected_outputs"] = [ln for ln in printed if re.match(r"^[0-9a-f]{64}  ", ln)]
             exports["archive_sha256"] = hashlib.sha256(archive.read_bytes()).hexdigest()
 

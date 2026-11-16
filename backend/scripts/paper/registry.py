@@ -30,7 +30,7 @@ status, not dropped.
 from __future__ import annotations
 
 from app.services.deposit.expected_outputs import Generator
-from scripts.paper import generators, snapshot_cases, snapshot_generators
+from scripts.paper import chemkin_export, generators, snapshot_cases, snapshot_generators
 
 GENERATORS: dict[str, Generator] = {
     "corpus_counts": generators.corpus_counts,
@@ -55,6 +55,7 @@ GENERATORS: dict[str, Generator] = {
     "thermo_selection_outcomes": snapshot_generators.thermo_selection_outcomes,
     "structure_selection_outcomes": snapshot_generators.structure_selection_outcomes,
     "use_case_ch4_oh": snapshot_cases.use_case_ch4_oh,
+    "use_case_chemkin_export": chemkin_export.use_case_chemkin_export,
     "ch3_enthalpy_of_formation": snapshot_cases.ch3_enthalpy_of_formation,
     "network_n2h3": snapshot_cases.network_n2h3,
     "chemkin_reconciliation": snapshot_cases.chemkin_reconciliation,
