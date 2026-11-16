@@ -11,6 +11,7 @@ from typing import Any
 from tckdb_schemas.software import normalize_software_name
 
 from app.schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
+from app.services.public_refs import software_public_ref, workflow_tool_public_ref
 
 
 def manifest_integrity_evidence(
@@ -35,7 +36,8 @@ def manifest_integrity_evidence(
     software_ok = bool(
         software
         and software.software
-        and normalize_software_name(payload.software_release.name) == software.software.name
+        and software_public_ref(normalize_software_name(payload.software_release.name))
+        == software_public_ref(software.software.name)
         and payload.software_release.version == software.version
         and payload.software_release.revision == software.revision
         and payload.software_release.build == software.build
@@ -46,7 +48,8 @@ def manifest_integrity_evidence(
             payload.workflow_tool_release is not None
             and workflow is not None
             and workflow.workflow_tool is not None
-            and payload.workflow_tool_release.name == workflow.workflow_tool.name
+            and workflow_tool_public_ref(payload.workflow_tool_release.name)
+            == workflow_tool_public_ref(workflow.workflow_tool.name)
             and payload.workflow_tool_release.version == workflow.version
             and payload.workflow_tool_release.git_commit == workflow.git_commit
         )

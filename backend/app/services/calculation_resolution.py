@@ -102,6 +102,7 @@ from app.services.deposit_warnings import note_warning_subject
 from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.literature_resolution import resolve_or_create_literature
+from app.services.public_refs import workflow_tool_public_ref
 from app.services.software_reconciliation import (
     SoftwareReconciliationResult,
     parsed_dict_to_ref,
@@ -248,14 +249,9 @@ def spin_agnostic_level_key(ref: LevelOfTheoryRef | LevelOfTheory) -> dict[str, 
 
 
 def find_workflow_tool_by_name(session: Session, name: str) -> WorkflowTool | None:
-    """Return the workflow tool whose name matches *name* ignoring case and surrounding whitespace.
+    """Return the workflow tool whose public ref equals the one *name* would be given."""
 
-    The key is the lower-cased trimmed name the public ref is derived from.
-    """
-
-    return session.scalar(
-        select(WorkflowTool).where(func.lower(func.trim(WorkflowTool.name)) == name.strip().lower()).order_by(WorkflowTool.id)
-    )
+    return session.scalar(select(WorkflowTool).where(WorkflowTool.public_ref == workflow_tool_public_ref(name)))
 
 
 def resolve_workflow_tool_release_ref(

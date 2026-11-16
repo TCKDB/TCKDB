@@ -597,6 +597,7 @@ def _preview_software_release(
         )
     )
     if release is not None:
+        hosted_identity["software_name"] = software.name
         return ContributionBundleDryRunItem(
             record_type=DryRunRecordType.software_release,
             action=DryRunAction.would_reuse,
@@ -656,6 +657,7 @@ def _preview_workflow_tool_release(
         )
     )
     if release is not None:
+        hosted_identity["workflow_tool_name"] = tool.name
         return ContributionBundleDryRunItem(
             record_type=DryRunRecordType.workflow_tool_release,
             action=DryRunAction.would_reuse,

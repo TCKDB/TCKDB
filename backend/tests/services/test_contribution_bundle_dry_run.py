@@ -308,3 +308,23 @@ def test_summary_counts_match_items(db_engine) -> None:
     assert result.summary.would_append == sum(
         1 for a in actions if a is DryRunAction.would_append
     )
+
+
+def test_dry_run_provenance_preview_reuses_a_case_variant_and_reports_the_stored_name(db_conn) -> None:
+    from app.schemas.fragments.refs import SoftwareReleaseRef, WorkflowToolReleaseRef
+    from app.services.calculation_resolution import resolve_workflow_tool_release_ref
+    from app.services.contribution_bundle_dry_run import _preview_software_release, _preview_workflow_tool_release
+    from app.services.software_resolution import resolve_software_release_ref
+
+    with Session(db_conn) as session:
+        with session.begin():
+            resolve_software_release_ref(session, SoftwareReleaseRef(name="Psi4", version="1.9.1"))
+            resolve_workflow_tool_release_ref(session, WorkflowToolReleaseRef(name="geomeTRIC", version="1.0"))
+
+            software = _preview_software_release(session, SoftwareReleaseRef(name="PSI4", version="1.9.1"), "sr")
+            tool = _preview_workflow_tool_release(session, WorkflowToolReleaseRef(name="GeomeTRIC", version="1.0"), "wt")
+
+            assert software.action == DryRunAction.would_reuse
+            assert software.hosted_identity["software_name"] == "Psi4"
+            assert tool.action == DryRunAction.would_reuse
+            assert tool.hosted_identity["workflow_tool_name"] == "geomeTRIC"

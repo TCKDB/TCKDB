@@ -49,3 +49,17 @@ def test_insert_conflict_with_no_matching_row_raises_instead_of_returning_none(d
             monkeypatch.setattr(calculation_resolution, "find_workflow_tool_by_name", lambda sess, name: None)
             with pytest.raises(RuntimeError, match="uniqueness constraint"):
                 resolve_workflow_tool_release_ref(session, WorkflowToolReleaseRef(name="GeomeTRIC"))
+
+
+@pytest.mark.parametrize("name", ["ΑΣ", "İxx"])
+def test_a_name_whose_python_and_sql_case_folds_differ_resolves_to_one_workflow_tool(db_conn, name) -> None:
+    with Session(db_conn) as session:
+        with session.begin():
+            first = resolve_workflow_tool_release_ref(session, WorkflowToolReleaseRef(name=name))
+            second = resolve_workflow_tool_release_ref(session, WorkflowToolReleaseRef(name=name))
+
+            assert first.workflow_tool_id == second.workflow_tool_id
+            count = session.scalar(
+                select(func.count()).select_from(WorkflowTool).where(WorkflowTool.id == first.workflow_tool_id)
+            )
+            assert count == 1

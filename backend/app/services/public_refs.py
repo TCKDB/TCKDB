@@ -33,6 +33,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import secrets
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Callable
 
 from sqlalchemy import event
@@ -320,6 +321,16 @@ def _canonical_software(obj: Any) -> str:
     """Software identity: lowercased trimmed name."""
     name = (obj.name or "").strip().lower()
     return f"software:name={name}"
+
+
+def software_public_ref(name: str) -> str:
+    """The public ref a ``Software`` row named *name* is given on insert."""
+    return make_content_ref(PREFIXES["Software"], _canonical_software(SimpleNamespace(name=name)))
+
+
+def workflow_tool_public_ref(name: str) -> str:
+    """The public ref a ``WorkflowTool`` row named *name* is given on insert."""
+    return make_content_ref(PREFIXES["WorkflowTool"], _canonical_workflow_tool(SimpleNamespace(name=name)))
 
 
 def _canonical_software_release(obj: Any) -> str:

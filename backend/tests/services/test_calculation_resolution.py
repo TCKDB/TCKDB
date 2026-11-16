@@ -711,3 +711,37 @@ def test_dependency_role_type_compatible_accepts_backend_optimized_from_with_opt
         role=CalculationDependencyRole.optimized_from,
         context="test",
     )
+
+
+def _case_variant_environment() -> dict:
+    environment = _execution_environment()
+    environment["software_release"] = {"name": "GAUSSIAN", "version": "16"}
+    environment["workflow_tool_release"] = {"name": "ARC", "version": "1.0"}
+    return environment
+
+
+def test_execution_environment_manifest_check_accepts_case_variant_names(db_conn) -> None:
+    from app.services.execution_environment_integrity import manifest_integrity_evidence
+
+    stored = _execution_environment()
+    stored["workflow_tool_release"] = {"name": "arc", "version": "1.0"}
+    with Session(db_conn) as session:
+        with session.begin():
+            manifest = resolve_execution_environment_manifest(
+                session, ExecutionEnvironmentManifestPayload.model_validate(stored)
+            )
+            variant = ExecutionEnvironmentManifestPayload.model_validate(_case_variant_environment())
+            again = resolve_execution_environment_manifest(session, variant)
+            assert again is not None
+            assert again.software_release_id == manifest.software_release_id
+            assert again.workflow_tool_release_id == manifest.workflow_tool_release_id
+
+            valid, evidence = manifest_integrity_evidence(
+                again,
+                expected_payload=variant,
+                expected_software_release_id=manifest.software_release_id,
+                expected_workflow_tool_release_id=manifest.workflow_tool_release_id,
+            )
+            assert valid, evidence
+            # A second resolution of the variant takes the existing-digest path through the check.
+            assert resolve_execution_environment_manifest(session, variant).id == again.id

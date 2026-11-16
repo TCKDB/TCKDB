@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import ColumnElement
@@ -10,6 +10,7 @@ from tckdb_schemas.software import normalize_software_name
 
 from app.db.models.software import Software, SoftwareRelease
 from app.schemas.fragments.refs import SoftwareReleaseRef
+from app.services.public_refs import software_public_ref
 
 #: Programs that are workflow tools and can never be the electronic-structure
 #: package that ran a calculation. Keyed by the lowercased,
@@ -116,17 +117,11 @@ def _null_safe_equals(column: ColumnElement, value: str | None) -> ColumnElement
     return column.is_(None) if value is None else column == value
 
 
-def software_name_key(name: str) -> str:
-    """Identity key of a software name: the trimmed, lowercased form the public ref is derived from."""
-
-    return normalize_software_name(name).strip().lower()
-
-
 def find_software_by_name(session: Session, name: str) -> Software | None:
-    """Return the software row whose name matches *name* ignoring case and surrounding whitespace."""
+    """Return the software row whose public ref equals the one *name* would be given."""
 
     return session.scalar(
-        select(Software).where(func.lower(func.trim(Software.name)) == software_name_key(name)).order_by(Software.id)
+        select(Software).where(Software.public_ref == software_public_ref(normalize_software_name(name)))
     )
 
 

@@ -225,3 +225,16 @@ def test_insert_conflict_with_no_matching_row_raises_instead_of_returning_none(d
             monkeypatch.setattr(software_resolution, "find_software_by_name", lambda sess, name: None)
             with pytest.raises(RuntimeError, match="uniqueness constraint"):
                 software_resolution.resolve_software(session, "PSI4")
+
+
+@pytest.mark.parametrize("name", ["ΑΣ", "İxx"])
+def test_a_name_whose_python_and_sql_case_folds_differ_resolves_to_one_software(db_conn, name) -> None:
+    from app.services import software_resolution
+
+    with Session(db_conn) as session:
+        with session.begin():
+            first = software_resolution.resolve_software(session, name)
+            second = software_resolution.resolve_software(session, name)
+
+            assert first.id == second.id
+            assert session.scalar(select(func.count()).select_from(Software).where(Software.public_ref == first.public_ref)) == 1
