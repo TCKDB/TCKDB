@@ -41,11 +41,11 @@ from app.services.deposit.build import (
 from app.services.release import versions
 from app.services.release.curation import add_selection, publish_release
 from app.services.release.manifest import VerificationReport, freeze_manifest
-from tests.services.deposit.sample_generators.registry import GENERATORS
 
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
 REPO_ROOT = BACKEND_ROOT.parent
-GENERATOR_DIR = Path(__file__).parent / "sample_generators"
+GENERATOR_ROOT = Path(__file__).parent / "sample_generators"
+GENERATOR_SPEC = "sample_deposit_generators.registry:GENERATORS"
 
 
 # ---------------------------------------------------------------------------
@@ -347,8 +347,8 @@ def test_write_deposit_defaults_to_the_strict_source_checks(
             output_dir=tmp_path / "out",
             author_accounts=_allowlist(db_session),
             repo_root=tagged_repo,
-            generators=GENERATORS,
-            generator_dir=GENERATOR_DIR,
+            generator_spec=GENERATOR_SPEC,
+            generator_root=GENERATOR_ROOT,
         )
     assert not (tmp_path / "out").exists()
 
@@ -367,8 +367,8 @@ def test_switching_the_source_checks_off_reaches_the_next_refusal(
             output_dir=tmp_path / "out",
             author_accounts=_allowlist(db_session),
             repo_root=tagged_repo,
-            generators=GENERATORS,
-            generator_dir=GENERATOR_DIR,
+            generator_spec=GENERATOR_SPEC,
+            generator_root=GENERATOR_ROOT,
             require_clean_tree=False,
             require_exact_tag=False,
         )
@@ -388,8 +388,8 @@ def test_write_deposit_refuses_a_non_empty_output_directory(
             output_dir=out,
             author_accounts=_allowlist(db_session),
             repo_root=REPO_ROOT,
-            generators=GENERATORS,
-            generator_dir=GENERATOR_DIR,
+            generator_spec=GENERATOR_SPEC,
+            generator_root=GENERATOR_ROOT,
             require_clean_tree=False,
             require_exact_tag=False,
         )
@@ -416,8 +416,8 @@ def test_write_deposit_refuses_when_the_archived_release_rows_differ_from_the_em
             output_dir=tmp_path / "out",
             author_accounts=_allowlist(db_session),
             repo_root=REPO_ROOT,
-            generators=GENERATORS,
-            generator_dir=GENERATOR_DIR,
+            generator_spec=GENERATOR_SPEC,
+            generator_root=GENERATOR_ROOT,
             require_clean_tree=False,
             require_exact_tag=False,
         )
@@ -433,8 +433,8 @@ def built_deposit(db_session, draft_release, curator, thermo_candidates, species
         output_dir=tmp_path / "deposit",
         author_accounts=_allowlist(db_session),
         repo_root=REPO_ROOT,
-        generators=GENERATORS,
-        generator_dir=GENERATOR_DIR,
+        generator_spec=GENERATOR_SPEC,
+        generator_root=GENERATOR_ROOT,
         require_clean_tree=False,
         require_exact_tag=False,
     )

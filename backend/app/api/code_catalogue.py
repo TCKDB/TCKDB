@@ -1463,19 +1463,40 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("freq_n_imag_disagrees_with_modes", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
             shape=Shape.relationship),
+    ApiCode("generators_name_collision", 422, Surface.message_prefix,
+            "backend/app/services/deposit/generator_spec.py",
+            reach=Reach.guard,
+            note=(
+                "The registry's top-level package has the name of a top-level package of the checkout and would shadow it on a reproducer's import path. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) through the deposit service, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
+    ApiCode("generators_outside_root", 422, Surface.message_prefix,
+            "backend/app/services/deposit/generator_spec.py",
+            reach=Reach.guard,
+            note=(
+                "The registry's module, or a file of its package, does not lie under --generator-root. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) through the deposit service, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
     ApiCode("generators_required", 422, Surface.message_prefix,
             "backend/app/services/deposit/generator_spec.py",
             reach=Reach.guard,
             note=(
-                "The deposit builder or the generator runner was run without --generators. "
-                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+                "--generators was not passed. "
+                "Raised by backend/scripts/ops/build_publication_deposit.py (build) and backend/scripts/ops/generate_expected_outputs.py, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
+    ApiCode("generators_root_required", 422, Surface.message_prefix,
+            "backend/app/services/deposit/generator_spec.py",
+            reach=Reach.guard,
+            note=(
+                "--generator-root was not passed to the deposit builder. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py), an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
             )),
     ApiCode("generators_spec_invalid", 422, Surface.message_prefix,
             "backend/app/services/deposit/generator_spec.py",
             reach=Reach.guard,
             note=(
-                "--generators is not a module:attr naming an importable, non-empty mapping of name to generator. "
-                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+                "--generators is not a module.path:attr naming an importable, non-empty mapping of name to callable. "
+                "Raised by backend/scripts/ops/build_publication_deposit.py (build) and backend/scripts/ops/generate_expected_outputs.py, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
             )),
     ApiCode("geometry_isotope_symbol_conflict", 422, Surface.coded_exception,
             "backend/app/chemistry/geometry.py",

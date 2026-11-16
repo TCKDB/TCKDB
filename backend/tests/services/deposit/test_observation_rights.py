@@ -51,7 +51,6 @@ from app.services.release.curation import add_selection, publish_release
 from app.services.release.manifest import freeze_manifest
 from app.services.rights import record_attestation
 from app.services.submission import create_submission, link_records
-from tests.services.deposit.sample_generators.registry import GENERATORS
 from tests.services.release._attest import deposit_and_attest
 from tests.services.scientific_read._factories import (
     make_observation,
@@ -62,7 +61,8 @@ from tests.services.scientific_read._factories import (
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[3]
 _REPO_ROOT = _BACKEND_ROOT.parent
-_GENERATOR_DIR = Path(__file__).parent / "sample_generators"
+GENERATOR_ROOT = Path(__file__).parent / "sample_generators"
+GENERATOR_SPEC = "sample_deposit_generators.registry:GENERATORS"
 
 
 def _allowlist(session) -> list[str]:
@@ -266,8 +266,8 @@ def test_write_deposit_refuses_an_unattested_in_scope_observation(
             output_dir=tmp_path / "out",
             author_accounts=_allowlist(db_session),
             repo_root=_REPO_ROOT,
-            generators=GENERATORS,
-            generator_dir=_GENERATOR_DIR,
+            generator_spec=GENERATOR_SPEC,
+            generator_root=GENERATOR_ROOT,
             require_clean_tree=False,
             require_exact_tag=False,
         )
@@ -296,8 +296,8 @@ def test_write_deposit_builds_over_an_attested_in_scope_observation(
         output_dir=tmp_path / "out",
         author_accounts=_allowlist(db_session),
         repo_root=_REPO_ROOT,
-        generators=GENERATORS,
-        generator_dir=_GENERATOR_DIR,
+        generator_spec=GENERATOR_SPEC,
+        generator_root=GENERATOR_ROOT,
         require_clean_tree=False,
         require_exact_tag=False,
     )

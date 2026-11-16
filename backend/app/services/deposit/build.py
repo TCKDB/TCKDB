@@ -54,6 +54,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import shlex
 import shutil
 import subprocess
 import tarfile
@@ -77,7 +78,7 @@ from app.db.models.molecular_property_observation import (
     MolecularPropertyObservation,
 )
 from app.services.archive import verify_archive, write_archive
-from app.services.deposit.expected_outputs import Generator, write_expected_outputs
+from app.services.deposit.expected_outputs import write_expected_outputs
 from app.services.document_formats import DEPOSIT, FORMATS, header_of, reads_as
 from app.services.release import versions
 from app.services.release.artifacts import canonical_json, release_record_universe
@@ -595,7 +596,7 @@ def _accounts_document(session: Session, allowlist: frozenset[str]) -> bytes:
 
 
 def _reproduce_document(
-    *, tag: str, source: SourceBinding, archive_member: str, generator_spec: str | None = None
+    *, tag: str, source: SourceBinding, archive_member: str, generator_spec: str
 ) -> bytes:
     template = Template(REPRODUCE_TEMPLATE.read_text(encoding="utf-8"))
     return template.substitute(
@@ -606,7 +607,7 @@ def _reproduce_document(
         backend_version=source.backend_version,
         schemas_package_version=source.schemas_package_version,
         archive_member=archive_member,
-        generators_spec=generator_spec or "<module:attr>",
+        generators_spec=shlex.quote(generator_spec),
     ).encode("utf-8")
 
 
@@ -715,9 +716,8 @@ def write_deposit(
     output_dir: Path,
     author_accounts: Collection[str],
     repo_root: Path,
-    generators: Mapping[str, Generator],
-    generator_dir: Path,
-    generator_spec: str | None = None,
+    generator_spec: str,
+    generator_root: Path,
     source: SourceBinding | None = None,
     require_clean_tree: bool = True,
     require_exact_tag: bool = True,
@@ -749,9 +749,13 @@ def write_deposit(
         if not candidate.is_file():
             raise SourcePinMissingError(f"source_pin_missing: {relative_source} is not in the checkout")
         pins.append((candidate, deposit_path))
-    generator_sources = sorted(p for p in Path(generator_dir).glob("*.py"))
+    from app.services.deposit.generator_spec import (
+        load_deposit_generators,
+    )
+
+    generators, generator_sources = load_deposit_generators(generator_spec, generator_root)
     if not generator_sources:
-        raise DepositError(f"no_generators: {generator_dir} holds no generator sources")
+        raise DepositError(f"no_generators: {generator_root} holds no generator sources")
 
     if output_dir.exists() and any(output_dir.iterdir()):
         raise OutputNotEmptyError(f"output_not_empty: {output_dir} already has content; refusing to overwrite")
@@ -791,9 +795,9 @@ def write_deposit(
             _write(output_dir, deposit_path, content)
             members.append(_member(deposit_path, content, ROLE_SOURCE_PIN))
 
-        for path in generator_sources:
+        for path, relative in generator_sources:
             content = path.read_bytes()
-            deposit_path = f"scripts/{path.name}"
+            deposit_path = f"scripts/{relative}"
             _write(output_dir, deposit_path, content)
             members.append(_member(deposit_path, content, ROLE_RESULT_GENERATOR))
 

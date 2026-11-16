@@ -19,8 +19,8 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.api.deps import SessionLocal  # noqa: E402
-from app.services.deposit.expected_outputs import write_expected_outputs  # noqa: E402
 from app.services.deposit.build import DepositError  # noqa: E402
+from app.services.deposit.expected_outputs import write_expected_outputs  # noqa: E402
 from app.services.deposit.generator_spec import load_generators  # noqa: E402
 
 
@@ -45,7 +45,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     try:
-        registry, _ = load_generators(args.generators)
+        registry = load_generators(args.generators)
     except DepositError as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return exc.exit_code

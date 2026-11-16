@@ -88,12 +88,14 @@ row into the database, byte-exact.
 ## 4. Regenerate the expected outputs and byte-diff them
 
 ```bash
-conda run -n tckdb_env python backend/scripts/ops/generate_expected_outputs.py --generators ${generators_spec} --output-dir /tmp/regenerated
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=<deposit>/scripts conda run -n tckdb_env python backend/scripts/ops/generate_expected_outputs.py --generators ${generators_spec} --output-dir /tmp/regenerated
 diff -r <deposit>/expected_outputs /tmp/regenerated && echo "expected outputs reproduced byte for byte"
 ```
 
-The registry `${generators_spec}` is the one the deposit was built with; its
-sources are copied under `scripts/`.
+Run it from the root of the checkout of step 1. `PYTHONPATH` makes the registry
+`${generators_spec}` import from the copy of its package under `<deposit>/scripts/`,
+so the sources that run are the ones the manifest binds; `PYTHONDONTWRITEBYTECODE` keeps
+the deposit directory unchanged.
 
 ## 5. Verify the deposit against the restored database
 

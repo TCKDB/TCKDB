@@ -314,7 +314,7 @@ checksums. If you want the newer state published, cut the next release.
 ## 5b. Build the publication deposit
 
 The curl procedure above gives you the release. A **deposit**
-(`tckdb.deposit`, format version 1) is the directory a paper is backed by: the release, the
+(`tckdb.deposit`, format version 1) is the directory a publication is backed by: the release, the
 `tckdb.archive` (format version 1) evidence archive written in the same database session,
 the exact source commit and its lockfiles, the scripts that generate the
 published numbers, those scripts' expected outputs, a `REPRODUCE.md`
@@ -332,13 +332,16 @@ conda run -n tckdb_env python backend/scripts/ops/build_publication_deposit.py b
   --release 2026.07.0 \
   --output /srv/deposits/tckdb-2026.07.0 \
   --generators my_generators.registry:GENERATORS \
+  --generator-root /srv/my-generators \
   --author-account alice --author-account bob
 ```
 
 `--generators module:attr` names the generator registry (a mapping of name to
-generator); the build refuses without it. `--generator-dir` sets the directory
-whose `*.py` files are copied into the deposit (default: the registry module's
-directory). The build reads the release from the database (never over HTTP) and refuses,
+generator) and `--generator-root` the directory it imports from (here
+`/srv/my-generators/my_generators/registry.py`); the build refuses without either.
+The registry's top-level package is copied, layout preserved, under the deposit's
+`scripts/`, and `REPRODUCE.md` puts that directory on `PYTHONPATH`. The package
+name must not be one the checkout uses (`app`, `scripts`, `tests`, ...). The build reads the release from the database (never over HTTP) and refuses,
 with a distinct exit code, when:
 
 | exit | refusal |
@@ -374,7 +377,7 @@ at build time; the release manifest itself does not yet carry a commit.
 ## 6. Mint the DOI — the manual step
 
 **TCKDB does not mint DOIs.** A DOI is not retractable; the machinery is built
-so that depositing is a deliberate human act at the moment a paper tag is cut,
+so that depositing is a deliberate human act at the moment a release is tagged for publication,
 not a side effect of publishing a release.
 
 When you are ready:

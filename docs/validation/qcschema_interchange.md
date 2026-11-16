@@ -10,8 +10,8 @@ tckdb-qcschema 0.5.0 (issue #573). This is the demonstration for the QCSchema ha
   [`backend/scripts/validation/qcschema_interchange_report.py`](../../backend/scripts/validation/qcschema_interchange_report.py).
 - **Fixtures:**
   [`backend/tests/fixtures/qcschema/water_b3lyp_def2tzvp_psi4/`](../../backend/tests/fixtures/qcschema/water_b3lyp_def2tzvp_psi4/README.md).
-- **Deposit generator:** `paper_generator` in the report module, for a registry passed to
-  `--generators`.
+- **Registry entry:** `paper_generator(session)` in the report module is a `(Session) -> dict`
+  callable that a generator registry can list.
 - **Test:** `backend/tests/scripts/test_qcschema_interchange_report.py`, in
   the backend complement gate.
 
