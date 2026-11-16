@@ -11,7 +11,7 @@ The grid, the composition and every bound are stated in
 comparison emits a machine-readable summary (every reaction compared, every
 unsupported form or export gap, the maximum deviation per species and per
 reaction) to the path in ``TCKDB_CHEMKIN_GRID_SUMMARY_PATH`` when that is set,
-and ``test_summary_shape`` pins its shape for a later paper generator.
+and ``test_summary_shape`` pins its shape for a later consumer.
 
 Mutation checks rewrite the *exported* text and re-run the comparison against
 the unmutated original, so each row of the table below is a landed mutation:
@@ -163,7 +163,7 @@ def test_exported_mechanism_matches_original_on_the_grid(pipeline):
 
 
 def test_summary_shape(pipeline):
-    """A paper generator reads this shape; keep it stable."""
+    """A report generator reads this shape; keep it stable."""
     summary = _compare(pipeline, pipeline["files_out"]).summary()
     assert summary["schema"] == SUMMARY_SCHEMA
     assert summary["engine"] == {"cantera": PINNED_CANTERA}

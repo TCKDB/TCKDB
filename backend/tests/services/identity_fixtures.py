@@ -2,7 +2,7 @@
 
 The fixtures live in ``backend/tests/fixtures/identity/`` (see its README for
 the contract and the file format). This module is import-only support: the
-test that runs the cases is ``test_identity_fixtures.py``; a paper generator
+test that runs the cases is ``test_identity_fixtures.py``; a report generator
 can import :func:`identity_fixture_report` to count what the set contains.
 """
 
@@ -141,7 +141,7 @@ def load_identity_fixtures(fixture_dir: Path = FIXTURE_DIR) -> list[IdentityCase
 
 
 def identity_fixture_report(cases: list[IdentityCase] | None = None) -> dict[str, Any]:
-    """Counts by class and expected outcome, for the paper generators.
+    """Counts by class and expected outcome, for report generators.
 
     The report describes what the fixture set *contains*; whether the services
     reproduce each expectation is the test's verdict, not this function's.

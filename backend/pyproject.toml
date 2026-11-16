@@ -125,8 +125,8 @@ dev = [
     "httpx>=0.27",
     "jsonschema>=4.22",
     # The QCSchema interchange demonstration
-    # (scripts/validation/qcschema_interchange_report.py, usable as a
-    # deposit generator) runs the client-side adapter under
+    # (scripts/validation/qcschema_interchange_report.py, usable by a
+    # deposit generator through build_report(..., include_commit=False)) runs the client-side adapter under
     # clients/python/adapters/qcschema, which validates documents with
     # qcelemental. Same exact pin as that adapter. Test/dev only: the deployed
     # image installs with --no-deps from environment.yml, so nothing here

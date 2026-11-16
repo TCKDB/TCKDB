@@ -10,8 +10,6 @@ tckdb-qcschema 0.5.0 (issue #573). This is the demonstration for the QCSchema ha
   [`backend/scripts/validation/qcschema_interchange_report.py`](../../backend/scripts/validation/qcschema_interchange_report.py).
 - **Fixtures:**
   [`backend/tests/fixtures/qcschema/water_b3lyp_def2tzvp_psi4/`](../../backend/tests/fixtures/qcschema/water_b3lyp_def2tzvp_psi4/README.md).
-- **Registry entry:** `paper_generator(session)` in the report module is a `(Session) -> dict`
-  callable that a generator registry can list.
 - **Test:** `backend/tests/scripts/test_qcschema_interchange_report.py`, in
   the backend complement gate.
 
@@ -65,7 +63,7 @@ Exit status:
 - `1`: a round-trip check failed; the output names it.
 - `2`: the fixtures or the environment could not be used.
 
-Two runs give byte-identical JSON. The paper generator returns the same report
+Two runs give byte-identical JSON. `build_report(session, include_commit=False)` returns the same report
 without the checkout's commit hash.
 
 ## What was run and why
@@ -195,8 +193,8 @@ scientific read does not return. Everything the import writes is rolled back.
     with `--no-deps` from `environment.yml`, so this does not reach it. A
     workstation without the extra skips the new test. CI fails instead of
     skipping.
-15. **The paper generator leaves out the commit hash.** It is the same report
-    without `tckdb_commit`. A reproducer's checkout could otherwise make the
+15. **`build_report(session, include_commit=False)` leaves out the commit hash.**
+    It returns the same report without `tckdb_commit`. A reproducer's checkout could otherwise make the
     deposit's byte comparison fail on a value the fixtures do not determine.
 
 ## Round trip
@@ -240,6 +238,14 @@ the document compares equal after parsing: 58 field paths, including
 `fix_com` and `fix_orientation` on both molecules (`true` in the Psi4 input
 and, since tckdb-qcschema 0.5.0, in the export). The Hessian and the two
 geometries are checked separately above.
+
+Two of those compared paths, `input_data.specification.model.basis` and
+`.method`, are compared by TCKDB's identity key rather than byte for byte:
+a level of theory that already exists under another spelling (`B3LYP`,
+`Def2TZVP`) is reused and exported as stored, and the two spellings are one
+TCKDB level of theory. A different basis set or method still counts as a
+change. `loss_list.compared_by_identity_key` names those paths; it is a
+declaration, not a measurement of any spelling difference.
 
 ## Measurements
 
