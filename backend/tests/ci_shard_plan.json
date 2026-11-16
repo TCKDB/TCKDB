@@ -406,7 +406,6 @@
    "tests/scripts/test_merge_scheme_input_levels.py": 1,
    "tests/scripts/test_migrate_object_store.py": 4,
    "tests/scripts/test_mypy_sees_the_wire_package.py": 1,
-   "tests/scripts/test_paper_generators.py": 3,
    "tests/scripts/test_pdep_ingestion.py": 4,
    "tests/scripts/test_project_imaginary_modes.py": 3,
    "tests/scripts/test_prune_orphan_provenance.py": 2,

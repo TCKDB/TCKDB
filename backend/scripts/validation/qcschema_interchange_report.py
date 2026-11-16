@@ -1170,17 +1170,6 @@ def markdown_summary(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def paper_generator(session: Session) -> dict[str, Any]:
-    """The report as a ``(Session) -> dict`` callable for a generator registry.
-
-    The same report without the checkout commit, which a restored deposit's
-    byte comparison could not reproduce from a different checkout. Reads the
-    committed fixtures; the session's database is used for the rolled-back
-    round trip and may already hold levels of theory and other rows.
-    """
-    return build_report(session, include_commit=False)
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--json-out", type=Path, default=None, help="write the canonical JSON report here")
