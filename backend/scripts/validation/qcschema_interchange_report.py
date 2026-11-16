@@ -19,9 +19,11 @@ Inputs are committed fixtures; the database may be populated
 
 No network is contacted. The round trip runs against whatever database the
 session points at, empty or populated, inside one transaction that is always
-rolled back: see "The round trip". Rows already present can be reused (a level
-of theory keeps the spelling of its first deposit), so the exported basis is
-compared by its identity key; see ``IDENTITY_KEYED_PATHS``.
+rolled back: see "The round trip". A level of theory that exists under another
+basis or method spelling is reused and exported as stored, so those two fields
+are compared by identity key; see ``IDENTITY_KEYED_PATHS``. Other rows already
+present are not covered by that: a software name that differs only in case
+from the fixture's is a known backend failure, not handled here.
 
 The round trip (asserted, exit status 1 on any failure)
 -------------------------------------------------------
@@ -147,6 +149,7 @@ if str(BACKEND_ROOT) not in sys.path:
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.chemistry.basis_set_names import basis_identity_key  # noqa: E402
+from app.chemistry.method_names import method_identity_key  # noqa: E402
 from app.chemistry.normal_modes import (  # noqa: E402
     FRAME_CONSISTENCY_TOLERANCE_CM1,
     atomic_mass,
@@ -237,13 +240,17 @@ EXPECTED_CHANGED_PATHS = (
     "provenance.version",
 )
 
-#: Paths compared by TCKDB's identity key rather than byte for byte. The
-#: level-of-theory row is shared and keeps the spelling of whichever deposit
-#: created it, so the exported basis is the stored spelling: ``def2-tzvp``
-#: and ``Def2TZVP`` are one basis (``app.chemistry.basis_set_names``) and
-#: QCSchema consumers read basis names case-insensitively. A different basis
-#: set still lands in ``changed``.
-IDENTITY_KEYED_PATHS = ("input_data.specification.model.basis",)
+#: Paths compared by TCKDB's identity key rather than byte for byte, with the
+#: key each uses. The level-of-theory row is shared and keeps the spelling of
+#: whichever deposit created it, so the export carries the stored spelling,
+#: not the fixture's. Two spellings with one key are one TCKDB level of theory
+#: (``app.chemistry.basis_set_names``, ``app.chemistry.method_names``). A
+#: different basis set or method still lands in ``changed``. Only ``method``
+#: and ``basis`` are exported from the level of theory.
+IDENTITY_KEYED_PATHS: dict[str, Callable[[Any], Any]] = {
+    "input_data.specification.model.basis": basis_identity_key,
+    "input_data.specification.model.method": method_identity_key,
+}
 
 #: Compared by their own checks, not by the structural diff.
 _SEPARATELY_CHECKED = frozenset(
@@ -871,7 +878,7 @@ def _check_round_trip(adapter: SimpleNamespace, fixtures: SimpleNamespace, trip:
     diff = structural_diff(
         _as_parsed(original),
         _as_parsed(exported),
-        identity_keyed=dict.fromkeys(IDENTITY_KEYED_PATHS, basis_identity_key),
+        identity_keyed=IDENTITY_KEYED_PATHS,
     )
     checks["loss_list_complete"] = diff["lost"] == sorted(EXPECTED_LOST_PATHS) and diff["changed"] == sorted(
         EXPECTED_CHANGED_PATHS
@@ -882,7 +889,7 @@ def _check_round_trip(adapter: SimpleNamespace, fixtures: SimpleNamespace, trip:
         "added": diff["added"],
         "separately_checked": diff["separately_checked"],
         "equal_count": len(diff["equal"]),
-        "compared_by_identity_key": list(IDENTITY_KEYED_PATHS),
+        "compared_by_identity_key": sorted(IDENTITY_KEYED_PATHS),
         "unexpected_lost": sorted(set(diff["lost"]) - set(EXPECTED_LOST_PATHS)),
         "missing_from_lost": sorted(set(EXPECTED_LOST_PATHS) - set(diff["lost"])),
         "unexpected_changed": sorted(set(diff["changed"]) - set(EXPECTED_CHANGED_PATHS)),
