@@ -174,8 +174,9 @@ MIN_T_MID_DECIMALS = 2
 #: out a few parts in 1e16 above 1 in floating point; the gate allows that and nothing larger. The value reported in the
 #: output is rounded for reading; the gate uses the unrounded one.
 HALF_UNIT_FLOAT_EPSILON = 1.0e-9
-#: Cantera's k against the hand evaluation of the written A, n and Ea (same formula, same digits).
-CANTERA_VS_HAND_RELATIVE = 1.0e-6
+#: Cantera's k against the hand evaluation of the written A, n and Ea (same formula, same digits): the two gas
+#: constants differ by 3e-10, which Ea/RT (about 3.4) takes to 1e-9, and the report has ten figures.
+CANTERA_VS_HAND_RELATIVE = 1.0e-8
 
 
 def _written_places(key: str, text: Any) -> int | None:

@@ -232,9 +232,11 @@ def test_multi_arrhenius_emits_one_duplicate_arrhenius_line_per_term():
     assert any("1.00000000E+12" in ln for ln in main_lines)
     assert any("5.00000000E+11" in ln for ln in main_lines)
     # The old bug wrote a single identically-zero rate; assert it is gone.
-    assert "0.0 0.00000000E+00 0.00000000E+00" not in export.files["chem.inp"]
     for ln in main_lines:
-        assert not ln.strip().endswith("0.0 0.00000000E+00 0.00000000E+00")
+        a_text, n_text, ea_text = ln.split()[-3:]
+        # "0.0" is the fallback for a missing A or Ea; a written rate is always in E notation
+        assert "0.0" not in (a_text, ea_text)
+        assert float(a_text) > 0.0
 
 
 def test_multi_arrhenius_cantera_summed_rate_is_sum_of_terms():

@@ -156,7 +156,7 @@ def test_the_file_digest_ignores_refs_and_the_manifest_timestamp_and_nothing_els
 
 
 def test_ratio_is_reported_as_it_is_to_six_figures():
-    assert chemkin_export.ratio(1.87889e10, 1.87469e10) == 1.00224
+    assert chemkin_export.ratio(1.87889e10, 1.87469e10) == 1.00224037
     assert chemkin_export.ratio(3.0, 2.0) == 1.5
     assert chemkin_export.ratio(None, 2.0) is None
     assert chemkin_export.ratio(2.0, None) is None
@@ -521,19 +521,19 @@ def _good_output() -> dict:
         "cantera": {"status": "loaded"},
         "manifest": {"gaps": []},
         "forward_rate": {
-            "cantera_k_forward": 1.87889e10,
-            "stored_fit_k": 1.87469e10,
+            "cantera_k_forward": 18746927970.0,
+            "stored_fit_k": 18746927860.0,
             "stored_fit_units": "cm3_mol_s",
             "units": "cm3_mol_s",
-            "cantera_over_stored": 1.00000001,
-            "ratio_explained_by_written_digits": {"total": 1.0e-7},
-            "written_in_chem_inp": {"n_text": "3.46761000E+00", "a_text": "1.45978000E+03", "ea_text": "2.03305213E+03"},
+            "cantera_over_stored": 1.000000006,
+            "ratio_explained_by_written_digits": {"total": 4.18e-8},
+            "written_in_chem_inp": {"n_text": "3.46761000E+00", "a_text": "1.45978000E+03", "ea_text": "2.03305210E+03"},
             "written_vs_stored_fit": {
-                "n": {"over_half_unit": 0.78, "over_half_unit_unrounded": 0.78},
-                "a": {"over_half_unit": 0.4, "over_half_unit_unrounded": 0.4},
-                "ea": {"over_half_unit": 0.9, "over_half_unit_unrounded": 0.9},
+                "n": {"over_half_unit": 0.0, "over_half_unit_unrounded": 0.0},
+                "a": {"over_half_unit": 0.0, "over_half_unit_unrounded": 0.0},
+                "ea": {"over_half_unit": 0.65, "over_half_unit_unrounded": 0.65},
             },
-            "cantera_over_hand_evaluation_of_written_digits": 1.0,
+            "cantera_over_hand_evaluation_of_written_digits": 1.0000000006,
         },
         "ch3_h298": {
             "exported_nasa_h298_kj_mol": 144.815,
@@ -604,7 +604,9 @@ def test_a_rate_ratio_the_written_digits_cannot_explain_is_refused(step):
     assert any("1000.0" in r and "explain" in r for r in step.verify_output(wrong))
     assert step.verify_output(_with(_good_output(), forward_rate__cantera_over_stored=0.99))
     assert step.verify_output(_with(_good_output(), forward_rate__ratio_explained_by_written_digits=None))
-    assert step.verify_output(_with(_good_output(), forward_rate__cantera_over_stored=1.0000001)) == []
+    assert step.verify_output(_with(_good_output(), forward_rate__cantera_over_stored=1.00000003)) == []
+    # the bound follows nine-figure rounding, so a ratio of 1 + 1e-7 is refused
+    assert step.verify_output(_with(_good_output(), forward_rate__cantera_over_stored=1.0000001))
 
 
 def test_rates_in_other_units_are_refused(step):
