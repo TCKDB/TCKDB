@@ -1463,6 +1463,20 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("freq_n_imag_disagrees_with_modes", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
             shape=Shape.relationship),
+    ApiCode("generators_required", 422, Surface.message_prefix,
+            "backend/app/services/deposit/generator_spec.py",
+            reach=Reach.guard,
+            note=(
+                "The deposit builder or the generator runner was run without --generators. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
+    ApiCode("generators_spec_invalid", 422, Surface.message_prefix,
+            "backend/app/services/deposit/generator_spec.py",
+            reach=Reach.guard,
+            note=(
+                "--generators is not a module:attr naming an importable, non-empty mapping of name to generator. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
     ApiCode("geometry_isotope_symbol_conflict", 422, Surface.coded_exception,
             "backend/app/chemistry/geometry.py",
             shape=Shape.relationship),
@@ -1960,7 +1974,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/deposit/build.py",
             reach=Reach.guard,
             note=(
-                "The paper generator registry is empty. "
+                "The generator registry is empty. "
                 "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
             )),
     ApiCode("non_finite_value", 422, Surface.message_prefix,

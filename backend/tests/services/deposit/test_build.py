@@ -41,11 +41,11 @@ from app.services.deposit.build import (
 from app.services.release import versions
 from app.services.release.curation import add_selection, publish_release
 from app.services.release.manifest import VerificationReport, freeze_manifest
-from scripts.paper.registry import GENERATORS
+from tests.services.deposit.sample_generators.registry import GENERATORS
 
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
 REPO_ROOT = BACKEND_ROOT.parent
-GENERATOR_DIR = BACKEND_ROOT / "scripts" / "paper"
+GENERATOR_DIR = Path(__file__).parent / "sample_generators"
 
 
 # ---------------------------------------------------------------------------

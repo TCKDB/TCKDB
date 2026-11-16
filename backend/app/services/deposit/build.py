@@ -6,7 +6,7 @@ A published dataset release freezes four NDJSON files and a manifest, but by
 its own contract omits the evidence: raw artifact bytes, geometries and
 calculation payloads. That evidence lives in a ``tckdb.archive`` archive.
 Neither says which git commit produced it, and nothing binds the two to the
-scripts that turn the database into the numbers a manuscript quotes.
+scripts that turn the database into the published numbers.
 
 The deposit is the directory that binds all of it by digest::
 
@@ -594,7 +594,9 @@ def _accounts_document(session: Session, allowlist: frozenset[str]) -> bytes:
     return "\n".join(lines).encode("utf-8")
 
 
-def _reproduce_document(*, tag: str, source: SourceBinding, archive_member: str) -> bytes:
+def _reproduce_document(
+    *, tag: str, source: SourceBinding, archive_member: str, generator_spec: str | None = None
+) -> bytes:
     template = Template(REPRODUCE_TEMPLATE.read_text(encoding="utf-8"))
     return template.substitute(
         tag=tag,
@@ -604,6 +606,7 @@ def _reproduce_document(*, tag: str, source: SourceBinding, archive_member: str)
         backend_version=source.backend_version,
         schemas_package_version=source.schemas_package_version,
         archive_member=archive_member,
+        generators_spec=generator_spec or "<module:attr>",
     ).encode("utf-8")
 
 
@@ -714,6 +717,7 @@ def write_deposit(
     repo_root: Path,
     generators: Mapping[str, Generator],
     generator_dir: Path,
+    generator_spec: str | None = None,
     source: SourceBinding | None = None,
     require_clean_tree: bool = True,
     require_exact_tag: bool = True,
@@ -799,7 +803,9 @@ def write_deposit(
             assert hashlib.sha256(content).hexdigest() == digest
             members.append(_member(f"expected_outputs/{name}", content, ROLE_EXPECTED_OUTPUT))
 
-        reproduce = _reproduce_document(tag=release.tag, source=source, archive_member=archive_member_path)
+        reproduce = _reproduce_document(
+            tag=release.tag, source=source, archive_member=archive_member_path, generator_spec=generator_spec
+        )
         _write(output_dir, "REPRODUCE.md", reproduce)
         members.append(_member("REPRODUCE.md", reproduce, ROLE_PROTOCOL))
 

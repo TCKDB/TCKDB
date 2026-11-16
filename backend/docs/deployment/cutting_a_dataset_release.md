@@ -316,25 +316,29 @@ checksums. If you want the newer state published, cut the next release.
 The curl procedure above gives you the release. A **deposit**
 (`tckdb.deposit`, format version 1) is the directory a paper is backed by: the release, the
 `tckdb.archive` (format version 1) evidence archive written in the same database session,
-the exact source commit and its lockfiles, the scripts that generate every
-manuscript number, those scripts' expected outputs, a `REPRODUCE.md`
+the exact source commit and its lockfiles, the scripts that generate the
+published numbers, those scripts' expected outputs, a `REPRODUCE.md`
 protocol and an `ACCOUNTS.md` privacy statement -- all bound by SHA-256 in
 one `MANIFEST.json`. Build it **on the host that holds the database**, from a
 clean checkout of the exact tagged commit that is deployed:
 
 ```bash
 git status --porcelain --untracked-files=no   # must print nothing (untracked files are only warned about)
-git describe --tags --exact-match             # must print the paper tag
+git describe --tags --exact-match             # must print the release tag
 export DB_USER=... DB_PASSWORD=... DB_HOST=... DB_PORT=... DB_NAME=...
 export S3_ENDPOINT_URL=... S3_ACCESS_KEY=... S3_SECRET_KEY=... S3_BUCKET=... S3_REGION=...
 
 conda run -n tckdb_env python backend/scripts/ops/build_publication_deposit.py build \
   --release 2026.07.0 \
   --output /srv/deposits/tckdb-2026.07.0 \
+  --generators my_generators.registry:GENERATORS \
   --author-account alice --author-account bob
 ```
 
-The build reads the release from the database (never over HTTP) and refuses,
+`--generators module:attr` names the generator registry (a mapping of name to
+generator); the build refuses without it. `--generator-dir` sets the directory
+whose `*.py` files are copied into the deposit (default: the registry module's
+directory). The build reads the release from the database (never over HTTP) and refuses,
 with a distinct exit code, when:
 
 | exit | refusal |

@@ -51,7 +51,7 @@ from app.services.release.curation import add_selection, publish_release
 from app.services.release.manifest import freeze_manifest
 from app.services.rights import record_attestation
 from app.services.submission import create_submission, link_records
-from scripts.paper.registry import GENERATORS
+from tests.services.deposit.sample_generators.registry import GENERATORS
 from tests.services.release._attest import deposit_and_attest
 from tests.services.scientific_read._factories import (
     make_observation,
@@ -62,7 +62,7 @@ from tests.services.scientific_read._factories import (
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[3]
 _REPO_ROOT = _BACKEND_ROOT.parent
-_GENERATOR_DIR = _BACKEND_ROOT / "scripts" / "paper"
+_GENERATOR_DIR = Path(__file__).parent / "sample_generators"
 
 
 def _allowlist(session) -> list[str]:

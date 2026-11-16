@@ -2,7 +2,7 @@
 
 ``build`` reads one published dataset release from the database (never over
 HTTP), writes the evidence archive from the same session, copies the source
-pins and the manuscript-number generators, runs the generators to produce
+pins and the generator sources named by ``--generators``, runs them to produce
 ``expected_outputs/``, and binds everything by SHA-256 in ``MANIFEST.json``.
 It refuses on a dirty tree, an untagged commit, an unknown package version,
 a database not at the Alembic script head, a release that does not verify,
@@ -32,9 +32,7 @@ if str(BACKEND_ROOT) not in sys.path:
 from app.api.deps import SessionLocal  # noqa: E402
 from app.services.deposit import DepositError, checksum_lines, verify_deposit, write_deposit  # noqa: E402
 from app.services.deposit.build import MANIFEST_NAME  # noqa: E402
-from scripts.paper.registry import GENERATORS  # noqa: E402
-
-GENERATOR_DIR = BACKEND_ROOT / "scripts" / "paper"
+from app.services.deposit.generator_spec import load_generators  # noqa: E402
 EXIT_VERIFICATION_FAILED = 7
 
 
@@ -59,6 +57,19 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="checkout to bind the deposit to (default: the one this script lives in)",
     )
 
+    build.add_argument(
+        "--generators",
+        metavar="MODULE:ATTR",
+        default=None,
+        help="the generator registry: a mapping of name to generator, importable as module:attr (required)",
+    )
+    build.add_argument(
+        "--generator-dir",
+        type=Path,
+        default=None,
+        help="directory whose *.py files are copied into the deposit (default: the registry module's directory)",
+    )
+
     verify = subparsers.add_parser("verify", help="Re-hash a deposit; with --db, check it against the database.")
     verify.add_argument("deposit", type=Path)
     verify.add_argument("--db", action="store_true", help="also compare with the database the environment points at")
@@ -75,6 +86,7 @@ def _checksums(args: argparse.Namespace) -> int:
 
 
 def _build(args: argparse.Namespace) -> int:
+    generators, module_dir = load_generators(args.generators)
     with SessionLocal() as session:
         result = write_deposit(
             session,
@@ -82,8 +94,9 @@ def _build(args: argparse.Namespace) -> int:
             output_dir=args.output,
             author_accounts=args.author_account,
             repo_root=args.repo_root,
-            generators=GENERATORS,
-            generator_dir=GENERATOR_DIR,
+            generators=generators,
+            generator_dir=args.generator_dir or module_dir,
+            generator_spec=args.generators,
         )
         session.rollback()  # the build reads; release the archive's snapshot locks promptly
     source = result.manifest["source"]

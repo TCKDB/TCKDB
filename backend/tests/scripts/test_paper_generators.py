@@ -84,11 +84,6 @@ def test_render_markdown_tabulates_lists_of_rows_and_escapes_pipes():
     assert "| x | true |" in text
 
 
-def test_write_expected_outputs_refuses_an_empty_registry(db_session, tmp_path):
-    with pytest.raises(ValueError, match="no generators registered"):
-        write_expected_outputs(db_session, tmp_path, {})
-
-
 # ---------------------------------------------------------------------------
 # registry
 # ---------------------------------------------------------------------------

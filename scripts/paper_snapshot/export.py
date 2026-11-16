@@ -1,6 +1,6 @@
 """Archive and expected-output export from the finished instance.
 
-Runs ``backend/scripts/tckdb_archive.py`` and ``backend/scripts/paper/generate_expected_outputs.py`` as subprocesses
+Runs ``backend/scripts/tckdb_archive.py`` and ``backend/scripts/ops/generate_expected_outputs.py`` as subprocesses
 against the instance's database.
 """
 
@@ -41,7 +41,14 @@ def restore_archive(path: Path, env: dict[str, str]) -> str:
 
 
 def expected_outputs(out_dir: Path, env: dict[str, str], only: list[str] | None = None) -> str:
-    argv = [sys.executable, "scripts/paper/generate_expected_outputs.py", "--output-dir", str(out_dir)]
+    argv = [
+        sys.executable,
+        "scripts/ops/generate_expected_outputs.py",
+        "--generators",
+        "scripts.paper.registry:GENERATORS",
+        "--output-dir",
+        str(out_dir),
+    ]
     for name in only or []:
         argv += ["--only", name]
     out_dir.mkdir(parents=True, exist_ok=True)

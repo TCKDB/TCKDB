@@ -18,7 +18,7 @@ Definitions. A **release** is the frozen, citable set of selected values and
 their candidates (`release/`). The **archive** (`${archive_member}`) is the
 lossless database snapshot that carries the evidence behind the release. A
 **generator** is a script that reads the restored database and emits one
-manuscript number; `expected_outputs/` holds what each generator produced on
+number; `expected_outputs/` holds what each generator produced on
 the instance the release was cut from.
 
 ## 0. Check the deposit's own integrity (no database, no checkout needed)
@@ -85,14 +85,15 @@ The restore requires an otherwise empty database at exactly the revision
 above. It writes every calculation artifact into the object store and every
 row into the database, byte-exact.
 
-## 4. Regenerate the manuscript numbers and byte-diff them
+## 4. Regenerate the expected outputs and byte-diff them
 
 ```bash
-conda run -n tckdb_env python backend/scripts/paper/generate_expected_outputs.py --output-dir /tmp/regenerated
+conda run -n tckdb_env python backend/scripts/ops/generate_expected_outputs.py --generators ${generators_spec} --output-dir /tmp/regenerated
 diff -r <deposit>/expected_outputs /tmp/regenerated && echo "expected outputs reproduced byte for byte"
 ```
 
-Every `[DATA]` number in the manuscript is read from one of these files.
+The registry `${generators_spec}` is the one the deposit was built with; its
+sources are copied under `scripts/`.
 
 ## 5. Verify the deposit against the restored database
 
@@ -111,7 +112,7 @@ checks each against its recorded digest.
 
 A clean run proves that the deposited bytes are internally consistent, that
 the database they describe can be rebuilt from them, and that the numbers
-the manuscript quotes are what the deposited scripts compute from that
+in `expected_outputs/` are what the deposited scripts compute from that
 database. It does not prove that any value is chemically accurate: the
 release's curation policy, review history and candidate set are in
 `release/` precisely so that a reader can disagree with a selection.

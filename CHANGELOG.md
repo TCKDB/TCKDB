@@ -22,6 +22,10 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## The publication deposit command takes its generators from `--generators` (Unreleased)
+
+- `build_publication_deposit.py build` requires `--generators module:attr` (optional `--generator-dir`) and refuses without it; the generator runner is now `backend/scripts/ops/generate_expected_outputs.py --generators module:attr`.
+
 ## Stable order for record links, a calculation's artifact links and release artifact lines (Unreleased)
 
 - **Behaviour:** a submission's record links, the artifact links written for a calculation's artifacts, and the lines of a release's selected-record, candidate and review-history files follow integer ids, so two databases built by the same sequence of uploads hold the same rows in the same order. Release lines were ordered by public ref, which is random per database.

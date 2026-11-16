@@ -43,9 +43,9 @@ from app.services.archive import write_archive
 from app.services.deposit import verify_deposit, write_deposit
 from app.services.release.curation import add_selection, publish_release
 from app.services.release.manifest import freeze_manifest, load_manifest, verify_release
-from scripts.paper.registry import GENERATORS
 from tests import conftest  # the root harness, not this directory's conftest
 from tests.conftest import scratch_database_name
+from tests.services.deposit.sample_generators.registry import GENERATORS
 from tests.services.scientific_read._factories import (
     attach_freq_result,
     attach_hessian,
@@ -65,9 +65,10 @@ from tests.services.scientific_read._factories import (
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
 ARCHIVE_CLI = BACKEND_ROOT / "scripts" / "tckdb_archive.py"
-GENERATOR_CLI = BACKEND_ROOT / "scripts" / "paper" / "generate_expected_outputs.py"
+GENERATOR_CLI = BACKEND_ROOT / "scripts" / "ops" / "generate_expected_outputs.py"
+GENERATOR_SPEC = "tests.services.deposit.sample_generators.registry:GENERATORS"
 DEPOSIT_CLI = BACKEND_ROOT / "scripts" / "ops" / "build_publication_deposit.py"
-GENERATOR_DIR = BACKEND_ROOT / "scripts" / "paper"
+GENERATOR_DIR = BACKEND_ROOT / "tests" / "services" / "deposit" / "sample_generators"
 
 
 def _subprocess_env(db_name: str) -> dict[str, str]:
@@ -244,7 +245,7 @@ def test_cli_restore_into_a_fresh_database_reproduces_the_release_bytes(
 def test_deposit_round_trip_reproduces_expected_outputs_byte_for_byte(
     db_session, tmp_path, scratch_db, draft_release, curator, thermo_candidates, species_entry
 ):
-    lineage_entry = _seed_evidence(db_session, curator)
+    _seed_evidence(db_session, curator)
     _publish(db_session, draft_release, curator, thermo_candidates[0], species_entry)
     allowlist = sorted(db_session.scalars(select(AppUser.username)))
 
@@ -257,6 +258,7 @@ def test_deposit_round_trip_reproduces_expected_outputs_byte_for_byte(
         repo_root=REPO_ROOT,
         generators=GENERATORS,
         generator_dir=GENERATOR_DIR,
+        generator_spec=GENERATOR_SPEC,
         require_clean_tree=False,
         require_exact_tag=False,
     )
@@ -296,7 +298,7 @@ def test_deposit_round_trip_reproduces_expected_outputs_byte_for_byte(
     assert restore.returncode == 0, f"restore failed:\n{restore.stdout}\n{restore.stderr}"
 
     regenerated = tmp_path / "regenerated"
-    generate = _run([str(GENERATOR_CLI), "--output-dir", str(regenerated)], scratch_db)
+    generate = _run([str(GENERATOR_CLI), "--generators", GENERATOR_SPEC, "--output-dir", str(regenerated)], scratch_db)
     assert generate.returncode == 0, f"generators failed:\n{generate.stdout}\n{generate.stderr}"
     regenerated_files = sorted(p.name for p in regenerated.iterdir())
     assert regenerated_files == expected_files
@@ -304,18 +306,11 @@ def test_deposit_round_trip_reproduces_expected_outputs_byte_for_byte(
         assert (regenerated / name).read_bytes() == (deposit_dir / "expected_outputs" / name).read_bytes(), name
 
     # The counts must reflect the seeded evidence, not pass on an empty corpus.
-    evidence = json.loads((regenerated / "transition_state_evidence.json").read_text())
-    assert evidence["transition_state_entries"] >= 2
-    assert evidence["with_exactly_one_imaginary_mode"] >= 1
-    assert evidence["with_stored_hessian"] >= 1
-    lineage = json.loads((regenerated / "candidate_lineage.json").read_text())
-    assert lineage["species_entries_with_multiple_candidates"] >= 1
-    entry = next(row for row in lineage["lineage"] if row["species_entry_ref"] == lineage_entry.public_ref)
-    assert entry["candidate_count"] == 2
-    assert entry["distinct_submissions"] == 2
-    assert entry["distinct_workflow_tool_release_commits"] == 1
-    selected = json.loads((regenerated / "selected_thermo_by_species.json").read_text())
-    assert any(row["thermo_ref"] == thermo_candidates[0].public_ref for row in selected["selected_thermo"])
+    counts = json.loads((regenerated / "row_counts.json").read_text())
+    assert counts["species_entries"] >= 2
+    values = json.loads((regenerated / "thermo_values.json").read_text())["h298_kj_mol"]
+    assert len(values) >= len(thermo_candidates)
+    assert str(thermo_candidates[0].h298_kj_mol) in {str(v) for v in values}
 
     engine = create_engine(conftest._database_url(scratch_db), future=True)
     try:

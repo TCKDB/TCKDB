@@ -1,7 +1,7 @@
-"""Run every registered manuscript-number generator against a database.
+"""Run every generator of a registry against a database.
 
 Writes ``<name>.json`` (canonical JSON) and ``<name>.md`` per generator into
-``--output-dir``. The database is the one ``Settings.database_url`` resolves
+``--output-dir``. ``--generators module:attr`` names the registry. The database is the one ``Settings.database_url`` resolves
 from ``DB_USER``, ``DB_PASSWORD``, ``DB_HOST``, ``DB_PORT`` and ``DB_NAME``.
 
 A reproducer runs this against the database restored from the deposit's
@@ -20,12 +20,19 @@ if str(BACKEND_ROOT) not in sys.path:
 
 from app.api.deps import SessionLocal  # noqa: E402
 from app.services.deposit.expected_outputs import write_expected_outputs  # noqa: E402
-from scripts.paper.registry import GENERATORS  # noqa: E402
+from app.services.deposit.build import DepositError  # noqa: E402
+from app.services.deposit.generator_spec import load_generators  # noqa: E402
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument(
+        "--generators",
+        metavar="MODULE:ATTR",
+        default=None,
+        help="the generator registry: a mapping of name to generator, importable as module:attr (required)",
+    )
     parser.add_argument(
         "--only",
         action="append",
@@ -37,13 +44,18 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    selected = GENERATORS
+    try:
+        registry, _ = load_generators(args.generators)
+    except DepositError as exc:
+        print(f"refused: {exc}", file=sys.stderr)
+        return exc.exit_code
+    selected = registry
     if args.only:
-        unknown = sorted(set(args.only) - set(GENERATORS))
+        unknown = sorted(set(args.only) - set(registry))
         if unknown:
-            print(f"error: unknown generator(s) {unknown}; known: {sorted(GENERATORS)}", file=sys.stderr)
+            print(f"error: unknown generator(s) {unknown}; known: {sorted(registry)}", file=sys.stderr)
             return 2
-        selected = {name: GENERATORS[name] for name in args.only}
+        selected = {name: registry[name] for name in args.only}
     with SessionLocal() as session:
         digests = write_expected_outputs(session, args.output_dir, selected)
         session.rollback()
