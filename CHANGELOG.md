@@ -22,9 +22,15 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## The publication deposit command takes its generators from `--generators` (Unreleased)
+
+- `build_publication_deposit.py build` requires `--generators module:attr` and `--generator-root`, and refuses without either; the deposit's `scripts/` holds the registry's package tree and `REPRODUCE.md` step 4 runs it from there with bytecode kept out of the deposit. The generator runner is now `backend/scripts/ops/generate_expected_outputs.py --generators module:attr`.
+
 ## CHEMKIN export writes rate parameters to nine significant figures (Unreleased)
 
-- **Behaviour:** the CHEMKIN export writes A, n, Ea, the falloff, Troe, SRI, PLOG and Chebyshev coefficients and the third-body efficiencies to nine significant figures (`1.45978000E+03`), the precision of the NASA cards, so Cantera's k(T) from the file matches the stored fit to about 1e-8. The paper snapshot build refuses a file written with fewer digits.
+- **Behaviour:** the CHEMKIN export (`POST /scientific/export/chemkin` and the network export) writes A, n, Ea, the falloff, Troe, SRI, PLOG and Chebyshev coefficients and the third-body efficiencies to nine significant figures (`1.45978000E+03`), the precision of the NASA cards, so Cantera's k(T) from the file matches the stored fit to the rounding of those digits. The paper snapshot build refuses a file written with fewer digits.
+- **Behaviour:** Ea is converted to cal/mol with the exact kJ-to-cal factor (1000 / 4.184) in both exports.
+- **Behaviour:** reaction lines may be longer than 80 columns; Cantera reads them.
 - **Schema and migration:** none. No new environment variable. No distributed package changed.
 
 ## Snapshot build exports the use case as a CHEMKIN mechanism (Unreleased)

@@ -11,8 +11,9 @@ such restore had ever succeeded (see ``MIGRATION_WRITTEN_TABLES`` in
 The second test is the deposit round trip: a
 small corpus is published and deposited from the test session, the deposit's
 archive is restored by subprocess into a scratch database, the
-manuscript-number generators are run against the restored database by the
-real runner script, and their output must be byte-identical to the
+generators are run against the restored database by the command line REPRODUCE.md
+renders for step 4 -- with the registry's original directory deleted, so only the
+deposited copy can be imported -- and their output must be byte-identical to the
 ``expected_outputs/`` the deposit shipped.
 
 The author allowlist here is read from the database rather than written
@@ -27,6 +28,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import py_compile
+import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -43,7 +47,6 @@ from app.services.archive import write_archive
 from app.services.deposit import verify_deposit, write_deposit
 from app.services.release.curation import add_selection, publish_release
 from app.services.release.manifest import freeze_manifest, load_manifest, verify_release
-from scripts.paper.registry import GENERATORS
 from tests import conftest  # the root harness, not this directory's conftest
 from tests.conftest import scratch_database_name
 from tests.services.scientific_read._factories import (
@@ -65,9 +68,10 @@ from tests.services.scientific_read._factories import (
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
 ARCHIVE_CLI = BACKEND_ROOT / "scripts" / "tckdb_archive.py"
-GENERATOR_CLI = BACKEND_ROOT / "scripts" / "paper" / "generate_expected_outputs.py"
+GENERATOR_SPEC = "sample_deposit_generators.registry:GENERATORS"
+GENERATOR_NAMES = ("row_counts", "thermo_values", "transition_state_evidence", "candidate_lineage")
 DEPOSIT_CLI = BACKEND_ROOT / "scripts" / "ops" / "build_publication_deposit.py"
-GENERATOR_DIR = BACKEND_ROOT / "scripts" / "paper"
+GENERATOR_FIXTURE_ROOT = BACKEND_ROOT / "tests" / "services" / "deposit" / "sample_generators"
 
 
 def _subprocess_env(db_name: str) -> dict[str, str]:
@@ -115,6 +119,52 @@ def scratch_db():
         conftest._drop_test_database(db_name)
 
 
+@pytest.fixture
+def fresh_sample_registry():
+    """The registry package is imported from a different root in each test; forget earlier imports."""
+
+    def forget() -> None:
+        for name in [n for n in sys.modules if n == "sample_deposit_generators" or n.startswith("sample_deposit_generators.")]:
+            del sys.modules[name]
+
+    forget()
+    yield
+    forget()
+
+
+def _run_reproduce_step_4(deposit_dir: Path, output_dir: Path, db_name: str) -> subprocess.CompletedProcess[str]:
+    """Run, from the checkout root, the command line REPRODUCE.md gives for step 4."""
+    reproduce = (deposit_dir / "REPRODUCE.md").read_text()
+    lines = [line for line in reproduce.splitlines() if "generate_expected_outputs.py" in line]
+    assert len(lines) == 1, "REPRODUCE.md must carry exactly one step-4 command"
+    cache_prefix = output_dir.parent / "pycache_prefix"
+    cache_prefix.mkdir(exist_ok=True)
+    command = lines[0].replace("<deposit>", str(deposit_dir)).replace("/tmp/regenerated", str(output_dir))
+    assert '"$(mktemp -d)"' in command, "step 4 must send bytecode to a fresh directory"
+    tokens = shlex.split(command.replace('"$(mktemp -d)"', str(cache_prefix)))
+    env = _subprocess_env(db_name)
+    while "=" in tokens[0] and not tokens[0].startswith("-"):
+        key, _, value = tokens.pop(0).partition("=")
+        env[key] = value + os.pathsep + env[key] if key in env else value
+    assert tokens[:5] == ["conda", "run", "-n", "tckdb_env", "python"], tokens
+    argv = [sys.executable, *tokens[5:]]
+    return subprocess.run(argv, cwd=REPO_ROOT, env=env, capture_output=True, text=True)
+
+
+def _plant_bytecode(package_dir: Path, marker: Path) -> Path:
+    """Put a ``__pycache__`` entry for ``registry`` that would run other code if it were read."""
+    source = package_dir / "_planted.py"
+    source.write_text(f"open({str(marker)!r}, 'w').write('ran')\nraise SystemExit('planted bytecode ran')\n")
+    cache = package_dir / "__pycache__"
+    cache.mkdir()
+    target = cache / f"registry.{sys.implementation.cache_tag}.pyc"
+    py_compile.compile(
+        str(source), cfile=str(target), invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH, doraise=True
+    )
+    source.unlink()
+    return target
+
+
 def _publish(session, release, curator, thermo, species_entry):
     add_selection(
         session,
@@ -131,7 +181,12 @@ def _publish(session, release, curator, thermo, species_entry):
 
 
 def _seed_evidence(session, curator):
-    """Give every generator something non-trivial to count.
+    """Give the sample generators something non-trivial to count.
+
+    Used by the generators: the lineage entry's two thermo candidates, each from its own
+    submission, and two transition-state entries, one with a stored Hessian and one with two
+    imaginary modes. The source calculation, workflow-tool and thermo-source rows are not read
+    by them; they widen what the archive must restore.
 
     The lineage subject is a second species entry with two *unreviewed*
     candidates: the release fixture's candidates are already approved, and
@@ -242,9 +297,11 @@ def test_cli_restore_into_a_fresh_database_reproduces_the_release_bytes(
 
 
 def test_deposit_round_trip_reproduces_expected_outputs_byte_for_byte(
-    db_session, tmp_path, scratch_db, draft_release, curator, thermo_candidates, species_entry
+    db_session, tmp_path, scratch_db, draft_release, curator, thermo_candidates, species_entry, fresh_sample_registry
 ):
     lineage_entry = _seed_evidence(db_session, curator)
+    registry_root = tmp_path / "registry_root"
+    shutil.copytree(GENERATOR_FIXTURE_ROOT, registry_root, ignore=shutil.ignore_patterns("__pycache__"))
     _publish(db_session, draft_release, curator, thermo_candidates[0], species_entry)
     allowlist = sorted(db_session.scalars(select(AppUser.username)))
 
@@ -255,8 +312,8 @@ def test_deposit_round_trip_reproduces_expected_outputs_byte_for_byte(
         output_dir=deposit_dir,
         author_accounts=allowlist,
         repo_root=REPO_ROOT,
-        generators=GENERATORS,
-        generator_dir=GENERATOR_DIR,
+        generator_spec=GENERATOR_SPEC,
+        generator_root=registry_root,
         require_clean_tree=False,
         require_exact_tag=False,
     )
@@ -283,7 +340,7 @@ def test_deposit_round_trip_reproduces_expected_outputs_byte_for_byte(
     }
     assert source["checks"] == {"clean_tree": False, "exact_tag": False}, "a test build must say it was relaxed"
     expected_files = sorted(p.name for p in (deposit_dir / "expected_outputs").iterdir())
-    assert expected_files == sorted(f"{name}{suffix}" for name in GENERATORS for suffix in (".json", ".md"))
+    assert expected_files == sorted(f"{name}{suffix}" for name in GENERATOR_NAMES for suffix in (".json", ".md"))
     accounts = (deposit_dir / "ACCOUNTS.md").read_text()
     assert "@" not in accounts, "ACCOUNTS.md must not carry an email address"
 
@@ -295,27 +352,35 @@ def test_deposit_round_trip_reproduces_expected_outputs_byte_for_byte(
     restore = _run([str(ARCHIVE_CLI), "restore", str(deposit_dir / archive_member.path)], scratch_db)
     assert restore.returncode == 0, f"restore failed:\n{restore.stdout}\n{restore.stderr}"
 
+    shutil.rmtree(registry_root)  # only the deposited copy of the registry may be imported from here on
+    assert (deposit_dir / "scripts" / "sample_deposit_generators" / "registry.py").is_file()
     regenerated = tmp_path / "regenerated"
-    generate = _run([str(GENERATOR_CLI), "--output-dir", str(regenerated)], scratch_db)
+    assert (deposit_dir / "scripts" / "sample_deposit_generators" / "helpers" / "counting.py").is_file()
+    planted = _plant_bytecode(deposit_dir / "scripts" / "sample_deposit_generators", tmp_path / "planted_marker")
+    generate = _run_reproduce_step_4(deposit_dir, regenerated, scratch_db)
     assert generate.returncode == 0, f"generators failed:\n{generate.stdout}\n{generate.stderr}"
     regenerated_files = sorted(p.name for p in regenerated.iterdir())
     assert regenerated_files == expected_files
     for name in expected_files:
         assert (regenerated / name).read_bytes() == (deposit_dir / "expected_outputs" / name).read_bytes(), name
 
+    assert not (tmp_path / "planted_marker").exists(), "a planted .pyc ran instead of the deposited source"
+    assert sorted(deposit_dir.rglob("*.pyc")) == [planted], "step 4 must not write bytecode into the deposit"
+    shutil.rmtree(planted.parent)
+
     # The counts must reflect the seeded evidence, not pass on an empty corpus.
+    counts = json.loads((regenerated / "row_counts.json").read_text())
+    assert counts["species_entries"] >= 2
+    values = json.loads((regenerated / "thermo_values.json").read_text())["h298_kj_mol"]
+    assert len(values) >= len(thermo_candidates)
     evidence = json.loads((regenerated / "transition_state_evidence.json").read_text())
     assert evidence["transition_state_entries"] >= 2
     assert evidence["with_exactly_one_imaginary_mode"] >= 1
     assert evidence["with_stored_hessian"] >= 1
-    lineage = json.loads((regenerated / "candidate_lineage.json").read_text())
-    assert lineage["species_entries_with_multiple_candidates"] >= 1
-    entry = next(row for row in lineage["lineage"] if row["species_entry_ref"] == lineage_entry.public_ref)
+    lineage = json.loads((regenerated / "candidate_lineage.json").read_text())["lineage"]
+    entry = next(row for row in lineage if row["species_entry_ref"] == lineage_entry.public_ref)
     assert entry["candidate_count"] == 2
     assert entry["distinct_submissions"] == 2
-    assert entry["distinct_workflow_tool_release_commits"] == 1
-    selected = json.loads((regenerated / "selected_thermo_by_species.json").read_text())
-    assert any(row["thermo_ref"] == thermo_candidates[0].public_ref for row in selected["selected_thermo"])
 
     engine = create_engine(conftest._database_url(scratch_db), future=True)
     try:

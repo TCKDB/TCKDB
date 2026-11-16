@@ -89,7 +89,7 @@ put this checkout's packages first on `PYTHONPATH`; `snapshot_record.json` says 
 In `--out-dir`:
 
 - `tckdb.archive`: the whole instance, from `backend/scripts/tckdb_archive.py`. Job files travel as blobs.
-- `expected_outputs/<name>.json` and `.md`: the paper's numbers, from `backend/scripts/paper/generate_expected_outputs.py`
+- `expected_outputs/<name>.json` and `.md`: the paper's numbers, from `backend/scripts/ops/generate_expected_outputs.py`
   (the generators registered in `backend/scripts/paper/registry.py`).
 - `build_report.json`: per source what was deposited, and every refusal and warning grouped by code.
 - `snapshot_record.json`: source commit, package versions, the approval statement, archive digest, and per source

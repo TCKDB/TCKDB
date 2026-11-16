@@ -6,7 +6,7 @@ A published dataset release freezes four NDJSON files and a manifest, but by
 its own contract omits the evidence: raw artifact bytes, geometries and
 calculation payloads. That evidence lives in a ``tckdb.archive`` archive.
 Neither says which git commit produced it, and nothing binds the two to the
-scripts that turn the database into the numbers a manuscript quotes.
+scripts that turn the database into the published numbers.
 
 The deposit is the directory that binds all of it by digest::
 
@@ -54,6 +54,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import shlex
 import shutil
 import subprocess
 import tarfile
@@ -77,7 +78,13 @@ from app.db.models.molecular_property_observation import (
     MolecularPropertyObservation,
 )
 from app.services.archive import verify_archive, write_archive
-from app.services.deposit.expected_outputs import Generator, write_expected_outputs
+from app.services.deposit.errors import DepositError
+from app.services.deposit.expected_outputs import write_expected_outputs
+from app.services.deposit.generator_spec import (
+    assert_sources_within,
+    load_deposit_generators,
+    snapshot_modules,
+)
 from app.services.document_formats import DEPOSIT, FORMATS, header_of, reads_as
 from app.services.release import versions
 from app.services.release.artifacts import canonical_json, release_record_universe
@@ -139,12 +146,6 @@ RESIDUAL_RISK_PARAGRAPH = (
 # ---------------------------------------------------------------------------
 # Errors
 # ---------------------------------------------------------------------------
-
-
-class DepositError(RuntimeError):
-    """Base class: the deposit was not built, and the message says why."""
-
-    exit_code = 1
 
 
 class ReleaseNotPublishableError(DepositError):
@@ -594,7 +595,9 @@ def _accounts_document(session: Session, allowlist: frozenset[str]) -> bytes:
     return "\n".join(lines).encode("utf-8")
 
 
-def _reproduce_document(*, tag: str, source: SourceBinding, archive_member: str) -> bytes:
+def _reproduce_document(
+    *, tag: str, source: SourceBinding, archive_member: str, generator_spec: str
+) -> bytes:
     template = Template(REPRODUCE_TEMPLATE.read_text(encoding="utf-8"))
     return template.substitute(
         tag=tag,
@@ -604,6 +607,7 @@ def _reproduce_document(*, tag: str, source: SourceBinding, archive_member: str)
         backend_version=source.backend_version,
         schemas_package_version=source.schemas_package_version,
         archive_member=archive_member,
+        generators_spec=shlex.quote(generator_spec),
     ).encode("utf-8")
 
 
@@ -712,8 +716,8 @@ def write_deposit(
     output_dir: Path,
     author_accounts: Collection[str],
     repo_root: Path,
-    generators: Mapping[str, Generator],
-    generator_dir: Path,
+    generator_spec: str,
+    generator_root: Path,
     source: SourceBinding | None = None,
     require_clean_tree: bool = True,
     require_exact_tag: bool = True,
@@ -731,6 +735,9 @@ def write_deposit(
     output_dir = Path(output_dir)
     allowlist = frozenset(author_accounts)
 
+    modules_before = snapshot_modules()
+    generators, generator_sources = load_deposit_generators(generator_spec, generator_root)
+
     release = _release_by_tag(session, release_tag)
     if source is None:
         source = source_binding(
@@ -745,10 +752,6 @@ def write_deposit(
         if not candidate.is_file():
             raise SourcePinMissingError(f"source_pin_missing: {relative_source} is not in the checkout")
         pins.append((candidate, deposit_path))
-    generator_sources = sorted(p for p in Path(generator_dir).glob("*.py"))
-    if not generator_sources:
-        raise DepositError(f"no_generators: {generator_dir} holds no generator sources")
-
     if output_dir.exists() and any(output_dir.iterdir()):
         raise OutputNotEmptyError(f"output_not_empty: {output_dir} already has content; refusing to overwrite")
     created_here = not output_dir.exists()
@@ -787,9 +790,9 @@ def write_deposit(
             _write(output_dir, deposit_path, content)
             members.append(_member(deposit_path, content, ROLE_SOURCE_PIN))
 
-        for path in generator_sources:
+        for path, relative in generator_sources:
             content = path.read_bytes()
-            deposit_path = f"scripts/{path.name}"
+            deposit_path = f"scripts/{relative}"
             _write(output_dir, deposit_path, content)
             members.append(_member(deposit_path, content, ROLE_RESULT_GENERATOR))
 
@@ -798,8 +801,11 @@ def write_deposit(
             content = (expected_dir / name).read_bytes()
             assert hashlib.sha256(content).hexdigest() == digest
             members.append(_member(f"expected_outputs/{name}", content, ROLE_EXPECTED_OUTPUT))
+        assert_sources_within(generator_sources, before=modules_before, repo_root=repo_root)
 
-        reproduce = _reproduce_document(tag=release.tag, source=source, archive_member=archive_member_path)
+        reproduce = _reproduce_document(
+            tag=release.tag, source=source, archive_member=archive_member_path, generator_spec=generator_spec
+        )
         _write(output_dir, "REPRODUCE.md", reproduce)
         members.append(_member("REPRODUCE.md", reproduce, ROLE_PROTOCOL))
 

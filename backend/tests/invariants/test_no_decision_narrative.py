@@ -155,11 +155,6 @@ ALLOWLIST: tuple[tuple[str, str, int, str], ...] = (
         "backend/tests/scripts/test_gate_coverage.py", "paper/", 1,
         "names the manuscript folder as a path the workflow filters ignore",
     ),
-    ("backend/app/services/deposit/expected_outputs.py", "paper/", 1, "names the real backend/scripts/paper/ directory"),
-    (
-        "backend/app/services/deposit/REPRODUCE.md.template", "paper/", 1,
-        "command line running the real backend/scripts/paper/ script",
-    ),
     (_PSI4, "paper/", 1, _PSI4_REASON),
     (_PSI4, "Phase C", 1, _PSI4_REASON),
     (_PSI4, "C-Q4", 1, _PSI4_REASON),

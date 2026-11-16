@@ -153,9 +153,8 @@ carries a comparison; the others each name what stopped it:
 Determinism
 -----------
 
-:func:`hessian_reanalysis` returns a plain dictionary shaped for a paper
-generator: records ordered by public ref (the snapshot wrapper
-in ``scripts.paper.snapshot_generators`` re-sorts them by content), no wall-clock values, every
+:func:`hessian_reanalysis` returns a plain dictionary shaped for a deposit
+generator: records ordered by public ref (a wrapper may re-sort them by content), no wall-clock values, every
 float rounded to a fixed number of decimals so that two runs on the same
 database are byte-identical after ``json.dumps(sort_keys=True)``.
 """
@@ -857,10 +856,9 @@ def hessian_reanalysis(
 ) -> dict:
     """The generator: every record in scope, as a canonical dictionary.
 
-    Ordered by public ref (the snapshot wrapper re-sorts by content), no
+    Ordered by public ref (a wrapper may re-sort by content), no
     wall-clock values, floats rounded to fixed decimals -- ``json.dumps(result, sort_keys=True)`` of two runs on the
-    same database is byte-identical. Registered by the paper generator
-    registry under the name ``hessian_reanalysis``.
+    same database is byte-identical. Usable as a deposit generator.
 
     :param session: Open read session; nothing is written.
     :param calculation_ref: One calculation by public ref (``calc_...``;
