@@ -22,9 +22,16 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Software and workflow-tool names that differ only in case resolve to one row (Unreleased)
+
+- **Behaviour:** an upload naming `PSI4` (or ` psi4 `) when `Psi4` is already stored now reuses that software row and its stored spelling. It used to fail with a server error. Software is looked up by its public ref, in the upload resolver and in the contribution-bundle dry run, which reports the stored name.
+- **Behaviour:** the same holds for workflow tools: an upload naming `GeomeTRIC` when `geomeTRIC` is stored reuses that row instead of failing.
+- **Behaviour:** an execution-environment manifest naming the software or workflow tool in another case is accepted instead of refused as not matching its stored content.
+- **Schema and migration:** none. No new environment variable. No distributed package changed.
+
 ## The QCSchema interchange report passes when the database spells the method or basis differently (Unreleased)
 
-- **Behaviour:** the report compares the exported `input_data.specification.model.basis` and `.method` to the fixture's by TCKDB's identity key, so a level of theory already stored under another spelling (`B3LYP`, `Def2TZVP`) and reused by the round trip no longer fails `loss_list_complete`; a different basis set or method still does. The two paths are listed under `loss_list.compared_by_identity_key`. A software name that differs only in case from the fixture's still crashes the round trip (backend bug, tracked by a strict xfail).
+- **Behaviour:** the report compares the exported `input_data.specification.model.basis` and `.method` to the fixture's by TCKDB's identity key, so a level of theory already stored under another spelling (`B3LYP`, `Def2TZVP`) and reused by the round trip no longer fails `loss_list_complete`; a different basis set or method still does. The two paths are listed under `loss_list.compared_by_identity_key`.
 - **Schema and migration:** none. No new environment variable. No distributed package changed.
 
 ## CHEMKIN export writes rate parameters to nine significant figures (Unreleased)

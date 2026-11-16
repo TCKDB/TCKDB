@@ -33,9 +33,9 @@ from app.chemistry.species import (
 )
 from app.db.models.literature import Literature
 from app.db.models.reaction import ChemReaction
-from app.db.models.software import Software, SoftwareRelease
+from app.db.models.software import SoftwareRelease
 from app.db.models.species import Species
-from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
+from app.db.models.workflow import WorkflowToolRelease
 from app.schemas.contribution_bundle_dry_run import (
     ContributionBundleDryRunItem,
     ContributionBundleDryRunMessage,
@@ -54,9 +54,10 @@ from app.schemas.workflows.contribution_bundle import (
 from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
+from app.services.calculation_resolution import find_workflow_tool_by_name
 from app.services.literature_metadata import normalize_doi, normalize_isbn
 from app.services.reaction_resolution import inherit_reversible, reaction_stoichiometry_hash
-from app.services.software_resolution import normalize_software_name
+from app.services.software_resolution import find_software_by_name, normalize_software_name
 from app.services.species_resolution import find_species, find_species_entry, null_safe_equals, resolve_entry_stereo
 
 # ---------------------------------------------------------------------------
@@ -573,9 +574,7 @@ def _preview_software_release(
     if ref.version is not None:
         hosted_identity["version"] = ref.version
 
-    software = session.scalar(
-        select(Software).where(Software.name == normalized_name)
-    )
+    software = find_software_by_name(session, normalized_name)
     if software is None:
         return ContributionBundleDryRunItem(
             record_type=DryRunRecordType.software_release,
@@ -598,6 +597,7 @@ def _preview_software_release(
         )
     )
     if release is not None:
+        hosted_identity["software_name"] = software.name
         return ContributionBundleDryRunItem(
             record_type=DryRunRecordType.software_release,
             action=DryRunAction.would_reuse,
@@ -635,9 +635,7 @@ def _preview_workflow_tool_release(
     if ref.git_commit is not None:
         hosted_identity["git_commit"] = ref.git_commit
 
-    tool = session.scalar(
-        select(WorkflowTool).where(WorkflowTool.name == ref.name)
-    )
+    tool = find_workflow_tool_by_name(session, ref.name)
     if tool is None:
         return ContributionBundleDryRunItem(
             record_type=DryRunRecordType.workflow_tool_release,
@@ -659,6 +657,7 @@ def _preview_workflow_tool_release(
         )
     )
     if release is not None:
+        hosted_identity["workflow_tool_name"] = tool.name
         return ContributionBundleDryRunItem(
             record_type=DryRunRecordType.workflow_tool_release,
             action=DryRunAction.would_reuse,

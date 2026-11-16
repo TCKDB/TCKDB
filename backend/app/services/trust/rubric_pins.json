@@ -25,10 +25,10 @@
       "1": "90951074d2bcd429547a90f5690bb8d9fb892f1aa170f45ebbe52110766290d8"
     },
     "tckdb_reproducibility": {
-      "1": "17edf720190c3e3b047175077615f6ea861bac3801d5695f188d86cdfe74500a"
+      "1": "53ebdac6ff051e755f588edef1f5c31822bdf6efae6b821d3e2d734f466910bc"
     },
     "tckdb_reproducibility_ts_statmech": {
-      "1": "f8c2d4d2b729fe6cbaec61e185d41bcd9d9257a22524e90a07f06ea1c07e47d7"
+      "1": "ef142006d45b0f1f0fa2965bbd31d6e83d4bc568bebbd99943c033a17c94d6a7"
     }
   },
   "unbumped_overrides": [
@@ -472,6 +472,16 @@
       "name": "computed_transition_state",
       "version": 2,
       "reason": "Method-family classifier and method-name key moved into tckdb_schemas; table and rules unchanged. MethodClassFilter.keys and .matches read CLASSIFICATION directly, the same single-version object the registry held."
+    },
+    {
+      "name": "tckdb_reproducibility",
+      "version": 1,
+      "reason": "the manifest name check compares by public ref; it accepts only manifests whose names differ in case, which could not be stored before"
+    },
+    {
+      "name": "tckdb_reproducibility_ts_statmech",
+      "version": 1,
+      "reason": "the manifest name check compares by public ref; it accepts only manifests whose names differ in case, which could not be stored before"
     }
   ]
 }

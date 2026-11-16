@@ -102,6 +102,7 @@ from app.services.deposit_warnings import note_warning_subject
 from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.literature_resolution import resolve_or_create_literature
+from app.services.public_refs import workflow_tool_public_ref
 from app.services.software_reconciliation import (
     SoftwareReconciliationResult,
     parsed_dict_to_ref,
@@ -247,6 +248,12 @@ def spin_agnostic_level_key(ref: LevelOfTheoryRef | LevelOfTheory) -> dict[str, 
     return payload
 
 
+def find_workflow_tool_by_name(session: Session, name: str) -> WorkflowTool | None:
+    """Return the workflow tool whose public ref equals the one *name* would be given."""
+
+    return session.scalar(select(WorkflowTool).where(WorkflowTool.public_ref == workflow_tool_public_ref(name)))
+
+
 def resolve_workflow_tool_release_ref(
     session: Session,
     ref: WorkflowToolReleaseRef | None,
@@ -261,9 +268,7 @@ def resolve_workflow_tool_release_ref(
     if ref is None:
         return None
 
-    workflow_tool = session.scalar(
-        select(WorkflowTool).where(WorkflowTool.name == ref.name)
-    )
+    workflow_tool = find_workflow_tool_by_name(session, ref.name)
     if workflow_tool is None:
         try:
             with session.begin_nested():
@@ -271,9 +276,11 @@ def resolve_workflow_tool_release_ref(
                 session.add(workflow_tool)
                 session.flush()
         except IntegrityError:
-            workflow_tool = session.scalar(
-                select(WorkflowTool).where(WorkflowTool.name == ref.name)
-            )
+            workflow_tool = find_workflow_tool_by_name(session, ref.name)
+            if workflow_tool is None:
+                raise RuntimeError(
+                    f"workflow tool {ref.name!r} violated a uniqueness constraint on insert but no matching row was found"
+                ) from None
 
     release = session.scalar(
         select(WorkflowToolRelease).where(

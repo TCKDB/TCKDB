@@ -10,6 +10,7 @@ from tckdb_schemas.software import normalize_software_name
 
 from app.db.models.software import Software, SoftwareRelease
 from app.schemas.fragments.refs import SoftwareReleaseRef
+from app.services.public_refs import software_public_ref
 
 #: Programs that are workflow tools and can never be the electronic-structure
 #: package that ran a calculation. Keyed by the lowercased,
@@ -116,6 +117,14 @@ def _null_safe_equals(column: ColumnElement, value: str | None) -> ColumnElement
     return column.is_(None) if value is None else column == value
 
 
+def find_software_by_name(session: Session, name: str) -> Software | None:
+    """Return the software row whose public ref equals the one *name* would be given."""
+
+    return session.scalar(
+        select(Software).where(Software.public_ref == software_public_ref(normalize_software_name(name)))
+    )
+
+
 def resolve_software(
     session: Session,
     name: str,
@@ -128,7 +137,7 @@ def resolve_software(
     """
 
     normalized_name = normalize_software_name(name)
-    software = session.scalar(select(Software).where(Software.name == normalized_name))
+    software = find_software_by_name(session, normalized_name)
     if software is None:
         try:
             with session.begin_nested():
@@ -136,7 +145,11 @@ def resolve_software(
                 session.add(software)
                 session.flush()
         except IntegrityError:
-            software = session.scalar(select(Software).where(Software.name == normalized_name))
+            software = find_software_by_name(session, normalized_name)
+            if software is None:
+                raise RuntimeError(
+                    f"software {normalized_name!r} violated a uniqueness constraint on insert but no matching row was found"
+                ) from None
 
     return software
 

@@ -21,9 +21,8 @@ No network is contacted. The round trip runs against whatever database the
 session points at, empty or populated, inside one transaction that is always
 rolled back: see "The round trip". A level of theory that exists under another
 basis or method spelling is reused and exported as stored, so those two fields
-are compared by identity key; see ``IDENTITY_KEYED_PATHS``. Other rows already
-present are not covered by that: a software name that differs only in case
-from the fixture's is a known backend failure, not handled here.
+are compared by identity key; see ``IDENTITY_KEYED_PATHS``. A software row
+stored under another case is reused the same way and does not reach the report.
 
 The round trip (asserted, exit status 1 on any failure)
 -------------------------------------------------------

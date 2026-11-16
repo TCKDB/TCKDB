@@ -587,3 +587,21 @@ def test_qcschema_scan_case_accepted_and_persisted(
     assert replay.json() == body, f"{case}: replay body differs from the original"
     db_session.expire_all()
     assert _row_counts(db_session) == before, f"{case}: replay created rows"
+
+
+def test_upload_reuses_a_software_row_stored_under_another_case(client, db_session: Session) -> None:
+    """A stored ``PSI4`` row is the identity for an upload that names ``Psi4``."""
+    db_session.add(Software(name="PSI4"))
+    db_session.flush()
+
+    payload, _artifact, _meta = _load(CASES[0])
+    resp = client.post(
+        "/api/v1/uploads/conformers",
+        json=payload,
+        headers={"Idempotency-Key": "qcschema-software-case-variant"},
+    )
+    assert resp.status_code == 201, resp.text[:500]
+
+    db_session.expire_all()
+    names = db_session.scalars(select(Software.name).where(func.lower(Software.name) == "psi4")).all()
+    assert names == ["PSI4"]

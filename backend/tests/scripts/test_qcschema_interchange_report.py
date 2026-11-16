@@ -309,11 +309,6 @@ def test_report_is_the_same_on_an_empty_and_a_populated_database(db_session, mon
     assert report_script.canonical_json(populated) == report_script.canonical_json(empty)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AttributeError,
-    reason="backend bug: a software name differing from the fixture's only in case crashes the round trip; fixed separately",
-)
 def test_round_trip_passes_when_the_software_name_differs_in_case(db_session, require_qcelemental):
     from app.db.models.software import Software
 

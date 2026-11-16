@@ -181,3 +181,76 @@ def test_trailing_version_strip_is_fast_on_long_runs(name: str) -> None:
     started = time.perf_counter()
     _strip_trailing_version(name)
     assert time.perf_counter() - started < 0.5
+
+
+def test_case_variants_of_an_unaliased_name_resolve_to_one_software(db_conn) -> None:
+    with Session(db_conn) as session:
+        with session.begin():
+            first = resolve_software_release_ref(session, SoftwareReleaseRef(name="Psi4", version="1.9.1"))
+            second = resolve_software_release_ref(session, SoftwareReleaseRef(name="PSI4", version="1.9.1"))
+            third = resolve_software_release_ref(session, SoftwareReleaseRef(name=" psi4 ", version="1.9.1"))
+
+            assert first.id == second.id == third.id
+            assert first.software.name == "Psi4"
+            count = session.scalar(select(func.count()).select_from(Software).where(func.lower(Software.name) == "psi4"))
+            assert count == 1
+
+
+def test_insert_conflict_retry_finds_the_existing_case_variant(db_conn, monkeypatch) -> None:
+    from app.services import software_resolution
+
+    real_find = software_resolution.find_software_by_name
+    with Session(db_conn) as session:
+        with session.begin():
+            existing = software_resolution.resolve_software(session, "Psi4")
+            calls = {"n": 0}
+
+            def blind_first_lookup(sess, name):
+                calls["n"] += 1
+                return None if calls["n"] == 1 else real_find(sess, name)
+
+            monkeypatch.setattr(software_resolution, "find_software_by_name", blind_first_lookup)
+            again = software_resolution.resolve_software(session, "PSI4")
+
+            assert calls["n"] == 2
+            assert again.id == existing.id
+
+
+def test_insert_conflict_with_no_matching_row_raises_instead_of_returning_none(db_conn, monkeypatch) -> None:
+    from app.services import software_resolution
+
+    with Session(db_conn) as session:
+        with session.begin():
+            software_resolution.resolve_software(session, "Psi4")
+            monkeypatch.setattr(software_resolution, "find_software_by_name", lambda sess, name: None)
+            with pytest.raises(RuntimeError, match="uniqueness constraint"):
+                software_resolution.resolve_software(session, "PSI4")
+
+
+@pytest.mark.parametrize("name", ["ΑΣ", "İxx"])
+def test_a_name_whose_python_and_sql_case_folds_differ_resolves_to_one_software(db_conn, name) -> None:
+    from app.services import software_resolution
+
+    with Session(db_conn) as session:
+        with session.begin():
+            first = software_resolution.resolve_software(session, name)
+            second = software_resolution.resolve_software(session, name)
+
+            assert first.id == second.id
+            assert session.scalar(select(func.count()).select_from(Software).where(Software.public_ref == first.public_ref)) == 1
+
+
+@pytest.mark.parametrize("name", ["Q-Chem", "ΑΣ", "İxx", "NWChem 7"])
+def test_the_lookup_ref_is_the_ref_an_inserted_row_gets(db_conn, name) -> None:
+    from app.db.models.workflow import WorkflowTool
+    from app.services.public_refs import software_public_ref, workflow_tool_public_ref
+
+    with Session(db_conn) as session:
+        with session.begin():
+            software = Software(name=name)
+            tool = WorkflowTool(name=name)
+            session.add_all([software, tool])
+            session.flush()
+
+            assert software.public_ref == software_public_ref(name)
+            assert tool.public_ref == workflow_tool_public_ref(name)
