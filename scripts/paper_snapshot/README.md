@@ -118,7 +118,8 @@ Generators run for the snapshot: `corpus_counts`, `conformer_basins`, `calculati
     k is compared with the hand evaluation of the written A, n and Ea. H298 of [CH3] from the polynomial is reported
     next to the record's scalar H298 (not gated) and next to Cantera's (gated).
   - The build refuses the snapshot unless Cantera loaded the files, the stored fit is in cm3 mol-1 s-1, all of those
-    agree, the 300 K ratio is within its bound, the files are written to at least today's precision (nine significant digits of A, n and Ea and of the NASA coefficients' mantissas; more digits pass), and the manifest has no gaps.
+    agree, the 300 K ratio is within its bound, the files are written to at least today's precision (nine significant
+    digits of A, n and Ea and of the NASA coefficients' mantissas; more digits pass), and the manifest has no gaps.
     Without Cantera the output says `cantera_not_installed`, and the build refuses that.
 - `ch3_enthalpy_of_formation`: every [CH3] thermo record (H298, level, the deposit it came from) and the H298
   selection answer with a level-of-theory filter.

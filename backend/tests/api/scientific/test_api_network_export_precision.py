@@ -118,6 +118,8 @@ def test_cantera_k_of_a_plog_row_is_the_stored_fit_to_the_written_digits(client,
     loaded = gas.forward_rate_constants[0]
     stored = a * temperature**n * math.exp(-ea_kj / (8.314462618e-3 * temperature))
     bound = written_rate_bound(a_text, n_text, ea_text, temperature)
+    # The written 1 bar pressure rounds to 1 - 2.9e-10 bar, so Cantera blends in ~2e-9 of the next PLOG row at 300 K;
+    # the bound's other terms cover it.
     # cm3 mol-1 s-1 -> m3 kmol-1 s-1
     assert abs(math.log(loaded / (stored * 1.0e-3))) <= bound
     assert bound < 2.0e-7

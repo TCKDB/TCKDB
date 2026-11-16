@@ -155,7 +155,7 @@ def test_the_file_digest_ignores_refs_and_the_manifest_timestamp_and_nothing_els
     assert base != chemkin_export.masked_sha256("manifest.json", manifest("2026-01-01T00:00:00+00:00", _ref("rxe", "a"), [{"code": "x"}]))
 
 
-def test_ratio_is_reported_as_it_is_to_six_figures():
+def test_ratio_is_reported_as_it_is_to_ten_figures():
     assert chemkin_export.ratio(1.87889e10, 1.87469e10) == 1.00224037
     assert chemkin_export.ratio(3.0, 2.0) == 1.5
     assert chemkin_export.ratio(None, 2.0) is None
