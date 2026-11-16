@@ -292,7 +292,7 @@ def test_mutation_nasa_coefficient_plus_one_unit_below_print_precision_is_green(
     assert water["max_abs_deviation"]["cp_over_r"] == pytest.approx(1e-9, rel=1e-3)
 
 
-#: HO2 + NH2 <=> O2 + NH3, A = 2.179000e+06 in the fixture, printed 2.1790E+06 by the export.
+#: HO2 + NH2 <=> O2 + NH3, A = 2.179000e+06 in the fixture, printed 2.17900000E+06 by the export.
 _A_PRINTED = "2.17900000E+06"
 _A_REACTION = "[NH2] + [O]O <=> N + [O][O] | Arrhenius"
 
@@ -323,9 +323,12 @@ def test_mutation_a_plus_one_unit_of_the_export_print_is_red(pipeline):
     assert entry["within_bound"] is False
     assert entry["max_rel_deviation_kf"] == pytest.approx(1e-2 / 2.179e6, rel=1e-6)
     assert result.parameter_violations == []
+    # Below 1500 K the half unit of Ea's ninth digit, over RT, widens the bound past one unit of A's ninth digit.
+    assert sorted({v.split(" at ")[1].split(" K")[0] for v in result.bound_violations}) == ["1500.0", "2000.0"]
 
 
 def test_mutation_a_plus_a_hundred_units_of_the_export_print_is_red(pipeline):
+    # 100 units, not 10: the half unit of Ea's ninth digit now dominates the bound, so 10 units is not 10 bounds.
     result = _a_mutation(pipeline, "2.17900100E+06")
     assert result.bound_violations and all(v.startswith(_A_REACTION) for v in result.bound_violations)
     entry = next(e for e in result.reactions if e["key"] == _A_REACTION)
