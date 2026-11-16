@@ -244,3 +244,105 @@ def test_the_adapter_import_leaves_no_trace(require_qcelemental):
     after = {name: module for name, module in sys.modules.items() if name.split(".")[0] in {"tckdb_client", "tckdb_qcschema"}}
     assert sys.path == before_path
     assert after == before
+
+
+def _seed_level(db_session, *, method: str = "b3lyp", basis: str = "def2-tzvp"):
+    from app.schemas.fragments.refs import LevelOfTheoryRef
+    from app.services.calculation_resolution import resolve_level_of_theory_ref
+
+    row = resolve_level_of_theory_ref(db_session, LevelOfTheoryRef(method=method, basis=basis))
+    db_session.flush()
+    return row
+
+
+def _report_and_exported_level(db_session, monkeypatch):
+    """The report, and the method/basis spelling its export carried."""
+    seen = {}
+    with report_script.adapter_modules() as adapter:
+        original = adapter.exporter.export_calculation
+
+        def capture(client, calculation_id, *args, **kwargs):
+            document = original(client, calculation_id, *args, **kwargs)
+            model = document["input_data"]["specification"]["model"]
+            seen.update(method=model["method"], basis=model["basis"])
+            return document
+
+        monkeypatch.setattr(adapter.exporter, "export_calculation", capture)
+        report = report_script.build_report(db_session, adapter=adapter, include_commit=False)
+    return report, seen
+
+
+@pytest.mark.parametrize(
+    ("method", "basis"),
+    [
+        ("b3lyp", "def2-TZVP"),
+        ("b3lyp", "Def2TZVP"),
+        ("b3lyp", "DEF2TZVP"),
+        ("B3LYP", "def2-tzvp"),
+        ("B3lyp", "def2-tzvp"),
+        ("B3LYP", "Def2TZVP"),
+    ],
+)
+def test_round_trip_passes_when_the_level_exists_under_another_spelling(
+    db_session, monkeypatch, require_qcelemental, method, basis
+):
+    """The shared level-of-theory row keeps its first spelling; the export reads it back."""
+    seeded = _seed_level(db_session, method=method, basis=basis)
+
+    report, exported = _report_and_exported_level(db_session, monkeypatch)
+
+    assert report_script.failed_checks(report) == [], report["round_trip"]["loss_list"]
+    assert report["round_trip"]["passed"] is True
+    # The seeded row was reused: the export carries its spelling, not the fixture's.
+    assert exported == {"method": method, "basis": basis}
+    assert (seeded.method, seeded.basis) == (method, basis)
+
+
+def test_report_is_the_same_on_an_empty_and_a_populated_database(db_session, monkeypatch, require_qcelemental):
+    empty, empty_level = _report_and_exported_level(db_session, monkeypatch)
+    _seed_level(db_session, method="B3LYP", basis="Def2TZVP")
+    populated, populated_level = _report_and_exported_level(db_session, monkeypatch)
+
+    # The populated run reused the seeded row; the spelling is not written into the report.
+    assert empty_level == {"method": "b3lyp", "basis": "def2-tzvp"}
+    assert populated_level == {"method": "B3LYP", "basis": "Def2TZVP"}
+    assert report_script.canonical_json(populated) == report_script.canonical_json(empty)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AttributeError,
+    reason="backend bug: a software name differing from the fixture's only in case crashes the round trip; fixed separately",
+)
+def test_round_trip_passes_when_the_software_name_differs_in_case(db_session, require_qcelemental):
+    from app.db.models.software import Software
+
+    db_session.add(Software(name="PSI4"))
+    db_session.flush()
+    report = report_script.build_report(db_session, include_commit=False)
+    assert report["round_trip"]["passed"] is True
+
+
+@pytest.mark.parametrize(
+    ("path", "wrong"),
+    [
+        ("basis", "def2-qzvp"),
+        ("method", "ub3lyp"),
+        ("method", "b3lyp5"),
+    ],
+)
+def test_a_different_basis_or_method_still_fails_the_round_trip(db_session, monkeypatch, require_qcelemental, path, wrong):
+    """A real change of basis or method, not a spelling, is an unexpected change."""
+    with report_script.adapter_modules() as adapter:
+        original = adapter.exporter.export_calculation
+
+        def wrong_value(client, calculation_id, *args, **kwargs):
+            document = original(client, calculation_id, *args, **kwargs)
+            document["input_data"]["specification"]["model"][path] = wrong
+            return document
+
+        monkeypatch.setattr(adapter.exporter, "export_calculation", wrong_value)
+        report = report_script.build_report(db_session, adapter=adapter, include_commit=False)
+
+    assert report_script.failed_checks(report) == ["loss_list_complete"]
+    assert report["round_trip"]["loss_list"]["unexpected_changed"] == [f"input_data.specification.model.{path}"]
