@@ -484,6 +484,8 @@ def _reaction_block(
         for row, units in zip(fit["plog"], fit["_plog_units"], strict=True):
             a = _a_to_mol_cm_s(row["a"], units or _units_of(fit))
             ea = _convert_ea(row["ea_kj_mol"], energy_units)
+            if a is None or ea is None:
+                raise ValueError(f"PLOG row of {fit['kinetics_ref']} has no A or Ea")
             lines.append(
                 f"    PLOG / {_num(row['pressure_bar'] * _PRESSURE_ATM_PER_BAR)} {_num(a)} {_num(row['n'])} {_num(ea)} /"
             )
