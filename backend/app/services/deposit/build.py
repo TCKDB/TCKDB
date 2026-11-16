@@ -80,7 +80,11 @@ from app.db.models.molecular_property_observation import (
 from app.services.archive import verify_archive, write_archive
 from app.services.deposit.errors import DepositError
 from app.services.deposit.expected_outputs import write_expected_outputs
-from app.services.deposit.generator_spec import assert_sources_within, load_deposit_generators
+from app.services.deposit.generator_spec import (
+    assert_sources_within,
+    load_deposit_generators,
+    snapshot_modules,
+)
 from app.services.document_formats import DEPOSIT, FORMATS, header_of, reads_as
 from app.services.release import versions
 from app.services.release.artifacts import canonical_json, release_record_universe
@@ -731,6 +735,7 @@ def write_deposit(
     output_dir = Path(output_dir)
     allowlist = frozenset(author_accounts)
 
+    modules_before = snapshot_modules()
     generators, generator_sources = load_deposit_generators(generator_spec, generator_root)
 
     release = _release_by_tag(session, release_tag)
@@ -796,7 +801,7 @@ def write_deposit(
             content = (expected_dir / name).read_bytes()
             assert hashlib.sha256(content).hexdigest() == digest
             members.append(_member(f"expected_outputs/{name}", content, ROLE_EXPECTED_OUTPUT))
-        assert_sources_within(generator_sources, generator_root)
+        assert_sources_within(generator_sources, before=modules_before, repo_root=repo_root)
 
         reproduce = _reproduce_document(
             tag=release.tag, source=source, archive_member=archive_member_path, generator_spec=generator_spec

@@ -62,12 +62,15 @@ def _locations(top_level: str) -> list[str] | None:
     return list(found.submodule_search_locations or []) or None
 
 
-def _collides(top_level: str, root: Path) -> bool:
-    """True when ``top_level`` already names something outside ``root`` that a deposit would shadow."""
+def _collision(top_level: str, root: Path) -> str | None:
+    """Say where ``top_level`` already lives when that is outside ``root`` and a deposit would shadow it."""
     if top_level in reserved_top_level_names() or top_level in sys.stdlib_module_names:
-        return True
+        return "the checkout or the standard library"
     places = _locations(top_level)
-    return places is None or any(not Path(place).resolve().is_relative_to(root) for place in places)
+    if places is None:
+        return "a built-in module"
+    outside = [place for place in places if not Path(place).resolve().is_relative_to(root)]
+    return ", ".join(outside) or None
 
 
 def _purge(top_level: str) -> None:
@@ -124,10 +127,12 @@ def load_deposit_generators(
         raise DepositError("generators_root_required: pass --generator-root, the directory the registry imports from")
     root = Path(root).resolve()
     top_level = module_name.partition(".")[0]
-    if _collides(top_level, root):
+    elsewhere = _collision(top_level, root)
+    if elsewhere:
         raise DepositError(
-            f"generators_name_collision: top-level package {top_level!r} already names a module outside "
-            f"{root}; rename the registry package"
+            f"generators_name_collision: top-level package {top_level!r} already names a module in {elsewhere}, "
+            f"outside {root}. Rename the registry package; if this is the same registry loaded earlier from "
+            "another root, run in a fresh process"
         )
     registry, module_file = _import_registry(spec, module_name, attr, root)
     if not module_file.is_relative_to(root):
@@ -143,22 +148,33 @@ def load_deposit_generators(
     return registry, files
 
 
-def assert_sources_within(files: list[tuple[Path, str]], root: Path) -> None:
-    """Refuse when the registry ran code from under ``root`` that the deposit does not carry."""
-    root = Path(root).resolve()
+def snapshot_modules() -> dict[str, object]:
+    """The modules imported right now, to tell later which ones a registry brought in."""
+    return dict(sys.modules)
+
+
+def assert_sources_within(files: list[tuple[Path, str]], *, before: dict[str, object], repo_root: Path) -> None:
+    """Refuse when the registry imported a source file the deposit neither carries nor can supply.
+
+    Every module imported since ``before`` must lie in the copied files, the bound checkout
+    (``repo_root``) or the Python installation (``sys.prefix``, ``sys.base_prefix``).
+    """
     carried = {path for path, _ in files}
+    supplied = [Path(repo_root).resolve(), Path(sys.prefix).resolve(), Path(sys.base_prefix).resolve()]
     missing = sorted(
         {
             str(origin)
-            for module in list(sys.modules.values())
-            if (file := getattr(module, "__file__", None))
-            and (origin := Path(file).resolve()).is_relative_to(root)
-            and origin not in carried
+            for name, module in list(sys.modules.items())
+            if before.get(name) is not module
+            and (file := getattr(module, "__file__", None))
+            and (origin := Path(file).resolve()) not in carried
+            and not any(origin.is_relative_to(place) for place in supplied)
         }
     )
     if missing:
         listed = ", ".join(missing[:5])
         raise DepositError(
-            f"generators_outside_package: the registry imported {len(missing)} source file(s) under {root} "
-            f"that are not in its top-level package, so the deposit would not carry them: {listed}"
+            f"generators_outside_package: the registry imported {len(missing)} source file(s) that are not in its "
+            f"top-level package, the bound checkout or the Python installation, so the deposit would not carry "
+            f"them: {listed}"
         )

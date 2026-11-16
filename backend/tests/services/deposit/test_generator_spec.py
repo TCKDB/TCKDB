@@ -11,7 +11,12 @@ import pytest
 
 from app.services.deposit import DepositError
 from app.services.deposit.expected_outputs import write_expected_outputs
-from app.services.deposit.generator_spec import assert_sources_within, load_deposit_generators, load_generators
+from app.services.deposit.generator_spec import (
+    assert_sources_within,
+    load_deposit_generators,
+    load_generators,
+    snapshot_modules,
+)
 
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
 _counter = itertools.count()
@@ -168,21 +173,50 @@ def test_deposit_loader_refuses_a_file_that_resolves_outside_the_root(tmp_path):
         load_deposit_generators(spec, root)
 
 
-def test_sources_imported_from_outside_the_package_are_refused(tmp_path):
-    (tmp_path / "helpers.py").write_text("VALUE = 1\n")
-    spec = _package(tmp_path, "import helpers\n\nR = {'a': lambda session: {'v': helpers.VALUE}}\n")
+def _imports(tmp_path: Path, helper_dir: Path, helper: str, repo_root: Path, monkeypatch):
+    """Load a registry that imports ``helper`` from ``helper_dir``; return the arguments for the check."""
+    helper_dir.mkdir(parents=True, exist_ok=True)
+    (helper_dir / f"{helper}.py").write_text("VALUE = 1\n")
+    monkeypatch.syspath_prepend(str(helper_dir))
+    before = snapshot_modules()
+    spec = _package(tmp_path, f"import {helper}\n\nR = {{'a': lambda session: {{'v': {helper}.VALUE}}}}\n")
     _, files = load_deposit_generators(spec, tmp_path)
+    return files, before
+
+
+def test_a_helper_beside_the_package_is_refused(tmp_path, monkeypatch):
+    files, before = _imports(tmp_path, tmp_path, "beside_helper", tmp_path / "no_checkout", monkeypatch)
     try:
         with pytest.raises(DepositError, match="generators_outside_package"):
-            assert_sources_within(files, tmp_path)
+            assert_sources_within(files, before=before, repo_root=tmp_path / "no_checkout")
     finally:
-        sys.modules.pop("helpers", None)
+        sys.modules.pop("beside_helper", None)
+
+
+def test_a_helper_on_an_outside_path_entry_is_refused(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    files, before = _imports(root, tmp_path / "outside", "outside_helper", tmp_path / "checkout", monkeypatch)
+    try:
+        with pytest.raises(DepositError, match="generators_outside_package"):
+            assert_sources_within(files, before=before, repo_root=tmp_path / "checkout")
+    finally:
+        sys.modules.pop("outside_helper", None)
+
+
+def test_a_checkout_inside_the_root_is_accepted(tmp_path, monkeypatch):
+    checkout = tmp_path / "checkout"
+    files, before = _imports(tmp_path, checkout / "lib", "checkout_helper", checkout, monkeypatch)
+    try:
+        assert_sources_within(files, before=before, repo_root=checkout)
+    finally:
+        sys.modules.pop("checkout_helper", None)
 
 
 def test_sources_all_inside_the_package_pass(tmp_path):
+    before = snapshot_modules()
     spec = _package(tmp_path, "R = {'a': lambda session: {}}\n")
     _, files = load_deposit_generators(spec, tmp_path)
-    assert_sources_within(files, tmp_path)
+    assert_sources_within(files, before=before, repo_root=tmp_path / "no_checkout")
 
 
 @pytest.mark.parametrize(
