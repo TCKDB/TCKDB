@@ -61,6 +61,7 @@ from app.services.scientific_read.chemkin_serialize import (
     _elements,
     _flatten_cheb,
     _formula,
+    _num,
     _sanitize_name,
     structure_comment,
 )
@@ -483,8 +484,10 @@ def _reaction_block(
         for row, units in zip(fit["plog"], fit["_plog_units"], strict=True):
             a = _a_to_mol_cm_s(row["a"], units or _units_of(fit))
             ea = _convert_ea(row["ea_kj_mol"], energy_units)
+            if a is None or ea is None:
+                raise ValueError(f"PLOG row of {fit['kinetics_ref']} has no A or Ea")
             lines.append(
-                f"    PLOG / {row['pressure_bar'] * _PRESSURE_ATM_PER_BAR:.4E} {a:.4E} {row['n']:.3f} {ea:.4f} /"
+                f"    PLOG / {_num(row['pressure_bar'] * _PRESSURE_ATM_PER_BAR)} {_num(a)} {_num(row['n'])} {_num(ea)} /"
             )
     else:
         cheb = fit["chebyshev"]
@@ -492,13 +495,13 @@ def _reaction_block(
         offset = _log10_offset(_units_of(fit)) or 0.0
         if flat:
             flat[0] += offset  # a constant added to the first coefficient shifts log10 k by that constant
-        lines.append(f"    TCHEB / {fit['temperature_min_k']:.2f} {fit['temperature_max_k']:.2f} /")
+        lines.append(f"    TCHEB / {_num(fit['temperature_min_k'])} {_num(fit['temperature_max_k'])} /")
         lines.append(
-            f"    PCHEB / {fit['pressure_min_bar'] * _PRESSURE_ATM_PER_BAR:.4E} "
-            f"{fit['pressure_max_bar'] * _PRESSURE_ATM_PER_BAR:.4E} /"
+            f"    PCHEB / {_num(fit['pressure_min_bar'] * _PRESSURE_ATM_PER_BAR)} "
+            f"{_num(fit['pressure_max_bar'] * _PRESSURE_ATM_PER_BAR)} /"
         )
         lines.append(
-            f"    CHEB / {cheb['n_temperature']} {cheb['n_pressure']} " + " ".join(f"{v:.6E}" for v in flat) + " /"
+            f"    CHEB / {cheb['n_temperature']} {cheb['n_pressure']} " + " ".join(_num(v) for v in flat) + " /"
         )
     return lines
 

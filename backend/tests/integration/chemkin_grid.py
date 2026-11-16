@@ -13,35 +13,34 @@ the summary, never dropped.
 Bound derivation for a rate constant
 ------------------------------------
 
-The export prints each stored parameter ``p`` on a decimal grid of unit
-``u(p)`` (``chemkin_serialize._kinetics_lines``): the Arrhenius ``A`` with
-five significant digits (``.4E``), the activation energy with four decimals
-in cal/mol (``.4f``), the temperature exponent with three decimals (``.3f``),
-Troe coefficients with four significant digits (``.4G``), collider
-efficiencies with three (``.3G``), Chebyshev coefficients with seven
-(``.6E``). The stored value is the original file's printed value, parsed,
-after the importer's unit conversion. Printing rounds, so the exported value
-differs from the stored one by at most half a unit of the export's grid, and
-the stored value differs from the original by the unit-conversion chain's
-floating-point error ``eps(p)`` (kcal/mol -> kJ/mol -> cal/mol for ``Ea``;
-identity for ``A`` and ``n``). Hence, for every parameter,
+The export prints each stored parameter ``p`` with nine significant digits
+(``chemkin_serialize._num``, ``.8E``): the Arrhenius ``A``, the temperature
+exponent ``n``, the activation energy in cal/mol, Troe coefficients,
+collider efficiencies and Chebyshev coefficients alike. The stored value is
+the original file's printed value, parsed, after the importer's unit
+conversion. Printing rounds, so the exported value differs from the stored
+one by at most half a unit of the export's ninth digit, and the stored value
+differs from the original by the unit-conversion chain's floating-point
+error ``eps(p)`` (kcal/mol -> kJ/mol -> cal/mol for ``Ea``, with the
+importer's 4.184 and the exporter's exact 1000 / 4.184; identity for ``A``
+and ``n``). Hence, for every parameter,
 
     |p_out - p_in| <= u(p)/2 + |p_in| * eps(p).
 
-Where the export's grid is at least as fine as the original's and the chain
-is the identity (``n``, Troe coefficients, efficiencies, Chebyshev
+Where the original has no more digits than the export prints and the chain is
+the identity (``A``, ``n``, Troe coefficients, efficiencies, Chebyshev
 coefficients and ranges, NASA temperature limits), correctly-rounded
 formatting reproduces the original digits exactly. Those parameters are
 checked for equality (to a 1e-12 floating-point allowance) and contribute
 nothing to the bound: a dropped efficiency or an altered Troe coefficient is
-a hard failure, not a tolerance question. The parameters that can move are
-``A`` (five printed digits against the original's seven) and ``Ea`` (through
-the unit chain).
+a hard failure, not a tolerance question. ``A`` still enters the bound (half
+a unit of its ninth digit), and so does ``Ea`` (through the unit chain).
 
 For a modified Arrhenius channel ``k = A T^n exp(-Ea/RT)``,
 
-    |d ln k| <= dA/A + dEa/(R T),   dA = 10^(floor(log10 A) - 4) / 2,
-                                    dEa = (10^-4 cal/mol)/2 * 4184 J/kmol per cal/mol
+    |d ln k| <= dA/A + dEa/(R T),   dA = 10^(floor(log10 A) - 8) / 2,
+                                    dEa = half a unit of the ninth digit of
+                                          Ea in cal/mol * 4184 J/kmol per cal/mol
                                           + |Ea| * eps_Ea,
 
 with ``R`` in J/kmol/K as Cantera stores ``Ea``. ``dA/A`` is unit-free
@@ -114,13 +113,14 @@ SUPPORTED_FORMS = frozenset(
 )
 
 # Printed precision the exporter declares (chemkin_serialize._kinetics_lines).
-EXPORT_A_SIGNIFICANT_DIGITS = 5  # f"{a:.4E}"
-EXPORT_EA_DECIMALS_CAL_PER_MOL = 4  # f"{ea:.4f}"
+EXPORT_A_SIGNIFICANT_DIGITS = 9  # chemkin_serialize._num: f"{v:.8E}"
+EXPORT_EA_SIGNIFICANT_DIGITS = 9  # chemkin_serialize._num: f"{v:.8E}"
 EXPORT_T_LOW_HIGH_DECIMALS = 3  # _nasa_card: f"{t:>10.3f}"
 EXPORT_T_MID_DECIMALS = 2  # _nasa_card: f"{t_mid:>8.2f}"
 
 #: The importer's kcal/mol -> kJ/mol factor (tckdb_chemkin.forms) and the
-#: exporter's kJ/mol -> cal/mol factor do not compose to exactly 1000.
+#: exporter's kJ/mol -> cal/mol factor (1000 / 4.184) compose to 1000 up to
+#: floating-point error.
 _IMPORTER_KCAL_TO_KJ = 4.184
 EA_CHAIN_RELATIVE_ERROR = abs(_IMPORTER_KCAL_TO_KJ * _KJ_PER_MOL_TO_CAL_PER_MOL / 1000.0 - 1.0)
 #: Cantera's ``cal/mol`` -> J/kmol factor.
@@ -241,8 +241,9 @@ def half_unit_relative(value: float, significant_digits: int) -> float:
 def arrhenius_log_bound(rate: ct.ArrheniusRate, temperature: float) -> float:
     """``|d ln k|`` for one modified-Arrhenius channel at ``temperature`` (module docstring)."""
     d_a = half_unit_relative(rate.pre_exponential_factor, EXPORT_A_SIGNIFICANT_DIGITS)
+    ea_cal_per_mol = abs(rate.activation_energy) / _CAL_PER_MOL_TO_J_PER_KMOL
     d_ea = (
-        0.5 * 10.0 ** (-EXPORT_EA_DECIMALS_CAL_PER_MOL) * _CAL_PER_MOL_TO_J_PER_KMOL
+        half_unit_relative(ea_cal_per_mol, EXPORT_EA_SIGNIFICANT_DIGITS) * abs(rate.activation_energy)
         + abs(rate.activation_energy) * EA_CHAIN_RELATIVE_ERROR
     )
     return d_a + d_ea / (ct.gas_constant * temperature)
