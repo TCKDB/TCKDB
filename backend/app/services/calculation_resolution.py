@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 from typing import Iterable
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, object_session
 from sqlalchemy.sql import ColumnElement
@@ -247,6 +247,17 @@ def spin_agnostic_level_key(ref: LevelOfTheoryRef | LevelOfTheory) -> dict[str, 
     return payload
 
 
+def find_workflow_tool_by_name(session: Session, name: str) -> WorkflowTool | None:
+    """Return the workflow tool whose name matches *name* ignoring case and surrounding whitespace.
+
+    The key is the lower-cased trimmed name the public ref is derived from.
+    """
+
+    return session.scalar(
+        select(WorkflowTool).where(func.lower(func.trim(WorkflowTool.name)) == name.strip().lower()).order_by(WorkflowTool.id)
+    )
+
+
 def resolve_workflow_tool_release_ref(
     session: Session,
     ref: WorkflowToolReleaseRef | None,
@@ -261,9 +272,7 @@ def resolve_workflow_tool_release_ref(
     if ref is None:
         return None
 
-    workflow_tool = session.scalar(
-        select(WorkflowTool).where(WorkflowTool.name == ref.name)
-    )
+    workflow_tool = find_workflow_tool_by_name(session, ref.name)
     if workflow_tool is None:
         try:
             with session.begin_nested():
@@ -271,9 +280,11 @@ def resolve_workflow_tool_release_ref(
                 session.add(workflow_tool)
                 session.flush()
         except IntegrityError:
-            workflow_tool = session.scalar(
-                select(WorkflowTool).where(WorkflowTool.name == ref.name)
-            )
+            workflow_tool = find_workflow_tool_by_name(session, ref.name)
+            if workflow_tool is None:
+                raise RuntimeError(
+                    f"workflow tool {ref.name!r} violated a uniqueness constraint on insert but no matching row was found"
+                ) from None
 
     release = session.scalar(
         select(WorkflowToolRelease).where(
