@@ -22,6 +22,10 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## The publication deposit command takes its generators from `--generators` (Unreleased)
+
+- `build_publication_deposit.py build` requires `--generators module:attr` and `--generator-root`, and refuses without either; the deposit's `scripts/` holds the registry's package tree and `REPRODUCE.md` step 4 runs it from there with bytecode kept out of the deposit. The generator runner is now `backend/scripts/ops/generate_expected_outputs.py --generators module:attr`.
+
 ## Snapshot build exports the use case as a CHEMKIN mechanism (Unreleased)
 
 - **Behaviour:** the paper snapshot build requests `POST /scientific/export/chemkin` as its curator for the CH4 + OH use case, saves the files, and refuses a snapshot whose export does not load in Cantera, whose rate parameters, NASA coefficients or Cantera H298 disagree with the records (each within half a unit of its last written place), whose files are written to less precision than the exporter writes today, or whose manifest lists gaps. A new generator, `use_case_chemkin_export`, makes the same export in-process from the database and reports the Cantera load, k(300 K) against the stored fit, and H298 of [CH3] from the exported polynomial; `compare.py` also compares the saved files.

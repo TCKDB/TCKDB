@@ -2,8 +2,8 @@
 """Recover the vibrational spectrum from every stored Hessian and report,
 per record, how well it reproduces the deposited frequency list.
 
-The deposited script behind the manuscript's sentence "spectrum recovered
-from stored data alone agrees with the separately parsed frequency lists".
+The deposited script behind the claim that the spectrum recovered from stored data
+alone agrees with the separately parsed frequency lists.
 It is a thin command-line wrapper over
 :mod:`app.services.hessian_reanalysis`, which holds the numerics, the
 refusal vocabulary and the derivation of the tolerance; read that module's

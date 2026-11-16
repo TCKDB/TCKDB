@@ -314,27 +314,37 @@ checksums. If you want the newer state published, cut the next release.
 ## 5b. Build the publication deposit
 
 The curl procedure above gives you the release. A **deposit**
-(`tckdb.deposit`, format version 1) is the directory a paper is backed by: the release, the
+(`tckdb.deposit`, format version 1) is the directory a publication is backed by: the release, the
 `tckdb.archive` (format version 1) evidence archive written in the same database session,
-the exact source commit and its lockfiles, the scripts that generate every
-manuscript number, those scripts' expected outputs, a `REPRODUCE.md`
+the exact source commit and its lockfiles, the scripts that generate the
+published numbers, those scripts' expected outputs, a `REPRODUCE.md`
 protocol and an `ACCOUNTS.md` privacy statement -- all bound by SHA-256 in
 one `MANIFEST.json`. Build it **on the host that holds the database**, from a
 clean checkout of the exact tagged commit that is deployed:
 
 ```bash
 git status --porcelain --untracked-files=no   # must print nothing (untracked files are only warned about)
-git describe --tags --exact-match             # must print the paper tag
+git describe --tags --exact-match             # must print the release tag
 export DB_USER=... DB_PASSWORD=... DB_HOST=... DB_PORT=... DB_NAME=...
 export S3_ENDPOINT_URL=... S3_ACCESS_KEY=... S3_SECRET_KEY=... S3_BUCKET=... S3_REGION=...
 
 conda run -n tckdb_env python backend/scripts/ops/build_publication_deposit.py build \
   --release 2026.07.0 \
   --output /srv/deposits/tckdb-2026.07.0 \
+  --generators my_generators.registry:GENERATORS \
+  --generator-root /srv/my-generators \
   --author-account alice --author-account bob
 ```
 
-The build reads the release from the database (never over HTTP) and refuses,
+`--generators module:attr` names the generator registry (a mapping of name to
+generator) and `--generator-root` the directory it imports from (here
+`/srv/my-generators/my_generators/registry.py`); the build refuses without either.
+The registry's top-level package is copied, layout preserved, under the deposit's
+`scripts/`, and `REPRODUCE.md` puts that directory on `PYTHONPATH`. Only the package's `*.py` files are deposited, and the build refuses if the registry
+imports a source file under the root that is not among them, so a generator reads data
+from the database or the pinned checkout, never from files beside the registry. The
+package name must not be one that already names a module (`app`, `scripts`, `tests`,
+an installed package or a standard-library module). The build reads the release from the database (never over HTTP) and refuses,
 with a distinct exit code, when:
 
 | exit | refusal |
@@ -370,7 +380,7 @@ at build time; the release manifest itself does not yet carry a commit.
 ## 6. Mint the DOI — the manual step
 
 **TCKDB does not mint DOIs.** A DOI is not retractable; the machinery is built
-so that depositing is a deliberate human act at the moment a paper tag is cut,
+so that depositing is a deliberate human act at the moment a release is tagged for publication,
 not a side effect of publishing a release.
 
 When you are ready:

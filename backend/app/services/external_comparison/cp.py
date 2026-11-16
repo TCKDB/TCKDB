@@ -501,7 +501,7 @@ def latest_cp_comparison_for_thermo(session: Session, thermo_id: int) -> RecordM
     (:data:`RUNNER`), so "the latest recorded Cp comparison for this thermo"
     is a well-defined notion independent of any reviewer-family (LLM /
     fake-provider) row that may also exist for the same ``(thermo, "thermo")``
-    key. Callers that want the latest Cp comparison (the CLI, the paper
+    key. Callers that want the latest Cp comparison (the CLI, a deposit
     generator) should use this rather than the generic
     :func:`~app.services.machine_review.query.get_latest_record_machine_review_row`
     call with no family, which would default to the reviewer family and

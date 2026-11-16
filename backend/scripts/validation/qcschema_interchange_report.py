@@ -1135,7 +1135,7 @@ def markdown_summary(report: dict[str, Any]) -> str:
 
 
 def paper_generator(session: Session) -> dict[str, Any]:
-    """Registered in the publication-snapshot registry (``registry.py``).
+    """The report as a ``(Session) -> dict`` callable for a generator registry.
 
     The same report without the checkout commit, which a restored deposit's
     byte comparison could not reproduce from a different checkout. Reads the

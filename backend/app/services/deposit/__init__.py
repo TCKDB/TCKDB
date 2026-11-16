@@ -4,7 +4,7 @@ A *release* is the citable, frozen scientific product (four NDJSON files and
 a manifest). An *archive* is the lossless ``tckdb.archive`` database
 snapshot that carries the evidence behind it. A *deposit* is the directory
 that binds one release, its archive, the exact source commit, the scripts
-that generate every manuscript number and those scripts' expected outputs
+that generate the published numbers and those scripts' expected outputs
 into a single ``MANIFEST.json`` of SHA-256 digests, so that a reader with the
 deposit alone can rebuild the database, re-run the generators and check every
 byte. See :mod:`app.services.deposit.build`.

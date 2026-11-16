@@ -1,8 +1,8 @@
-"""Deterministic rendering of manuscript-number generators.
+"""Deterministic rendering of deposit generators.
 
-A *generator* is a callable ``(Session) -> dict`` registered by name in
-``backend/scripts/paper/registry.py``. Each one answers one ``[DATA]`` claim
-in the manuscript by reading the (restored) database through the ORM. This
+A *generator* is a callable ``(Session) -> dict`` registered by name in a
+registry the operator supplies (``module:attr``). Each one reads the
+(restored) database through the ORM. This
 module turns a generator's dict into the two files the deposit ships per
 generator -- ``<name>.json`` in canonical JSON and ``<name>.md`` as tables --
 and enforces the determinism rules every generator must obey:
