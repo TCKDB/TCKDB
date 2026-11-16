@@ -244,3 +244,49 @@ def test_the_adapter_import_leaves_no_trace(require_qcelemental):
     after = {name: module for name, module in sys.modules.items() if name.split(".")[0] in {"tckdb_client", "tckdb_qcschema"}}
     assert sys.path == before_path
     assert after == before
+
+
+def _seed_level(db_session, *, basis: str):
+    from app.schemas.fragments.refs import LevelOfTheoryRef
+    from app.services.calculation_resolution import resolve_level_of_theory_ref
+
+    row = resolve_level_of_theory_ref(db_session, LevelOfTheoryRef(method="b3lyp", basis=basis))
+    db_session.flush()
+    return row
+
+
+@pytest.mark.parametrize("stored_spelling", ["def2-tzvp", "Def2TZVP", "def2-TZVP", "DEF2TZVP"])
+def test_round_trip_passes_when_the_level_exists_under_another_spelling(db_session, require_qcelemental, stored_spelling):
+    """The shared level-of-theory row keeps its first spelling; the export reads it back."""
+    seeded = _seed_level(db_session, basis=stored_spelling)
+
+    report = report_script.build_report(db_session, include_commit=False)
+
+    assert report_script.failed_checks(report) == [], report["round_trip"]["loss_list"]
+    assert report["round_trip"]["passed"] is True
+    db_session.expire_all()
+    assert db_session.get(type(seeded), seeded.id).basis == stored_spelling
+
+
+def test_report_is_the_same_on_an_empty_and_a_populated_database(db_session, require_qcelemental):
+    empty = report_script.canonical_json(report_script.build_report(db_session, include_commit=False))
+    _seed_level(db_session, basis="Def2TZVP")
+    populated = report_script.canonical_json(report_script.build_report(db_session, include_commit=False))
+    assert populated == empty
+
+
+def test_a_different_basis_set_still_fails_the_round_trip(db_session, monkeypatch, require_qcelemental):
+    """A real change of basis, not a spelling, is reported as an unexpected change."""
+    with report_script.adapter_modules() as adapter:
+        original = adapter.exporter.export_calculation
+
+        def wrong_basis(client, calculation_id, *args, **kwargs):
+            document = original(client, calculation_id, *args, **kwargs)
+            document["input_data"]["specification"]["model"]["basis"] = "def2-qzvp"
+            return document
+
+        monkeypatch.setattr(adapter.exporter, "export_calculation", wrong_basis)
+        report = report_script.build_report(db_session, adapter=adapter, include_commit=False)
+
+    assert report_script.failed_checks(report) == ["loss_list_complete"]
+    assert report["round_trip"]["loss_list"]["unexpected_changed"] == ["input_data.specification.model.basis"]

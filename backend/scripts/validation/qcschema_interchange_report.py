@@ -4,8 +4,8 @@ and the same molecule's Gaussian record beside it.
 
 The write-up is ``docs/validation/qcschema_interchange.md``.
 
-Inputs are committed fixtures and nothing else
-----------------------------------------------
+Inputs are committed fixtures; the database may be populated
+------------------------------------------------------------
 ``backend/tests/fixtures/qcschema/water_b3lyp_def2tzvp_psi4/``:
 
 * ``water_b3lyp_def2tzvp_hessian_v2.json`` (and its ``_v1`` sibling): a Psi4
@@ -17,8 +17,11 @@ Inputs are committed fixtures and nothing else
 * ``meta.json``: the sha256 of every file above. A fixture whose digest
   disagrees is refused before anything is computed.
 
-No network is contacted. The database is touched only inside one
-transaction that is always rolled back: see "The round trip".
+No network is contacted. The round trip runs against whatever database the
+session points at, empty or populated, inside one transaction that is always
+rolled back: see "The round trip". Rows already present can be reused (a level
+of theory keeps the spelling of its first deposit), so the exported basis is
+compared by its identity key; see ``IDENTITY_KEYED_PATHS``.
 
 The round trip (asserted, exit status 1 on any failure)
 -------------------------------------------------------
@@ -128,7 +131,7 @@ import platform
 import subprocess
 import sys
 import tomllib
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -143,6 +146,7 @@ if str(BACKEND_ROOT) not in sys.path:
 
 from sqlalchemy.orm import Session  # noqa: E402
 
+from app.chemistry.basis_set_names import basis_identity_key  # noqa: E402
 from app.chemistry.normal_modes import (  # noqa: E402
     FRAME_CONSISTENCY_TOLERANCE_CM1,
     atomic_mass,
@@ -232,6 +236,14 @@ EXPECTED_CHANGED_PATHS = (
     "provenance.routine",
     "provenance.version",
 )
+
+#: Paths compared by TCKDB's identity key rather than byte for byte. The
+#: level-of-theory row is shared and keeps the spelling of whichever deposit
+#: created it, so the exported basis is the stored spelling: ``def2-tzvp``
+#: and ``Def2TZVP`` are one basis (``app.chemistry.basis_set_names``) and
+#: QCSchema consumers read basis names case-insensitively. A different basis
+#: set still lands in ``changed``.
+IDENTITY_KEYED_PATHS = ("input_data.specification.model.basis",)
 
 #: Compared by their own checks, not by the structural diff.
 _SEPARATELY_CHECKED = frozenset(
@@ -472,14 +484,24 @@ def _present(value: Any) -> bool:
     return value is not None and value != {} and value != [] and value != ""
 
 
-def structural_diff(original: Any, exported: Any, path: str = "") -> dict[str, list[str]]:
+def structural_diff(
+    original: Any,
+    exported: Any,
+    path: str = "",
+    identity_keyed: Mapping[str, Callable[[Any], Any]] | None = None,
+) -> dict[str, list[str]]:
     """Classify every field path of ``original`` against ``exported``.
+
+    A leaf whose path is in ``identity_keyed`` is equal when both values map to
+    the same key.
 
     A dict on both sides is walked key by key; anything else is a leaf. A
     subtree present in the original and absent (or empty) in the export is
     reported once, at its root.
     """
     out: dict[str, list[str]] = {"equal": [], "changed": [], "lost": [], "added": [], "separately_checked": []}
+
+    keyed = identity_keyed or {}
 
     def walk(orig: Any, exp: Any, here: str) -> None:
         if here in _SEPARATELY_CHECKED:
@@ -494,7 +516,7 @@ def structural_diff(original: Any, exported: Any, path: str = "") -> dict[str, l
         elif isinstance(orig, dict) and isinstance(exp, dict):
             for key in sorted(set(orig) | set(exp)):
                 walk(orig.get(key), exp.get(key), f"{here}.{key}" if here else key)
-        elif orig == exp:
+        elif orig == exp or (here in keyed and keyed[here](orig) == keyed[here](exp)):
             out["equal"].append(here)
         else:
             out["changed"].append(here)
@@ -846,7 +868,11 @@ def _check_round_trip(adapter: SimpleNamespace, fixtures: SimpleNamespace, trip:
     checks["export_declares_fixed_frame"] = all(all(flags.values()) for flags in frame.values())
     details["exported_frame"] = frame
 
-    diff = structural_diff(_as_parsed(original), _as_parsed(exported))
+    diff = structural_diff(
+        _as_parsed(original),
+        _as_parsed(exported),
+        identity_keyed=dict.fromkeys(IDENTITY_KEYED_PATHS, basis_identity_key),
+    )
     checks["loss_list_complete"] = diff["lost"] == sorted(EXPECTED_LOST_PATHS) and diff["changed"] == sorted(
         EXPECTED_CHANGED_PATHS
     )
@@ -856,6 +882,7 @@ def _check_round_trip(adapter: SimpleNamespace, fixtures: SimpleNamespace, trip:
         "added": diff["added"],
         "separately_checked": diff["separately_checked"],
         "equal_count": len(diff["equal"]),
+        "compared_by_identity_key": list(IDENTITY_KEYED_PATHS),
         "unexpected_lost": sorted(set(diff["lost"]) - set(EXPECTED_LOST_PATHS)),
         "missing_from_lost": sorted(set(EXPECTED_LOST_PATHS) - set(diff["lost"])),
         "unexpected_changed": sorted(set(diff["changed"]) - set(EXPECTED_CHANGED_PATHS)),
@@ -1139,8 +1166,8 @@ def paper_generator(session: Session) -> dict[str, Any]:
 
     The same report without the checkout commit, which a restored deposit's
     byte comparison could not reproduce from a different checkout. Reads the
-    committed fixtures; the session only lends a connection for the rolled-
-    back round trip.
+    committed fixtures; the session's database is used for the rolled-back
+    round trip and may already hold levels of theory and other rows.
     """
     return build_report(session, include_commit=False)
 
