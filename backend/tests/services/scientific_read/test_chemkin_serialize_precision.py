@@ -16,6 +16,7 @@ import pytest
 
 from app.db.models.common import ArrheniusAUnits, KineticsModelKind
 from app.services.scientific_read.chemkin_serialize import _KJ_PER_MOL_TO_CAL_PER_MOL
+from tests.services.scientific_read._chemkin_precision import written_rate_bound
 from tests.services.scientific_read.test_chemkin_serialize_kinetics import (
     _arr_entry,
     _forward_rate_sum,
@@ -181,11 +182,16 @@ def test_chebyshev_limits_and_coefficients_reproduce_the_stored_values():
 
 @pytest.mark.parametrize("t0_k", [1.0, 300.0])
 @pytest.mark.parametrize("temperature", [300.0, 1000.0, 2000.0])
-def test_cantera_k_from_the_file_is_the_stored_fit(t0_k, temperature):
-    """k = A (T/T0)^n exp(-Ea/RT) from the stored row against Cantera's evaluation of the written file."""
+def test_cantera_k_from_the_file_is_the_stored_fit_to_the_written_digits(t0_k, temperature):
+    """k = A (T/T0)^n exp(-Ea/RT) from the stored row against Cantera's evaluation of the written file, within
+    what the written digits of A, n and Ea allow."""
     rxn = _reaction(["H-e", "O2-e"], ["HO2-e"], _plain(t0_k), ref="R1")
     export, _ = _serialize(_hoh_species(), [rxn])
+    main_line = next(ln for ln in export.files["chem.inp"].splitlines() if "<=>" in ln)
+    a_text, n_text, ea_text = main_line.split()[-3:]
     gas, loaded = _forward_rate_sum(export.files, {"H1", "O2"}, temperature=temperature)
     stored = A_STORED * (temperature / t0_k) ** N_STORED * math.exp(-EA_KJ / (R_KJ * temperature))
     # cm3 mol-1 s-1 -> m3 kmol-1 s-1
-    assert loaded == pytest.approx(stored * 1.0e-3, rel=8.0e-9)
+    bound = written_rate_bound(a_text, n_text, ea_text, temperature)
+    assert abs(math.log(loaded / (stored * 1.0e-3))) <= bound
+    assert bound < 5.0e-8
