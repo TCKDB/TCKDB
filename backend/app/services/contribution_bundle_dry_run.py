@@ -33,7 +33,7 @@ from app.chemistry.species import (
 )
 from app.db.models.literature import Literature
 from app.db.models.reaction import ChemReaction
-from app.db.models.software import Software, SoftwareRelease
+from app.db.models.software import SoftwareRelease
 from app.db.models.species import Species
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.contribution_bundle_dry_run import (
@@ -56,7 +56,7 @@ from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.services.literature_metadata import normalize_doi, normalize_isbn
 from app.services.reaction_resolution import inherit_reversible, reaction_stoichiometry_hash
-from app.services.software_resolution import normalize_software_name
+from app.services.software_resolution import find_software_by_name, normalize_software_name
 from app.services.species_resolution import find_species, find_species_entry, null_safe_equals, resolve_entry_stereo
 
 # ---------------------------------------------------------------------------
@@ -573,9 +573,7 @@ def _preview_software_release(
     if ref.version is not None:
         hosted_identity["version"] = ref.version
 
-    software = session.scalar(
-        select(Software).where(Software.name == normalized_name)
-    )
+    software = find_software_by_name(session, normalized_name)
     if software is None:
         return ContributionBundleDryRunItem(
             record_type=DryRunRecordType.software_release,

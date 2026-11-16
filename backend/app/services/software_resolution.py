@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import ColumnElement
@@ -116,6 +116,20 @@ def _null_safe_equals(column: ColumnElement, value: str | None) -> ColumnElement
     return column.is_(None) if value is None else column == value
 
 
+def software_name_key(name: str) -> str:
+    """Identity key of a software name: the trimmed, lowercased form the public ref is derived from."""
+
+    return normalize_software_name(name).strip().lower()
+
+
+def find_software_by_name(session: Session, name: str) -> Software | None:
+    """Return the software row whose name matches *name* ignoring case and surrounding whitespace."""
+
+    return session.scalar(
+        select(Software).where(func.lower(func.trim(Software.name)) == software_name_key(name)).order_by(Software.id)
+    )
+
+
 def resolve_software(
     session: Session,
     name: str,
@@ -128,7 +142,7 @@ def resolve_software(
     """
 
     normalized_name = normalize_software_name(name)
-    software = session.scalar(select(Software).where(Software.name == normalized_name))
+    software = find_software_by_name(session, normalized_name)
     if software is None:
         try:
             with session.begin_nested():
@@ -136,7 +150,11 @@ def resolve_software(
                 session.add(software)
                 session.flush()
         except IntegrityError:
-            software = session.scalar(select(Software).where(Software.name == normalized_name))
+            software = find_software_by_name(session, normalized_name)
+            if software is None:
+                raise RuntimeError(
+                    f"software {normalized_name!r} violated a uniqueness constraint on insert but no matching row was found"
+                ) from None
 
     return software
 

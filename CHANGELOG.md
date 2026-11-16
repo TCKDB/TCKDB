@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Software names that differ only in case resolve to one software (Unreleased)
+
+- **Behaviour:** an upload naming `PSI4` (or ` psi4 `) when `Psi4` is already stored now reuses that software row and its stored spelling. It used to fail with a server error. Software lookup uses the same lower-cased, trimmed name as the public ref, in the upload resolver and in the contribution-bundle dry run.
+- **Schema and migration:** none. No new environment variable. No distributed package changed.
+
 ## CHEMKIN export writes rate parameters to nine significant figures (Unreleased)
 
 - **Behaviour:** the CHEMKIN export (`POST /scientific/export/chemkin` and the network export) writes A, n, Ea, the falloff, Troe, SRI, PLOG and Chebyshev coefficients and the third-body efficiencies to nine significant figures (`1.45978000E+03`), the precision of the NASA cards, so Cantera's k(T) from the file matches the stored fit to the rounding of those digits. The paper snapshot build refuses a file written with fewer digits.
