@@ -160,13 +160,48 @@ def check_saved(directory: Path, env: dict[str, str]) -> dict[str, Any]:
     return result
 
 
+#: The least precision the exporter writes today; a build that finds fewer digits is refused, so the bounds computed from
+#: the written digits cannot widen to let a coarser file through. More digits pass.
+MIN_N_DECIMALS = 3
+MIN_A_MANTISSA_DECIMALS = 4
+MIN_EA_DECIMALS = 4
+MIN_NASA_MANTISSA_DECIMALS = 8
+#: Cantera's k against the hand evaluation of the written A, n and Ea (same formula, same digits).
+CANTERA_VS_HAND_RELATIVE = 1.0e-6
+
+
+def _decimals(text: str) -> int:
+    mantissa = str(text).lower().partition("e")[0]
+    return len(mantissa.split(".")[1]) if "." in mantissa else 0
+
+
 def _rate_problems(rate: dict[str, Any]) -> list[str]:
-    """The forward rate must be evaluated, in the stored fit's units, and agree within what the written digits explain."""
+    """The forward rate must be evaluated, written to at least today's precision, parameter by parameter the stored
+    fit's, Cantera's own evaluation of the written digits, and within what the written digits explain at 300 K."""
     if rate.get("cantera_k_forward") is None or rate.get("stored_fit_k") is None:
         return ["no forward rate coefficient was compared with the stored fit"]
     out = []
-    if rate.get("stored_fit_units") != "cm3_mol_s" or rate.get("units") != "cm3_mol_s":
+    if rate.get("stored_fit_units") != "cm3_mol_s":
         out.append(f"the stored fit is in {rate.get('stored_fit_units')!r}, not cm3_mol_s; Cantera's value is not comparable")
+    written = rate.get("written_in_chem_inp") or {}
+    for key, floor, label in (
+        ("n_text", MIN_N_DECIMALS, "n"),
+        ("a_text", MIN_A_MANTISSA_DECIMALS, "A"),
+        ("ea_text", MIN_EA_DECIMALS, "Ea"),
+    ):
+        if key not in written or _decimals(written[key]) < floor:
+            out.append(f"{label} is written as {written.get(key)!r}, fewer than the {floor} decimals the export writes")
+    parameters = rate.get("written_vs_stored_fit")
+    if not parameters:
+        out.append("the written parameters were not compared with the stored fit")
+    else:
+        for key in ("n", "a", "ea"):
+            over = (parameters.get(key) or {}).get("over_half_unit")
+            if over is None or over > 1:
+                out.append(f"written {key} differs from the stored fit by {over} half-units of its last written place")
+    hand = rate.get("cantera_over_hand_evaluation_of_written_digits")
+    if hand is None or abs(hand - 1.0) > CANTERA_VS_HAND_RELATIVE:
+        out.append(f"Cantera's k is {hand} times the hand evaluation of the written A, n and Ea")
     bound = (rate.get("ratio_explained_by_written_digits") or {}).get("total")
     ratio = rate.get("cantera_over_stored")
     if bound is None or ratio is None or ratio <= 0:
@@ -177,19 +212,34 @@ def _rate_problems(rate: dict[str, Any]) -> list[str]:
 
 
 def _h298_problems(h298: dict[str, Any]) -> list[str]:
-    """H298 of [CH3] must be evaluated, agree with the record within coefficient rounding and with Cantera."""
-    if h298.get("exported_nasa_h298_kj_mol") is None or h298.get("record_h298_kj_mol") is None:
-        return ["no H298 of [CH3] was compared with the record"]
-    out = []
-    bound = (h298.get("exported_minus_record_explained_by_coefficient_rounding") or {}).get("bound_kj_mol")
-    difference = h298.get("exported_minus_record_kj_mol")
-    if bound is None or difference is None or abs(difference) > bound:
-        out.append(f"H298 of [CH3] from the exported polynomial differs from the record by {difference} kJ/mol; "
-                   f"coefficient rounding explains at most {bound}")
+    """Cantera's H298 of [CH3] must match the exported polynomial's. The difference between the record's scalar H298
+    and its own polynomial is reported, not gated."""
+    if h298.get("exported_nasa_h298_kj_mol") is None:
+        return ["no H298 of [CH3] was evaluated from the exported polynomial"]
     agreement = h298.get("cantera_agreement_bound_kj_mol")
-    cantera_difference = h298.get("cantera_minus_exported_kj_mol")
-    if agreement is None or cantera_difference is None or abs(cantera_difference) > agreement:
-        out.append(f"Cantera's H298 of [CH3] differs from the exported polynomial's by {cantera_difference} kJ/mol (bound {agreement})")
+    difference = h298.get("cantera_minus_exported_kj_mol")
+    if agreement is None or difference is None or abs(difference) > agreement:
+        return [f"Cantera's H298 of [CH3] differs from the exported polynomial's by {difference} kJ/mol (bound {agreement})"]
+    return []
+
+
+def _nasa_problems(row: dict[str, Any]) -> list[str]:
+    """Every number written in a species' NASA card is the stored record's to within half a unit of its last written
+    place, and the coefficients are written to at least today's precision."""
+    check = row.get("nasa_vs_record")
+    if not check:
+        return [f"species {row.get('smiles')}: the NASA card was not compared with the stored record"]
+    out = []
+    if check["max_difference_over_half_unit"] > 1:
+        out.append(
+            f"species {row['smiles']}: a written NASA number differs from the stored record by "
+            f"{check['max_difference_over_half_unit']} half-units of its last written place"
+        )
+    if check["min_coefficient_mantissa_decimals"] < MIN_NASA_MANTISSA_DECIMALS:
+        out.append(
+            f"species {row['smiles']}: coefficients are written with {check['min_coefficient_mantissa_decimals']} "
+            f"mantissa decimals, fewer than the {MIN_NASA_MANTISSA_DECIMALS} the export writes"
+        )
     return out
 
 
@@ -208,6 +258,8 @@ def verify_output(document: dict[str, Any]) -> list[str]:
     for row in document.get("species") or []:
         if len(row.get("thermo_refs_named") or []) != 1 or not row.get("has_nasa_in_therm_dat"):
             out.append(f"species {row.get('smiles')}: needs one named thermo record and a NASA entry in therm.dat")
+        else:
+            out += _nasa_problems(row)
     if document.get("named_thermo_refs_without_a_species_in_chem_inp"):
         out.append("a named thermo record has no species in chem.inp")
     return out

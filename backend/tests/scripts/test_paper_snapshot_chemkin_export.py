@@ -14,6 +14,7 @@ import math
 import sys
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import cantera as ct
 import pytest
@@ -526,22 +527,39 @@ def _good_output() -> dict:
             "units": "cm3_mol_s",
             "cantera_over_stored": 1.00224,
             "ratio_explained_by_written_digits": {"total": 0.0029},
+            "written_in_chem_inp": {"n_text": "3.468", "a_text": "1.4598E+03", "ea_text": "2033.0521"},
+            "written_vs_stored_fit": {
+                "n": {"over_half_unit": 0.78},
+                "a": {"over_half_unit": 0.4},
+                "ea": {"over_half_unit": 0.9},
+            },
+            "cantera_over_hand_evaluation_of_written_digits": 1.0,
         },
         "ch3_h298": {
             "exported_nasa_h298_kj_mol": 144.815,
             "record_h298_kj_mol": 144.815,
             "exported_minus_record_kj_mol": -0.00022,
-            "exported_minus_record_explained_by_coefficient_rounding": {"bound_kj_mol": 0.0005},
             "cantera_minus_exported_kj_mol": 0.0,
             "cantera_agreement_bound_kj_mol": 0.00014,
         },
-        "species": [{"smiles": "C", "thermo_refs_named": ["thm_a"], "has_nasa_in_therm_dat": True}],
+        "species": [
+            {
+                "smiles": "C",
+                "thermo_refs_named": ["thm_a"],
+                "has_nasa_in_therm_dat": True,
+                "nasa_vs_record": {
+                    "numbers_compared": 17,
+                    "max_difference_over_half_unit": 0.0,
+                    "min_coefficient_mantissa_decimals": 8,
+                },
+            }
+        ],
         "named_thermo_refs_without_a_species_in_chem_inp": [],
     }
 
 
 def _with(document: dict, **changes) -> dict:
-    """A copy of ``document`` with ``changes`` applied as ``section.key=value`` (``section__key``)."""
+    """A copy of ``document`` with ``changes`` applied (``section__key`` sets ``document[section][key]``)."""
     out = json.loads(json.dumps(document))
     for path, value in changes.items():
         section, _, key = path.partition("__")
@@ -550,6 +568,16 @@ def _with(document: dict, **changes) -> dict:
         else:
             out[section] = value
     return out
+
+
+def _rate_with(**changes) -> dict:
+    document = _good_output()
+    for key, value in changes.items():
+        if key in document["forward_rate"]["written_in_chem_inp"]:
+            document["forward_rate"]["written_in_chem_inp"][key] = value
+        else:
+            document["forward_rate"][key] = value
+    return document
 
 
 def test_the_build_accepts_only_an_output_that_shows_the_files_loaded_and_checked(step):
@@ -569,28 +597,71 @@ def test_the_build_accepts_only_an_output_that_shows_the_files_loaded_and_checke
 def test_a_rate_ratio_the_written_digits_cannot_explain_is_refused(step):
     wrong = _with(_good_output(), forward_rate__cantera_over_stored=1000.0)
     assert any("1000.0" in r and "explain" in r for r in step.verify_output(wrong))
-    low = _with(_good_output(), forward_rate__cantera_over_stored=0.99)
-    assert step.verify_output(low)
-    no_bound = _with(_good_output(), forward_rate__ratio_explained_by_written_digits=None)
-    assert step.verify_output(no_bound)
-    inside = _with(_good_output(), forward_rate__cantera_over_stored=1.0028)
-    assert step.verify_output(inside) == []
+    assert step.verify_output(_with(_good_output(), forward_rate__cantera_over_stored=0.99))
+    assert step.verify_output(_with(_good_output(), forward_rate__ratio_explained_by_written_digits=None))
+    assert step.verify_output(_with(_good_output(), forward_rate__cantera_over_stored=1.0028)) == []
 
 
 def test_rates_in_other_units_are_refused(step):
     other = _with(_good_output(), forward_rate__stored_fit_units="cm3_molecule_s")
     assert any("not cm3_mol_s" in r for r in step.verify_output(other))
-    other_units = _with(_good_output(), forward_rate__units="cm3_molecule_s")
-    assert step.verify_output(other_units)
 
 
-def test_an_h298_off_by_a_kilojoule_is_refused_and_so_is_a_cantera_disagreement(step):
-    off = _with(_good_output(), ch3_h298__exported_minus_record_kj_mol=1.0)
-    assert any("differs from the record by 1.0" in r for r in step.verify_output(off))
+def test_a_coarser_file_is_refused_even_when_its_ratio_is_inside_its_own_wider_bound(step):
+    # n written as 3.5: the bound computed from that file is 0.5 * 0.05 * ln 300, wide enough for a ratio of 1.1
+    coarse_n = _rate_with(n_text="3.5", cantera_over_stored=1.1)
+    coarse_n["forward_rate"]["ratio_explained_by_written_digits"]["total"] = 0.285
+    reasons = step.verify_output(coarse_n)
+    assert any("n is written as '3.5'" in r for r in reasons)
+    assert step.verify_output(_rate_with(n_text="3")), "n written to no decimals"
+    assert any("A is written" in r for r in step.verify_output(_rate_with(a_text="1.46E+03")))
+    assert any("Ea is written" in r for r in step.verify_output(_rate_with(ea_text="2033.05")))
+
+
+def test_a_file_written_with_more_digits_still_passes(step):
+    finer = _rate_with(n_text="3.46761", a_text="1.459780E+03", ea_text="2033.05213")
+    finer["forward_rate"]["written_vs_stored_fit"] = {k: {"over_half_unit": 0.1} for k in ("n", "a", "ea")}
+    finer["forward_rate"]["ratio_explained_by_written_digits"]["total"] = 0.00005
+    finer["forward_rate"]["cantera_over_stored"] = 1.00001
+    finer["species"][0]["nasa_vs_record"]["min_coefficient_mantissa_decimals"] = 12
+    assert step.verify_output(finer) == []
+
+
+def test_cancelling_errors_in_a_and_n_are_caught_parameter_by_parameter(step):
+    # k(300 K) is right but n and A are each off: the 300 K ratio alone would pass
+    cancelling = _good_output()
+    cancelling["forward_rate"]["written_vs_stored_fit"]["n"]["over_half_unit"] = 60.0
+    cancelling["forward_rate"]["written_vs_stored_fit"]["a"]["over_half_unit"] = 40.0
+    reasons = step.verify_output(cancelling)
+    assert any("written n differs" in r for r in reasons) and any("written a differs" in r for r in reasons)
+    assert any("written ea differs" in r for r in step.verify_output(_with(_good_output(), forward_rate__written_vs_stored_fit={
+        "n": {"over_half_unit": 0.1}, "a": {"over_half_unit": 0.1}, "ea": {"over_half_unit": 3.0}})))
+    assert step.verify_output(_with(_good_output(), forward_rate__written_vs_stored_fit=None))
+
+
+def test_cantera_must_agree_with_the_hand_evaluation_of_the_written_digits(step):
+    assert any("hand evaluation" in r for r in step.verify_output(_rate_with(cantera_over_hand_evaluation_of_written_digits=1.01)))
+    assert step.verify_output(_rate_with(cantera_over_hand_evaluation_of_written_digits=None))
+
+
+def test_a_nasa_card_that_is_not_the_stored_record_or_is_written_coarsely_is_refused(step):
+    off = _good_output()
+    off["species"][0]["nasa_vs_record"]["max_difference_over_half_unit"] = 4.0
+    assert any("half-units" in r for r in step.verify_output(off))
+    coarse = _good_output()
+    coarse["species"][0]["nasa_vs_record"]["min_coefficient_mantissa_decimals"] = 5
+    assert any("mantissa decimals" in r for r in step.verify_output(coarse))
+    missing = _good_output()
+    missing["species"][0]["nasa_vs_record"] = None
+    assert any("not compared" in r for r in step.verify_output(missing))
+
+
+def test_the_records_scalar_h298_is_reported_not_gated_but_cantera_must_match_the_polynomial(step):
+    far = _with(_good_output(), ch3_h298__exported_minus_record_kj_mol=1.0)
+    assert step.verify_output(far) == []
     cantera = _with(_good_output(), ch3_h298__cantera_minus_exported_kj_mol=1.0)
     assert any("Cantera's H298" in r for r in step.verify_output(cantera))
-    missing = _with(_good_output(), ch3_h298__record_h298_kj_mol=None)
-    assert step.verify_output(missing)
+    assert step.verify_output(_with(_good_output(), ch3_h298__exported_nasa_h298_kj_mol=None))
 
 
 def test_a_manifest_with_gaps_is_refused(step):
@@ -673,24 +744,43 @@ def test_the_rate_bound_is_the_sum_of_what_each_written_number_can_move():
     assert chemkin_export.rate_ratio_bound(None, ["CAL/MOLE"], 300.0) is None
 
 
-def test_more_digits_written_means_a_smaller_bound():
-    coarse = {"a": 1459.8, "a_text": "1.4598E+03", "n_text": "3.468", "ea_text": "2033.0521"}
-    fine = {"a": 1459.8, "a_text": "1.4598E+03", "n_text": "3.46761", "ea_text": "2033.0521"}
-    units = ["CAL/MOLE", "MOLES"]
-    assert (
-        chemkin_export.rate_ratio_bound(fine, units, 300.0)["total"] < chemkin_export.rate_ratio_bound(coarse, units, 300.0)["total"]
-    )
+def test_the_written_reaction_is_matched_whatever_order_its_terms_are_written_in():
+    sides = chemkin_export.equation_sides
+    assert sides("C1H4 + H1O1 <=> H2O1 + C1H3") == sides("H1O1 + C1H4 <=> C1H3 + H2O1") == (["C1H4", "H1O1"], ["C1H3", "H2O1"])
+    assert sides("A => B") == (["A"], ["B"])
 
 
-def test_the_h298_bound_follows_the_significant_figures_of_the_coefficients():
+def test_hand_rate_is_the_formula_on_the_written_digits():
+    written = chemkin_export.parse_chem_inp(CHEM_INP)["reactions"][0]
+    r = chemkin_export.GAS_CONSTANT_CAL_MOL_K
+    assert chemkin_export.hand_rate(written, 300.0) == pytest.approx(1459.8 * 300.0**3.468 * math.exp(-2033.0521 / (r * 300.0)))
+
+
+def test_each_written_parameter_is_compared_with_the_stored_fit_in_half_units():
+    written = chemkin_export.parse_chem_inp(CHEM_INP)["reactions"][0]
+    kinetics = SimpleNamespace(a=1459.78, n=3.46761, ea_kj_mol=8.50629, t0_k=1.0)
+    out = chemkin_export.written_vs_stored_fit(written, kinetics)
+    assert out["n"]["over_half_unit"] == pytest.approx(0.78, abs=0.01)  # 3.468 for 3.46761
+    assert out["a"]["over_half_unit"] < 1 and out["ea"]["over_half_unit"] < 1
+    # a different reference temperature changes the A the file must hold: k = A (T/T0)^n is written as A T0^-n T^n
+    shifted = chemkin_export.written_vs_stored_fit(written, SimpleNamespace(a=1459.78, n=3.46761, ea_kj_mol=8.50629, t0_k=300.0))
+    assert shifted["a"]["over_half_unit"] > 1
+    assert chemkin_export.written_vs_stored_fit(None, kinetics) is None
+
+
+def test_every_number_in_a_nasa_card_is_compared_with_the_stored_record():
     record = chemkin_export.parse_therm_dat(THERM_DAT)["C1H3"]
-    six = chemkin_export.nasa7_h_rounding_bound_kj_mol(record, 298.15)
-    assert six["coefficient_significant_figures"] == 6
-    assert six["bound_kj_mol"] > 2.2e-4  # covers the -0.00022 kJ/mol between this polynomial and the record's scalar
-    nine = {**record, "low": [v + 1.234567891e-9 for v in record["low"]], "high": [v + 1.234567891e-9 for v in record["high"]]}
-    finer = chemkin_export.nasa7_h_rounding_bound_kj_mol(nine, 298.15)
-    assert finer["coefficient_significant_figures"] > 6
-    assert finer["bound_kj_mol"] < six["bound_kj_mol"]
+    nasa = SimpleNamespace(
+        t_low=10.0, t_mid=646.79, t_high=3000.0,
+        **{f"a{i}": v for i, v in enumerate(CH3_LOW, 1)}, **{f"b{i}": v for i, v in enumerate(CH3_HIGH, 1)},
+    )
+    out = chemkin_export.nasa_vs_record(record, nasa)
+    assert out["numbers_compared"] == 17 and out["max_difference_over_half_unit"] <= 1
+    assert out["min_coefficient_mantissa_decimals"] == 8
+    nasa.a3 = nasa.a3 + 1e-6  # a stored coefficient the card does not hold
+    assert chemkin_export.nasa_vs_record(record, nasa)["max_difference_over_half_unit"] > 1
+    assert chemkin_export.nasa_vs_record(record, SimpleNamespace(**{**vars(nasa), "a1": None})) is None
+    assert chemkin_export.nasa_vs_record(record, None) is None
 
 
 # ---------------------------------------------------------------------------
@@ -753,18 +843,27 @@ def test_cantera_refuses_a_species_without_thermo_and_the_refusal_is_the_result(
     assert str(tmp_path) not in out["error"]
 
 
-def test_the_full_analysis_with_real_cantera_passes_the_builds_checks(db_session, tmp_path, step):
+def test_the_full_analysis_of_the_exporters_own_files_with_real_cantera_passes_the_builds_checks(db_session, step):
     entry, entries, kinetics, thermo = _seed(db_session)
-    request, files = _files(entry, kinetics, thermo)
-    files["therm.dat"] = _four_species_therm().encode()
+    _make_exportable(db_session, thermo)
+    _release_with_the_use_case(db_session, entries, kinetics, thermo, [])
+    request, _ = chemkin_export.resolve_request(db_session)
+    files = chemkin_export.export_in_process(db_session, request)
 
     out = chemkin_export.analyse(db_session, request, files)
 
     assert out["cantera"]["status"] == "loaded"
-    assert step.verify_output(out) == []
+    assert step.verify_output(out) == [], str(out["forward_rate"])
     rate = out["forward_rate"]
-    assert abs(math.log(rate["cantera_over_stored"])) < rate["ratio_explained_by_written_digits"]["total"]
     assert rate["stored_fit_units"] == "cm3_mol_s" and rate["units"] == "cm3_mol_s"
+    assert abs(rate["cantera_over_hand_evaluation_of_written_digits"] - 1.0) < 1e-6
+    assert all(row["nasa_vs_record"]["max_difference_over_half_unit"] <= 1 for row in out["species"])
+    # a card whose number is not the stored one is refused
+    altered = dict(files)
+    altered["therm.dat"] = files["therm.dat"].replace(b"3.50000000E+00", b"3.60000000E+00", 1)
+    assert altered["therm.dat"] != files["therm.dat"]
+    changed = chemkin_export.analyse(db_session, request, altered)
+    assert any("NASA number differs" in r for r in step.verify_output(changed))
 
 
 # ---------------------------------------------------------------------------

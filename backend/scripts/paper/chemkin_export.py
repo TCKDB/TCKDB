@@ -159,8 +159,8 @@ def parse_chem_inp(text: str) -> dict[str, Any]:
 _THERMO_HEAD = re.compile(r"^(?P<name>\S+)\s.*G\s+(?P<tlow>[\d.]+)\s+(?P<thigh>[\d.]+)\s+(?P<tmid>[\d.]+)\s+1\s*$")
 
 
-def _fields(line: str) -> list[float]:
-    return [float(line[i : i + 15]) for i in range(0, 75, 15) if line[i : i + 15].strip()]
+def _field_texts(line: str) -> list[str]:
+    return [line[i : i + 15].strip() for i in range(0, 75, 15) if line[i : i + 15].strip()]
 
 
 def parse_therm_dat(text: str) -> dict[str, dict[str, Any]]:
@@ -176,15 +176,19 @@ def parse_therm_dat(text: str) -> dict[str, dict[str, Any]]:
         block = lines[i + 1 : i + 4]
         if len(block) < 3:
             raise ValueError(f"therm.dat: {match['name']}: fewer than three coefficient lines")
-        numbers = [x for ln in block for x in _fields(ln)]
-        if len(numbers) != 14:
-            raise ValueError(f"therm.dat: {match['name']}: {len(numbers)} coefficients, expected 14")
+        texts = [x for ln in block for x in _field_texts(ln)]
+        if len(texts) != 14:
+            raise ValueError(f"therm.dat: {match['name']}: {len(texts)} coefficients, expected 14")
+        numbers = [float(x) for x in texts]
         out[match["name"]] = {
             "t_low_k": float(match["tlow"]),
             "t_mid_k": float(match["tmid"]),
             "t_high_k": float(match["thigh"]),
             "high": numbers[:7],
             "low": numbers[7:],
+            "high_text": texts[:7],
+            "low_text": texts[7:],
+            "temperature_text": {"t_low": match["tlow"], "t_mid": match["tmid"], "t_high": match["thigh"]},
         }
         i += 4
     return out
@@ -222,29 +226,72 @@ def rate_ratio_bound(written: dict[str, Any] | None, units_line: list[str] | Non
     return {**{k: sig(v, 3) for k, v in parts.items()}, "total": sig(sum(parts.values()), 3)}
 
 
-def significant_figures(value: float, limit: int = 9) -> int:
-    """Significant figures of ``value`` as written with ``limit`` digits, trailing zeros dropped."""
-    mantissa = f"{abs(value):.{limit - 1}e}".split("e")[0].replace(".", "").rstrip("0")
-    return max(len(mantissa), 1)
+def mantissa_decimals(text: str) -> int:
+    """Decimals written in the mantissa of ``text`` (``3.468`` is 3, ``1.4598E+03`` is 4)."""
+    mantissa = text.lower().partition("e")[0]
+    return len(mantissa.split(".")[1]) if "." in mantissa else 0
 
 
-def nasa7_h_rounding_bound_kj_mol(record: dict[str, Any], temperature_k: float) -> dict[str, Any]:
-    """What coefficient rounding can explain of H(T) from a ``parse_therm_dat`` record.
+def nasa_vs_record(record: dict[str, Any], nasa: Any) -> dict[str, Any] | None:
+    """Each coefficient and temperature written in ``therm.dat`` against the stored record's, in half units of the
+    last written place. ``max_difference_over_half_unit`` of at most 1 means every written number is the stored one
+    rounded to what was written."""
+    if nasa is None:
+        return None
+    pairs = [(record["temperature_text"][k], getattr(nasa, k)) for k in ("t_low", "t_mid", "t_high")]
+    pairs += list(zip(record["low_text"], (getattr(nasa, f"a{i}") for i in range(1, 8))))
+    pairs += list(zip(record["high_text"], (getattr(nasa, f"b{i}") for i in range(1, 8))))
+    if any(stored is None for _, stored in pairs):
+        return None
+    worst = max(abs(float(text) - stored) / half_unit_in_last_place(text) for text, stored in pairs)
+    coefficient_texts = record["low_text"] + record["high_text"]
+    return {
+        "numbers_compared": len(pairs),
+        "max_difference_over_half_unit": sig(worst, 3),
+        "min_coefficient_mantissa_decimals": min(mantissa_decimals(t) for t in coefficient_texts),
+    }
 
-    The record's coefficients carry at most ``figures`` significant figures (the most any of the 14 shows, trailing zeros
-    dropped). Each is taken as rounded to that many, so it is uncertain by half a unit in its last place; the
-    uncertainties are propagated through H = R (a1 T + a2 T^2/2 + a3 T^3/3 + a4 T^4/4 + a5 T^5/5 + a6) and added.
-    """
-    a = record["low"] if temperature_k < record["t_mid_k"] else record["high"]
-    figures = max(significant_figures(v) for v in record["low"] + record["high"])
-    total = 0.0
-    for index, value in enumerate(a[:6]):
-        if value == 0:
-            continue
-        half_unit = 0.5 * 10.0 ** (math.floor(math.log10(abs(value))) - (figures - 1))
-        weight = temperature_k**index / (index + 1) * temperature_k if index < 5 else 1.0
-        total += half_unit * weight
-    return {"coefficient_significant_figures": figures, "bound_kj_mol": sig(total * GAS_CONSTANT_J_MOL_K / 1000.0, 3)}
+
+def written_vs_stored_fit(written: dict[str, Any] | None, kinetics: Any) -> dict[str, Any] | None:
+    """Each Arrhenius parameter written in ``chem.inp`` against the stored fit's, in half units of the last written
+    place: n; A after the reference temperature (k = A (T/T0)^n is written as A T0^-n T^n) in cm3 mol-1 s-1; Ea in cal/mol.
+    A difference of at most half a unit (``over_half_unit`` at most 1) is the stored value rounded to what was written."""
+    if written is None or kinetics is None or kinetics.a is None or kinetics.n is None or kinetics.ea_kj_mol is None:
+        return None
+    stored = {
+        "n": kinetics.n,
+        "a": kinetics.a / (kinetics.t0_k or 1.0) ** kinetics.n,
+        "ea": kinetics.ea_kj_mol * 1000.0 / J_PER_CAL,
+    }
+    out = {}
+    for key in ("n", "a", "ea"):
+        half = half_unit_in_last_place(written[f"{key}_text"])
+        out[key] = {
+            "written": written[key],
+            "stored": sig(stored[key], 9),
+            "difference": sig(written[key] - stored[key], 3),
+            "over_half_unit": sig(abs(written[key] - stored[key]) / half, 3),
+        }
+    return out
+
+
+#: J per cal (thermochemical).
+J_PER_CAL = 4.184
+
+
+def equation_sides(equation: str) -> tuple[list[str], list[str]]:
+    """Sorted species names on each side of a ``chem.inp`` equation, whatever order the terms are written in."""
+    left, _, right = equation.replace("<=>", "=>").partition("=>")
+    return (sorted(t.strip() for t in left.split("+")), sorted(t.strip() for t in right.split("+")))
+
+
+def forward_sides(reaction: dict[str, Any]) -> tuple[list[str], list[str]]:
+    return (sorted(reaction["reactants"]), sorted(reaction["products"]))
+
+
+def hand_rate(written: dict[str, Any], temperature_k: float) -> float:
+    """k = A T^n exp(-Ea / RT) from the digits written in ``chem.inp`` (CAL/MOLE), in cm3 mol-1 s-1."""
+    return written["a"] * temperature_k ** written["n"] * math.exp(-written["ea"] / (GAS_CONSTANT_CAL_MOL_K * temperature_k))
 
 
 #: Cantera and this module evaluate the same polynomial; they differ only in the gas constant's last digits.
@@ -472,6 +519,9 @@ def analyse(session: Session, request: dict[str, Any], files: dict[str, bytes]) 
                 **row,
                 "thermo_refs_named": refs,
                 "has_nasa_in_therm_dat": row["name"] in therm,
+                "nasa_vs_record": (
+                    nasa_vs_record(therm[row["name"]], records[0].nasa) if row["name"] in therm and len(records) == 1 and records[0] else None
+                ),
                 "released_in": sorted({tag for rec in records if rec is not None for tag in _released_in(session, SubmissionRecordType.thermo, rec.id)}),
             }
         )
@@ -493,15 +543,21 @@ def analyse(session: Session, request: dict[str, Any], files: dict[str, bytes]) 
     kinetics = session.scalar(select(Kinetics).where(Kinetics.public_ref == kinetics_ref))
     stored = _rate_at(kinetics, USE_CASE_TEMPERATURE_K) if kinetics is not None else None
     cantera_k = sig(forward["k_forward_cm3_mol_s"]) if forward else None
-    written = next((r for r in chem["reactions"] if forward and r["equation"] == forward["equation"]), None)
+    written = next((r for r in chem["reactions"] if forward and equation_sides(r["equation"]) == forward_sides(forward)), None)
     rate = {
         "temperature_k": USE_CASE_TEMPERATURE_K,
-        "units": stored["units"] if stored else None,
+        "units": "cm3_mol_s",
         "cantera_k_forward": cantera_k,
         "stored_fit_k": stored["k"] if stored else None,
         "stored_fit_units": stored["units"] if stored else None,
         "cantera_over_stored": ratio(cantera_k, stored["k"] if stored else None),
         "ratio_explained_by_written_digits": rate_ratio_bound(written, chem["reaction_units"], USE_CASE_TEMPERATURE_K),
+        "written_vs_stored_fit": written_vs_stored_fit(written, kinetics),
+        "cantera_over_hand_evaluation_of_written_digits": (
+            sig(forward["k_forward_cm3_mol_s"] / hand_rate(written, USE_CASE_TEMPERATURE_K), 9)
+            if forward and written and chem["reaction_units"] and chem["reaction_units"][0].upper() == "CAL/MOLE"
+            else None
+        ),
         "stored_fit": (
             {"a": kinetics.a, "n": kinetics.n, "ea_kj_mol": kinetics.ea_kj_mol, "t0_k": kinetics.t0_k} if kinetics else None
         ),
@@ -524,9 +580,6 @@ def analyse(session: Session, request: dict[str, Any], files: dict[str, bytes]) 
         "exported_nasa_h298_kj_mol": sig(exported_raw),
         "exported_minus_record_kj_mol": (
             sig(exported_raw - record_raw) if exported_raw is not None and record_raw is not None else None
-        ),
-        "exported_minus_record_explained_by_coefficient_rounding": (
-            nasa7_h_rounding_bound_kj_mol(therm[ch3_name], H298_TEMPERATURE_K) if ch3_name in therm else None
         ),
         "cantera_h298_kj_mol": sig(cantera_raw),
         "cantera_minus_exported_kj_mol": (

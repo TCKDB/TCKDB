@@ -24,7 +24,7 @@ dataset must never require a code release.
 
 ## Snapshot build exports the use case as a CHEMKIN mechanism (Unreleased)
 
-- **Behaviour:** the paper snapshot build requests `POST /scientific/export/chemkin` as its curator for the CH4 + OH use case, saves the files, and refuses a snapshot whose export does not load in Cantera. A new generator, `use_case_chemkin_export`, makes the same export in-process from the database and reports the Cantera load, k(300 K) against the stored fit, and H298 of [CH3] from the exported polynomial; `compare.py` also compares the saved files.
+- **Behaviour:** the paper snapshot build requests `POST /scientific/export/chemkin` as its curator for the CH4 + OH use case, saves the files, and refuses a snapshot whose export does not load in Cantera, whose rate parameters, NASA coefficients or Cantera H298 disagree with the records (each within half a unit of its last written place), whose files are written to less precision than the exporter writes today, or whose manifest lists gaps. A new generator, `use_case_chemkin_export`, makes the same export in-process from the database and reports the Cantera load, k(300 K) against the stored fit, and H298 of [CH3] from the exported polynomial; `compare.py` also compares the saved files.
 - **Schema and migration:** none.
 
 ## Stable order for record links, a calculation's artifact links and release artifact lines (Unreleased)

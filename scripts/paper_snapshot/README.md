@@ -112,12 +112,15 @@ Generators run for the snapshot: `corpus_counts`, `conformer_basins`, `calculati
   written, the result of loading the files with Cantera 3.2.0's strict `ck2yaml` (`permissive=False`), k(300 K) of the
   forward reaction as Cantera evaluates it next to the stored fit's k(300 K) with their ratio, and H298 of [CH3] from
   the exported polynomial next to the record's and Cantera's.
-  - The ratio is reported as it is, next to what the digits written in `chem.inp` can explain of it (half a unit in
-    the last place of n times ln T, of A over A, of Ea over RT, and six-figure rounding of the reported numbers). The
-    H298 difference is reported next to what the coefficients' significant figures can explain.
-  - The build refuses the snapshot unless Cantera loaded the files, the stored fit is in cm3 mol-1 s-1, the ratio is
-    within that bound, H298 of [CH3] agrees with the record within the coefficient bound and with Cantera, and the
-    manifest has no gaps. Without Cantera the output says `cantera_not_installed`, and the build refuses that.
+  - The 300 K ratio is reported as it is, next to what the digits written in `chem.inp` can explain of it.
+  - Each written parameter is also compared with the stored fit (n; A after the reference temperature; Ea in cal/mol),
+    and each number in a NASA card with the stored record's, within half a unit in its last written place; Cantera's
+    k is compared with the hand evaluation of the written A, n and Ea. H298 of [CH3] from the polynomial is reported
+    next to the record's scalar H298 (not gated) and next to Cantera's (gated).
+  - The build refuses the snapshot unless Cantera loaded the files, the stored fit is in cm3 mol-1 s-1, all of those
+    agree, the 300 K ratio is within its bound, the files are written to at least today's precision (3 decimals of n, 4
+    of A's mantissa and of Ea, 8 of the NASA coefficients' mantissas; more digits pass), and the manifest has no gaps.
+    Without Cantera the output says `cantera_not_installed`, and the build refuses that.
 - `ch3_enthalpy_of_formation`: every [CH3] thermo record (H298, level, the deposit it came from) and the H298
   selection answer with a level-of-theory filter.
 - `network_n2h3`: wells, channels and k(T, P) forms of the stored network, and k(1000 K, 1 bar) of NH3N -> N2H3 from
