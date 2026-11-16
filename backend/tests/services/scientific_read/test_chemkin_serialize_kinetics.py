@@ -229,12 +229,12 @@ def test_multi_arrhenius_emits_one_duplicate_arrhenius_line_per_term():
     # Exactly the two terms, each its own DUPLICATE-marked line.
     assert len(main_lines) == 2
     assert len(dup_lines) == 2
-    assert any("1.0000E+12" in ln for ln in main_lines)
-    assert any("5.0000E+11" in ln for ln in main_lines)
+    assert any("1.00000000E+12" in ln for ln in main_lines)
+    assert any("5.00000000E+11" in ln for ln in main_lines)
     # The old bug wrote a single identically-zero rate; assert it is gone.
-    assert "0.0 0.000 0.0000" not in export.files["chem.inp"]
+    assert "0.0 0.00000000E+00 0.00000000E+00" not in export.files["chem.inp"]
     for ln in main_lines:
-        assert not ln.strip().endswith("0.0 0.000 0.0000")
+        assert not ln.strip().endswith("0.0 0.00000000E+00 0.00000000E+00")
 
 
 def test_multi_arrhenius_cantera_summed_rate_is_sum_of_terms():
@@ -364,7 +364,7 @@ def test_simple_third_body_uses_bare_plus_M_with_efficiencies():
     assert main.startswith("H1 + O2 + M <=> H1O2 + M")
     assert "(+M)" not in main  # bare +M, not the falloff paren form
     # efficiency block present with both colliders.
-    assert any("H2O1/6/" in ln and "Ar1/0.7/" in ln for ln in body)
+    assert any("H2O1/6.00000000E+00/" in ln and "Ar1/7.00000000E-01/" in ln for ln in body)
 
     validate_chemkin_mechanism(export.files)
     ct = require_module("cantera", install=_CANTERA_INSTALL)
@@ -458,7 +458,7 @@ def test_multi_arrhenius_third_body_efficiencies_on_every_term():
     body = _reaction_lines(export.files["chem.inp"])
 
     main_lines = [ln for ln in body if "<=>" in ln]
-    eff_lines = [ln for ln in body if "H2O1/6/" in ln and "Ar1/0.7/" in ln]
+    eff_lines = [ln for ln in body if "H2O1/6.00000000E+00/" in ln and "Ar1/7.00000000E-01/" in ln]
     dup_lines = [ln for ln in body if ln.strip() == "DUPLICATE"]
     # Each of the two terms: bare +M main line + its own efficiency line + DUP.
     assert len(main_lines) == 2
@@ -547,8 +547,8 @@ def test_regression_scalar_and_troe_falloff_lines_unchanged():
 
     assert body[0].startswith("H1 + O2 (+M) <=> H1O2 (+M)")
     assert any(ln.startswith("    LOW /") for ln in body)
-    assert any(ln.startswith("    TROE / 0.5 100 1000 2000 /") for ln in body)
-    assert any("H2O1/6/" in ln for ln in body)
+    assert any(ln.startswith("    TROE / 5.00000000E-01 1.00000000E+02 1.00000000E+03 2.00000000E+03 /") for ln in body)
+    assert any("H2O1/6.00000000E+00/" in ln for ln in body)
     # No DUPLICATE for a lone reaction.
     assert not any(ln.strip() == "DUPLICATE" for ln in body)
     validate_chemkin_mechanism(export.files)

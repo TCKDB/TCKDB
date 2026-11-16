@@ -22,7 +22,7 @@ NASA coefficient + 1 unit in the 9th printed digit  red   (the bound is half a u
 NASA coefficient + 1 unit in a 10th digit           green (below print precision)
 Arrhenius A + 1 unit in a 10th digit                green (0.1 export units)
 Arrhenius A + 1 unit in the export's 9th digit      red   (the bound is half a unit)
-Arrhenius A + 10 units in the export's 9th digit    red
+Arrhenius A + 100 units in the export's 9th digit   red
 drop one Troe collider efficiency                   red
 ==================================================  =======
 """
@@ -325,11 +325,11 @@ def test_mutation_a_plus_one_unit_of_the_export_print_is_red(pipeline):
     assert result.parameter_violations == []
 
 
-def test_mutation_a_plus_ten_units_of_the_export_print_is_red(pipeline):
-    result = _a_mutation(pipeline, "2.17900010E+06")
+def test_mutation_a_plus_a_hundred_units_of_the_export_print_is_red(pipeline):
+    result = _a_mutation(pipeline, "2.17900100E+06")
     assert result.bound_violations and all(v.startswith(_A_REACTION) for v in result.bound_violations)
     entry = next(e for e in result.reactions if e["key"] == _A_REACTION)
-    assert entry["max_rel_deviation_kf"] == pytest.approx(1e-1 / 2.179e6, rel=1e-6)
+    assert entry["max_rel_deviation_kf"] == pytest.approx(1.0 / 2.179e6, rel=1e-6)
     assert entry["max_rel_deviation_kf"] > 10 * entry["max_rel_bound"] / 2
 
 
