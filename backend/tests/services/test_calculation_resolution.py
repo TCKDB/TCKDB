@@ -715,7 +715,7 @@ def test_dependency_role_type_compatible_accepts_backend_optimized_from_with_opt
 
 def _case_variant_environment() -> dict:
     environment = _execution_environment()
-    environment["software_release"] = {"name": "GAUSSIAN", "version": "16"}
+    environment["software_release"] = {"name": "PSI4", "version": "1.9"}
     environment["workflow_tool_release"] = {"name": "ARC", "version": "1.0"}
     return environment
 
@@ -723,7 +723,9 @@ def _case_variant_environment() -> dict:
 def test_execution_environment_manifest_check_accepts_case_variant_names(db_conn) -> None:
     from app.services.execution_environment_integrity import manifest_integrity_evidence
 
+    # Psi4 has no alias entry, so only the ref-key comparison makes PSI4 and Psi4 one software.
     stored = _execution_environment()
+    stored["software_release"] = {"name": "Psi4", "version": "1.9"}
     stored["workflow_tool_release"] = {"name": "arc", "version": "1.0"}
     with Session(db_conn) as session:
         with session.begin():

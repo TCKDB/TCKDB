@@ -24,8 +24,9 @@ dataset must never require a code release.
 
 ## Software and workflow-tool names that differ only in case resolve to one row (Unreleased)
 
-- **Behaviour:** an upload naming `PSI4` (or ` psi4 `) when `Psi4` is already stored now reuses that software row and its stored spelling. It used to fail with a server error. Software lookup uses the same lower-cased, trimmed name as the public ref, in the upload resolver and in the contribution-bundle dry run.
+- **Behaviour:** an upload naming `PSI4` (or ` psi4 `) when `Psi4` is already stored now reuses that software row and its stored spelling. It used to fail with a server error. Software is looked up by its public ref, in the upload resolver and in the contribution-bundle dry run, which reports the stored name.
 - **Behaviour:** the same holds for workflow tools: an upload naming `GeomeTRIC` when `geomeTRIC` is stored reuses that row instead of failing.
+- **Behaviour:** an execution-environment manifest naming the software or workflow tool in another case is accepted instead of refused as not matching its stored content.
 - **Schema and migration:** none. No new environment variable. No distributed package changed.
 
 ## CHEMKIN export writes rate parameters to nine significant figures (Unreleased)

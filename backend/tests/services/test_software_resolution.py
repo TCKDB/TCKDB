@@ -238,3 +238,19 @@ def test_a_name_whose_python_and_sql_case_folds_differ_resolves_to_one_software(
 
             assert first.id == second.id
             assert session.scalar(select(func.count()).select_from(Software).where(Software.public_ref == first.public_ref)) == 1
+
+
+@pytest.mark.parametrize("name", ["Q-Chem", "ΑΣ", "İxx", "NWChem 7"])
+def test_the_lookup_ref_is_the_ref_an_inserted_row_gets(db_conn, name) -> None:
+    from app.db.models.workflow import WorkflowTool
+    from app.services.public_refs import software_public_ref, workflow_tool_public_ref
+
+    with Session(db_conn) as session:
+        with session.begin():
+            software = Software(name=name)
+            tool = WorkflowTool(name=name)
+            session.add_all([software, tool])
+            session.flush()
+
+            assert software.public_ref == software_public_ref(name)
+            assert tool.public_ref == workflow_tool_public_ref(name)
