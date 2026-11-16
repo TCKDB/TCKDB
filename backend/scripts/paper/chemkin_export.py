@@ -35,7 +35,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.chemistry.arrhenius import GAS_CONSTANT_J_MOL_K
+from app.chemistry.arrhenius import GAS_CONSTANT_J_MOL_K, arrhenius_k
 from app.db.models.common import DatasetReleaseStatus, SubmissionRecordType
 from app.db.models.dataset_release import DatasetRelease
 from app.db.models.kinetics import Kinetics
@@ -92,10 +92,10 @@ def masked_sha256(name: str, data: bytes) -> str:
 
 
 def ratio(numerator: float | None, denominator: float | None) -> float | None:
-    """``numerator / denominator`` to six significant figures; ``None`` when either is missing or the divisor is zero."""
+    """``numerator / denominator`` to ten significant figures; ``None`` when either is missing or the divisor is zero."""
     if numerator is None or denominator is None or denominator == 0:
         return None
-    return sig(numerator / denominator)
+    return sig(numerator / denominator, REPORTED_DIGITS)
 
 
 # ---------------------------------------------------------------------------
@@ -204,15 +204,17 @@ def half_unit_in_last_place(text: str) -> float:
 
 #: cal mol-1 K-1, for the REACTIONS energy unit the export writes.
 GAS_CONSTANT_CAL_MOL_K = 1.987204258
-#: Each of the three reported numbers (Cantera's k, the stored k, their ratio) is rounded to six significant figures.
-REPORTED_FIGURE_RELATIVE_ERROR = 5.0e-6
+#: Each of the three reported numbers (Cantera's k, the stored k, their ratio) is rounded to ten significant figures,
+#: one more than the export writes.
+REPORTED_DIGITS = 10
+REPORTED_FIGURE_RELATIVE_ERROR = 5.0e-10
 
 
 def rate_ratio_bound(written: dict[str, Any] | None, units_line: list[str] | None, temperature_k: float) -> dict[str, Any] | None:
     """What the digits written in ``chem.inp`` can explain of the ratio of Cantera's k to the stored fit's k.
 
     k = A T^n exp(-Ea / RT): rounding n to its written place moves ln k by half a unit there times ln T; rounding A moves
-    it by that half unit over A; rounding Ea by half a unit over RT; and each reported number carries six-figure
+    it by that half unit over A; rounding Ea by half a unit over RT; and each reported number carries ten-figure
     rounding. The parts are added (a bound on |ln ratio|, which is the ratio's distance from 1 to first order).
     ``None`` when the energy unit is not cal/mol or the line is missing.
     """
@@ -554,19 +556,27 @@ def analyse(session: Session, request: dict[str, Any], files: dict[str, bytes]) 
     [kinetics_ref] = request["kinetics_refs"]
     kinetics = session.scalar(select(Kinetics).where(Kinetics.public_ref == kinetics_ref))
     stored = _rate_at(kinetics, USE_CASE_TEMPERATURE_K) if kinetics is not None else None
-    cantera_k = sig(forward["k_forward_cm3_mol_s"]) if forward else None
+    cantera_k_raw = forward["k_forward_cm3_mol_s"] if forward else None
+    stored_k_raw = (
+        arrhenius_k(
+            USE_CASE_TEMPERATURE_K, a=kinetics.a, n=kinetics.n, ea_kj_mol=kinetics.ea_kj_mol, t0_k=kinetics.t0_k or 1.0
+        )
+        if stored and stored["k"] is not None
+        else None
+    )
+    cantera_k = sig(cantera_k_raw, REPORTED_DIGITS) if forward else None
     written = next((r for r in chem["reactions"] if forward and equation_sides(r["equation"]) == forward_sides(forward)), None)
     rate = {
         "temperature_k": USE_CASE_TEMPERATURE_K,
         "units": "cm3_mol_s",
         "cantera_k_forward": cantera_k,
-        "stored_fit_k": stored["k"] if stored else None,
+        "stored_fit_k": sig(stored_k_raw, REPORTED_DIGITS),
         "stored_fit_units": stored["units"] if stored else None,
-        "cantera_over_stored": ratio(cantera_k, stored["k"] if stored else None),
+        "cantera_over_stored": ratio(cantera_k_raw, stored_k_raw),
         "ratio_explained_by_written_digits": rate_ratio_bound(written, chem["reaction_units"], USE_CASE_TEMPERATURE_K),
         "written_vs_stored_fit": written_vs_stored_fit(written, kinetics),
         "cantera_over_hand_evaluation_of_written_digits": (
-            sig(forward["k_forward_cm3_mol_s"] / hand_rate(written, USE_CASE_TEMPERATURE_K), 9)
+            sig(forward["k_forward_cm3_mol_s"] / hand_rate(written, USE_CASE_TEMPERATURE_K), REPORTED_DIGITS)
             if forward and written and chem["reaction_units"] and chem["reaction_units"][0].upper() == "CAL/MOLE"
             else None
         ),

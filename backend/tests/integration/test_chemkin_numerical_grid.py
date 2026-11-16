@@ -20,9 +20,9 @@ the unmutated original, so each row of the table below is a landed mutation:
 swap one species' NASA high/low blocks              red
 NASA coefficient + 1 unit in the 9th printed digit  red   (the bound is half a unit)
 NASA coefficient + 1 unit in a 10th digit           green (below print precision)
-Arrhenius A + 1 unit in the original's 7th digit    green (0.01 export units)
-Arrhenius A + 1 unit in the export's 5th digit      red   (the bound is half a unit)
-Arrhenius A + 10 units in the export's 5th digit    red
+Arrhenius A + 1 unit in a 10th digit                green (0.1 export units)
+Arrhenius A + 1 unit in the export's 9th digit      red   (the bound is half a unit)
+Arrhenius A + 100 units in the export's 9th digit   red
 drop one Troe collider efficiency                   red
 ==================================================  =======
 """
@@ -292,8 +292,8 @@ def test_mutation_nasa_coefficient_plus_one_unit_below_print_precision_is_green(
     assert water["max_abs_deviation"]["cp_over_r"] == pytest.approx(1e-9, rel=1e-3)
 
 
-#: HO2 + NH2 <=> O2 + NH3, A = 2.179000e+06 in the fixture, printed 2.1790E+06 by the export.
-_A_PRINTED = "2.1790E+06"
+#: HO2 + NH2 <=> O2 + NH3, A = 2.179000e+06 in the fixture, printed 2.17900000E+06 by the export.
+_A_PRINTED = "2.17900000E+06"
 _A_REACTION = "[NH2] + [O]O <=> N + [O][O] | Arrhenius"
 
 
@@ -303,33 +303,36 @@ def _a_mutation(pipeline, new_text: str) -> GridComparison:
     return _compare(pipeline, files)
 
 
-def test_mutation_a_plus_one_unit_of_the_original_print_is_green(pipeline):
-    # 2.179000e+06 -> 2.179001e+06: one unit in the original's seventh digit,
-    # a hundredth of a unit of the export's grid, inside the half-unit bound.
-    result = _a_mutation(pipeline, "2.179001E+06")
+def test_mutation_a_plus_one_unit_below_print_precision_is_green(pipeline):
+    # 2.17900000e+06 -> 2.179000001e+06: one unit in a tenth digit, a tenth of
+    # a unit of the export's grid, inside the half-unit bound.
+    result = _a_mutation(pipeline, "2.179000001E+06")
     assert result.violations == [], result.violations
     entry = next(e for e in result.reactions if e["key"] == _A_REACTION)
     assert 0 < entry["max_rel_deviation_kf"] < entry["max_rel_bound"]
 
 
 def test_mutation_a_plus_one_unit_of_the_export_print_is_red(pipeline):
-    # 2.1790E+06 -> 2.1791E+06: one full unit of the export's own grid. The
+    # 2.17900000E+06 -> 2.17900001E+06: one full unit of the export's own grid. The
     # export reproduced the stored value exactly at that digit, so the bound,
     # half a unit, is exceeded by construction. (A half-unit rounding
     # bound cannot admit a full-unit change.)
-    result = _a_mutation(pipeline, "2.1791E+06")
+    result = _a_mutation(pipeline, "2.17900001E+06")
     assert result.bound_violations and all(v.startswith(_A_REACTION) for v in result.bound_violations)
     entry = next(e for e in result.reactions if e["key"] == _A_REACTION)
     assert entry["within_bound"] is False
-    assert entry["max_rel_deviation_kf"] == pytest.approx(1e2 / 2.179e6, rel=1e-6)
+    assert entry["max_rel_deviation_kf"] == pytest.approx(1e-2 / 2.179e6, rel=1e-6)
     assert result.parameter_violations == []
+    # Below 1500 K the half unit of Ea's ninth digit, over RT, widens the bound past one unit of A's ninth digit.
+    assert sorted({v.split(" at ")[1].split(" K")[0] for v in result.bound_violations}) == ["1500.0", "2000.0"]
 
 
-def test_mutation_a_plus_ten_units_of_the_export_print_is_red(pipeline):
-    result = _a_mutation(pipeline, "2.1800E+06")
+def test_mutation_a_plus_a_hundred_units_of_the_export_print_is_red(pipeline):
+    # 100 units, not 10: the half unit of Ea's ninth digit now dominates the bound, so 10 units is not 10 bounds.
+    result = _a_mutation(pipeline, "2.17900100E+06")
     assert result.bound_violations and all(v.startswith(_A_REACTION) for v in result.bound_violations)
     entry = next(e for e in result.reactions if e["key"] == _A_REACTION)
-    assert entry["max_rel_deviation_kf"] == pytest.approx(1e3 / 2.179e6, rel=1e-6)
+    assert entry["max_rel_deviation_kf"] == pytest.approx(1.0 / 2.179e6, rel=1e-6)
     assert entry["max_rel_deviation_kf"] > 10 * entry["max_rel_bound"] / 2
 
 

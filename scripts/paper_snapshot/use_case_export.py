@@ -162,11 +162,11 @@ def check_saved(directory: Path, env: dict[str, str]) -> dict[str, Any]:
 
 #: The least precision the exporter writes today; a build that finds fewer digits is refused, so the bounds computed from
 #: the written digits cannot widen to let a coarser file through. More digits pass.
-#: Fixed-point fields (n, Ea, the NASA temperatures) are counted in decimal places, the E-notation ones (A, the NASA
-#: coefficients) in significant digits of the normalised mantissa, so ``0.0001E+07`` does not pass for a 5-digit A.
-MIN_N_DECIMALS = 3
-MIN_A_SIGNIFICANT_DIGITS = 5
-MIN_EA_DECIMALS = 4
+#: Fixed-point fields (the NASA temperatures) are counted in decimal places, the E-notation ones (A, n, Ea, the NASA
+#: coefficients) in significant digits of the normalised mantissa, so ``0.0001E+07`` does not pass for a 9-digit A.
+MIN_N_SIGNIFICANT_DIGITS = 9
+MIN_A_SIGNIFICANT_DIGITS = 9
+MIN_EA_SIGNIFICANT_DIGITS = 9
 MIN_NASA_SIGNIFICANT_DIGITS = 9
 MIN_T_LOW_HIGH_DECIMALS = 3
 MIN_T_MID_DECIMALS = 2
@@ -174,16 +174,17 @@ MIN_T_MID_DECIMALS = 2
 #: out a few parts in 1e16 above 1 in floating point; the gate allows that and nothing larger. The value reported in the
 #: output is rounded for reading; the gate uses the unrounded one.
 HALF_UNIT_FLOAT_EPSILON = 1.0e-9
-#: Cantera's k against the hand evaluation of the written A, n and Ea (same formula, same digits).
-CANTERA_VS_HAND_RELATIVE = 1.0e-6
+#: Cantera's k against the hand evaluation of the written A, n and Ea (same formula, same digits): the two gas
+#: constants differ by 3e-10, which Ea/RT (about 3.4) takes to 1e-9, and the report has ten figures.
+CANTERA_VS_HAND_RELATIVE = 1.0e-8
 
 
 def _written_places(key: str, text: Any) -> int | None:
-    """Decimal places (n, Ea) or significant digits (A) of the written ``text``; ``None`` when it is not a number."""
-    from scripts.paper.chemkin_export import decimal_places, significant_digits
+    """Significant digits of the written ``text`` (A, n, Ea); ``None`` when it is not a number."""
+    from scripts.paper.chemkin_export import significant_digits
 
     try:
-        return significant_digits(text) if key == "a_text" else decimal_places(text)
+        return significant_digits(text)
     except (ArithmeticError, ValueError, TypeError):
         return None
 
@@ -198,9 +199,9 @@ def _rate_problems(rate: dict[str, Any]) -> list[str]:
         out.append(f"the stored fit is in {rate.get('stored_fit_units')!r}, not cm3_mol_s; Cantera's value is not comparable")
     written = rate.get("written_in_chem_inp") or {}
     for key, floor, label, unit in (
-        ("n_text", MIN_N_DECIMALS, "n", "decimals"),
+        ("n_text", MIN_N_SIGNIFICANT_DIGITS, "n", "significant digits"),
         ("a_text", MIN_A_SIGNIFICANT_DIGITS, "A", "significant digits"),
-        ("ea_text", MIN_EA_DECIMALS, "Ea", "decimals"),
+        ("ea_text", MIN_EA_SIGNIFICANT_DIGITS, "Ea", "significant digits"),
     ):
         places = _written_places(key, written[key]) if key in written else None
         if places is None or places < floor:

@@ -155,8 +155,8 @@ def test_the_file_digest_ignores_refs_and_the_manifest_timestamp_and_nothing_els
     assert base != chemkin_export.masked_sha256("manifest.json", manifest("2026-01-01T00:00:00+00:00", _ref("rxe", "a"), [{"code": "x"}]))
 
 
-def test_ratio_is_reported_as_it_is_to_six_figures():
-    assert chemkin_export.ratio(1.87889e10, 1.87469e10) == 1.00224
+def test_ratio_is_reported_as_it_is_to_ten_figures():
+    assert chemkin_export.ratio(1.87889e10, 1.87469e10) == 1.00224037
     assert chemkin_export.ratio(3.0, 2.0) == 1.5
     assert chemkin_export.ratio(None, 2.0) is None
     assert chemkin_export.ratio(2.0, None) is None
@@ -521,19 +521,19 @@ def _good_output() -> dict:
         "cantera": {"status": "loaded"},
         "manifest": {"gaps": []},
         "forward_rate": {
-            "cantera_k_forward": 1.87889e10,
-            "stored_fit_k": 1.87469e10,
+            "cantera_k_forward": 18746927970.0,
+            "stored_fit_k": 18746927860.0,
             "stored_fit_units": "cm3_mol_s",
             "units": "cm3_mol_s",
-            "cantera_over_stored": 1.00224,
-            "ratio_explained_by_written_digits": {"total": 0.0029},
-            "written_in_chem_inp": {"n_text": "3.468", "a_text": "1.4598E+03", "ea_text": "2033.0521"},
+            "cantera_over_stored": 1.000000006,
+            "ratio_explained_by_written_digits": {"total": 4.18e-8},
+            "written_in_chem_inp": {"n_text": "3.46761000E+00", "a_text": "1.45978000E+03", "ea_text": "2.03305210E+03"},
             "written_vs_stored_fit": {
-                "n": {"over_half_unit": 0.78, "over_half_unit_unrounded": 0.78},
-                "a": {"over_half_unit": 0.4, "over_half_unit_unrounded": 0.4},
-                "ea": {"over_half_unit": 0.9, "over_half_unit_unrounded": 0.9},
+                "n": {"over_half_unit": 0.0, "over_half_unit_unrounded": 0.0},
+                "a": {"over_half_unit": 0.0, "over_half_unit_unrounded": 0.0},
+                "ea": {"over_half_unit": 0.65, "over_half_unit_unrounded": 0.65},
             },
-            "cantera_over_hand_evaluation_of_written_digits": 1.0,
+            "cantera_over_hand_evaluation_of_written_digits": 1.0000000006,
         },
         "ch3_h298": {
             "exported_nasa_h298_kj_mol": 144.815,
@@ -604,7 +604,9 @@ def test_a_rate_ratio_the_written_digits_cannot_explain_is_refused(step):
     assert any("1000.0" in r and "explain" in r for r in step.verify_output(wrong))
     assert step.verify_output(_with(_good_output(), forward_rate__cantera_over_stored=0.99))
     assert step.verify_output(_with(_good_output(), forward_rate__ratio_explained_by_written_digits=None))
-    assert step.verify_output(_with(_good_output(), forward_rate__cantera_over_stored=1.0028)) == []
+    assert step.verify_output(_with(_good_output(), forward_rate__cantera_over_stored=1.00000003)) == []
+    # the bound follows nine-figure rounding, so a ratio of 1 + 1e-7 is refused
+    assert step.verify_output(_with(_good_output(), forward_rate__cantera_over_stored=1.0000001))
 
 
 def test_rates_in_other_units_are_refused(step):
@@ -613,22 +615,23 @@ def test_rates_in_other_units_are_refused(step):
 
 
 def test_a_coarser_file_is_refused_even_when_its_ratio_is_inside_its_own_wider_bound(step):
-    # n written as 3.5: the bound computed from that file is 0.5 * 0.05 * ln 300, wide enough for a ratio of 1.1
-    coarse_n = _rate_with(n_text="3.5", cantera_over_stored=1.1)
-    coarse_n["forward_rate"]["ratio_explained_by_written_digits"]["total"] = 0.285
+    # n written as 3.468: the bound computed from that file is wide enough for a ratio of 1.0022
+    coarse_n = _rate_with(n_text="3.468", cantera_over_stored=1.0022)
+    coarse_n["forward_rate"]["ratio_explained_by_written_digits"]["total"] = 0.0029
     reasons = step.verify_output(coarse_n)
-    assert any("n is written as '3.5'" in r for r in reasons)
+    assert any("n is written as '3.468'" in r and "9 significant digits" in r for r in reasons)
     assert step.verify_output(_rate_with(n_text="3")), "n written to no decimals"
-    assert any("A is written" in r for r in step.verify_output(_rate_with(a_text="1.46E+03")))
-    assert any("Ea is written" in r for r in step.verify_output(_rate_with(ea_text="2033.05")))
+    assert any("n is written" in r for r in step.verify_output(_rate_with(n_text="3.4676100E+00")))
+    assert any("A is written" in r for r in step.verify_output(_rate_with(a_text="1.4598E+03")))
+    assert any("Ea is written" in r for r in step.verify_output(_rate_with(ea_text="2033.0521")))
 
 
 def test_an_unnormalised_a_does_not_meet_the_floor_by_showing_decimals(step):
-    # 0.0001E+07 shows 4 mantissa decimals but is one significant digit
-    reasons = step.verify_output(_rate_with(a_text="0.0001E+07"))
-    assert any("A is written as '0.0001E+07'" in r and "significant digits" in r for r in reasons)
-    assert step.verify_output(_rate_with(a_text="1.4598E+03")) == []
-    assert step.verify_output(_rate_with(a_text="1.45980E+03")) == []
+    # 0.00000000E+07 shows 8 mantissa decimals; 0.0001000000E+07 is one significant digit however many it shows
+    reasons = step.verify_output(_rate_with(a_text="0.0001000000E+07"))
+    assert any("A is written as '0.0001000000E+07'" in r and "significant digits" in r for r in reasons)
+    assert step.verify_output(_rate_with(a_text="1.45978000E+03")) == []
+    assert step.verify_output(_rate_with(a_text="1459.78000")) == []
     assert step.verify_output(_rate_with(a_text="not a number"))
     assert chemkin_export.decimal_places("3.5E-1") == 2 and chemkin_export.decimal_places("12") == 0
 
@@ -663,7 +666,7 @@ def test_the_species_must_be_present_and_exactly_the_ones_the_generator_names(st
 
 
 def test_a_file_written_with_more_digits_still_passes(step):
-    finer = _rate_with(n_text="3.46761", a_text="1.459780E+03", ea_text="2033.05213")
+    finer = _rate_with(n_text="3.467610000E+00", a_text="1.459780000E+03", ea_text="2.033052130E+03")
     finer["forward_rate"]["written_vs_stored_fit"] = {k: {"over_half_unit": 0.1, "over_half_unit_unrounded": 0.1} for k in ("n", "a", "ea")}
     finer["forward_rate"]["ratio_explained_by_written_digits"]["total"] = 0.00005
     finer["forward_rate"]["cantera_over_stored"] = 1.00001
