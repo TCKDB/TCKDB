@@ -857,6 +857,9 @@ def test_every_number_in_a_nasa_card_is_compared_with_the_stored_record():
     assert chemkin_export.nasa_vs_record(record, nasa)["max_difference_over_half_unit"] > 1
     assert chemkin_export.nasa_vs_record(record, SimpleNamespace(**{**vars(nasa), "a1": None})) is None
     assert chemkin_export.nasa_vs_record(record, None) is None
+    # a card missing a coefficient is not compared on the six it has
+    short = {**record, "high_text": record["high_text"][:6]}
+    assert chemkin_export.nasa_vs_record(short, nasa) is None
 
 
 # ---------------------------------------------------------------------------

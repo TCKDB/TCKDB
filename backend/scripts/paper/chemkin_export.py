@@ -20,7 +20,6 @@ The parsing, hashing and arithmetic helpers do not need Cantera or a database.
 from __future__ import annotations
 
 import asyncio
-from decimal import Decimal
 import hashlib
 import io
 import json
@@ -29,6 +28,7 @@ import os
 import re
 import tempfile
 import zipfile
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -245,11 +245,11 @@ def nasa_vs_record(record: dict[str, Any], nasa: Any) -> dict[str, Any] | None:
     last written place. ``max_difference_over_half_unit`` (reported to three figures; the unrounded value is what is
     gated) of at most 1 means every written number is the stored one
     rounded to what was written."""
-    if nasa is None:
+    if nasa is None or len(record["low_text"]) != 7 or len(record["high_text"]) != 7:
         return None
     pairs = [(record["temperature_text"][k], getattr(nasa, k)) for k in ("t_low", "t_mid", "t_high")]
-    pairs += list(zip(record["low_text"], (getattr(nasa, f"a{i}") for i in range(1, 8))))
-    pairs += list(zip(record["high_text"], (getattr(nasa, f"b{i}") for i in range(1, 8))))
+    pairs += list(zip(record["low_text"], (getattr(nasa, f"a{i}") for i in range(1, 8)), strict=True))
+    pairs += list(zip(record["high_text"], (getattr(nasa, f"b{i}") for i in range(1, 8)), strict=True))
     if any(stored is None for _, stored in pairs):
         return None
     worst = max(abs(float(text) - stored) / half_unit_in_last_place(text) for text, stored in pairs)
