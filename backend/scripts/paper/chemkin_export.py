@@ -234,7 +234,8 @@ def mantissa_decimals(text: str) -> int:
 
 def nasa_vs_record(record: dict[str, Any], nasa: Any) -> dict[str, Any] | None:
     """Each coefficient and temperature written in ``therm.dat`` against the stored record's, in half units of the
-    last written place. ``max_difference_over_half_unit`` of at most 1 means every written number is the stored one
+    last written place. ``max_difference_over_half_unit`` (reported to three figures; the unrounded value is what is
+    gated) of at most 1 means every written number is the stored one
     rounded to what was written."""
     if nasa is None:
         return None
@@ -248,6 +249,7 @@ def nasa_vs_record(record: dict[str, Any], nasa: Any) -> dict[str, Any] | None:
     return {
         "numbers_compared": len(pairs),
         "max_difference_over_half_unit": sig(worst, 3),
+        "max_difference_over_half_unit_unrounded": worst,
         "min_coefficient_mantissa_decimals": min(mantissa_decimals(t) for t in coefficient_texts),
     }
 
@@ -271,6 +273,7 @@ def written_vs_stored_fit(written: dict[str, Any] | None, kinetics: Any) -> dict
             "stored": sig(stored[key], 9),
             "difference": sig(written[key] - stored[key], 3),
             "over_half_unit": sig(abs(written[key] - stored[key]) / half, 3),
+            "over_half_unit_unrounded": abs(written[key] - stored[key]) / half,
         }
     return out
 

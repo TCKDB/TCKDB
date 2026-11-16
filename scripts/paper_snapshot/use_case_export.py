@@ -166,6 +166,10 @@ MIN_N_DECIMALS = 3
 MIN_A_MANTISSA_DECIMALS = 4
 MIN_EA_DECIMALS = 4
 MIN_NASA_MANTISSA_DECIMALS = 8
+#: A written number that is exactly half a unit from the stored one (a tie, such as 985.655 written as 985.66) can come
+#: out a few parts in 1e16 above 1 in floating point; the gate allows that and nothing larger. The value reported in the
+#: output is rounded for reading; the gate uses the unrounded one.
+HALF_UNIT_FLOAT_EPSILON = 1.0e-9
 #: Cantera's k against the hand evaluation of the written A, n and Ea (same formula, same digits).
 CANTERA_VS_HAND_RELATIVE = 1.0e-6
 
@@ -196,8 +200,8 @@ def _rate_problems(rate: dict[str, Any]) -> list[str]:
         out.append("the written parameters were not compared with the stored fit")
     else:
         for key in ("n", "a", "ea"):
-            over = (parameters.get(key) or {}).get("over_half_unit")
-            if over is None or over > 1:
+            over = (parameters.get(key) or {}).get("over_half_unit_unrounded")
+            if over is None or over > 1 + HALF_UNIT_FLOAT_EPSILON:
                 out.append(f"written {key} differs from the stored fit by {over} half-units of its last written place")
     hand = rate.get("cantera_over_hand_evaluation_of_written_digits")
     if hand is None or abs(hand - 1.0) > CANTERA_VS_HAND_RELATIVE:
@@ -230,10 +234,11 @@ def _nasa_problems(row: dict[str, Any]) -> list[str]:
     if not check:
         return [f"species {row.get('smiles')}: the NASA card was not compared with the stored record"]
     out = []
-    if check["max_difference_over_half_unit"] > 1:
+    worst = check.get("max_difference_over_half_unit_unrounded")
+    if worst is None or worst > 1 + HALF_UNIT_FLOAT_EPSILON:
         out.append(
             f"species {row['smiles']}: a written NASA number differs from the stored record by "
-            f"{check['max_difference_over_half_unit']} half-units of its last written place"
+            f"{worst} half-units of its last written place"
         )
     if check["min_coefficient_mantissa_decimals"] < MIN_NASA_MANTISSA_DECIMALS:
         out.append(

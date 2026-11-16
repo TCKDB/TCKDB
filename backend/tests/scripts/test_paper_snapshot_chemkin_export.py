@@ -529,9 +529,9 @@ def _good_output() -> dict:
             "ratio_explained_by_written_digits": {"total": 0.0029},
             "written_in_chem_inp": {"n_text": "3.468", "a_text": "1.4598E+03", "ea_text": "2033.0521"},
             "written_vs_stored_fit": {
-                "n": {"over_half_unit": 0.78},
-                "a": {"over_half_unit": 0.4},
-                "ea": {"over_half_unit": 0.9},
+                "n": {"over_half_unit": 0.78, "over_half_unit_unrounded": 0.78},
+                "a": {"over_half_unit": 0.4, "over_half_unit_unrounded": 0.4},
+                "ea": {"over_half_unit": 0.9, "over_half_unit_unrounded": 0.9},
             },
             "cantera_over_hand_evaluation_of_written_digits": 1.0,
         },
@@ -550,6 +550,7 @@ def _good_output() -> dict:
                 "nasa_vs_record": {
                     "numbers_compared": 17,
                     "max_difference_over_half_unit": 0.0,
+                    "max_difference_over_half_unit_unrounded": 0.0,
                     "min_coefficient_mantissa_decimals": 8,
                 },
             }
@@ -620,7 +621,7 @@ def test_a_coarser_file_is_refused_even_when_its_ratio_is_inside_its_own_wider_b
 
 def test_a_file_written_with_more_digits_still_passes(step):
     finer = _rate_with(n_text="3.46761", a_text="1.459780E+03", ea_text="2033.05213")
-    finer["forward_rate"]["written_vs_stored_fit"] = {k: {"over_half_unit": 0.1} for k in ("n", "a", "ea")}
+    finer["forward_rate"]["written_vs_stored_fit"] = {k: {"over_half_unit": 0.1, "over_half_unit_unrounded": 0.1} for k in ("n", "a", "ea")}
     finer["forward_rate"]["ratio_explained_by_written_digits"]["total"] = 0.00005
     finer["forward_rate"]["cantera_over_stored"] = 1.00001
     finer["species"][0]["nasa_vs_record"]["min_coefficient_mantissa_decimals"] = 12
@@ -630,13 +631,39 @@ def test_a_file_written_with_more_digits_still_passes(step):
 def test_cancelling_errors_in_a_and_n_are_caught_parameter_by_parameter(step):
     # k(300 K) is right but n and A are each off: the 300 K ratio alone would pass
     cancelling = _good_output()
-    cancelling["forward_rate"]["written_vs_stored_fit"]["n"]["over_half_unit"] = 60.0
-    cancelling["forward_rate"]["written_vs_stored_fit"]["a"]["over_half_unit"] = 40.0
+    cancelling["forward_rate"]["written_vs_stored_fit"]["n"]["over_half_unit_unrounded"] = 60.0
+    cancelling["forward_rate"]["written_vs_stored_fit"]["a"]["over_half_unit_unrounded"] = 40.0
     reasons = step.verify_output(cancelling)
     assert any("written n differs" in r for r in reasons) and any("written a differs" in r for r in reasons)
     assert any("written ea differs" in r for r in step.verify_output(_with(_good_output(), forward_rate__written_vs_stored_fit={
-        "n": {"over_half_unit": 0.1}, "a": {"over_half_unit": 0.1}, "ea": {"over_half_unit": 3.0}})))
+        "n": {"over_half_unit_unrounded": 0.1}, "a": {"over_half_unit_unrounded": 0.1}, "ea": {"over_half_unit_unrounded": 3.0}})))
     assert step.verify_output(_with(_good_output(), forward_rate__written_vs_stored_fit=None))
+
+
+def test_the_gate_uses_the_unrounded_distance_and_allows_only_a_float_epsilon_at_a_tie(step):
+    # 1.0004 is reported as 1.0 (three figures) and must still be refused
+    for distance in (1.0004, 1.000001):
+        param = _good_output()
+        param["forward_rate"]["written_vs_stored_fit"]["n"] = {"over_half_unit": 1.0, "over_half_unit_unrounded": distance}
+        assert any("written n differs" in r for r in step.verify_output(param)), distance
+        card = _good_output()
+        card["species"][0]["nasa_vs_record"].update(max_difference_over_half_unit=1.0, max_difference_over_half_unit_unrounded=distance)
+        assert any("half-units" in r for r in step.verify_output(card)), distance
+    tie = _good_output()
+    tie["forward_rate"]["written_vs_stored_fit"]["n"]["over_half_unit_unrounded"] = 1.0 + 4e-16
+    tie["species"][0]["nasa_vs_record"]["max_difference_over_half_unit_unrounded"] = 1.0 + 4e-16
+    assert step.verify_output(tie) == []
+    assert step.HALF_UNIT_FLOAT_EPSILON == 1e-9
+    missing = _good_output()
+    del missing["species"][0]["nasa_vs_record"]["max_difference_over_half_unit_unrounded"]
+    assert step.verify_output(missing)
+
+
+def test_the_unrounded_distance_is_in_the_analysis_next_to_the_reported_one():
+    written = chemkin_export.parse_chem_inp(CHEM_INP)["reactions"][0]
+    out = chemkin_export.written_vs_stored_fit(written, SimpleNamespace(a=1459.78, n=3.46761, ea_kj_mol=8.50629, t0_k=1.0))
+    assert out["n"]["over_half_unit"] == chemkin_export.sig(out["n"]["over_half_unit_unrounded"], 3)
+    assert out["n"]["over_half_unit_unrounded"] != out["n"]["over_half_unit"]
 
 
 def test_cantera_must_agree_with_the_hand_evaluation_of_the_written_digits(step):
@@ -646,7 +673,7 @@ def test_cantera_must_agree_with_the_hand_evaluation_of_the_written_digits(step)
 
 def test_a_nasa_card_that_is_not_the_stored_record_or_is_written_coarsely_is_refused(step):
     off = _good_output()
-    off["species"][0]["nasa_vs_record"]["max_difference_over_half_unit"] = 4.0
+    off["species"][0]["nasa_vs_record"]["max_difference_over_half_unit_unrounded"] = 4.0
     assert any("half-units" in r for r in step.verify_output(off))
     coarse = _good_output()
     coarse["species"][0]["nasa_vs_record"]["min_coefficient_mantissa_decimals"] = 5
