@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## The QCSchema interchange report passes when the database spells the method or basis differently (Unreleased)
+
+- **Behaviour:** the report compares the exported `input_data.specification.model.basis` and `.method` to the fixture's by TCKDB's identity key, so a level of theory already stored under another spelling (`B3LYP`, `Def2TZVP`) and reused by the round trip no longer fails `loss_list_complete`; a different basis set or method still does. The two paths are listed under `loss_list.compared_by_identity_key`. A software name that differs only in case from the fixture's still crashes the round trip (backend bug, tracked by a strict xfail).
+- **Schema and migration:** none. No new environment variable. No distributed package changed.
+
 ## CHEMKIN export writes rate parameters to nine significant figures (Unreleased)
 
 - **Behaviour:** the CHEMKIN export (`POST /scientific/export/chemkin` and the network export) writes A, n, Ea, the falloff, Troe, SRI, PLOG and Chebyshev coefficients and the third-body efficiencies to nine significant figures (`1.45978000E+03`), the precision of the NASA cards, so Cantera's k(T) from the file matches the stored fit to the rounding of those digits.

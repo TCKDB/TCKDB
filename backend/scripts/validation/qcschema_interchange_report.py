@@ -4,8 +4,8 @@ and the same molecule's Gaussian record beside it.
 
 The write-up is ``docs/validation/qcschema_interchange.md``.
 
-Inputs are committed fixtures and nothing else
-----------------------------------------------
+Inputs are committed fixtures; the database may be populated
+------------------------------------------------------------
 ``backend/tests/fixtures/qcschema/water_b3lyp_def2tzvp_psi4/``:
 
 * ``water_b3lyp_def2tzvp_hessian_v2.json`` (and its ``_v1`` sibling): a Psi4
@@ -17,8 +17,13 @@ Inputs are committed fixtures and nothing else
 * ``meta.json``: the sha256 of every file above. A fixture whose digest
   disagrees is refused before anything is computed.
 
-No network is contacted. The database is touched only inside one
-transaction that is always rolled back: see "The round trip".
+No network is contacted. The round trip runs against whatever database the
+session points at, empty or populated, inside one transaction that is always
+rolled back: see "The round trip". A level of theory that exists under another
+basis or method spelling is reused and exported as stored, so those two fields
+are compared by identity key; see ``IDENTITY_KEYED_PATHS``. Other rows already
+present are not covered by that: a software name that differs only in case
+from the fixture's is a known backend failure, not handled here.
 
 The round trip (asserted, exit status 1 on any failure)
 -------------------------------------------------------
@@ -128,9 +133,9 @@ import platform
 import subprocess
 import sys
 import tomllib
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 from typing import Any
 
 import httpx
@@ -143,6 +148,8 @@ if str(BACKEND_ROOT) not in sys.path:
 
 from sqlalchemy.orm import Session  # noqa: E402
 
+from app.chemistry.basis_set_names import basis_identity_key  # noqa: E402
+from app.chemistry.method_names import method_identity_key  # noqa: E402
 from app.chemistry.normal_modes import (  # noqa: E402
     FRAME_CONSISTENCY_TOLERANCE_CM1,
     atomic_mass,
@@ -231,6 +238,20 @@ EXPECTED_CHANGED_PATHS = (
     "provenance.creator",
     "provenance.routine",
     "provenance.version",
+)
+
+#: Paths compared by TCKDB's identity key rather than byte for byte, with the
+#: key each uses. The level-of-theory row is shared and keeps the spelling of
+#: whichever deposit created it, so the export carries the stored spelling,
+#: not the fixture's. Two spellings with one key are one TCKDB level of theory
+#: (``app.chemistry.basis_set_names``, ``app.chemistry.method_names``). A
+#: different basis set or method still lands in ``changed``. Only ``method``
+#: and ``basis`` are exported from the level of theory.
+IDENTITY_KEYED_PATHS: Mapping[str, Callable[[Any], Any]] = MappingProxyType(
+    {
+        "input_data.specification.model.basis": basis_identity_key,
+        "input_data.specification.model.method": method_identity_key,
+    }
 )
 
 #: Compared by their own checks, not by the structural diff.
@@ -472,14 +493,24 @@ def _present(value: Any) -> bool:
     return value is not None and value != {} and value != [] and value != ""
 
 
-def structural_diff(original: Any, exported: Any, path: str = "") -> dict[str, list[str]]:
+def structural_diff(
+    original: Any,
+    exported: Any,
+    path: str = "",
+    identity_keyed: Mapping[str, Callable[[Any], Any]] | None = None,
+) -> dict[str, list[str]]:
     """Classify every field path of ``original`` against ``exported``.
+
+    A leaf whose path is in ``identity_keyed`` is equal when both values map to
+    the same key.
 
     A dict on both sides is walked key by key; anything else is a leaf. A
     subtree present in the original and absent (or empty) in the export is
     reported once, at its root.
     """
     out: dict[str, list[str]] = {"equal": [], "changed": [], "lost": [], "added": [], "separately_checked": []}
+
+    keyed = identity_keyed or {}
 
     def walk(orig: Any, exp: Any, here: str) -> None:
         if here in _SEPARATELY_CHECKED:
@@ -494,7 +525,7 @@ def structural_diff(original: Any, exported: Any, path: str = "") -> dict[str, l
         elif isinstance(orig, dict) and isinstance(exp, dict):
             for key in sorted(set(orig) | set(exp)):
                 walk(orig.get(key), exp.get(key), f"{here}.{key}" if here else key)
-        elif orig == exp:
+        elif orig == exp or (here in keyed and keyed[here](orig) == keyed[here](exp)):
             out["equal"].append(here)
         else:
             out["changed"].append(here)
@@ -846,7 +877,11 @@ def _check_round_trip(adapter: SimpleNamespace, fixtures: SimpleNamespace, trip:
     checks["export_declares_fixed_frame"] = all(all(flags.values()) for flags in frame.values())
     details["exported_frame"] = frame
 
-    diff = structural_diff(_as_parsed(original), _as_parsed(exported))
+    diff = structural_diff(
+        _as_parsed(original),
+        _as_parsed(exported),
+        identity_keyed=IDENTITY_KEYED_PATHS,
+    )
     checks["loss_list_complete"] = diff["lost"] == sorted(EXPECTED_LOST_PATHS) and diff["changed"] == sorted(
         EXPECTED_CHANGED_PATHS
     )
@@ -856,6 +891,7 @@ def _check_round_trip(adapter: SimpleNamespace, fixtures: SimpleNamespace, trip:
         "added": diff["added"],
         "separately_checked": diff["separately_checked"],
         "equal_count": len(diff["equal"]),
+        "compared_by_identity_key": sorted(IDENTITY_KEYED_PATHS),
         "unexpected_lost": sorted(set(diff["lost"]) - set(EXPECTED_LOST_PATHS)),
         "missing_from_lost": sorted(set(EXPECTED_LOST_PATHS) - set(diff["lost"])),
         "unexpected_changed": sorted(set(diff["changed"]) - set(EXPECTED_CHANGED_PATHS)),

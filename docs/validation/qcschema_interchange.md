@@ -239,6 +239,14 @@ the document compares equal after parsing: 58 field paths, including
 and, since tckdb-qcschema 0.5.0, in the export). The Hessian and the two
 geometries are checked separately above.
 
+Two of those compared paths, `input_data.specification.model.basis` and
+`.method`, are compared by TCKDB's identity key rather than byte for byte:
+a level of theory that already exists under another spelling (`B3LYP`,
+`Def2TZVP`) is reused and exported as stored, and the two spellings are one
+TCKDB level of theory. A different basis set or method still counts as a
+change. `loss_list.compared_by_identity_key` names those paths; it is a
+declaration, not a measurement of any spelling difference.
+
 ## Measurements
 
 All differences are **Psi4 minus Gaussian**, at geometries that agree to
