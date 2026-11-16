@@ -236,6 +236,11 @@ def _formula(comp: Counter) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _num(value: float) -> str:
+    """A rate-block number in E notation with nine significant figures, the precision of the NASA cards."""
+    return f"{value:.8E}"
+
+
 def _convert_ea(ea_kj_mol: float | None, energy_units: str) -> float | None:
     if ea_kj_mol is None:
         return None
@@ -445,7 +450,7 @@ def _efficiency_line(k, collider_names: dict[int, str]) -> str | None:
     if not k.third_body_efficiencies:
         return None
     effs = " ".join(
-        f"{collider_names.get(tb.collider_species_id, str(tb.collider_species_id))}/{tb.efficiency:.3G}/"
+        f"{collider_names.get(tb.collider_species_id, str(tb.collider_species_id))}/{_num(tb.efficiency)}/"
         for tb in k.third_body_efficiencies
     )
     return f"    {effs}" if effs else None
@@ -507,9 +512,9 @@ def _kinetics_lines(
             a = _a_to_mol_cm_s(entry.a, entry.a_units or k.a_units)
             n = entry.n if entry.n is not None else 0.0
             ea = _convert_ea(entry.ea_kj_mol, options.energy_units)
-            a_str = f"{a:.4E}" if a is not None else "0.0"
-            ea_str = f"{ea:.4f}" if ea is not None else "0.0"
-            block = [f"{eq}   {a_str} {n:.3f} {ea_str}"]
+            a_str = _num(a) if a is not None else "0.0"
+            ea_str = _num(ea) if ea is not None else "0.0"
+            block = [f"{eq}   {a_str} {_num(n)} {ea_str}"]
             if eff_line is not None:
                 block.append(eff_line)
             blocks.append(block)
@@ -533,24 +538,24 @@ def _kinetics_lines(
         )
         n = k.n if k.n is not None else 0.0
         ea = _convert_ea(k.ea_kj_mol, options.energy_units)
-        a_str = f"{a:.4E}" if a is not None else "0.0"
-        ea_str = f"{ea:.4f}" if ea is not None else "0.0"
-        lines = [f"{eq}   {a_str} {n:.3f} {ea_str}"]
+        a_str = _num(a) if a is not None else "0.0"
+        ea_str = _num(ea) if ea is not None else "0.0"
+        lines = [f"{eq}   {a_str} {_num(n)} {ea_str}"]
 
     if is_falloff and k.falloff is not None:
         fo = k.falloff
         low_a = _a_to_mol_cm_s(fo.low_a, fo.low_a_units or k.a_units)
         low_n = fo.low_n if fo.low_n is not None else 0.0
         low_ea = _convert_ea(fo.low_ea_kj_mol, options.energy_units) or 0.0
-        low_a_str = f"{low_a:.4E}" if low_a is not None else "0.0"
-        lines.append(f"    LOW / {low_a_str} {low_n:.3f} {low_ea:.4f} /")
+        low_a_str = _num(low_a) if low_a is not None else "0.0"
+        lines.append(f"    LOW / {low_a_str} {_num(low_n)} {_num(low_ea)} /")
         if k.model_kind is KineticsModelKind.troe and fo.troe_alpha is not None:
             troe = [fo.troe_alpha, fo.troe_t3, fo.troe_t1]
             if fo.troe_t2 is not None:
                 troe.append(fo.troe_t2)
             lines.append(
                 "    TROE / "
-                + " ".join(f"{v:.4G}" for v in troe if v is not None)
+                + " ".join(_num(v) for v in troe if v is not None)
                 + " /"
             )
         elif k.model_kind is KineticsModelKind.sri and fo.sri_a is not None:
@@ -561,7 +566,7 @@ def _kinetics_lines(
                 sri.append(fo.sri_e)
             lines.append(
                 "    SRI / "
-                + " ".join(f"{v:.4G}" for v in sri if v is not None)
+                + " ".join(_num(v) for v in sri if v is not None)
                 + " /"
             )
 
@@ -575,25 +580,25 @@ def _kinetics_lines(
             pa = _a_to_mol_cm_s(pe.a, pe.a_units or k.a_units)
             pn = pe.n if pe.n is not None else 0.0
             pea = _convert_ea(pe.ea_kj_mol, options.energy_units) or 0.0
-            pa_str = f"{pa:.4E}" if pa is not None else "0.0"
+            pa_str = _num(pa) if pa is not None else "0.0"
             # pressure in atm for PLOG (CHEMKIN convention); stored in bar.
             p_atm = pe.pressure_bar / 1.01325
             lines.append(
-                f"    PLOG / {p_atm:.4E} {pa_str} {pn:.3f} {pea:.4f} /"
+                f"    PLOG / {_num(p_atm)} {pa_str} {_num(pn)} {_num(pea)} /"
             )
 
     if k.model_kind is KineticsModelKind.chebyshev and k.chebyshev is not None:
         cb = k.chebyshev
         if cb.tmin_k is not None and cb.tmax_k is not None:
-            lines.append(f"    TCHEB / {cb.tmin_k:.2f} {cb.tmax_k:.2f} /")
+            lines.append(f"    TCHEB / {_num(cb.tmin_k)} {_num(cb.tmax_k)} /")
         if cb.pmin_bar is not None and cb.pmax_bar is not None:
             lines.append(
-                f"    PCHEB / {cb.pmin_bar / 1.01325:.4E} {cb.pmax_bar / 1.01325:.4E} /"
+                f"    PCHEB / {_num(cb.pmin_bar / 1.01325)} {_num(cb.pmax_bar / 1.01325)} /"
             )
         flat = _flatten_cheb(cb.coefficients)
         lines.append(
             f"    CHEB / {cb.n_temperature} {cb.n_pressure} "
-            + " ".join(f"{v:.6E}" for v in flat)
+            + " ".join(_num(v) for v in flat)
             + " /"
         )
     return [lines]

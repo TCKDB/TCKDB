@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## CHEMKIN export writes rate parameters to nine significant figures (Unreleased)
+
+- **Behaviour:** the CHEMKIN export writes A, n, Ea, the falloff, Troe, SRI, PLOG and Chebyshev coefficients and the third-body efficiencies to nine significant figures (`1.45978000E+03`), the precision of the NASA cards, so Cantera's k(T) from the file matches the stored fit to about 1e-8. The paper snapshot build refuses a file written with fewer digits.
+- **Schema and migration:** none. No new environment variable. No distributed package changed.
+
 ## Snapshot build exports the use case as a CHEMKIN mechanism (Unreleased)
 
 - **Behaviour:** the paper snapshot build requests `POST /scientific/export/chemkin` as its curator for the CH4 + OH use case, saves the files, and refuses a snapshot whose export does not load in Cantera, whose rate parameters, NASA coefficients or Cantera H298 disagree with the records (each within half a unit of its last written place), whose files are written to less precision than the exporter writes today, or whose manifest lists gaps. A new generator, `use_case_chemkin_export`, makes the same export in-process from the database and reports the Cantera load, k(300 K) against the stored fit, and H298 of [CH3] from the exported polynomial; `compare.py` also compares the saved files.

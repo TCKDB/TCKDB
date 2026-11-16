@@ -114,8 +114,8 @@ SUPPORTED_FORMS = frozenset(
 )
 
 # Printed precision the exporter declares (chemkin_serialize._kinetics_lines).
-EXPORT_A_SIGNIFICANT_DIGITS = 5  # f"{a:.4E}"
-EXPORT_EA_DECIMALS_CAL_PER_MOL = 4  # f"{ea:.4f}"
+EXPORT_A_SIGNIFICANT_DIGITS = 9  # chemkin_serialize._num: f"{v:.8E}"
+EXPORT_EA_SIGNIFICANT_DIGITS = 9  # chemkin_serialize._num: f"{v:.8E}"
 EXPORT_T_LOW_HIGH_DECIMALS = 3  # _nasa_card: f"{t:>10.3f}"
 EXPORT_T_MID_DECIMALS = 2  # _nasa_card: f"{t_mid:>8.2f}"
 
@@ -241,8 +241,9 @@ def half_unit_relative(value: float, significant_digits: int) -> float:
 def arrhenius_log_bound(rate: ct.ArrheniusRate, temperature: float) -> float:
     """``|d ln k|`` for one modified-Arrhenius channel at ``temperature`` (module docstring)."""
     d_a = half_unit_relative(rate.pre_exponential_factor, EXPORT_A_SIGNIFICANT_DIGITS)
+    ea_cal_per_mol = abs(rate.activation_energy) / _CAL_PER_MOL_TO_J_PER_KMOL
     d_ea = (
-        0.5 * 10.0 ** (-EXPORT_EA_DECIMALS_CAL_PER_MOL) * _CAL_PER_MOL_TO_J_PER_KMOL
+        half_unit_relative(ea_cal_per_mol, EXPORT_EA_SIGNIFICANT_DIGITS) * abs(rate.activation_energy)
         + abs(rate.activation_energy) * EA_CHAIN_RELATIVE_ERROR
     )
     return d_a + d_ea / (ct.gas_constant * temperature)
