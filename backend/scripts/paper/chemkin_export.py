@@ -20,6 +20,7 @@ The parsing, hashing and arithmetic helpers do not need Cantera or a database.
 from __future__ import annotations
 
 import asyncio
+from decimal import Decimal
 import hashlib
 import io
 import json
@@ -226,10 +227,17 @@ def rate_ratio_bound(written: dict[str, Any] | None, units_line: list[str] | Non
     return {**{k: sig(v, 3) for k, v in parts.items()}, "total": sig(sum(parts.values()), 3)}
 
 
-def mantissa_decimals(text: str) -> int:
-    """Decimals written in the mantissa of ``text`` (``3.468`` is 3, ``1.4598E+03`` is 4)."""
-    mantissa = text.lower().partition("e")[0]
-    return len(mantissa.split(".")[1]) if "." in mantissa else 0
+def decimal_places(text: str) -> int:
+    """Places after the decimal point of the number ``text`` stands for (``3.468`` is 3, ``3.5E-1`` is 2, ``12`` is 0)."""
+    return max(0, -Decimal(text).as_tuple().exponent)
+
+
+def significant_digits(text: str) -> int:
+    """Digits written in the normalised mantissa of ``text``: leading zeros do not count (``0.0001E+07`` is 1,
+    ``1.4598E+03`` is 5, ``3.24887000E+00`` is 9). A written zero counts the digits it is written with."""
+    Decimal(text)  # a ValueError-like refusal for anything that is not a number
+    digits = text.lower().partition("e")[0].lstrip("+-").replace(".", "")
+    return len(digits.lstrip("0")) or len(digits)
 
 
 def nasa_vs_record(record: dict[str, Any], nasa: Any) -> dict[str, Any] | None:
@@ -250,7 +258,8 @@ def nasa_vs_record(record: dict[str, Any], nasa: Any) -> dict[str, Any] | None:
         "numbers_compared": len(pairs),
         "max_difference_over_half_unit": sig(worst, 3),
         "max_difference_over_half_unit_unrounded": worst,
-        "min_coefficient_mantissa_decimals": min(mantissa_decimals(t) for t in coefficient_texts),
+        "min_coefficient_significant_digits": min(significant_digits(t) for t in coefficient_texts),
+        **{f"{k}_decimals": decimal_places(v) for k, v in record["temperature_text"].items()},
     }
 
 

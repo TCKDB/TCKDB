@@ -162,10 +162,14 @@ def check_saved(directory: Path, env: dict[str, str]) -> dict[str, Any]:
 
 #: The least precision the exporter writes today; a build that finds fewer digits is refused, so the bounds computed from
 #: the written digits cannot widen to let a coarser file through. More digits pass.
+#: Fixed-point fields (n, Ea, the NASA temperatures) are counted in decimal places, the E-notation ones (A, the NASA
+#: coefficients) in significant digits of the normalised mantissa, so ``0.0001E+07`` does not pass for a 5-digit A.
 MIN_N_DECIMALS = 3
-MIN_A_MANTISSA_DECIMALS = 4
+MIN_A_SIGNIFICANT_DIGITS = 5
 MIN_EA_DECIMALS = 4
-MIN_NASA_MANTISSA_DECIMALS = 8
+MIN_NASA_SIGNIFICANT_DIGITS = 9
+MIN_T_LOW_HIGH_DECIMALS = 3
+MIN_T_MID_DECIMALS = 2
 #: A written number that is exactly half a unit from the stored one (a tie, such as 985.655 written as 985.66) can come
 #: out a few parts in 1e16 above 1 in floating point; the gate allows that and nothing larger. The value reported in the
 #: output is rounded for reading; the gate uses the unrounded one.
@@ -174,9 +178,14 @@ HALF_UNIT_FLOAT_EPSILON = 1.0e-9
 CANTERA_VS_HAND_RELATIVE = 1.0e-6
 
 
-def _decimals(text: str) -> int:
-    mantissa = str(text).lower().partition("e")[0]
-    return len(mantissa.split(".")[1]) if "." in mantissa else 0
+def _written_places(key: str, text: Any) -> int | None:
+    """Decimal places (n, Ea) or significant digits (A) of the written ``text``; ``None`` when it is not a number."""
+    from scripts.paper.chemkin_export import decimal_places, significant_digits
+
+    try:
+        return significant_digits(text) if key == "a_text" else decimal_places(text)
+    except (ArithmeticError, ValueError, TypeError):
+        return None
 
 
 def _rate_problems(rate: dict[str, Any]) -> list[str]:
@@ -188,13 +197,14 @@ def _rate_problems(rate: dict[str, Any]) -> list[str]:
     if rate.get("stored_fit_units") != "cm3_mol_s":
         out.append(f"the stored fit is in {rate.get('stored_fit_units')!r}, not cm3_mol_s; Cantera's value is not comparable")
     written = rate.get("written_in_chem_inp") or {}
-    for key, floor, label in (
-        ("n_text", MIN_N_DECIMALS, "n"),
-        ("a_text", MIN_A_MANTISSA_DECIMALS, "A"),
-        ("ea_text", MIN_EA_DECIMALS, "Ea"),
+    for key, floor, label, unit in (
+        ("n_text", MIN_N_DECIMALS, "n", "decimals"),
+        ("a_text", MIN_A_SIGNIFICANT_DIGITS, "A", "significant digits"),
+        ("ea_text", MIN_EA_DECIMALS, "Ea", "decimals"),
     ):
-        if key not in written or _decimals(written[key]) < floor:
-            out.append(f"{label} is written as {written.get(key)!r}, fewer than the {floor} decimals the export writes")
+        places = _written_places(key, written[key]) if key in written else None
+        if places is None or places < floor:
+            out.append(f"{label} is written as {written.get(key)!r}, fewer than the {floor} {unit} the export writes")
     parameters = rate.get("written_vs_stored_fit")
     if not parameters:
         out.append("the written parameters were not compared with the stored fit")
@@ -240,11 +250,16 @@ def _nasa_problems(row: dict[str, Any]) -> list[str]:
             f"species {row['smiles']}: a written NASA number differs from the stored record by "
             f"{worst} half-units of its last written place"
         )
-    if check["min_coefficient_mantissa_decimals"] < MIN_NASA_MANTISSA_DECIMALS:
+    digits = check.get("min_coefficient_significant_digits")
+    if digits is None or digits < MIN_NASA_SIGNIFICANT_DIGITS:
         out.append(
-            f"species {row['smiles']}: coefficients are written with {check['min_coefficient_mantissa_decimals']} "
-            f"mantissa decimals, fewer than the {MIN_NASA_MANTISSA_DECIMALS} the export writes"
+            f"species {row['smiles']}: coefficients are written with {digits} significant digits, "
+            f"fewer than the {MIN_NASA_SIGNIFICANT_DIGITS} the export writes"
         )
+    for key, floor in (("t_low", MIN_T_LOW_HIGH_DECIMALS), ("t_mid", MIN_T_MID_DECIMALS), ("t_high", MIN_T_LOW_HIGH_DECIMALS)):
+        places = check.get(f"{key}_decimals")
+        if places is None or places < floor:
+            out.append(f"species {row['smiles']}: {key} is written with {places} decimals, fewer than the {floor} the export writes")
     return out
 
 
@@ -260,7 +275,14 @@ def verify_output(document: dict[str, Any]) -> list[str]:
     out += _h298_problems(document.get("ch3_h298") or {})
     if (document.get("manifest") or {}).get("gaps"):
         out.append(f"the manifest lists gaps: {document['manifest']['gaps']}")
-    for row in document.get("species") or []:
+    from scripts.paper.chemkin_export import NAMED_SPECIES
+
+    species = document.get("species") or []
+    if not species:
+        out.append("the output lists no species")
+    elif sorted(row.get("smiles") for row in species) != sorted(NAMED_SPECIES):
+        out.append(f"the species are {sorted(str(row.get('smiles')) for row in species)}, not {sorted(NAMED_SPECIES)}")
+    for row in species:
         if len(row.get("thermo_refs_named") or []) != 1 or not row.get("has_nasa_in_therm_dat"):
             out.append(f"species {row.get('smiles')}: needs one named thermo record and a NASA entry in therm.dat")
         else:

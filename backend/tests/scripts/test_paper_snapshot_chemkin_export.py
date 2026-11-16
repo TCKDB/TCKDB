@@ -544,16 +544,20 @@ def _good_output() -> dict:
         },
         "species": [
             {
-                "smiles": "C",
-                "thermo_refs_named": ["thm_a"],
+                "smiles": smiles,
+                "thermo_refs_named": ["thm_" + smiles],
                 "has_nasa_in_therm_dat": True,
                 "nasa_vs_record": {
                     "numbers_compared": 17,
                     "max_difference_over_half_unit": 0.0,
                     "max_difference_over_half_unit_unrounded": 0.0,
-                    "min_coefficient_mantissa_decimals": 8,
+                    "min_coefficient_significant_digits": 9,
+                    "t_low_decimals": 3,
+                    "t_mid_decimals": 2,
+                    "t_high_decimals": 3,
                 },
             }
+            for smiles in chemkin_export.NAMED_SPECIES
         ],
         "named_thermo_refs_without_a_species_in_chem_inp": [],
     }
@@ -619,12 +623,51 @@ def test_a_coarser_file_is_refused_even_when_its_ratio_is_inside_its_own_wider_b
     assert any("Ea is written" in r for r in step.verify_output(_rate_with(ea_text="2033.05")))
 
 
+def test_an_unnormalised_a_does_not_meet_the_floor_by_showing_decimals(step):
+    # 0.0001E+07 shows 4 mantissa decimals but is one significant digit
+    reasons = step.verify_output(_rate_with(a_text="0.0001E+07"))
+    assert any("A is written as '0.0001E+07'" in r and "significant digits" in r for r in reasons)
+    assert step.verify_output(_rate_with(a_text="1.4598E+03")) == []
+    assert step.verify_output(_rate_with(a_text="1.45980E+03")) == []
+    assert step.verify_output(_rate_with(a_text="not a number"))
+    assert chemkin_export.decimal_places("3.5E-1") == 2 and chemkin_export.decimal_places("12") == 0
+
+
+def test_a_coarser_nasa_temperature_is_refused(step):
+    for key, coarse in (("t_mid", 1), ("t_low", 2), ("t_high", 2)):
+        document = _good_output()
+        document["species"][0]["nasa_vs_record"][f"{key}_decimals"] = coarse
+        assert any(f"{key} is written with {coarse} decimals" in r for r in step.verify_output(document)), key
+    more = _good_output()
+    more["species"][0]["nasa_vs_record"].update(t_low_decimals=5, t_mid_decimals=4, t_high_decimals=5)
+    assert step.verify_output(more) == []
+    missing = _good_output()
+    del missing["species"][0]["nasa_vs_record"]["t_mid_decimals"]
+    assert step.verify_output(missing)
+
+
+def test_the_species_must_be_present_and_exactly_the_ones_the_generator_names(step):
+    no_key = _good_output()
+    del no_key["species"]
+    assert any("no species" in r for r in step.verify_output(no_key))
+    assert any("no species" in r for r in step.verify_output(_with(_good_output(), species=[])))
+    fewer = _good_output()
+    fewer["species"] = fewer["species"][:3]
+    assert any("not" in r and "species are" in r for r in step.verify_output(fewer))
+    extra = _good_output()
+    extra["species"].append({**extra["species"][0], "smiles": "N"})
+    assert any("species are" in r for r in step.verify_output(extra))
+    swapped = _good_output()
+    swapped["species"][0]["smiles"] = "N"
+    assert any("species are" in r for r in step.verify_output(swapped))
+
+
 def test_a_file_written_with_more_digits_still_passes(step):
     finer = _rate_with(n_text="3.46761", a_text="1.459780E+03", ea_text="2033.05213")
     finer["forward_rate"]["written_vs_stored_fit"] = {k: {"over_half_unit": 0.1, "over_half_unit_unrounded": 0.1} for k in ("n", "a", "ea")}
     finer["forward_rate"]["ratio_explained_by_written_digits"]["total"] = 0.00005
     finer["forward_rate"]["cantera_over_stored"] = 1.00001
-    finer["species"][0]["nasa_vs_record"]["min_coefficient_mantissa_decimals"] = 12
+    finer["species"][0]["nasa_vs_record"]["min_coefficient_significant_digits"] = 13
     assert step.verify_output(finer) == []
 
 
@@ -676,8 +719,13 @@ def test_a_nasa_card_that_is_not_the_stored_record_or_is_written_coarsely_is_ref
     off["species"][0]["nasa_vs_record"]["max_difference_over_half_unit_unrounded"] = 4.0
     assert any("half-units" in r for r in step.verify_output(off))
     coarse = _good_output()
-    coarse["species"][0]["nasa_vs_record"]["min_coefficient_mantissa_decimals"] = 5
-    assert any("mantissa decimals" in r for r in step.verify_output(coarse))
+    coarse["species"][0]["nasa_vs_record"]["min_coefficient_significant_digits"] = 6
+    assert any("significant digits" in r for r in step.verify_output(coarse))
+    # an unnormalised coefficient such as 0.0001E+07 is one significant digit, however many decimals it shows
+    assert chemkin_export.significant_digits("0.0001E+07") == 1
+    assert chemkin_export.significant_digits("3.24887000E+00") == 9
+    assert chemkin_export.significant_digits("0.00000000E+00") == 9
+    assert chemkin_export.significant_digits("-1.09443000E-08") == 9
     missing = _good_output()
     missing["species"][0]["nasa_vs_record"] = None
     assert any("not compared" in r for r in step.verify_output(missing))
@@ -803,7 +851,8 @@ def test_every_number_in_a_nasa_card_is_compared_with_the_stored_record():
     )
     out = chemkin_export.nasa_vs_record(record, nasa)
     assert out["numbers_compared"] == 17 and out["max_difference_over_half_unit"] <= 1
-    assert out["min_coefficient_mantissa_decimals"] == 8
+    assert out["min_coefficient_significant_digits"] == 9
+    assert (out["t_low_decimals"], out["t_mid_decimals"], out["t_high_decimals"]) == (3, 2, 3)
     nasa.a3 = nasa.a3 + 1e-6  # a stored coefficient the card does not hold
     assert chemkin_export.nasa_vs_record(record, nasa)["max_difference_over_half_unit"] > 1
     assert chemkin_export.nasa_vs_record(record, SimpleNamespace(**{**vars(nasa), "a1": None})) is None
