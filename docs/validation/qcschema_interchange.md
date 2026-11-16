@@ -63,7 +63,7 @@ Exit status:
 - `1`: a round-trip check failed; the output names it.
 - `2`: the fixtures or the environment could not be used.
 
-Two runs give byte-identical JSON. The paper generator returns the same report
+Two runs give byte-identical JSON. `build_report(session, include_commit=False)` returns the same report
 without the checkout's commit hash.
 
 ## What was run and why
@@ -193,8 +193,8 @@ scientific read does not return. Everything the import writes is rolled back.
     with `--no-deps` from `environment.yml`, so this does not reach it. A
     workstation without the extra skips the new test. CI fails instead of
     skipping.
-15. **The paper generator leaves out the commit hash.** It is the same report
-    without `tckdb_commit`. A reproducer's checkout could otherwise make the
+15. **`build_report(session, include_commit=False)` leaves out the commit hash.**
+    It returns the same report without `tckdb_commit`. A reproducer's checkout could otherwise make the
     deposit's byte comparison fail on a value the fixtures do not determine.
 
 ## Round trip
