@@ -174,9 +174,9 @@ def test_round_trip_is_exact_and_every_measurement_is_reported(db_session, requi
         assert len(residue["rigid_body_curvature_cm1"]) == residue["rigid_body_dimension"] == 6
 
 
-def test_report_is_byte_stable_and_the_generator_drops_only_the_commit(db_session, require_qcelemental):
+def test_report_is_byte_stable_and_include_commit_false_drops_only_the_commit(db_session, require_qcelemental):
     first = report_script.build_report(db_session, include_commit=True)
-    second = report_script.paper_generator(db_session)
+    second = report_script.build_report(db_session, include_commit=False)
     assert "tckdb_commit" in first
     assert "tckdb_commit" not in second
     first.pop("tckdb_commit")

@@ -329,8 +329,6 @@ docs/specs/read_api_mvp.md
 # working directory; never commit it.
 timer.dat
 
-# paper snapshot build work directory (scripts/paper_snapshot)
-.paper_snapshot_work/
 
 # Local example-record setting for the front end dev server (operators mount their own in production).
 frontend/public/site-config.json
