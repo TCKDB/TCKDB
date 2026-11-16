@@ -188,4 +188,4 @@ def test_cantera_k_from_the_file_is_the_stored_fit(t0_k, temperature):
     gas, loaded = _forward_rate_sum(export.files, {"H1", "O2"}, temperature=temperature)
     stored = A_STORED * (temperature / t0_k) ** N_STORED * math.exp(-EA_KJ / (R_KJ * temperature))
     # cm3 mol-1 s-1 -> m3 kmol-1 s-1
-    assert loaded == pytest.approx(stored * 1.0e-3, rel=1.0e-8)
+    assert loaded == pytest.approx(stored * 1.0e-3, rel=8.0e-9)

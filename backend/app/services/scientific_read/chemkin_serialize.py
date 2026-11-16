@@ -43,8 +43,8 @@ from app.services.scientific_read.export import (
 )
 
 _AVOGADRO = 6.02214076e23
-#: 1 kJ/mol in cal/mol.
-_KJ_PER_MOL_TO_CAL_PER_MOL = 239.005736
+#: 1 kJ/mol in cal/mol (thermochemical calorie, 4.184 J).
+_KJ_PER_MOL_TO_CAL_PER_MOL = 1000.0 / 4.184
 #: 1 kJ/mol in J/mol.
 _KJ_PER_MOL_TO_J_PER_MOL = 1000.0
 #: 1 kJ/mol in K (Ea/R), R = 8.314462618 J/mol/K.
