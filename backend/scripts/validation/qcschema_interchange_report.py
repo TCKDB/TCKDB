@@ -135,7 +135,7 @@ import sys
 import tomllib
 from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 from typing import Any
 
 import httpx
@@ -247,10 +247,12 @@ EXPECTED_CHANGED_PATHS = (
 #: (``app.chemistry.basis_set_names``, ``app.chemistry.method_names``). A
 #: different basis set or method still lands in ``changed``. Only ``method``
 #: and ``basis`` are exported from the level of theory.
-IDENTITY_KEYED_PATHS: dict[str, Callable[[Any], Any]] = {
-    "input_data.specification.model.basis": basis_identity_key,
-    "input_data.specification.model.method": method_identity_key,
-}
+IDENTITY_KEYED_PATHS: Mapping[str, Callable[[Any], Any]] = MappingProxyType(
+    {
+        "input_data.specification.model.basis": basis_identity_key,
+        "input_data.specification.model.method": method_identity_key,
+    }
+)
 
 #: Compared by their own checks, not by the structural diff.
 _SEPARATELY_CHECKED = frozenset(
