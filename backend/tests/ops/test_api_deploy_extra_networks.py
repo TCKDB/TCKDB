@@ -65,7 +65,12 @@ case "$1" in
     [[ -n "$name" ]] && echo "$name $net" >> "$state"
     [[ "$1" == create ]] && echo "fake-container-id"
     exit 0 ;;
-  inspect) echo "laxzal/tckdb-api@sha256:fake"; exit 0 ;;
+  inspect)
+    [[ " ${MISSING_CONTAINERS:-} " == *" $2 "* ]] && exit 1
+    if [[ "$*" == *com.docker.compose.project* ]]; then echo "${FAKE_PROJECT:-}"; exit 0; fi
+    echo "laxzal/tckdb-api@sha256:fake"; exit 0 ;;
+  ps) [[ -n "${FAKE_PS_DB:-}" ]] && echo "$FAKE_PS_DB"; exit 0 ;;
+  compose) [[ -n "${FAKE_COMPOSE_DB:-}" ]] && echo "$FAKE_COMPOSE_DB"; exit 0 ;;
   exec) echo "fake dump"; exit 0 ;;
   *) exit 0 ;;
 esac
