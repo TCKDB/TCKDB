@@ -4,634 +4,148 @@
   <img src="docs/assets/tckdb-wordmark-cropped.png" alt="TCKDB wordmark" width="760">
 </p>
 
-**Thermochemical & Kinetics Database** — a provenance-rich,
-workflow-tool-agnostic database and HTTP API for computational and
-experimental chemistry data: species, reactions, transition states,
-geometries, calculations, statmech, thermo, kinetics, transport,
-networks, artifacts, and review/moderation state.
+TCKDB (Theoretical Chemical Kinetics Database) stores computed thermochemistry
+and kinetics together with the calculations behind each number: the geometry,
+the level of theory, the program and version, and the workflow that ran it.
+You run it yourself, on a laptop or on a server for your group, and talk to it
+over an HTTP API or the web interface.
 
-In practical terms, TCKDB is a database you can run locally or host
-for a group. It stores quantum-chemistry and experimental records
-with enough context to answer questions like: *Which calculation
-produced this thermo value? Which geometry was used? What level of
-theory, software version, and workflow generated it? Has the record
-been reviewed?*
+**Documentation:** <https://tckdb.github.io/TCKDB/>
 
-TCKDB defines a general scientific storage, provenance, and read/query
-contract. Workflow tools such as ARC, RMG, or any other computational
-chemistry pipeline can adapt to TCKDB; nothing in the schema or API is
-shaped around a single tool.
+## What it does
 
-Documentation website: <https://tckdb.github.io/TCKDB/>
+- **Chemical identity.** Species, reactions and transition states, each with a
+  specific form (stereochemistry, electronic state, isotopes) kept apart from
+  the graph that identifies it.
+- **Calculations.** Optimisations, frequencies, single points, scans, IRCs and
+  path searches (NEB, GSM), with their parameters, input and output geometries,
+  and the raw output files.
+- **Scientific results.** Statistical mechanics, thermochemistry (NASA
+  polynomials, H, S, Cp), rate coefficients (Arrhenius, Chebyshev, PLOG,
+  falloff), transport and pressure-dependent networks.
+- **Provenance.** Level of theory, program release, workflow tool and
+  literature for every record.
+- **Review.** Records start unreviewed. Curators approve or reject them, attach
+  findings, and publish citable dataset releases.
+- **Selection.** For a species or reaction, TCKDB lists every candidate value
+  with its evidence and lets you choose by explicit rules. It never ranks
+  methods for you.
+- **Checks.** Consistency checks (Gibbs energy, Kirchhoff, Hess's law and
+  others) compare related records and report disagreements as advisory
+  findings.
+- **Export.** CHEMKIN mechanisms and contribution bundles.
+- **Access.** Anonymous reads by stable public IDs (`spc_…`, `rxn_…`), uploads
+  with an API key, a Python client and a web interface.
 
----
+## Run it
 
-## Start here
-
-**Just want to see what's in it?** Open
-[`examples/clients/explore_tckdb.ipynb`](examples/clients/explore_tckdb.ipynb) —
-a read-only tour of a live TCKDB deployment. It needs no account, no API key and
-no local database, and it renders on GitHub with its outputs already filled in
-from one such run, so you can read it without running anything. Running it
-yourself (or reusing the plain `requests` calls in
-[`explore_tckdb.py`](examples/clients/explore_tckdb.py)) points it at whichever
-deployment you set `TCKDB_BASE_URL` to — yours, a colleague's, or a public one
-someone else hosts; there is no default. It looks up species, pulls their
-thermodynamics, evaluates the stored NASA polynomials back into
-Cp(T)/H(T)/S(T), checks them against NIST-JANAF values, and shows the
-calculations and trust evidence behind each number.
-
-Choose the path that matches what you are trying to do:
-
-- To read the full documentation website, open
-  <https://tckdb.github.io/TCKDB/> or preview it locally with
-  `conda run -n tckdb_env mkdocs serve`.
-- To understand what TCKDB is, read [What is TCKDB?](#what-is-tckdb)
-  and [What TCKDB stores](#what-tckdb-stores).
-- To run it on your machine, use
-  [Quick start: local development](#quick-start-local-development).
-- To confirm it works with real responses, use
-  [Load demo data](#load-demo-data), then
-  [Scientific read/query examples](#scientific-readquery-examples).
-- To query an existing hosted instance, start with
-  [Scientific read/query examples](#scientific-readquery-examples).
-- To upload computed or experimental records, see
-  [Uploads and workflow-tool integration](#uploads-and-workflow-tool-integration).
-- To deploy it for a lab or group, see
-  [Quick start: self-hosted single-node deployment](#quick-start-self-hosted-single-node-deployment).
-
-If you are primarily a chemistry user, the shortest useful path is:
-install the prerequisites, run the local quick start, load the demo
-data, then run the query examples for methane and the demo reactions.
-
----
-
-## What is TCKDB?
-
-TCKDB stores chemistry data together with the calculation context
-needed to judge how each number was produced. It exposes that data
-through an HTTP API designed for both human-scale queries and
-programmatic ingestion.
-
-A short summary:
-
-> TCKDB, the Theoretical Chemical Kinetics Database, is a provenance-rich
-> thermochemistry and kinetics database for computational and experimental
-> chemical data.
-
-The point is not just storage — it is **queryable scientific records
-with provenance and trust state**, addressed by stable public refs and
-fed by an authenticated upload contract.
-
----
-
-## Why TCKDB exists
-
-The computational thermochemistry and kinetics community does not have
-one agreed relational schema for thermo, kinetics, conformers,
-transition states, calculations, and provenance. Many datasets contain
-useful values but lose the calculation context — the geometry, the
-level of theory, the software release, the underlying statmech — that
-makes those values trustworthy and reproducible.
-
-TCKDB is an attempt to make scientific records queryable together
-with their full provenance and review state, so that:
-
-- Kinetics and thermo data are reproducible from inside the database.
-- Methods, software versions, and basis sets can be compared at scale.
-- Workflow tools can ingest into a single, structured destination
-  instead of bespoke output files.
-- Anonymous scientific reads are useful out of the box.
-- Future community review and curation have a place to live.
-
----
-
-## What TCKDB stores
-
-| Category | Entities |
-|---|---|
-| **Identity** | `species`, `species_entry`, `chem_reaction`, `reaction_entry`, `transition_state`, `transition_state_entry` |
-| **Structure** | `geometry`, `conformer_group`, `conformer_observation` |
-| **Calculations** | `calculation` (hub), single points, optimizations, frequencies, scans, IRCs, NEBs, composite calculations, input/output geometries, calculation parameters, dependencies, artifacts |
-| **Scientific products** | `statmech`, `thermo` (Cp/H/S, NASA polynomials), `kinetics` (Arrhenius, modified Arrhenius, Chebyshev/PLOG pressure dependence), `transport`, `network` (master-equation networks) |
-| **Trust / provenance** | `level_of_theory`, `software` + `software_release`, `workflow_tool` + `workflow_tool_release`, `literature` + `author`, `submission`, `record_review` |
-
-Raw output files (Gaussian/Orca logs, NEB traces, …) live in
-S3-compatible object storage as **artifacts** and are addressable
-through the API by handle.
-
-For example, a Gaussian or ORCA frequency workflow may produce a
-geometry, an optimization calculation, a frequency calculation,
-software/version provenance, a level of theory, vibrational/statmech
-data, and derived thermo. TCKDB stores those as linked records instead
-of flattening them into one disconnected table or file.
-
----
-
-## Core scientific concepts
-
-A short glossary of the most-used nouns:
-
-- **`species`** is graph-level molecular identity (the connectivity).
-  **`species_entry`** is a specific scientific form of that species —
-  stereochemistry, electronic state, isotopologue, stationary-point
-  kind.
-- **`chem_reaction`** is reactants → products as multisets of species.
-  **`reaction_entry`** is a scientific instance of that reaction with
-  resolved `species_entry` participants and attached kinetics.
-- **`transition_state`** / **`transition_state_entry`** apply the same
-  split to saddle points: identity vs scientific instance with
-  geometry, frequencies, and IRC linkage.
-- **`geometry`** is a coordinate set, addressed by public handle
-  (`geom_…`). Coordinates are fetched explicitly.
-- **`calculation`** is the hub for any computed result (`sp`, `opt`,
-  `freq`, `scan`, `irc`, `neb`, composite). Specific result rows
-  attach to the hub. Calculations form a small **DAG** so downstream
-  results cite the upstream calculations they consumed.
-- **`conformer_group`** clusters observations of one conformer
-  identity. **`conformer_observation`** is a single observed conformer
-  from a specific calculation.
-- **`statmech`**, **`thermo`**, **`kinetics`**, **`transport`**, and
-  **`network`** are the scientific-product tables. Each row carries
-  provenance back to the calculations and levels of theory that
-  produced it.
-- **Public refs vs internal IDs.** Every read response addresses
-  records by stable public refs (`species_…`, `reaction_entry_…`,
-  `geom_…`, `lot_…`, …). Integer primary keys are hidden by default
-  and only surface under explicit `include=internal_ids`, per the
-  visibility policy.
-- **Review/moderation state.** `record_review` rows track per-record
-  curation status (draft → pending → approved → rejected/deprecated).
-  Public reads default to approved records.
-
-For the longer-form treatment with examples and design rationale, see
-[docs/guides/core_concepts.md](docs/guides/core_concepts.md).
-
----
-
-## Architecture
-
-In normal use, clients do **not** connect directly to Postgres or
-the object store. You talk to the TCKDB API, either with curl, the Python client,
-or a workflow tool. The API then reads/writes the database and artifact
-storage for you.
-
-```text
-              ┌──────────────────────┐
-              │   FastAPI backend    │  127.0.0.1:8010 (loopback)
-              │   /api/v1/*          │
-              └─────────┬────────────┘
-                        │
-       ┌────────────────┼──────────────────┐
-       ▼                ▼                  ▼
- ┌──────────┐    ┌────────────┐     ┌────────────────┐
- │ Postgres │    │ S3 store   │     │ optional       │
- │ + RDKit  │    │ artifacts  │     │ frontend or    │
- │ (private)│    │ (private)  │     │ workflow tools │
- └──────────┘    └────────────┘     └────────────────┘
-
-       ▲                                     ▲
-       │                                     │
-       └─ tckdb-client (Python) ─────────────┘
-       └─ any HTTP client ───────────────────┘
-
-  Optional ingress in front of the API for public deployments:
-  Cloudflare Tunnel, nginx, Caddy, Traefik, Tailscale, WireGuard, …
-```
-
-Key invariants:
-
-- **PostgreSQL with the RDKit cartridge** is the chemistry-aware
-  storage layer; an **S3-compatible object store** holds artifacts.
-  The shipped Compose file runs **SeaweedFS**; AWS S3, Google Cloud
-  Storage (S3 interoperability, HMAC keys), an existing MinIO or any
-  other S3-compatible service works instead via `S3_ENDPOINT_URL`.
-- **The API is the public surface.** All client traffic — read,
-  upload, admin — goes through `/api/v1/*`.
-- **The database and object storage are private services.** Shipped
-  Compose files publish them on `127.0.0.1` only; they should never
-  face the LAN or internet directly.
-- **Ingress is a deployment choice**, not part of the scientific
-  model. The same backend runs behind Cloudflare Tunnel, an nginx
-  reverse proxy, a Tailscale subnet, or nothing at all.
-
----
-
-## Current capabilities
-
-Based on what is actually wired up in this repository:
-
-- Scientific read/query endpoints under `/api/v1/scientific/*`
-  (species, reactions, kinetics, thermo, geometries,
-  species-calculations, provenance).
-- Public stable refs as the default handle in read responses, with
-  internal IDs hidden by deployment policy.
-- Dedicated geometry detail endpoint for fetching coordinates by
-  handle.
-- Anonymous scientific reads on default deployments.
-- Authenticated uploads using `X-API-Key` (admin, upload, and
-  curator/reviewer roles).
-- Calculation hub + result/dependency/parameter/artifact tables.
-- Statmech, thermo (incl. NASA), Arrhenius and pressure-dependent
-  kinetics, transport, and master-equation network records.
-- Submissions and per-record review state.
-- A thin Python client (`tckdb-client`) for programmatic
-  read/upload.
-- Local-development and self-hosted single-node deployment recipes
-  driven by a single `docker-compose.yml` with profiles.
-- Helper scripts for admin bootstrap, API-key minting (`tckdb_auth.sh`),
-  setup diagnostics (`tckdb_doctor.sh`), and self-hosted deployment
-  checks (`check_selfhosted_deployment.sh`).
-
-The schema, upload payloads, and read API are still evolving — see
-**Project status** below.
-
----
-
-## Quick start: local development
-
-This path is for running TCKDB on your own machine. It starts the
-database and object storage in Docker, runs migrations, then starts
-the API on `http://127.0.0.1:8010`.
-
-Prerequisites:
-
-- Git.
-- Docker Desktop or Docker Engine with Compose.
-- Conda or Mamba. The recommended environment uses conda-forge RDKit.
-- A Unix-like shell: Linux, macOS, or WSL on Windows.
-
-The `make` commands below are thin wrappers around Docker, Alembic,
-and Uvicorn. They are the preferred local-development commands because
-they set the expected working directories and database name for you.
+You need Git and Docker with Compose. TCKDB itself comes as published container images.
 
 ```bash
-git clone <repo-url> tckdb
-cd tckdb
-
-# 1. Copy the env templates (root Compose env + backend app env)
-cp .env.example .env
-cp backend/.env.example backend/.env
-
-# 2. Set up the Python env (one-time). Pick ONE of the two paths.
-#
-#    Path A — conda + pip (recommended; conda-forge RDKit):
-mamba env create -n tckdb_env -f backend/environment.yml
-conda activate tckdb_env
-#    tckdb-schemas is first-party (in this repo, not on PyPI) and the
-#    backend imports it at module level, so install it before the backend:
-pip install -e schemas/python/tckdb-schemas
-cd backend && pip install -e ".[dev]" && cd ..
-#
-#    Path B — pure pip / uv (lockfile-driven, no conda):
-#    uv resolves tckdb-schemas from the path in [tool.uv.sources].
-# cd backend && uv sync --extra dev --extra rdkit && cd ..
-
-# 3. Start Postgres+RDKit + SeaweedFS and run migrations
-make up
-
-# 4. Start the API on 127.0.0.1:8010 (foreground; Ctrl-C to stop)
-make api
-
-# 5. From another shell — verify the stack
-make doctor
-
-# 6. Smoke-test
-curl http://127.0.0.1:8010/api/v1/health
-# -> {"status":"ok"}
+git clone https://github.com/TCKDB/TCKDB.git
+cd TCKDB
+backend/scripts/ops/tckdb_make_env.sh     # writes the settings, generates every password
+docker compose --env-file .env.selfhosted --env-file .env.db-admin \
+    --profile selfhost up -d --wait
 ```
 
-At this point the service is running, but the database may not contain
-scientific records yet. Query endpoints can legitimately return empty
-`records` arrays until you load data or upload records.
+`make selfhost` runs the last two steps. The script asks five questions: the
+deployment mode, the public URL, the proxy header (if any), and the admin's
+name and email. It prints the admin password once.
 
-`make help` lists every available target. The first-run diagnostic
-`make doctor` checks Docker, the env files, db/seaweedfs health, RDKit,
-Alembic, and the API — with actionable hints on each failure.
+When the stack is up:
 
-The two Python-env paths in step 2 are complementary:
-[backend/environment.yml](backend/environment.yml) installs the
-system toolchain (Python + conda-forge RDKit), and
-[backend/pyproject.toml](backend/pyproject.toml) defines the
-`tckdb-backend` package, its dependency list, dev/test extras, and
-the optional pip-RDKit extra. The lockfile next to it
-([backend/uv.lock](backend/uv.lock)) pins exact versions for
-reproducible installs. See
-[docs/deployment/api_containerization_notes.md](docs/deployment/api_containerization_notes.md)
-for the full story.
+- Web interface: <http://127.0.0.1:8011>
+- API: <http://127.0.0.1:8010/api/v1> (`/health` returns `{"status":"ok"}`)
 
-If anything fails, run `make doctor` and consult
-[docs/deployment/troubleshooting.md](docs/deployment/troubleshooting.md).
-For a longer walkthrough see
-[docs/deployment/local-v0.md](docs/deployment/local-v0.md).
-
----
-
-## Load demo data
-
-For a first successful read/query test, load the small illustrative
-demo dataset. It includes methane, ethane, radicals, geometries,
-thermo, calculations, and two reactions with kinetics.
-
-> Demo values are not publication-grade. They exist only to exercise
-> the API and show response shapes.
-
-With the database already started and migrated:
+Create an API key for uploads:
 
 ```bash
-cd backend
-
-# Dry run first; writes nothing.
-conda run -n tckdb_env python -m scripts.seed_scientific_demo_data
-
-# Actually write the demo rows.
-conda run -n tckdb_env python -m scripts.seed_scientific_demo_data --yes
+TCKDB_BASE_URL=http://127.0.0.1:8010/api/v1 backend/scripts/tckdb_auth.sh login-create-key
 ```
 
-Then keep the API running with `make api` from the repository root and
-try the examples in [Scientific read/query examples](#scientific-readquery-examples).
-You should see non-empty `records` for methane (`smiles=C`) and the
-demo reactions.
+Check the deployment with `backend/scripts/check_selfhosted_deployment.sh`.
 
-The full demo-data guide, including cleanup notes, is
-[docs/start/demo-data.md](docs/start/demo-data.md).
+Both ports listen on 127.0.0.1 only. To reach TCKDB from other machines, put a
+reverse proxy or a tunnel in front of port 8010; the
+[hosting guide](https://tckdb.github.io/TCKDB/deployment/) covers nginx,
+Caddy, Cloudflare Tunnel and Tailscale.
 
----
+Raw output files go to an S3-compatible store. The Compose file runs
+SeaweedFS; to use AWS S3, Google Cloud Storage, MinIO or another S3 service
+instead, set `S3_ENDPOINT_URL` and the keys in `.env.selfhosted`.
 
-## Quick start: self-hosted single-node deployment
+## Query it
 
-For a small server (home/lab box, small VPS, single-board computer,
-etc.) that exposes TCKDB to a wider audience:
-
-```bash
-# 1. Copy the env template and fill in change-me-* values
-cp .env.selfhosted.example .env.selfhosted
-cp .env.db-admin.example .env.db-admin
-$EDITOR .env.selfhosted .env.db-admin
-
-# 2. Bring up the core data plane (Postgres + SeaweedFS)
-docker compose --env-file .env.selfhosted --env-file .env.db-admin up -d db seaweedfs
-
-# 3. Provision DB roles, run migrations, and seed an admin (from backend/)
-set -a; source .env.selfhosted; source .env.db-admin; set +a
-cd backend
-conda run -n tckdb_env python scripts/configure_database_roles.py apply
-conda run -n tckdb_env alembic upgrade head
-conda run -n tckdb_env python scripts/configure_database_roles.py check
-conda run -n tckdb_env python scripts/bootstrap_admin.py \
-    --username alice --email alice@example.org --role admin
-```
-
-The API itself currently runs from the host Python environment (no
-shipped API container yet):
+Reads need no account.
 
 ```bash
-conda run -n tckdb_env uvicorn main:app --host 127.0.0.1 --port 8010
-```
-
-For production use, run it under a process manager — see
-[examples/deployment/systemd/tckdb-api.service](examples/deployment/systemd/tckdb-api.service)
-for a reference systemd unit.
-
-**Ingress is optional and pluggable.** Cloudflare Tunnel is one
-supported option, behind the `cloudflare` Compose profile:
-
-```bash
-docker compose --env-file .env.selfhosted \
-    --env-file .env.db-admin \
-    --profile cloudflare up -d cloudflared
-```
-
-nginx, Caddy, Traefik, Tailscale, WireGuard, or a host-side
-`cloudflared` systemd unit are equally valid — see the "Ingress
-options" section in
-[docs/deployment/self_hosted_single_node.md](docs/deployment/self_hosted_single_node.md).
-
-Run `backend/scripts/check_selfhosted_deployment.sh` after standing
-the stack up to verify db/seaweedfs/API health, public read access, and
-the API-key path end-to-end.
-
----
-
-## Authentication and API keys
-
-Anonymous scientific reads under `/api/v1/scientific/*` are allowed by
-default. Uploads and admin actions require an API key sent as
-`X-API-Key`.
-
-Seed an admin or curator account (idempotent):
-
-```bash
-cd backend
-conda run -n tckdb_env python scripts/bootstrap_admin.py \
-    --username alice \
-    --email   alice@example.org \
-    --role    admin
-```
-
-Log in and mint an API key via the helper script:
-
-```bash
-export TCKDB_BASE_URL="http://127.0.0.1:8010/api/v1"
-backend/scripts/tckdb_auth.sh login-create-key --name dev-upload
-source .tckdb_auth.env
-
-# Verify
-backend/scripts/tckdb_auth.sh me
-```
-
-The full recipe (curators, key rotation, wiring against a workflow
-tool) lives in
-[docs/deployment/admin_auth_quickstart.md](docs/deployment/admin_auth_quickstart.md).
-
----
-
-## Scientific read/query examples
-
-All scientific reads live under `/api/v1/scientific/*` and are
-anonymous-readable on default deployments.
-
-If you loaded the demo data, `smiles=C` queries methane and should
-return non-empty results. If you have not loaded or uploaded data yet,
-the same endpoints may return an empty `records` array; that means the
-API is working but has nothing scientific to return.
-
-```bash
-# Species search by SMILES (simple atom):
-curl -G "http://127.0.0.1:8010/api/v1/scientific/species/search" \
+# Species by SMILES
+curl -G http://127.0.0.1:8010/api/v1/scientific/species/search \
     --data-urlencode "smiles=C"
 
-# Bracketed SMILES — always url-encode with --data-urlencode,
-# otherwise brackets get interpreted as a curl URL range:
-curl -G "http://127.0.0.1:8010/api/v1/scientific/species/search" \
-    --data-urlencode "smiles=C[CH]C"
-
-# Thermo search by SMILES:
-curl -G "http://127.0.0.1:8010/api/v1/scientific/thermo/search" \
+# Thermochemistry for ethanol
+curl -G http://127.0.0.1:8010/api/v1/scientific/thermo/search \
     --data-urlencode "smiles=CCO"
 
-# Kinetics search by reactants/products (repeat the param for each
-# participant; prefer the POST form for complex/bracketed SMILES):
-curl -G "http://127.0.0.1:8010/api/v1/scientific/kinetics/search" \
-    --data-urlencode "reactants=[OH]" \
-    --data-urlencode "reactants=C" \
-    --data-urlencode "products=O" \
-    --data-urlencode "products=[CH3]"
-
-# One side is enough. Matching defaults to containment, so this asks
-# "what reactions consume the OH radical?" and leaves the products free.
-# Add match=exact to ask for one specific equation instead:
-curl -G "http://127.0.0.1:8010/api/v1/scientific/reactions/search" \
-    --data-urlencode "reactants=[OH]"
-
-# Geometry detail by public handle (geom_… ref):
-curl "http://127.0.0.1:8010/api/v1/scientific/geometries/geom_abc123"
+# Rate coefficients for CH4 + OH -> CH3 + H2O
+curl -G http://127.0.0.1:8010/api/v1/scientific/kinetics/search \
+    --data-urlencode "reactants=C" --data-urlencode "reactants=[OH]" \
+    --data-urlencode "products=[CH3]" --data-urlencode "products=O"
 ```
 
-For a more guided first run, use the Python example after loading demo
-data:
+[`examples/clients/explore_tckdb.ipynb`](examples/clients/explore_tckdb.ipynb)
+is a read-only tour of an instance: it pulls thermochemistry, evaluates the
+NASA polynomials and compares them with NIST-JANAF. The
+[query cookbook](https://tckdb.github.io/TCKDB/guides/scientific_query_cookbook/)
+has more.
 
-```bash
-# One-time if you did not already install the Python client:
-pip install -e ./clients/python
+## Upload to it
 
-python clients/python/examples/scientific_reads.py \
-    --base-url http://127.0.0.1:8010/api/v1 \
-    --smiles "C" \
-    --reactant "[CH3]" --reactant "[H][H]" \
-    --product "C" --product "[H]"
-```
-
-A longer cookbook with response shapes lives in
-[docs/guides/scientific_query_cookbook.md](docs/guides/scientific_query_cookbook.md).
-For querying a public hosted instance (rather than localhost), see
-[docs/guides/public_hosted_querying.md](docs/guides/public_hosted_querying.md).
-
----
-
-## Uploads and workflow-tool integration
-
-Uploads require an API key:
-
-```bash
-curl -X POST "$TCKDB_BASE_URL/uploads/calculations" \
-    -H "X-API-Key: $TCKDB_API_KEY" \
-    -H "Content-Type: application/json" \
-    --data-binary @my_calculation_payload.json
-```
-
-Workflow tools integrate by submitting structured TCKDB upload
-payloads to the appropriate `/api/v1/uploads/*` or `/api/v1/bundles/*`
-endpoint. The repo ships a thin Python HTTP client at
-[clients/python/](clients/python/).
-
-The important distinction: TCKDB uploads are structured scientific
-JSON payloads. Raw Gaussian/ORCA/RMG/ARC files can be stored as
-artifacts, but the database records still need the parsed scientific
-content: species, calculations, levels of theory, geometries, thermo,
-kinetics, provenance, and links between them. A workflow adapter is
-usually responsible for turning tool output into that JSON shape.
-
-Install it from PyPI:
-
-```bash
-pip install tckdb-client
-```
-
-Or the unreleased `main`, straight from the monorepo (the client needs
-`tckdb-schemas`, so install that first):
+Uploads are JSON payloads sent with an `X-API-Key` header. The Python client
+builds and sends them:
 
 ```bash
 pip install "git+https://github.com/TCKDB/TCKDB.git#subdirectory=schemas/python/tckdb-schemas"
 pip install "git+https://github.com/TCKDB/TCKDB.git#subdirectory=clients/python"
 ```
 
-For local editable development:
+Adapters turn program and workflow output into uploads: ARC
+([tckdb-adapters](https://github.com/calvinp0/tckdb-adapters)), CHEMKIN
+mechanisms and QCSchema results (in [`clients/python/adapters`](clients/python/adapters)).
+Any tool that can POST JSON can upload; see
+[Upload](https://tckdb.github.io/TCKDB/start/uploads/) and
+[Depositing](https://tckdb.github.io/TCKDB/guides/depositing_a_thermo_record/).
+
+## Develop it
+
+To work on TCKDB itself, run the API from a conda environment instead of the
+image:
 
 ```bash
-pip install -e ./clients/python
+cp .env.example .env
+cp backend/.env.example backend/.env
+mamba env create -n tckdb_env -f backend/environment.yml
+conda activate tckdb_env
+pip install -e schemas/python/tckdb-schemas
+pip install -e "backend[dev]"
+make up      # Postgres with RDKit and SeaweedFS, then migrations
+make api     # API on 127.0.0.1:8010
 ```
 
-`tckdb-client` is intentionally chemistry-free — it knows how to
-authenticate, encode payloads, retry, and handle idempotency, but it
-does not parse SMILES, enumerate conformers, or call RDKit. The
-builders that turn scientific Python objects (species, calculations,
-thermo, kinetics) into validated upload payloads already ship in the
-same package as `tckdb_client.builders` (public beta); see
-[clients/python/docs/builders.md](clients/python/docs/builders.md).
-Output parsers and producer-specific adapters (ARC, Chemkin, QCSchema)
-sit in separate packages above the client.
+`make help` lists the other targets, including the test suites. See
+[Install locally](https://tckdb.github.io/TCKDB/start/getting-started/).
 
-ARC is one workflow tool that has been used to exercise TCKDB
-ingestion end-to-end, but it has no special status in the schema or
-API. Any HTTP client that can POST JSON can upload — see
-[docs/specs/arc-tckdb-adapter-spec.md](docs/specs/arc-tckdb-adapter-spec.md)
-for one worked-through integration.
+## Status
 
----
+TCKDB is at version 0.2. The schema and the API can still change before 1.0.
 
-## Security and deployment notes
+## Citing and license
 
-- **Never commit** `.env` files, populated cookies, API keys,
-  Cloudflare tunnel tokens, or SQL backup dumps. The `.gitignore`
-  already covers the canonical locations, but treat anything
-  containing real values as sensitive.
-- **Never bind Postgres directly to `0.0.0.0`.** The shipped Compose
-  files publish to `127.0.0.1` for a reason. Operators wanting a DB
-  GUI from a workstation should use a protected TCP tunnel (e.g.
-  `cloudflared access tcp` behind a Cloudflare Access policy) or SSH
-  port forwarding rather than opening the port — see the
-  "Protected DB-GUI access" section of
-  [docs/deployment/self_hosted_single_node.md](docs/deployment/self_hosted_single_node.md).
-- **Keep object storage private** unless you have an explicit reason
-  to expose it; artifacts are reachable through the API by handle.
-- **Uploads require API keys.** Anonymous reads are allowed under
-  `/api/v1/scientific/*`; writes are not.
-- **Local auth artifacts are gitignored.** The auth helper scripts
-  produce these files on the local disk only — never commit them:
-  ```text
-  .tckdb_auth.env
-  .tckdb_api_key
-  .tckdb_cookies.txt
-  cookies.txt
-  ```
+The code is MIT licensed ([`LICENSE`](LICENSE)). Scientific data in TCKDB is
+CC BY 4.0 ([`LICENSE-DATA`](LICENSE-DATA)): cite the dataset release you used,
+by its tag and manifest checksum. To cite the software, use
+[`CITATION.cff`](CITATION.cff).
 
----
-
-## Project status
-
-TCKDB is **under active development** and pre-1.0. The repository
-ships a working backend, a Python client, and reference deployment
-recipes (local + self-hosted single-node), but:
-
-- The scientific schema and upload payloads may still evolve.
-- The read/query API is being stabilized — endpoints exist and are
-  tested, but breaking changes are possible before 1.0.
-- Deployment tooling (Compose, env templates, helper scripts) is
-  evolving toward broader self-host support; Cloudflare Tunnel is
-  one tested ingress, others are supported but less documented.
-- API containerization is tracked as a separate milestone; for now,
-  the API runs from the host Python environment.
-- The frontend is early; programmatic clients (HTTP, `tckdb-client`)
-  are the primary supported interface.
-
-Treat hosted instances as **evolving research infrastructure**, not a
-stable public service yet.
-
----
-
-## License
-
-TCKDB's **code** is released under the [MIT License](LICENSE). TCKDB's
-**scientific data** — the deposited records, the products derived from
-them, and the raw calculation artifacts published in a dataset release —
-is licensed separately under
-[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/): use it for
-anything, including commercially, provided you cite the dataset release
-you used (its tag and manifest checksum). See
-[`LICENSE-DATA`](LICENSE-DATA) for the exact scope, and
-`dataset_release.data_license` for the license a particular release was
-published under.
-
-Copyright (c) 2026 Calvin Pieters, Alon Grinberg Dana, and Technion --
-Israel Institute of Technology.
+Copyright (c) 2026 Calvin Pieters, Alon Grinberg Dana, and Technion – Israel
+Institute of Technology.
