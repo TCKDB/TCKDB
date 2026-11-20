@@ -10,10 +10,15 @@
 #       docker compose up -d db seaweedfs     # core services
 #       docker compose --profile worker up -d # add the upload worker
 #
-#   Self-hosted single-node server
-#   ------------------------------
-#       cp .env.selfhosted.example .env.selfhosted   # one-time; fill secrets
-#       docker compose --env-file .env.selfhosted up -d db seaweedfs
+#   Self-hosted single-node server, from the published images
+#   ---------------------------------------------------------
+#       backend/scripts/ops/tckdb_make_env.sh       # one-time; writes both env files
+#       docker compose --env-file .env.selfhosted --env-file .env.db-admin \
+#           --profile selfhost up -d                # or: make selfhost
+#
+#   Self-hosted, API run outside compose
+#   ------------------------------------
+#       docker compose --env-file .env.selfhosted --env-file .env.db-admin up -d db seaweedfs
 #       docker compose --env-file .env.selfhosted --profile cloudflare up -d
 #
 # Conventions baked in
@@ -29,8 +34,8 @@
 #     78 without one), so a stack that runs only MinIO does not need it.
 #   * All published ports bind to 127.0.0.1 only. Postgres and the object
 #     store are never reachable from the LAN or public internet. Loopback
-#     is enough because the API and Alembic run on the host (`tckdb_env`
-#     conda env).
+#     is enough because the API reaches them either from the host or, in
+#     the `selfhost` profile, over the compose networks.
 #   * Bridge networking for the data plane; `network_mode: host` only for
 #     `cloudflared`, which must dial the host-side API at 127.0.0.1:8010.
 #     The object store is on a second network, `storage`, that only the
@@ -139,9 +144,9 @@ services:
   #    `seaweedfs` is on the `storage` network ONLY. Nothing on `default`
   #    (db, anything else started in this project) can reach any SeaweedFS
   #    port, gRPC included. Only services that talk to the store join
-  #    `storage`: the worker here, and the API container, which
-  #    tckdb_deploy.sh connects when TCKDB_EXTRA_NETWORKS names this
-  #    network. The API already holds S3
+  #    `storage`: the worker and the selfhost `tckdb-api` here, and an API
+  #    container that tckdb_deploy.sh connects when TCKDB_EXTRA_NETWORKS
+  #    names this network. The API already holds S3
   #    credentials that can delete every object, so reaching gRPC gives it
   #    nothing it does not have; that is why isolation, rather than gRPC
   #    mTLS (which needs certificate files), is the chosen fix.
@@ -245,7 +250,7 @@ services:
       - storage
     # The S3 API is loopback-only, like every other published port here.
     ports:
-      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:${S3_PORT:-9000}:9000"
     volumes:
       - tckdb_seaweedfs:/data
     restart: unless-stopped
@@ -297,8 +302,8 @@ services:
     # Both the S3 API (9000) and the admin console (9001) are loopback-
     # only. The console is never exposed to the tunnel.
     ports:
-      - "127.0.0.1:9000:9000"
-      - "127.0.0.1:9001:9001"
+      - "127.0.0.1:${S3_PORT:-9000}:9000"
+      - "127.0.0.1:${S3_CONSOLE_PORT:-9001}:9001"
     volumes:
       - tckdb_minio:/data
     restart: unless-stopped
@@ -313,28 +318,152 @@ services:
         max-size: "10m"
         max-file: "5"
 
+  # ---------------------------------------------------------------------------
+  # Self-hosting from the published images: `--profile selfhost`.
+  #
+  #     backend/scripts/ops/tckdb_make_env.sh
+  #     docker compose --env-file .env.selfhosted --env-file .env.db-admin \
+  #         --profile selfhost up -d
+  #
+  # `init` refuses empty or change-me secrets, provisions the database
+  # roles, migrates, checks the roles and creates the first admin, then
+  # exits; the API starts only after it succeeds. Every step is idempotent,
+  # so it runs on every `up`. The API gets .env.selfhosted only; the owner
+  # and admin credentials in .env.db-admin reach `init` and nothing else.
+  # Both services address Postgres and the object store by service name,
+  # overriding the host-side DB_HOST / DB_PORT / S3_ENDPOINT_URL in the env
+  # file.
+  #
+  # This profile uses the bundled SeaweedFS. An external S3 store (AWS, an
+  # existing MinIO) needs a host-run API or backend/scripts/ops/tckdb_deploy.sh.
+  #
+  # TCKDB_IMAGE_TAG picks the release: a version or `sha-<commit>`. Upgrade
+  # by re-running `up -d` with a new tag; `init` migrates before the API
+  # restarts.
+  #
+  # `init` checks that the roles and grants are in place, not their
+  # passwords: changing a DB password in the env files later needs the
+  # matching ALTER ROLE ... PASSWORD (see .env.db-admin.example).
+  # ---------------------------------------------------------------------------
+  init:
+    profiles: ["selfhost"]
+    image: laxzal/tckdb-api:${TCKDB_IMAGE_TAG:-0.2.0}
+    env_file:
+      - .env.selfhosted
+      - .env.db-admin
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+    # apply runs only while the role check fails: it refuses once approval
+    # history exists.
+    command:
+      - sh
+      - -ec
+      - |
+        for v in DB_PASSWORD DB_ADMIN_PASSWORD DB_OWNER_PASSWORD S3_ACCESS_KEY S3_SECRET_KEY SEAWEEDFS_JWT_KEY PAGING_CURSOR_KEY; do
+          case "$$(printenv "$$v" || true)" in
+            ""|change-me*) echo "init: $$v is empty or still a change-me placeholder; generate the env files with backend/scripts/ops/tckdb_make_env.sh" >&2; exit 1 ;;
+          esac
+        done
+        roles() { python scripts/configure_database_roles.py "$$@"; }
+        if ! roles check; then echo "init: role check failed; provisioning the role split" >&2; roles apply; fi
+        alembic upgrade head
+        roles check
+        set -- --role admin --username "$${TCKDB_BOOTSTRAP_USERNAME:?set TCKDB_BOOTSTRAP_USERNAME in .env.db-admin}"
+        if [ -n "$${TCKDB_BOOTSTRAP_EMAIL:-}" ]; then set -- "$$@" --email "$$TCKDB_BOOTSTRAP_EMAIL"; fi
+        python scripts/bootstrap_admin.py "$$@"
+    depends_on:
+      db:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
+    restart: "no"
+
+  # Named `tckdb-api` because the frontend image proxies /api/ to that host.
+  tckdb-api:
+    profiles: ["selfhost"]
+    image: laxzal/tckdb-api:${TCKDB_IMAGE_TAG:-0.2.0}
+    env_file:
+      - .env.selfhosted
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      S3_ENDPOINT_URL: http://seaweedfs:9000
+    # `storage` to reach the object store, which is on no other network.
+    networks:
+      - default
+      - storage
+    ports:
+      - "127.0.0.1:${TCKDB_API_PORT:-8010}:8010"
+    # The image has no curl, and its Python is not on the default PATH.
+    healthcheck:
+      test: ["CMD", "/opt/conda/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/api/v1/health', timeout=4)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # The web interface: nginx serves the app and proxies /api/ to tckdb-api.
+  frontend:
+    profiles: ["selfhost"]
+    image: laxzal/tckdb-frontend:${TCKDB_IMAGE_TAG:-0.2.0}
+    ports:
+      - "127.0.0.1:${TCKDB_WEB_PORT:-8011}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      tckdb-api:
+        condition: service_started
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
   # Optional standalone upload worker.
   #
   # Activate with:
   #     docker compose --profile worker up -d
   #
   # Alternatively, set TCKDB_INLINE_WORKER=true in the API process to run
-  # the worker inline (simpler, but shares CPU). This service expects a
-  # pre-built `tckdb-api` image; see docs/deployment/native-advanced.md.
+  # the worker inline (simpler, but shares CPU). It runs the published API
+  # image, like the selfhost profile.
   # It runs on the bridge network and reaches Postgres via the `db`
   # service name, so its DB_HOST is hardcoded - it must not pick up the
   # host-side DB_HOST=127.0.0.1 default.
   worker:
     profiles: ["worker"]
-    image: tckdb-api
-    command: >
-      conda run -n tckdb_env python -m app.workers.upload_worker
+    image: laxzal/tckdb-api:${TCKDB_IMAGE_TAG:-0.2.0}
+    command: ["python", "-m", "app.workers.upload_worker"]
     environment:
       DB_HOST: db
       DB_PORT: "5432"
       DB_USER: ${DB_USER:-tckdb}
       DB_PASSWORD: ${DB_PASSWORD:-}
       DB_NAME: ${DB_NAME:-tckdb_dev}
+      # The bundled store by service name, like the DB, so jobs with
+      # artifacts can be processed.
+      S3_ENDPOINT_URL: http://seaweedfs:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-tckdb}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+      S3_BUCKET: ${S3_BUCKET:-tckdb-artifacts}
       TCKDB_INLINE_WORKER: "false"
     # `storage` to reach the object store, which is on no other network.
     networks:
@@ -385,8 +514,8 @@ services:
 
 # `storage` holds the object store and the services that talk to it, and
 # nothing else (#545). Compose names it `<project>_storage`, e.g.
-# `tckdbv2_storage`; a containerised API joins it through
-# TCKDB_EXTRA_NETWORKS in backend/scripts/ops/tckdb_deploy.sh.
+# `tckdbv2_storage`. The selfhost API is on it; an API container started by
+# backend/scripts/ops/tckdb_deploy.sh joins it through TCKDB_EXTRA_NETWORKS.
 networks:
   default:
   storage:
