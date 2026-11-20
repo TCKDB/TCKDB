@@ -1,4 +1,3 @@
-import { GuideLink } from "../components/GuideLink"
 import { baseLabel } from "../domain/levelLabel"
 import { RecordLink } from "../components/RecordLink"
 import { Link, useParams } from "react-router-dom"
@@ -70,6 +69,7 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                     <header className="basin-header">
                         <RecordIdentityHeader
                             kicker="Energy-correction scheme"
+                            guide={{ to: "correction-scheme", question: "What is a correction scheme?" }}
                             lede={CORRECTION_SCHEME_LEDE}
                             title={title}
                             ownRef={{ label: "Scheme ref", value: scheme.energy_correction_scheme_ref }}
@@ -108,7 +108,6 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                 </>
                             )}
                         />
-                        <p><GuideLink to="correction-scheme" /></p>
                         <dl className="kv-list basin-context">
                             <div><dt>Deposited</dt><dd>{isoDate(scheme.created_at)}</dd></div>
                         </dl>

@@ -20,7 +20,7 @@ Companion documents:
   recipe-style examples.
 - [workflow_tool_scientific_reads.md](workflow_tool_scientific_reads.md) —
   integration patterns for workflow tools.
-- [internal_ids_visibility_policy.md](../specs/internal_ids_visibility_policy.md) —
+- [internal_ids_visibility_policy.md](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/internal_ids_visibility_policy.md) —
   policy for integer-ID exposure.
 - [deployment_modes.md](../deployment/deployment_modes.md) —
   the three TCKDB deployment modes (local/offline, self-hosted
@@ -209,16 +209,16 @@ client = TCKDBClient(
 ```
 
 Uploads, moderation, and admin endpoints always require an API key;
-see [`clients/python/README.md`](../../clients/python/README.md)
+see [`clients/python/README.md`](https://github.com/TCKDB/TCKDB/blob/main/clients/python/README.md)
 for the full matrix.
 
 ## CLI examples
 
 Two ready-to-run example scripts ship with the client:
 
-- [`scientific_reads.py`](../../clients/python/examples/scientific_reads.py) —
+- [`scientific_reads.py`](https://github.com/TCKDB/TCKDB/blob/main/clients/python/examples/scientific_reads.py) —
   one-shot section-filterable read demo.
-- [`query_cookbook.py`](../../clients/python/examples/query_cookbook.py) —
+- [`query_cookbook.py`](https://github.com/TCKDB/TCKDB/blob/main/clients/python/examples/query_cookbook.py) —
   recipe-driven walkthrough that mirrors
   [`scientific_query_cookbook.md`](scientific_query_cookbook.md).
 
@@ -351,10 +351,9 @@ text is `depositor_message` and `depositor_field`: present only for the user who
 deposit's rows; whoever uploaded the artifact for an artifact's rows, so a curator's artifact warning is the curator's, not
 the depositor's) and for curators and admins, and absent for everyone else, including another signed-in user. Anything
 depositor-typed that a producer puts in `context` sits under `context.depositor_supplied`: it is depositor-typed text,
-and a client that shows it should say so. Since 2026-10-31 the upload response and the job result carry the same sentence:
+and a client that shows it should say so. The upload response and the job result carry the same sentence:
 a producer builds `message` from the code and the context (`UploadWarning.from_code`), never from text the depositor
-typed, so for a deposit made since then `depositor_message` equals `message`. Rows deposited earlier keep the text they
-were deposited with. Clients match on `code`, never on `message`.
+typed, so for a new deposit `depositor_message` equals `message`. Older rows keep the text they were deposited with. Clients match on `code`, never on `message`.
 
 A warning never changes a value, orders a list, or gates a selection, and the curated profile shows them as it shows any
 other evidence (a hidden record's ref inside a warning's `context` blanks that context and keeps the warning). They are a
@@ -379,14 +378,14 @@ To opt in to integer IDs:
 
 Public documentation, examples, and integrations should always use
 `*_ref` handles. See the
-[internal-ids visibility policy](../specs/internal_ids_visibility_policy.md)
+[internal-ids visibility policy](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/internal_ids_visibility_policy.md)
 for the full contract.
 
 ## Abuse-control expectations
 
 Hosted deployments enforce application-level rate limits and query
 caps. The full policy lives in
-[public_read_abuse_controls.md](../specs/public_read_abuse_controls.md).
+[public_read_abuse_controls.md](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/public_read_abuse_controls.md).
 In short:
 
 - Anonymous reads are rate-limited per client IP; authenticated
@@ -454,6 +453,6 @@ hosted querying.
 
 - [scientific_query_cookbook.md](scientific_query_cookbook.md) — recipe walkthrough.
 - [workflow_tool_scientific_reads.md](workflow_tool_scientific_reads.md) — workflow-tool integration patterns.
-- [scientific_read_demo_data.md](scientific_read_demo_data.md) — demo data setup.
-- [`clients/python/docs/configuration.md`](../../clients/python/docs/configuration.md) — client configuration and the auth matrix.
-- [internal_ids_visibility_policy.md](../specs/internal_ids_visibility_policy.md) — internal-IDs contract.
+- [Load demo data](../start/demo-data.md) — demo data setup.
+- [`clients/python/docs/configuration.md`](https://github.com/TCKDB/TCKDB/blob/main/clients/python/docs/configuration.md) — client configuration and the auth matrix.
+- [internal_ids_visibility_policy.md](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/internal_ids_visibility_policy.md) — internal-IDs contract.

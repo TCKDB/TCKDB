@@ -191,7 +191,7 @@ export TCKDB_API_KEY="tck_replace_me"
 ```
 
 A starter file is provided at
-[`examples/deployment/hpc-client.env.example`](../../examples/deployment/hpc-client.env.example).
+[`examples/deployment/hpc-client.env.example`](https://github.com/TCKDB/TCKDB/blob/main/examples/deployment/hpc-client.env.example).
 
 ---
 

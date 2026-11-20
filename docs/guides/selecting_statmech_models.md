@@ -1,6 +1,6 @@
 # Selecting a statistical-mechanics model for a stated use
 
-One page for whoever reads the statmech records of one species entry or one transition state entry and needs to know
+This page is for readers of the statmech records of one species entry or one transition state entry who need to know
 which supplied model supports a stated use, and why. It describes the one selection endpoint, what each answer means,
 and what it refuses to claim.
 

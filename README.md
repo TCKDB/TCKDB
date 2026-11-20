@@ -22,7 +22,7 @@ contract. Workflow tools such as ARC, RMG, or any other computational
 chemistry pipeline can adapt to TCKDB; nothing in the schema or API is
 shaped around a single tool.
 
-Documentation website: <https://calvinp0.github.io/tckdbv2/>
+Documentation website: <https://tckdb.github.io/TCKDB/>
 
 ---
 
@@ -44,7 +44,7 @@ calculations and trust evidence behind each number.
 Choose the path that matches what you are trying to do:
 
 - To read the full documentation website, open
-  <https://calvinp0.github.io/tckdbv2/> or preview it locally with
+  <https://tckdb.github.io/TCKDB/> or preview it locally with
   `conda run -n tckdb_env mkdocs serve`.
 - To understand what TCKDB is, read [What is TCKDB?](#what-is-tckdb)
   and [What TCKDB stores](#what-tckdb-stores).
@@ -354,7 +354,7 @@ You should see non-empty `records` for methane (`smiles=C`) and the
 demo reactions.
 
 The full demo-data guide, including cleanup notes, is
-[docs/guides/scientific_read_demo_data.md](docs/guides/scientific_read_demo_data.md).
+[docs/start/demo-data.md](docs/start/demo-data.md).
 
 ---
 

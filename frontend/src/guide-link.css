@@ -1,11 +1,76 @@
-.guide-link-for {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    padding: 0;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-    border: 0;
+/* Inline: takes the surrounding sentence's font and size; only colour and underline are its own. */
+.guide-link {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-color: var(--accent-underline);
+    text-underline-offset: .16em;
+}
+
+.guide-link:hover {
+    color: var(--accent-700);
+    text-decoration-color: currentColor;
+}
+
+.guide-link:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 3px;
+    border-radius: 2px;
+}
+
+/* Icon: a 24 px target around a 16 px glyph, after a kicker or a heading. */
+.guide-link--icon {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    text-decoration: none;
+    vertical-align: middle;
+}
+
+.guide-link--icon:hover {
+    background: var(--accent-50);
+}
+
+.guide-link--icon:focus-visible {
+    outline-offset: 1px;
+    border-radius: 50%;
+}
+
+.guide-link-glyph {
+    fill: currentColor;
+    stroke: currentColor;
+    stroke-width: 1.4;
+}
+
+/* A section heading with a guide glyph after it. The row takes the heading's font and default margins, so it spaces
+   and collapses as the bare heading would; the heading inside it has no margins of its own. */
+.section-heading-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    column-gap: var(--s-2);
+    margin: .83em 0;
+    font: var(--type-heading-1-font);
+}
+
+.section-heading-row--sub {
+    margin: 1em 0;
+    font: var(--type-heading-2-font);
+}
+
+.section-heading-row > :is(h2, h3) {
+    margin: 0;
+}
+
+/* Entry pages set their section h2 margins to zero; the row follows. */
+.entry-page .ledger-section .section-heading-row {
+    margin: 0;
+}
+
+/* Centred on the heading's first line, however many lines it wraps to. */
+.section-heading-row > .guide-link--icon {
+    margin-top: calc((1lh - 1.5rem) / 2);
 }

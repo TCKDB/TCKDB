@@ -451,7 +451,7 @@ records an `object_missing` integrity event against the calculation.
 **Fix**
 
 Follow
-[Moving from MinIO to SeaweedFS](../../backend/docs/deployment/migrating_minio_to_seaweedfs.md).
+[Moving from MinIO to SeaweedFS](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/deployment/migrating_minio_to_seaweedfs.md).
 It publishes SeaweedFS on another host port for the duration of the copy,
 and it switches the endpoint only after
 `backend/scripts/ops/migrate_object_store.py --verify-only` has read every

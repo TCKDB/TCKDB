@@ -34,7 +34,7 @@ and provenance summaries.
 > **Refs are the normal hosted handles. Integer IDs are internal/debug
 > compatibility fields.**
 >
-> Phase D: scientific read responses hide integer `*_id` fields and
+> Scientific read responses hide integer `*_id` fields and
 > bare integer-id arrays by default. Their public `*_ref` siblings
 > (and the ref-bearing object arrays like `input_geometries`,
 > `supporting_calculations`) remain visible. Workflow tools should
@@ -52,11 +52,8 @@ and provenance summaries.
 > explicitly: `include=["all", "internal_ids"]`.
 >
 > Route inputs are unchanged — integer path handles and `*_id` query
-> filters still work as inputs. See
-> [`docs/specs/internal_ids_visibility_policy.md`](../specs/internal_ids_visibility_policy.md)
-> and
-> [`docs/specs/public_identifier_policy.md`](../specs/public_identifier_policy.md)
-> for the full contract.
+> filters still work as inputs. The ref formats are listed in
+> [How a record is named](api_vocabulary.md#how-a-record-is-named).
 
 ## What this guide does not cover
 
@@ -391,7 +388,7 @@ Each record carries:
 
 The search returns every matching record in TCKDB's documented deterministic
 display order (approved first, `under_review` and `not_reviewed` together, then
-newest deposited, then highest id; see [Browse order](../specs/browse_order.md)).
+newest deposited, then highest id; see [Browse order](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/browse_order.md)).
 The first record is first in display order, not a scientific preference, and the
 client does not define "best thermo". To get one record under a policy you
 state, call `select_species_thermo`.
@@ -644,7 +641,7 @@ Records with `scientific_origin` of `experimental`, `estimated`,
 **null** TS-chain provenance fields. This is valid — those records are
 not "broken" or untrustworthy, they just don't have a TS chain.
 
-The provenance keys are always present in the JSON (Phase 2.2 contract):
+The provenance keys are always present in the JSON:
 
 ```python
 record = kinetics["records"][0]
@@ -831,36 +828,18 @@ different workflows can consume the same TCKDB instance with completely
 different reuse rules — neither has to fork the client, and neither
 constrains the other.
 
-## Coming next: chemistry-first species calculation/conformer search
+## Chemistry-first species calculation/conformer search
 
-> **Status: Phase 7 design / pending implementation.** See
-> [docs/specs/species_calculation_search_api.md](../specs/species_calculation_search_api.md).
+`search_species_calculations` asks calculation-and-conformer questions
+chemistry-first, for example *"the lowest-SP-energy calculation for this
+species at this level of theory, and the conformer it belongs to"*, without
+chaining `search_species` and an entry read yourself.
 
-A future endpoint will let workflow tools ask calculation-and-conformer
-questions chemistry-first — i.e. *"give me the lowest-SP-energy
-calculation for this species at this LoT, and tell me which conformer
-it belongs to"* — without manually chaining
-`search_species` → `get_species_calculations` themselves:
-
-```python
-# Pending Phase 7 implementation; method name and signature are draft.
-calcs = client.search_species_calculations(
-    smiles="CCO",
-    calculation_type="sp",
-    level_of_theory_id=8,
-    ranking="lowest_energy",
-    include=["provenance", "conformers", "review"],
-)
-```
-
-This is **calculation-centered**, not thermo-centered: the response
-records expose the calculation row, its energy, geometry IDs, conformer
-context (when present), validation/SCF status, level of theory, and
-software release — so workflow adapters can decide whether the
-calculation is reusable for a given workflow, with no hidden policy in
-the client. Until the endpoint ships, fall back to chaining
-`search_species` → existing entry-id calculation reads (or wait for the
-implementation phase).
+It is **calculation-centered**, not thermo-centered: each record carries the
+calculation, its energy, geometry refs, conformer context (when present),
+validation and SCF status, level of theory and software release, so a
+workflow adapter can decide whether the calculation is reusable. The
+[query cookbook](scientific_query_cookbook.md) has runnable recipes for it.
 
 ## Known v0 limitations
 
@@ -879,8 +858,7 @@ implementation phase).
   workflow decides.
 - Some rich nested sections may currently be summaries (e.g. the
   per-section `*_summary` fields under species-search entries return
-  `{ids: [...]}` ID lists rather than fully embedded records). Future
-  phases may enrich these without breaking the outer envelope.
+  `{ids: [...]}` ID lists rather than fully embedded records).
 
 ## Checklist for workflow-tool integrations
 
