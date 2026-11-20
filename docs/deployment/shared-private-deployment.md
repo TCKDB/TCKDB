@@ -108,8 +108,14 @@ server {
 ```
 
 Set `TRUSTED_PROXY_HEADER=X-Real-IP` to match. To serve the API alone, proxy
-to `127.0.0.1:8010` instead. Caddy and Traefik pass headers and cookies
-through by default.
+to `127.0.0.1:8010` instead.
+
+The proxy must overwrite `X-Real-IP` with the client's address, as the
+`$remote_addr` line does. The web UI passes on whatever `X-Real-IP` arrives,
+so behind a proxy that leaves it alone, a client could pick its own
+rate-limit key. Caddy and Traefik pass cookies and `X-API-Key` through by
+default, but don't set `X-Real-IP`: add a header rule that sets it, or leave
+`TRUSTED_PROXY_HEADER` unset.
 
 Route only the web UI and the API through the proxy. The database, the
 object store and the MinIO console stay private.

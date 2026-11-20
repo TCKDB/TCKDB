@@ -91,9 +91,9 @@ Pick one:
     - Its filer (8888), master (9333), volume server (9340) and their gRPC
       ports (18888, 19333, 19340, 19000) take no credentials, and over gRPC
       anyone who connects can delete objects. Bind everything to loopback
-      with `-ip=127.0.0.1 -ip.bind=127.0.0.1`. That closes every port but
-      the admin gRPC port 33646, which listens on all interfaces even with
-      `-admin.ui=false`; block it in the host firewall.
+      with `-ip=127.0.0.1 -ip.bind=127.0.0.1`. On 4.47, as measured, that
+      closes every port but the admin gRPC port 33646, which listens on all
+      interfaces even with `-admin.ui=false`; block it in the host firewall.
     - Add the `WEED_JWT_*` keys and `WEED_GUARD_WHITE_LIST=127.0.0.1,@` from
       the `seaweedfs` service in `docker-compose.yml` to lock the HTTP ports
       as well.
@@ -143,13 +143,17 @@ conda run -n tckdb_env python -m app.workers.upload_worker
 ```
 
 [`examples/deployment/systemd/tckdb-api.service`](../../examples/deployment/systemd/tckdb-api.service)
-is a unit for the API on the host. A worker unit is the same with the worker
-module in `ExecStart`. Adapt the paths, the user and the env file.
+is a unit for the API on the host. It expects Docker for the database, so on
+a host without Docker remove its `Requires=docker.service` and
+`After=docker.service` lines and order it after your Postgres service
+instead. Adapt the paths, the user and the env file. A worker unit is the
+same with the worker module in `ExecStart`.
 
 ## Things that go wrong
 
 - **RDKit cartridge drift.** Upgrading Postgres or the cartridge in place is
-  manual, and mismatched versions can break the chemistry indexes. Pin both.
+  manual, and mismatched versions can silently corrupt the chemistry
+  indexes. Pin both.
 - **Forgotten files.** Without Docker volumes to point at, it is easy to back
   up the database and not the object store.
 - **Open registration.** Set `AUTH_ALLOW_OPEN_REGISTRATION=false` as soon as

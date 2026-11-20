@@ -42,7 +42,7 @@ The full list of settings is the [Production checklist](production_checklist.md)
 
 | | `local` | `shared_private` | `hosted_public` |
 |---|---|---|---|
-| Who can connect | this machine | your network | anyone, through the ingress |
+| Who usually connects | you | your group | anyone, through the ingress |
 | Open registration | allowed | off | off |
 | Internal IDs in responses | allowed | hidden | hidden |
 | Legacy entity routes | open | need login | need login |
@@ -65,16 +65,17 @@ The full list of settings is the [Production checklist](production_checklist.md)
 - **At an institution**, use its domain and its proxy or CDN, which then
   terminates TLS.
 
-Never forward a router port to the server, and never publish Postgres or the
-object store. Only the web UI and the API go through the ingress.
+Don't forward a router port to the server, and never publish Postgres or
+the object store. Only the web UI and the API go through the ingress.
 
 ## Air-gapped clusters
 
 TCKDB runs in `local` mode with no network beyond the cluster.
 
 - Login needs nothing external: no identity provider, OAuth or DNS lookup.
-- Bind the API to `127.0.0.1` or a head-node address that the cluster can
-  reach. Don't assume any hosted TCKDB is reachable from compute nodes.
+- Keep the API on `127.0.0.1` and, if compute nodes must reach it, put a
+  proxy on a head-node address in front of it. Don't assume any hosted TCKDB
+  is reachable from compute nodes.
 - Pull the images on a connected machine and copy them across with
   `docker save` and `docker load`.
 - The documentation is in the repository's `docs/` folder and works offline.

@@ -69,8 +69,11 @@ header Cloudflare sets; see [Trusted proxy header](#trusted-proxy-header).
 ## The settings that matter
 
 `tckdb_make_env.sh` writes safe values for all of these.
-`DEPLOYMENT_MODE=hosted_public` makes the API refuse to start if one is
-wrong.
+`DEPLOYMENT_MODE=hosted_public` makes the API refuse to start while one of
+the enforced settings is unsafe; the
+[Production checklist](production_checklist.md#required-settings) marks which.
+`TRUSTED_PROXY_HEADER`, `EXPOSE_API_REFERENCE` and an unset
+`DB_STATEMENT_TIMEOUT_MS` are not checked, so set those yourself.
 
 | Variable | Value | Why |
 |---|---|---|
@@ -197,9 +200,11 @@ queries.
 The example [backup unit and timer](../../examples/deployment/systemd/) run
 `pg_dump` in the `db` container every night at 03:15. They write
 `/var/backups/tckdb/tckdb-YYYY-MM-DD.sql.gz` and delete dumps older than 30
-days. They expect the repository at `/opt/tckdb` and run as `tckdb`.
+days. They expect the repository at `/opt/tckdb` and run as `tckdb`, so
+create the backup directory for that user first.
 
 ```bash
+sudo install -d -o tckdb -g tckdb -m 700 /var/backups/tckdb
 sudo cp examples/deployment/systemd/tckdb-backup.service /etc/systemd/system/
 sudo cp examples/deployment/systemd/tckdb-backup.timer /etc/systemd/system/
 sudo systemctl daemon-reload
@@ -302,7 +307,11 @@ The instance is public through Cloudflare. SSH should not be.
 PasswordAuthentication no
 PermitRootLogin no
 KbdInteractiveAuthentication no
+AllowUsers youradmin
 ```
+
+Name your own login in `AllowUsers`. The `tckdb` account has no shell and
+needs no SSH.
 
 ```bash
 sudo ufw default deny incoming
@@ -380,7 +389,8 @@ done | sort | uniq -c
 ```
 
 Expect a run of `200`s, then `429`s whose body names `"bucket":"anon_read"`.
-Don't send an API key in this loop: that moves the requests to the
+If you raised `RATE_LIMIT_ANON_READ_PER_MINUTE`, raise the loop count to
+match. Don't send an API key in this loop: that moves the requests to the
 authenticated bucket (300 per minute). No `429` at all means
 `RATE_LIMIT_ENABLED` is off or `TRUSTED_PROXY_HEADER` is wrong.
 

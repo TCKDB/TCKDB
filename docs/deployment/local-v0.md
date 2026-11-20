@@ -35,8 +35,10 @@ conda run -n tckdb_env pip install -e "./backend[dev]"
 ```
 
 `.env` holds the values `docker-compose.yml` needs. `backend/.env` holds the
-API's settings. `backend/.env.local.example` turns on open registration and
-runs the upload worker inside the API.
+backend's settings. Alembic reads it on its own; the API reads only its
+environment, so export the file in the shell that starts the API (step 4).
+`backend/.env.local.example` turns on open registration and runs the upload
+worker inside the API.
 
 ## 2. Start Postgres and SeaweedFS
 
@@ -77,11 +79,14 @@ runs the same script; set `TCKDB_BOOTSTRAP_PASSWORD` first.
 ## 4. Start the API
 
 ```bash
+set -a; source backend/.env; set +a
 make api
 ```
 
-This runs `uvicorn main:app --host 127.0.0.1 --port 8010` from `backend/` in
-the foreground. With `TCKDB_INLINE_WORKER=true` (set by
+`make api` runs `uvicorn main:app --host 127.0.0.1 --port 8010` from
+`backend/` in the foreground. The API reads its settings from the
+environment, not from `backend/.env`, hence the `source`. The defaults match
+the development templates, so skipping it works until you change a value. With `TCKDB_INLINE_WORKER=true` (set by
 `backend/.env.local.example`), the upload worker runs inside the API. To run
 it on its own, set `TCKDB_INLINE_WORKER=false` and start it in a second
 terminal, from `backend/`:
@@ -149,8 +154,9 @@ that too, and mints a dev API key, while the API is running.
 - **`alembic upgrade head` cannot connect.** Check the `db` container is
   healthy with `docker compose ps`.
 - **Port 5432 is taken.** Stop the other Postgres, or set `DB_PORT` to a free
-  port in both `.env` and `backend/.env`. The container still listens on 5432
-  inside; only the host port moves.
+  port in both `.env` and `backend/.env`, and export it in the shell that
+  starts the API. The container still listens on 5432 inside; only the host
+  port moves.
 - **`401` with a session cookie.** Make curl keep cookies
   (`-c cookies.txt -b cookies.txt`). Sessions expire; log in again.
 - **`403` with a valid key.** A key has its owner's role, and some routes

@@ -8,8 +8,8 @@ backend/scripts/check_selfhosted_deployment.sh   # a self-hosted stack
 make doctor                                      # running from source
 ```
 
-Both print a hint next to most of the problems below. Each entry gives the
-symptom, the cause, the fix and a way to confirm it.
+`make doctor` prints a hint next to most of the problems below. Each entry
+gives the symptom, the cause, the fix and a way to confirm it.
 
 The commands below shorten the self-hosted compose command to `docker compose
 ...`. In full it is
@@ -126,8 +126,9 @@ set the matching variable to a free port:
 | 8011 | `TCKDB_WEB_PORT` |
 
 Only the host side moves; inside the containers nothing changes. When running
-from source, also set `DB_PORT` (and `S3_ENDPOINT_URL`) in `backend/.env`, so
-the API on the host follows.
+from source, also set `DB_PORT` (and `S3_ENDPOINT_URL`) for the host-run
+Alembic and API: in `backend/.env`, exported in the shell that starts the
+API, which reads only its environment.
 
 **Verify**
 
@@ -258,7 +259,10 @@ or the bucket is over its quota. Retrying does not help, which is why it is
   TCKDB then asks SeaweedFS how much room it has. If it is less than the
   refused write, the upload gets 507, the refusal is recorded and `/status`
   goes degraded. Without `S3_SEAWEEDFS_MASTER_URL`, a full SeaweedFS shows as
-  `503 artifact_storage_unavailable` with `/status` healthy.
+  `503 artifact_storage_unavailable` with `/status` healthy. Check its disk
+  (`df -h` on the volume) and its container log, which names the cause:
+  `no space left on device`, `No writable volumes and no free volumes left`,
+  or `read only ... (e.g. bucket over quota)`.
 
 The API log line names the limit that ran out
 (`artifact storage refused a <n>-byte write for want of room ...`):
@@ -294,7 +298,9 @@ Limits of the SeaweedFS check:
 
 In `weed shell`, `s3.bucket.list` shows each bucket's `quota:` and `usage:`.
 Raise a quota with `s3.bucket.quota -name=<bucket> -op=set -sizeMB=<larger>`
-or remove it with `-op=remove`.
+or remove it with `-op=remove`. No `lock` or `enforce` step is needed:
+SeaweedFS applies a quota change within about a minute, and removal at
+once.
 
 **"Full" depends on the size.** MinIO refuses a write that would cross its
 free-space threshold, judged against the object being written. A store in
@@ -363,7 +369,9 @@ curl -s http://127.0.0.1:8010/api/v1/admin/artifact-storage/capacity \
 ```
 
 **Fix.** Free space or raise the quota, then upload one artifact at least as
-large as the refused size to confirm:
+large as the refused size to confirm. On SeaweedFS, deleting objects returns
+no disk until the volume is vacuumed, so freeing disk on the host or adding
+volume slots is faster.
 
 - Delete or archive unreferenced objects with
   `backend/scripts/ops/verify_artifact_integrity.py --reclaim-orphans`, which
@@ -475,7 +483,10 @@ docker compose up -d
 
 On a database worth keeping, dump it, check the dump while the volume still
 exists, then recreate and restore. Use your own `DB_USER` / `DB_NAME` (on a
-self-hosted stack, the `DB_ADMIN_USER` from `.env.db-admin`).
+self-hosted stack, the `DB_ADMIN_USER` from `.env.db-admin`). `down -v` also
+deletes the object store's volume. On a stack with stored files, stop the
+stack and remove only the database volume instead:
+`docker compose ... down`, then `docker volume rm <project>_tckdb_pgdata`.
 
 ```bash
 # 1. Dump. Keep -T: without it docker compose allocates a terminal, which

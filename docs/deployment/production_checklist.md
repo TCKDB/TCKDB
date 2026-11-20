@@ -47,7 +47,7 @@ interface.
 | `SESSION_COOKIE_SECURE` | `true` | **enforced** Browsers then send the session cookie only over TLS. A `shared_private` instance served over plain HTTP on a trusted network may set `false` together with `SESSION_COOKIE_ALLOW_PLAIN_HTTP=true`; the API logs a warning and the cookie crosses the network unencrypted. `hosted_public` refuses `false` regardless. |
 | `SESSION_COOKIE_HTTPONLY` | `true` | Keeps the cookie away from JavaScript. Already the default. |
 | `SESSION_COOKIE_SAMESITE` | `lax` | Already the default. `strict` is fine. Never `none` without `secure=true` and an explicit CORS allow-list. |
-| `PAGING_CURSOR_KEY` | a random secret, 32+ characters | **enforced** Seals paging cursors so they hold no readable record ID. Every API process must share it. Changing it breaks cursors in flight (clients get 422 `invalid_cursor` and start their traversal again); nothing stored depends on it. |
+| `PAGING_CURSOR_KEY` | a random secret, 32+ characters | **enforced** Seals paging cursors so they hold no readable record ID. Generate one with `openssl rand -hex 32`. Every API process must share it. Changing it breaks cursors in flight (clients get 422 `invalid_cursor` and start their traversal again); nothing stored depends on it. |
 | `RATE_LIMIT_ENABLED` | `true` | **enforced** The test suite turns it off; nothing else should. |
 | `CORS_ALLOW_ORIGINS` | an explicit list, or unset | **enforced: no `*`** Unset means no CORS middleware, which is right for an API used with keys. List trusted browser origins (for example `https://app.tckdb.example.org`) only if a browser app on another origin calls the API. |
 | `TRUSTED_PROXY_HEADER` | the header your ingress sets, or unset | Unset by default. Tells the rate limiter where to read the client's IP. Set it only behind a proxy that always overwrites the header: Cloudflare → `CF-Connecting-IP`; nginx with `proxy_set_header X-Real-IP` → `X-Real-IP`. |
@@ -155,10 +155,12 @@ Settings alone are not enough. Before any traffic:
   started. It exits at startup if any enforced row is unsafe.
 - [ ] `.env.selfhosted` (or your equivalent) has no `change-me` value left.
   `tckdb_make_env.sh` generates them all.
-- [ ] `backend/scripts/check_selfhosted_deployment.sh` passes. On a
-  self-hosted stack it covers the next four rows: `init` provisions and
-  checks the database roles, migrates to head and creates the first
-  administrator on every start, and the check script confirms the result.
+- [ ] `backend/scripts/check_selfhosted_deployment.sh` passes. It checks the
+  secrets, container health, the RDKit extension, the migration head and two
+  API calls. On a self-hosted stack the next four rows also hold whenever
+  the API is running, because `init` checks the roles, migrates and creates
+  the first administrator before the API may start, and stops if any step
+  fails.
 - [ ] The runtime role is a non-owner, non-superuser with no DDL,
   temporary-table or `TRUNCATE` rights: `configure_database_roles.py check`
   passes.

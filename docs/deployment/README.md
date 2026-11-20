@@ -63,8 +63,12 @@ It will not overwrite existing files unless you pass `--force`.
 
 1. `db` (Postgres with the RDKit cartridge) and `seaweedfs` (the S3 object store).
 2. `init` sets up the database roles, runs the migrations, creates the first
-   administrator and exits. It does this on every start and changes nothing
-   that is already in place.
+   administrator and exits. It runs on every start. Steps already done are
+   skipped, with one exception: if the first administrator was deactivated,
+   `init` reactivates it, and if its role was changed, `init` fails and the
+   API does not start. To retire that account, change
+   `TCKDB_BOOTSTRAP_USERNAME` in `.env.db-admin` to the account that should
+   stay an administrator.
 3. `tckdb-api` and `frontend` start once `init` has succeeded.
 
 `--wait` returns when everything is healthy. The first start downloads the
