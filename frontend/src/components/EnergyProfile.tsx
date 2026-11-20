@@ -246,7 +246,7 @@ function ProfileView({ profile, labels, several, markPeak, tsWords, showLevel }:
                         <Fragment key={level.key}>{index > 0 && ", "}{level.label.toLowerCase()} <span className="t-preserve-case">{relativeKjText(level.kj)}</span></Fragment>
                     ))}.
                     {several && " Each profile has its own axis."}
-                    <GuideLink to="energy-profile" />
+                    {" "}<GuideLink to="energy-profile">What is an energy profile?</GuideLink>
                 </figcaption>
             </figure>
             <ProfileDefinition definition={profile.definition} />

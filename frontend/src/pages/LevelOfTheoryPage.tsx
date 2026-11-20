@@ -2,7 +2,6 @@ import { useId, useState } from "react"
 import { calculationWords } from "../domain/recordWords"
 import { baseLabel, inlineText, levelKey, levelLine, qualifiersOf } from "../domain/levelLabel"
 import { RecordLink } from "../components/RecordLink"
-import { GuideLink } from "../components/GuideLink"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../methods.css"
@@ -89,6 +88,7 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
                         <RecordIdentityHeader
                             kicker="Level of theory"
                             glyph="level-of-theory"
+                            guide={{ to: "level-of-theory", question: "What is a level of theory?" }}
                             lede={LEVEL_OF_THEORY_LEDE}
                             title={title}
                             subtitle={stated || undefined}
@@ -118,7 +118,6 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
                                 </>
                             )}
                         />
-                        <p><GuideLink to="level-of-theory" /></p>
                         <dl className="kv-list basin-context">
                             <div><dt>Deposited</dt><dd>{isoDate(lot.created_at)}</dd></div>
                         </dl>
