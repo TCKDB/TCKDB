@@ -22,6 +22,10 @@ instance.
 - A published client keeps its ceiling forever; pip metadata cannot be edited after upload. So a schemas minor that breaks the client must not fall inside the window of any published client release. If one would, either yank the client releases whose window covers it, or hold the break until those windows have passed. Releasing a new client with a lower ceiling only helps new installs; existing releases still accept the breaking schemas.
 - `backend/tests/test_release_metadata.py` fails when the in-repo schemas version reaches the ceiling or drops below the floor, so the window gets moved in the same change that bumps schemas.
 
+## Releasing
+
+Releases go to PyPI from a tag `<dist-name>-v<version>` through `.github/workflows/publish-python.yml`. The setup, order and TestPyPI dry run are in `backend/docs/deployment/publishing_python_packages.md`.
+
 ## Non-goals (v0)
 
 - no chemistry adapters / no ARC, RMG, RDKit, ASE, cclib, Arkane imports

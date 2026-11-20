@@ -1,0 +1,175 @@
+name: Publish Python package
+
+# Builds one TCKDB distribution, checks it, installs it into a clean
+# environment and imports it, then publishes it: to TestPyPI on every run,
+# and to PyPI only for a pushed release tag, after TestPyPI succeeded.
+#
+# Release tag: <dist-name>-v<version>, e.g. tckdb-client-v0.208.3. The tag's
+# version must equal the package's [project].version, and the tagged commit
+# must be on the default branch. A manual run (workflow_dispatch) builds the
+# chosen package at the selected ref and publishes to TestPyPI only.
+#
+# Uploads use PyPI trusted publishing (OpenID Connect): no token or secret is
+# stored anywhere. The trusted-publisher values and the release order are in
+# backend/docs/deployment/publishing_python_packages.md.
+#
+# The tag-to-directory map is backend/scripts/check_package_version_bump.py's
+# PACKAGES, read by backend/scripts/python_release.py; the choice list below
+# must name the same packages (backend/tests/scripts/test_publish_python_workflow.py).
+
+on:
+  push:
+    tags:
+      - "tckdb-*-v*"
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Distribution to build and publish to TestPyPI"
+        required: true
+        type: choice
+        options:
+          - tckdb-client
+          - tckdb-schemas
+          - tckdb-chemkin
+          - tckdb-qcschema
+          - tckdb-mcp
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-python-${{ github.ref }}-${{ inputs.package }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build, check and smoke-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      name: ${{ steps.resolve.outputs.name }}
+      version: ${{ steps.resolve.outputs.version }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          # Full history, to check that a tagged commit is on the default branch.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build tools
+        run: python -m pip install "build>=1.2" "twine>=6.1"
+
+      - name: Resolve the package; a tag must name its version
+        id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          PACKAGE: ${{ inputs.package }}
+        run: |
+          if [ "$EVENT_NAME" = "push" ]; then
+            python backend/scripts/python_release.py resolve --tag "$REF_NAME" | tee -a "$GITHUB_OUTPUT"
+          else
+            python backend/scripts/python_release.py resolve --package "$PACKAGE" | tee -a "$GITHUB_OUTPUT"
+          fi
+
+      - name: A release tag points at a commit on the default branch
+        if: github.event_name == 'push'
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" "origin/$DEFAULT_BRANCH"; then
+            echo "::error::$GITHUB_REF_NAME points at $GITHUB_SHA, which is not on $DEFAULT_BRANCH"
+            exit 1
+          fi
+
+      - name: Build the sdist and wheel
+        env:
+          PACKAGE_DIR: ${{ steps.resolve.outputs.directory }}
+        run: python -m build --outdir dist "$PACKAGE_DIR"
+
+      - name: Check the distribution metadata
+        run: python -m twine check --strict dist/*
+
+      # First-party requirements are built from this same commit, so the
+      # install below fails if the package's window on tckdb-client or
+      # tckdb-schemas excludes the versions in the repository.
+      - name: Build first-party dependencies for the smoke install
+        env:
+          DEPS: ${{ steps.resolve.outputs.deps }}
+        run: |
+          mkdir -p deps
+          for dir in $DEPS; do
+            python -m build --wheel --outdir deps "$dir"
+          done
+
+      - name: Install the wheel into a clean environment and import it
+        env:
+          NAME: ${{ steps.resolve.outputs.name }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          python -m venv "$RUNNER_TEMP/smoke"
+          shopt -s nullglob
+          "$RUNNER_TEMP/smoke/bin/python" -m pip install dist/*.whl deps/*.whl
+          "$RUNNER_TEMP/smoke/bin/python" backend/scripts/python_release.py smoke --name "$NAME" --version "$VERSION"
+
+      - name: Upload the distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-testpypi:
+    name: Publish to TestPyPI
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/${{ needs.build.outputs.name }}/${{ needs.build.outputs.version }}/
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download the distribution
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      # skip-existing: a dry run may already have uploaded this version.
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [build, publish-testpypi]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/${{ needs.build.outputs.name }}/${{ needs.build.outputs.version }}/
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download the distribution
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

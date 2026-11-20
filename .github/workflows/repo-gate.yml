@@ -95,6 +95,12 @@ jobs:
       - name: Frontend deploy rollback is safe
         run: python -m pytest --noconftest -q backend/tests/scripts/test_frontend_deploy_script.py
 
+      # publish-python.yml runs only on a release tag, so nothing else checks
+      # it before a release: its package list, tag handling and trusted
+      # publishing jobs are pinned here, where every pull request reaches.
+      - name: The PyPI publish workflow covers every package
+        run: python -m pytest --noconftest -q backend/tests/scripts/test_publish_python_workflow.py
+
       # WHY THE VERSION GUARD IS HERE AND NOT IN python-client-ci.yml
       #   Two agents branched from tckdb-client 0.46.0 on 2026-08-16, both
       #   correctly bumped to 0.47.0, and git merged the byte-identical
