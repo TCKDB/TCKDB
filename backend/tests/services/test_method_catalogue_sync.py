@@ -8,8 +8,10 @@ from pathlib import Path
 import pytest
 from sqlalchemy import delete, func, select, update
 
+from app.db.models.author import Author
 from app.db.models.common import LiteratureKind, LiteratureTitleSource
 from app.db.models.literature import Literature
+from app.db.models.literature_author import LiteratureAuthor
 from app.db.models.method_catalogue import (
     BasisSetCatalogue,
     BasisSetCatalogueKey,
@@ -119,25 +121,137 @@ def test_check_reports_drift_and_apply_removes_it(db_session, seed, loader, caps
     )
 
 
-def test_an_existing_citation_of_a_seeded_doi_is_adopted_not_rewritten(db_session, seed):
-    doi = "10.1063/1.2436888"
-    entry_id = db_session.scalar(select(MethodCatalogue.id).where(MethodCatalogue.key == "g4"))
-    seeded_id = db_session.scalar(select(Literature.id).where(Literature.doi == doi))
+G4_DOI = "10.1063/1.2436888"
+G4_AUTHORS = ["Curtiss", "Redfern", "Raghavachari"]
+
+
+def _authors_of(db_session, literature_id: int) -> list[str]:
+    return list(
+        db_session.scalars(
+            select(Author.family_name)
+            .join(LiteratureAuthor, LiteratureAuthor.author_id == Author.id)
+            .where(LiteratureAuthor.literature_id == literature_id)
+            .order_by(LiteratureAuthor.author_order)
+        )
+    )
+
+
+def _replace_seeded_g4(db_session, *, authors: tuple[str, ...] = (), **fields) -> Literature:
+    """Swap the seeded G4 citation for a row as a deposit could have left it."""
+    seeded_id = db_session.scalar(select(Literature.id).where(Literature.doi == G4_DOI))
     db_session.execute(delete(MethodCatalogueLiterature).where(MethodCatalogueLiterature.literature_id == seeded_id))
+    db_session.execute(delete(LiteratureAuthor).where(LiteratureAuthor.literature_id == seeded_id))
     db_session.execute(delete(Literature).where(Literature.id == seeded_id))
-    deposited = Literature(
-        kind=LiteratureKind.article,
+    row = Literature(kind=LiteratureKind.article, **fields)
+    db_session.add(row)
+    db_session.flush()
+    for order, name in enumerate(authors, start=1):
+        author = Author(family_name=name, full_name=name)
+        db_session.add(author)
+        db_session.flush()
+        db_session.add(LiteratureAuthor(literature_id=row.id, author_id=author.id, author_order=order))
+    db_session.flush()
+    return row
+
+
+def _g4_link(db_session) -> int:
+    entry_id = db_session.scalar(select(MethodCatalogue.id).where(MethodCatalogue.key == "g4"))
+    return db_session.scalar(
+        select(MethodCatalogueLiterature.literature_id).where(MethodCatalogueLiterature.method_catalogue_id == entry_id)
+    )
+
+
+def test_seeded_literature_carries_its_authors_in_order(db_session, seed):
+    for doi, ref in seed.references.items():
+        literature_id = db_session.scalar(select(Literature.id).where(Literature.doi == doi))
+        assert _authors_of(db_session, literature_id) == list(ref.authors), doi
+
+
+def test_a_depositor_citation_of_a_seeded_doi_is_upgraded_to_the_registry_record(db_session, seed):
+    deposited = _replace_seeded_g4(
+        db_session,
         title="typed by a depositor",
         title_source=LiteratureTitleSource.depositor_supplied,
+        year=1999,
         doi="https://doi.org/10.1063/1.2436888",
     )
-    db_session.add(deposited)
-    db_session.flush()
+    public_ref = deposited.public_ref
+
+    changes = sync_catalogue(db_session.connection(), seed, apply=True)
+    assert changes == [f"literature: upgrade {G4_DOI}", "method_catalogue_literature: set g4 (1 references)"]
+    assert sync_catalogue(db_session.connection(), seed, apply=False) == []
+    db_session.expire_all()
+    row = db_session.get(Literature, deposited.id)
+    ref = seed.references[G4_DOI]
+    assert row.title_source is LiteratureTitleSource.resolved_metadata
+    assert (row.title, row.journal, row.year, row.volume, row.pages) == (
+        ref.title, ref.journal, ref.year, ref.volume, ref.pages
+    )
+    assert (row.doi, row.public_ref) == ("https://doi.org/10.1063/1.2436888", public_ref)
+    assert _authors_of(db_session, row.id) == G4_AUTHORS
+    assert _g4_link(db_session) == row.id
+
+
+def test_an_upgraded_citation_keeps_the_authors_it_already_has(db_session, seed):
+    deposited = _replace_seeded_g4(
+        db_session, title="typed", title_source=None, doi=G4_DOI, authors=("Depositor",)
+    )
+    assert sync_catalogue(db_session.connection(), seed, apply=True)[0] == f"literature: upgrade {G4_DOI}"
+    db_session.expire_all()
+    assert db_session.get(Literature, deposited.id).title_source is LiteratureTitleSource.resolved_metadata
+    assert _authors_of(db_session, deposited.id) == ["Depositor"]
+
+
+def test_a_registry_resolved_citation_of_a_seeded_doi_is_left_as_it_stands(db_session, seed):
+    resolved = _replace_seeded_g4(
+        db_session,
+        title="resolved elsewhere",
+        title_source=LiteratureTitleSource.resolved_metadata,
+        doi=G4_DOI,
+        authors=("Someone",),
+    )
 
     changes = sync_catalogue(db_session.connection(), seed, apply=True)
     assert changes == ["method_catalogue_literature: set g4 (1 references)"]
     db_session.expire_all()
-    assert db_session.scalar(
-        select(MethodCatalogueLiterature.literature_id).where(MethodCatalogueLiterature.method_catalogue_id == entry_id)
-    ) == deposited.id
-    assert db_session.get(Literature, deposited.id).title == "typed by a depositor"
+    row = db_session.get(Literature, resolved.id)
+    assert row.title == "resolved elsewhere"
+    assert _authors_of(db_session, row.id) == ["Someone"]
+    assert _g4_link(db_session) == row.id
+
+
+def test_a_registry_resolved_citation_without_authors_gets_none_added(db_session, seed):
+    resolved = _replace_seeded_g4(
+        db_session, title="resolved elsewhere", title_source=LiteratureTitleSource.resolved_metadata, doi=G4_DOI
+    )
+    sync_catalogue(db_session.connection(), seed, apply=True)
+    db_session.expire_all()
+    assert _authors_of(db_session, resolved.id) == []
+    assert sync_catalogue(db_session.connection(), seed, apply=False) == []
+
+
+def test_a_doi_prefixed_citation_is_reused_not_duplicated(db_session, seed):
+    stray = _replace_seeded_g4(
+        db_session, title="typed", title_source=LiteratureTitleSource.depositor_supplied, doi="doi:10.1063/1.2436888"
+    )
+    assert stray.public_ref != literature_doi_public_ref(G4_DOI)
+
+    changes = sync_catalogue(db_session.connection(), seed, apply=True)
+    assert changes[0] == f"literature: upgrade {G4_DOI}"
+    assert not any(line.startswith("literature: create") for line in changes)
+    assert _g4_link(db_session) == stray.id
+    db_session.expire_all()
+    assert db_session.get(Literature, stray.id).doi == "doi:10.1063/1.2436888"
+    assert sync_catalogue(db_session.connection(), seed, apply=False) == []
+
+
+def test_check_reports_missing_authors_on_a_seeded_citation(db_session, seed, loader, capsys):
+    literature_id = db_session.scalar(select(Literature.id).where(Literature.doi == G4_DOI))
+    db_session.execute(delete(LiteratureAuthor).where(LiteratureAuthor.literature_id == literature_id))
+    db_session.flush()
+    conn = db_session.connection()
+    assert loader.run(conn, apply=False, check=True, seed=seed) == 1
+    assert f"literature_author: add {G4_DOI} (3 authors)" in capsys.readouterr().out
+    assert loader.run(conn, apply=True, check=False, seed=seed) == 0
+    assert _authors_of(db_session, literature_id) == G4_AUTHORS
+    assert loader.run(conn, apply=False, check=True, seed=seed) == 0

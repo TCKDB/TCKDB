@@ -287,11 +287,20 @@ def _catalogue_preseeds() -> dict[str, tuple[tuple[str, ...], frozenset[tuple[ob
     """The rows the catalogue revision writes into a fresh database, by identity.
 
     A link row has no identity beyond the two ids it joins, which differ between databases, so a link table is
-    checked by its ``(role, position)`` pairs; the catalogue keys and the literature DOIs pin the rest.
+    checked by its ``(role, position)`` pairs (``author_order`` for literature authors); the catalogue keys, the
+    literature DOIs and the author names pin the rest.
     """
     seed = load_seed()
     out: dict[str, tuple[tuple[str, ...], frozenset[tuple[object, ...]]]] = {
         "literature": (("doi",), frozenset((doi,) for doi in seed.references)),
+        "author": (
+            ("family_name", "full_name"),
+            frozenset((name, name) for ref in seed.references.values() for name in ref.authors),
+        ),
+        "literature_author": (
+            ("author_order",),
+            frozenset((order,) for ref in seed.references.values() for order in range(1, len(ref.authors) + 1)),
+        ),
     }
     for table, entries in (("method_catalogue", seed.methods), ("basis_set_catalogue", seed.basis_sets)):
         out[table] = (("key",), frozenset((e.key,) for e in entries))
