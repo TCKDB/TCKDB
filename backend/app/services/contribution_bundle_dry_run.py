@@ -56,6 +56,7 @@ from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.services.calculation_resolution import find_workflow_tool_by_name
 from app.services.literature_metadata import normalize_doi, normalize_isbn
+from app.services.literature_resolution import find_literature_by_doi
 from app.services.reaction_resolution import inherit_reversible, reaction_stoichiometry_hash
 from app.services.software_resolution import find_software_by_name, normalize_software_name
 from app.services.species_resolution import find_species, find_species_entry, null_safe_equals, resolve_entry_stereo
@@ -523,9 +524,7 @@ def _preview_literature(
 
     existing: Literature | None = None
     if normalized_doi is not None:
-        existing = session.scalar(
-            select(Literature).where(Literature.doi == normalized_doi)
-        )
+        existing = find_literature_by_doi(session, normalized_doi)
     if existing is None and normalized_isbn is not None:
         existing = session.scalar(
             select(Literature).where(Literature.isbn == normalized_isbn)

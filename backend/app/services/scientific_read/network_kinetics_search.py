@@ -79,6 +79,7 @@ from app.services.scientific_read.network_kinetics import (
     _LEGAL_INCLUDE_TOKENS,
     build_network_kinetics_record,
 )
+from app.services.software_resolution import software_name_clause, workflow_tool_name_clause
 
 # Filters that satisfy the at-least-one-filter guard. Trust knobs
 # (``include_rejected`` / ``include_deprecated`` / ``min_review_status``)
@@ -423,7 +424,7 @@ def _apply_method_basis_software_filters(
             SoftwareRelease.id == Calculation.software_release_id,
         ).join(Software, Software.id == SoftwareRelease.software_id)
         if request.software is not None:
-            sub = sub.where(Software.name == request.software)
+            sub = sub.where(software_name_clause(request.software))
         if request.software_version is not None:
             sub = sub.where(
                 SoftwareRelease.version == request.software_version
@@ -437,7 +438,7 @@ def _apply_method_basis_software_filters(
             WorkflowTool.id == WorkflowToolRelease.workflow_tool_id,
         )
         if request.workflow_tool is not None:
-            sub = sub.where(WorkflowTool.name == request.workflow_tool)
+            sub = sub.where(workflow_tool_name_clause(request.workflow_tool))
         if request.workflow_tool_version is not None:
             sub = sub.where(
                 WorkflowToolRelease.version == request.workflow_tool_version

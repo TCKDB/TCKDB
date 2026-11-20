@@ -328,3 +328,18 @@ def test_dry_run_provenance_preview_reuses_a_case_variant_and_reports_the_stored
             assert software.hosted_identity["software_name"] == "Psi4"
             assert tool.action == DryRunAction.would_reuse
             assert tool.hosted_identity["workflow_tool_name"] == "geomeTRIC"
+
+
+def test_dry_run_literature_preview_reuses_the_row_stored_under_the_bare_doi(db_conn, monkeypatch) -> None:
+    from app.schemas.workflows.literature_upload import LiteratureUploadRequest
+    from app.services.contribution_bundle_dry_run import _preview_literature
+    from app.services.literature_resolution import resolve_or_create_literature
+
+    monkeypatch.setattr("app.services.literature_resolution.fetch_doi_metadata", lambda doi: {"title": "A paper"})
+    with Session(db_conn) as session:
+        with session.begin():
+            resolve_or_create_literature(session, LiteratureUploadRequest(doi="10.1000/abc"))
+
+            item = _preview_literature(session, LiteratureUploadRequest(doi="https://dx.doi.org/10.1000/ABC"), "lit")
+
+            assert item.action == DryRunAction.would_reuse

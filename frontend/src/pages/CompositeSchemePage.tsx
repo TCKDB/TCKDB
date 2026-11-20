@@ -1,4 +1,3 @@
-import { GuideLink } from "../components/GuideLink"
 import { useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../methods.css"
@@ -62,6 +61,7 @@ function CompositeSchemeDetail({ record }: { record: CompositeSchemeRecord }) {
                     <header className="basin-header">
                         <RecordIdentityHeader
                             kicker="Composite recipe"
+                            guide={{ to: "composite-recipe", question: "What is a composite recipe?" }}
                             lede={COMPOSITE_SCHEME_LEDE}
                             title={title}
                             ownRef={{ label: "Composite scheme ref", value: scheme.composite_scheme_ref }}
@@ -109,7 +109,6 @@ function CompositeSchemeDetail({ record }: { record: CompositeSchemeRecord }) {
                                 </>
                             )}
                         />
-                        <p><GuideLink to="composite-recipe" /></p>
                         <dl className="kv-list basin-context">
                             <div><dt>Deposited</dt><dd>{isoDate(scheme.created_at)}</dd></div>
                         </dl>

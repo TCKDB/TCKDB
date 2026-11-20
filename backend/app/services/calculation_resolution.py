@@ -275,12 +275,12 @@ def resolve_workflow_tool_release_ref(
                 workflow_tool = WorkflowTool(name=ref.name)
                 session.add(workflow_tool)
                 session.flush()
-        except IntegrityError:
+        except IntegrityError as exc:
             workflow_tool = find_workflow_tool_by_name(session, ref.name)
             if workflow_tool is None:
                 raise RuntimeError(
                     f"workflow tool {ref.name!r} violated a uniqueness constraint on insert but no matching row was found"
-                ) from None
+                ) from exc
 
     release = session.scalar(
         select(WorkflowToolRelease).where(

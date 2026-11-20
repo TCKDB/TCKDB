@@ -43,6 +43,7 @@ describe("GuidePage", () => {
         for (const [path, text] of Object.entries(sources)) {
             if (/\.test\.tsx?$/.test(path)) continue
             for (const match of text.matchAll(/<GuideLink to="([^"]+)"/g)) linked.add(match[1])
+            for (const match of text.matchAll(/guide=\{\{ to: "([^"]+)"/g)) linked.add(match[1])
             for (const match of text.matchAll(/\/guide#([a-z-]+)/g)) linked.add(match[1])
         }
         expect(linked.size).toBeGreaterThan(5)

@@ -51,6 +51,7 @@ from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.reaction import ChemReaction, ReactionFamily
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
+from app.services.software_resolution import software_name_clause, workflow_tool_name_clause
 
 
 def _counted_distinct(session: Session, column) -> list[dict]:
@@ -131,7 +132,7 @@ def _counted_distinct_release_versions(
     release_parent_id_column,
     calculation_release_fk_column,
     parent_model,
-    parent_name: str,
+    parent_match,
 ) -> list[dict]:
     """``[{"value": v, "count": n}, ...]`` of one named parent's *used* releases.
 
@@ -139,8 +140,9 @@ def _counted_distinct_release_versions(
     — the two release tables have the identical shape (a nullable
     ``version`` column, a FK to a name-unique parent identity table), so
     one query does both. Joins on the parent's identity table and filters
-    on its ``name`` so an unrecognised or unspecified parent yields an
-    empty list, never every parent's versions merged together.
+    it with ``parent_match`` (the parent's name, by its public-ref key) so
+    an unrecognised or unspecified parent yields an empty list, never every
+    parent's versions merged together.
 
     A release row is only counted if at least one ``calculation`` cites it
     (``EXISTS`` correlated subquery) — a version whose only releases are
@@ -154,7 +156,7 @@ def _counted_distinct_release_versions(
         select(release_version_column, func.count())
         .join(parent_model, release_parent_id_column == parent_model.id)
         .where(
-            parent_model.name == parent_name,
+            parent_match,
             release_version_column.is_not(None),
             used,
         )
@@ -248,7 +250,7 @@ def list_software_versions(session: Session, software: str | None) -> list[dict]
         release_parent_id_column=SoftwareRelease.software_id,
         calculation_release_fk_column=Calculation.software_release_id,
         parent_model=Software,
-        parent_name=software,
+        parent_match=software_name_clause(software),
     )
 
 
@@ -275,7 +277,7 @@ def list_workflow_tool_versions(
         release_parent_id_column=WorkflowToolRelease.workflow_tool_id,
         calculation_release_fk_column=Calculation.workflow_tool_release_id,
         parent_model=WorkflowTool,
-        parent_name=workflow_tool,
+        parent_match=workflow_tool_name_clause(workflow_tool),
     )
 
 

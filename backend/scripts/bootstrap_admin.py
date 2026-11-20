@@ -103,6 +103,15 @@ def main(argv: Optional[list[str]] = None) -> int:
                         file=sys.stderr,
                     )
                     return 2
+                except ValueError as exc:
+                    # Raised before anything is written, e.g. no password for a new user.
+                    print(f"error: {exc}", file=sys.stderr)
+                    if not password:
+                        print(
+                            "hint: pass --password or set TCKDB_BOOTSTRAP_PASSWORD.",
+                            file=sys.stderr,
+                        )
+                    return 2
             print(
                 f"{outcome}: id={user.id} username={user.username} role={user.role.value}"
             )

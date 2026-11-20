@@ -32,6 +32,7 @@ from app.schemas.entities.energy_correction import (
     EnergyCorrectionSchemeRead,
     FrequencyScaleFactorRead,
 )
+from app.services.scientific_read.energy_correction_schemes import scheme_name_matches
 from app.services.scientific_read.handles import canonical_level_of_theory_id
 
 schemes_router = APIRouter(route_class=LegacyReadRoute)
@@ -61,7 +62,7 @@ def list_energy_correction_schemes(
     if kind is not None:
         base = base.where(EnergyCorrectionScheme.kind == kind)
     if name is not None:
-        base = base.where(EnergyCorrectionScheme.name == name)
+        base = base.where(scheme_name_matches(name))
     if level_of_theory_id is not None:
         # A merged row's id names the row it was merged into.
         base = base.where(

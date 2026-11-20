@@ -4,7 +4,7 @@ import html
 import re
 from collections.abc import Iterable
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -23,6 +23,7 @@ from app.services.provenance_warnings import (
     W_LITERATURE_TITLE_MISMATCH,
     W_LITERATURE_YEAR_MISMATCH,
 )
+from app.services.public_refs import literature_doi_public_ref
 
 # ---------------------------------------------------------------------------
 # Depositor-vs-fetched-metadata mismatch
@@ -274,6 +275,19 @@ def resolve_literature_submission(
     )
 
 
+def literature_doi_clause(normalized_doi: str) -> ColumnElement[bool]:
+    """Match the literature row whose public ref equals the one *normalized_doi* would be given."""
+
+    ref = literature_doi_public_ref(normalized_doi)
+    return Literature.public_ref == ref if ref is not None else Literature.doi == normalized_doi
+
+
+def find_literature_by_doi(session: Session, normalized_doi: str) -> Literature | None:
+    """Return the literature row a deposit citing *normalized_doi* would collide with on its public ref."""
+
+    return session.scalar(select(Literature).where(literature_doi_clause(normalized_doi)))
+
+
 def _select_existing_literature(
     session: Session,
     *,
@@ -289,9 +303,7 @@ def _select_existing_literature(
     """
     existing_by_doi = None
     if normalized_doi is not None:
-        existing_by_doi = session.scalar(
-            select(Literature).where(Literature.doi == normalized_doi)
-        )
+        existing_by_doi = find_literature_by_doi(session, normalized_doi)
 
     existing_by_isbn = None
     if normalized_isbn is not None:

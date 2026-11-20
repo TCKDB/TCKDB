@@ -232,6 +232,11 @@ UNSCANNED_BY_DESIGN: tuple[tuple[str, str], ...] = (
         "data, not an emitted string",
     ),
     (
+        "docs/hooks",
+        "an MkDocs build hook that rewrites links while the documentation "
+        "site is built; its output is HTML in a document, not an emitted string",
+    ),
+    (
         "examples/clients",
         "demo programs, as clients/python/examples",
     ),
