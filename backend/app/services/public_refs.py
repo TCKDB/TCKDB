@@ -363,11 +363,15 @@ def _canonical_workflow_tool_release(obj: Any) -> str:
     )
 
 
+#: Resolver URL prefixes a DOI may be written with, lower case.
+DOI_URL_PREFIXES = ("https://dx.doi.org/", "http://dx.doi.org/", "https://doi.org/", "http://doi.org/")
+
+
 def _normalize_doi(doi: str | None) -> str:
     if not doi:
         return ""
     s = doi.strip().lower()
-    for prefix in ("https://dx.doi.org/", "http://dx.doi.org/", "https://doi.org/", "http://doi.org/"):
+    for prefix in DOI_URL_PREFIXES:
         if s.startswith(prefix):
             s = s[len(prefix):]
             break
@@ -391,6 +395,12 @@ def _canonical_literature(obj: Any) -> str | None:
     if isbn:
         return f"literature:isbn={isbn}"
     return None
+
+
+def literature_doi_public_ref(doi: str) -> str | None:
+    """The public ref a ``Literature`` row storing *doi* is given on insert, or ``None`` when *doi* is blank."""
+    canonical = _canonical_literature(SimpleNamespace(doi=doi, isbn=None))
+    return make_content_ref(PREFIXES["Literature"], canonical) if canonical is not None else None
 
 
 def _canonical_conformer_assignment_scheme(obj: Any) -> str:
@@ -481,6 +491,35 @@ def _canonical_energy_correction_scheme(obj: Any) -> str:
     # (``uq_energy_correction_scheme_identity_revised``), so the build must
     # not reach the ref: two builds of one revision are one scheme.
     return f"{head}data_revision={data_revision}"
+
+
+def energy_correction_scheme_public_ref(
+    *,
+    kind: Any,
+    name: str,
+    level_of_theory_id: int | None,
+    frequency_level_of_theory_id: int | None,
+    source_literature_id: int | None,
+    software_release_id: int | None,
+    workflow_tool_release_id: int | None,
+    data_revision: str | None,
+) -> str:
+    """The public ref an ``EnergyCorrectionScheme`` row with these identity fields is given on insert."""
+    return make_content_ref(
+        PREFIXES["EnergyCorrectionScheme"],
+        _canonical_energy_correction_scheme(
+            SimpleNamespace(
+                kind=kind,
+                name=name,
+                level_of_theory_id=level_of_theory_id,
+                frequency_level_of_theory_id=frequency_level_of_theory_id,
+                source_literature_id=source_literature_id,
+                software_release_id=software_release_id,
+                workflow_tool_release_id=workflow_tool_release_id,
+                data_revision=data_revision,
+            )
+        ),
+    )
 
 
 def _canonical_composite_scheme(obj: Any) -> str | None:

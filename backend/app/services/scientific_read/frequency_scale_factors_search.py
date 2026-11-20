@@ -51,6 +51,7 @@ from app.services.scientific_read.internal_ids import (
 )
 from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
+from app.services.software_resolution import software_name_clause
 
 _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "frequency_scale_factor_ref",
@@ -149,7 +150,7 @@ def search_frequency_scale_factors(
             SoftwareRelease.id == FrequencyScaleFactor.software_release_id,
         ).join(Software, Software.id == SoftwareRelease.software_id)
         if request.software is not None:
-            stmt = stmt.where(Software.name == request.software)
+            stmt = stmt.where(software_name_clause(request.software))
         if request.software_version is not None:
             stmt = stmt.where(SoftwareRelease.version == request.software_version)
     if request.used_by_statmech is not None:

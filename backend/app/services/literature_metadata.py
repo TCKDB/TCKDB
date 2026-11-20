@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any
 
+from app.services.public_refs import DOI_URL_PREFIXES
 from app.user_agent import tckdb_user_agent
 
 # Note: the runtime import path remains `isbnlib`, but in this project we
@@ -27,15 +28,12 @@ def normalize_doi(doi: str | None) -> str | None:
     if doi is None:
         return None
 
-    normalized = doi.strip()
-    if not normalized:
-        return None
-
-    normalized = normalized.removeprefix("DOI:")
-    normalized = normalized.removeprefix("doi:")
-    normalized = normalized.removeprefix("https://doi.org/")
-    normalized = normalized.removeprefix("http://doi.org/")
-    return normalized.strip().lower()
+    normalized = doi.strip().lower().removeprefix("doi:").strip()
+    for prefix in DOI_URL_PREFIXES:
+        if normalized.startswith(prefix):
+            normalized = normalized[len(prefix):].strip()
+            break
+    return normalized or None
 
 
 def normalize_isbn(isbn: str | None) -> str | None:

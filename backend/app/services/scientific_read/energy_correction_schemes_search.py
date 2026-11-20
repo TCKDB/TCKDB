@@ -47,6 +47,7 @@ from app.services.scientific_read.energy_correction_schemes import (
     _LEGAL_INCLUDE_TOKENS,
     applied_target_visible,
     build_energy_correction_scheme_record,
+    scheme_name_matches,
 )
 from app.services.scientific_read.handles import resolve_filter_ref
 from app.services.scientific_read.internal_ids import (
@@ -54,6 +55,7 @@ from app.services.scientific_read.internal_ids import (
 )
 from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
+from app.services.software_resolution import software_name_clause
 
 _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "energy_correction_scheme_ref",
@@ -134,7 +136,7 @@ def search_energy_correction_schemes(
     if request.scheme_kind is not None:
         stmt = stmt.where(EnergyCorrectionScheme.kind == request.scheme_kind)
     if request.name is not None:
-        stmt = stmt.where(EnergyCorrectionScheme.name == request.name)
+        stmt = stmt.where(scheme_name_matches(request.name))
     if request.method is not None or request.basis is not None:
         stmt = stmt.join(
             LevelOfTheory,
@@ -153,7 +155,7 @@ def search_energy_correction_schemes(
             SoftwareRelease.id == EnergyCorrectionScheme.software_release_id,
         ).join(Software, Software.id == SoftwareRelease.software_id)
         if request.software is not None:
-            stmt = stmt.where(Software.name == request.software)
+            stmt = stmt.where(software_name_clause(request.software))
         if request.software_version is not None:
             stmt = stmt.where(SoftwareRelease.version == request.software_version)
     if request.has_corrections is not None:

@@ -58,6 +58,7 @@ from app.services.provenance_warnings import (
     collect_composite_delta_warnings,
     collect_energy_correction_scheme_provenance_warnings,
 )
+from app.services.public_refs import energy_correction_scheme_public_ref
 from app.services.record_review import get_record_review
 from app.services.software_resolution import resolve_software_release_ref
 
@@ -266,7 +267,26 @@ def resolve_or_create_scheme(
     else:
         # The tool build is provenance here, not identity.
         identity.append(EnergyCorrectionScheme.data_revision == ref.data_revision)
-    existing = session.scalar(select(EnergyCorrectionScheme).where(*identity))
+    # The public ref folds the name (trimmed, case-folded), so a case variant of
+    # a stored name is the same scheme. The exact-column match covers a row
+    # whose ref was minted under an earlier form of the canonical string.
+    public_ref = energy_correction_scheme_public_ref(
+        kind=ref.kind,
+        name=ref.name,
+        level_of_theory_id=lot_id,
+        frequency_level_of_theory_id=freq_lot_id,
+        source_literature_id=lit_id,
+        software_release_id=software_release_id,
+        workflow_tool_release_id=wtr_id,
+        data_revision=ref.data_revision,
+    )
+
+    def _find_existing() -> EnergyCorrectionScheme | None:
+        return session.scalar(
+            select(EnergyCorrectionScheme).where(EnergyCorrectionScheme.public_ref == public_ref)
+        ) or session.scalar(select(EnergyCorrectionScheme).where(*identity))
+
+    existing = _find_existing()
     created = existing is None
     if existing is not None:
         scheme = existing
@@ -289,8 +309,19 @@ def resolve_or_create_scheme(
             note=ref.note,
             created_by=created_by,
         )
-        session.add(scheme)
-        session.flush()
+        try:
+            with session.begin_nested():
+                session.add(scheme)
+                session.flush()
+        except IntegrityError as exc:
+            existing = _find_existing()
+            if existing is None:
+                raise RuntimeError(
+                    f"energy correction scheme {ref.name!r} violated a uniqueness constraint on insert "
+                    "but no matching row was found"
+                ) from exc
+            scheme = existing
+            created = False
     _reconcile_atom_params_applied_as(scheme, ref)
 
     _merge_scheme_params(session, scheme, ref)

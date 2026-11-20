@@ -122,6 +122,7 @@ from app.services.scientific_read.sql_review import (
     summary_from_sql,
     visible_review_filter,
 )
+from app.services.software_resolution import software_name_clause, workflow_tool_name_clause
 
 #: The one display order every analytics endpoint uses: review rank (approved first; ``under_review`` and
 #: ``not_reviewed`` tie), then deposition time (the row's ``created_at``) newest first, then the primary key newest
@@ -494,7 +495,7 @@ def search_kinetics_analytics(
                 Kinetics.workflow_tool_release_id == WorkflowToolRelease.id,
             )
             .join(WorkflowTool, WorkflowToolRelease.workflow_tool_id == WorkflowTool.id)
-            .where(WorkflowTool.name == request.workflow_tool)
+            .where(workflow_tool_name_clause(request.workflow_tool))
         )
 
     if request.has_statmech_provenance is not None:
@@ -728,7 +729,7 @@ def search_thermo_analytics(
                 Thermo.workflow_tool_release_id == WorkflowToolRelease.id,
             )
             .join(WorkflowTool, WorkflowToolRelease.workflow_tool_id == WorkflowTool.id)
-            .where(WorkflowTool.name == request.workflow_tool)
+            .where(workflow_tool_name_clause(request.workflow_tool))
         )
     if request.has_statmech_provenance is not None:
         stmt = stmt.where(
@@ -1203,7 +1204,7 @@ def search_calculation_analytics(
                 Calculation.software_release_id == SoftwareRelease.id,
             )
             .join(Software, SoftwareRelease.software_id == Software.id)
-            .where(Software.name == request.software)
+            .where(software_name_clause(request.software))
         )
 
     filter_echo = _filter_echo(request, _CALCULATION_FILTER_FIELDS)

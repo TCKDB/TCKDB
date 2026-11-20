@@ -118,6 +118,7 @@ from app.services.scientific_read.lot_identity_filters import basis_matches, met
 from app.services.software_banner_extraction import (
     try_reconcile_software_from_output_uploads,
 )
+from app.services.software_resolution import software_name_clause
 from app.services.sp_energy_extraction import (
     try_reconcile_sp_energy_from_output_upload,
 )
@@ -241,7 +242,7 @@ def list_calculations(
             SoftwareRelease,
             Calculation.software_release_id == SoftwareRelease.id,
         ).join(Software, SoftwareRelease.software_id == Software.id)
-        base = base.where(Software.name == software_name)
+        base = base.where(software_name_clause(software_name))
 
     hidden = visibility.hidden(session, SubmissionRecordType.calculation, base)
     base = visibility.restrict(base, Calculation.id, SubmissionRecordType.calculation)

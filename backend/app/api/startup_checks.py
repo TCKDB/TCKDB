@@ -44,6 +44,34 @@ class UnsafeDeploymentConfigError(RuntimeError):
         super().__init__(message)
 
 
+#: Prefix of every placeholder secret in the deployment env templates.
+PLACEHOLDER_SECRET_PREFIX = "change-me"
+
+
+def _placeholder_secret_violations(settings: Settings) -> list[str]:
+    """Name each secret the API uses that is empty or still a template placeholder."""
+    from app.services import artifact_storage
+
+    secrets = {
+        "DB_PASSWORD": settings.db_password,
+        "S3_ACCESS_KEY": artifact_storage.S3_ACCESS_KEY,
+        "S3_SECRET_KEY": artifact_storage.S3_SECRET_KEY,
+        "PAGING_CURSOR_KEY": settings.paging_cursor_key,
+    }
+    violations = []
+    for name, value in secrets.items():
+        if name == "PAGING_CURSOR_KEY" and not value:
+            continue  # already reported with its length rule
+        if not value or not value.strip():
+            violations.append(f"{name} must be set (it is empty)")
+        elif value.strip().lower().startswith(PLACEHOLDER_SECRET_PREFIX):
+            violations.append(
+                f"{name} is still the template placeholder ({PLACEHOLDER_SECRET_PREFIX}...); "
+                "generate real secrets, e.g. with backend/scripts/ops/tckdb_make_env.sh"
+            )
+    return violations
+
+
 def _collect_violations(settings: Settings) -> list[str]:
     """Return the list of unsafe-setting messages for a hosted mode.
 
@@ -59,13 +87,25 @@ def _collect_violations(settings: Settings) -> list[str]:
     if not settings.legacy_reads_require_auth:
         violations.append("LEGACY_READS_REQUIRE_AUTH must be true")
     if not settings.session_cookie_secure:
-        violations.append("SESSION_COOKIE_SECURE must be true")
+        if settings.deployment_mode == "hosted_public":
+            violations.append("SESSION_COOKIE_SECURE must be true")
+        elif settings.session_cookie_allow_plain_http:
+            logger.warning(
+                "startup: SESSION_COOKIE_SECURE=false (SESSION_COOKIE_ALLOW_PLAIN_HTTP=true); "
+                "session cookies travel unencrypted on this network"
+            )
+        else:
+            violations.append(
+                "SESSION_COOKIE_SECURE must be true (on a lab network served over plain HTTP, "
+                "also set SESSION_COOKIE_ALLOW_PLAIN_HTTP=true)"
+            )
     if settings.allow_public_internal_ids:
         violations.append("ALLOW_PUBLIC_INTERNAL_IDS must be false")
     if not settings.rate_limit_enabled:
         violations.append("RATE_LIMIT_ENABLED must be true")
     if not settings.paging_cursor_key or len(settings.paging_cursor_key) < 32:
         violations.append("PAGING_CURSOR_KEY must be set to a secret of at least 32 characters (it seals paging cursors)")
+    violations.extend(_placeholder_secret_violations(settings))
 
     # CORS rules diverge between the two hosted modes. shared_private
     # may run curl/HPC-only with no browser clients (empty allow-list

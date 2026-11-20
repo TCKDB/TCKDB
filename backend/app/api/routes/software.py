@@ -15,6 +15,7 @@ from app.api.routes._legacy_reads import (
 )
 from app.db.models.software import Software, SoftwareRelease
 from app.schemas.entities.software import SoftwareRead, SoftwareReleaseRead
+from app.services.software_resolution import software_name_clause
 
 router = APIRouter(route_class=LegacyReadRoute)
 releases_router = APIRouter(route_class=LegacyReadRoute)
@@ -33,7 +34,7 @@ def list_software(
 ):
     base = select(Software.id)
     if name is not None:
-        base = base.where(Software.name == name)
+        base = base.where(software_name_clause(name))
 
     total = session.scalar(
         select(func.count()).select_from(base.subquery())
