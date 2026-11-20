@@ -353,6 +353,8 @@ def test_family_and_rung_are_never_an_order_key_a_tie_break_or_a_select_default(
         # Asks one yes/no question: is the declared method a wavefunction or multireference method, so that a
         # one-electron Hartree-Fock energy may stand for it. A validation gate; it filters, orders and selects no records.
         "services/calculation_levels.py",
+        # Checks that a catalogue seed entry names a member of the family enum; it filters and orders nothing.
+        "services/method_catalogue_seed.py",
         "services/parameter_reconciliation.py",
         "services/scientific_read/calculation_provenance_filters.py",
         "services/scientific_read/calculations_search.py",
