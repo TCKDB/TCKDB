@@ -1,0 +1,270 @@
+# Methods and dispersion corrections in the method catalogue.
+#
+# `key` is the entry's identity key: method_identity_key() of the method, or dispersion_identity_key() of a
+# dispersion correction. `aliases` are further identity keys that name the same entry. `family` repeats the
+# classification app.chemistry.method_families derives (a test holds the two in agreement); it is not stored.
+# `references` are DOIs listed in literature.yml, in citation order. Descriptions are definitional only.
+
+seed_version: 1
+
+methods:
+  - key: gfn2-xtb
+    aliases: [gfn2]
+    kind: method
+    family: semiempirical
+    short_name: GFN2-xTB
+    full_name: Geometry, Frequency, Noncovalent, eXtended Tight Binding, second parametrisation
+    description: >-
+      A self-consistent extended tight-binding method with anisotropic multipole electrostatics and a
+      density-dependent dispersion term; its minimal basis is part of the method, so no basis set is recorded.
+    references:
+      - {doi: 10.1021/acs.jctc.8b01176, role: original}
+      - {doi: 10.1002/wcms.1493, role: implementation}
+
+  - key: b3lyp
+    kind: method
+    family: dft
+    short_name: B3LYP
+    full_name: Becke three-parameter hybrid exchange with Lee-Yang-Parr correlation
+    description: >-
+      A global hybrid density functional that mixes Hartree-Fock, Slater and Becke 1988 exchange with Lee-Yang-Parr
+      and VWN local correlation through three fitted parameters; Gaussian uses the VWN3 form of the local
+      correlation and ORCA the VWN5 form.
+    references:
+      - {doi: 10.1021/j100096a001, role: original}
+      - {doi: 10.1063/1.464913, role: component}
+      - {doi: 10.1103/PhysRevB.37.785, role: component}
+      - {doi: 10.1103/PhysRevA.38.3098, role: component}
+      - {doi: 10.1139/p80-159, role: component}
+
+  - key: wb97xd
+    kind: method
+    family: dft
+    short_name: ωB97X-D
+    full_name: Chai-Head-Gordon long-range-corrected hybrid functional with damped atom-atom dispersion
+    description: >-
+      A range-separated hybrid density functional refit from ωB97X together with an empirical, damped atom-pairwise
+      dispersion correction that is part of the functional.
+    references:
+      - {doi: 10.1039/b810189b, role: original}
+      - {doi: 10.1063/1.2834918, role: component}
+
+  - key: wb97x-d3
+    aliases: [wb97xd3]
+    kind: method
+    family: dft
+    short_name: ωB97X-D3
+    full_name: ωB97X reparametrised with Grimme D3 zero-damping dispersion
+    description: >-
+      A range-separated hybrid density functional refit together with Grimme's D3 dispersion correction in zero
+      damping, which is part of the functional.
+    references:
+      - {doi: 10.1021/ct300715s, role: original}
+
+  - key: dlpno-ccsd(t)-f12
+    kind: method
+    family: wavefunction
+    short_name: DLPNO-CCSD(T)-F12
+    full_name: Domain-based local pair natural orbital CCSD(T) with explicit correlation
+    description: >-
+      Coupled cluster with single and double excitations and perturbative triples in the domain-based local pair
+      natural orbital approximation, with F12 explicitly correlated pair functions.
+    references:
+      - {doi: 10.1063/1.4979993, role: original}
+      - {doi: 10.1063/1.4773581, role: component}
+      - {doi: 10.1063/1.4821834, role: component}
+      - {doi: 10.1063/1.4939030, role: component}
+      - {doi: 10.1063/1.5011798, role: component}
+
+  - key: ccsd(t)-f12
+    kind: method
+    family: wavefunction
+    short_name: CCSD(T)-F12
+    full_name: Coupled cluster singles, doubles and perturbative triples with explicit correlation
+    description: >-
+      CCSD(T) with F12 explicitly correlated pair functions; this key does not say which of the F12a and F12b
+      approximations was used.
+    references:
+      - {doi: 10.1063/1.2817618, role: original}
+      - {doi: 10.1063/1.3054300, role: original}
+
+  - key: ccsd(t)-f12a
+    kind: method
+    family: wavefunction
+    short_name: CCSD(T)-F12a
+    full_name: Coupled cluster singles, doubles and perturbative triples with explicit correlation, F12a approximation
+    description: CCSD(T) with F12 explicitly correlated pair functions in the F12a approximation.
+    references:
+      - {doi: 10.1063/1.2817618, role: original}
+      - {doi: 10.1063/1.3054300, role: original}
+
+  - key: ccsd(t)-f12b
+    kind: method
+    family: wavefunction
+    short_name: CCSD(T)-F12b
+    full_name: Coupled cluster singles, doubles and perturbative triples with explicit correlation, F12b approximation
+    description: CCSD(T) with F12 explicitly correlated pair functions in the F12b approximation.
+    references:
+      - {doi: 10.1063/1.2817618, role: original}
+      - {doi: 10.1063/1.3054300, role: original}
+
+  - key: ccsd(t)
+    kind: method
+    family: wavefunction
+    short_name: CCSD(T)
+    full_name: Coupled cluster singles and doubles with perturbative triples
+    description: >-
+      Coupled cluster with single and double excitations and a non-iterative perturbative estimate of connected
+      triple excitations.
+    references:
+      - {doi: 10.1016/S0009-2614(89)87395-6, role: original}
+
+  - key: mrci
+    kind: method
+    family: multireference
+    short_name: MRCI
+    full_name: Multireference configuration interaction
+    description: >-
+      Configuration interaction with single and double excitations from a multiconfigurational reference wave
+      function, without a size-consistency correction.
+    references:
+      - {doi: 10.1063/1.455556, role: original}
+      - {doi: 10.1016/0009-2614(88)87412-8, role: original}
+
+  - key: mrci+davidson
+    kind: method
+    family: multireference
+    short_name: MRCI+Q
+    full_name: Multireference configuration interaction with the Davidson correction
+    description: >-
+      Multireference configuration interaction with single and double excitations plus the Davidson (+Q) estimate
+      of the size-consistency error; MRCI+Davidson is the label Molpro prints for this energy.
+    references:
+      - {doi: 10.1063/1.455556, role: original}
+      - {doi: 10.1016/0009-2614(88)87412-8, role: original}
+      - {doi: 10.1002/qua.560080106, role: component}
+
+  - key: hf
+    kind: method
+    family: wavefunction
+    short_name: HF
+    full_name: Hartree-Fock self-consistent field
+    description: >-
+      The self-consistent field method in which the wave function is a single Slater determinant and each electron
+      moves in the mean field of the others.
+    references:
+      - {doi: 10.1017/S0305004100011919, role: original}
+      - {doi: 10.1007/BF01340294, role: original}
+      - {doi: 10.1103/RevModPhys.23.69, role: component}
+
+  - key: b2plyp
+    kind: method
+    family: dft
+    short_name: B2PLYP
+    full_name: Grimme double-hybrid functional with B88 exchange, LYP correlation and second-order perturbative correlation
+    description: >-
+      A double-hybrid density functional that mixes Hartree-Fock and Becke 1988 exchange with Lee-Yang-Parr
+      correlation and a second-order perturbative correlation term evaluated on the Kohn-Sham orbitals.
+    references:
+      - {doi: 10.1063/1.2148954, role: original}
+
+  - key: b2plypd3
+    kind: method
+    family: dft
+    short_name: B2PLYP-D3
+    full_name: B2PLYP with Grimme D3 zero-damping dispersion
+    description: >-
+      The B2PLYP double-hybrid density functional with Grimme's D3 dispersion correction in zero damping, the
+      combination Gaussian's B2PLYPD3 keyword names.
+    references:
+      - {doi: 10.1063/1.2148954, role: original}
+      - {doi: 10.1063/1.3382344, role: component}
+
+  - key: d3zero
+    kind: dispersion_correction
+    short_name: D3
+    full_name: Grimme D3 dispersion correction with zero damping
+    description: >-
+      An atom-pairwise dispersion energy with coordination-number-dependent C6 and C8 coefficients, damped to zero
+      at short interatomic distances.
+    references:
+      - {doi: 10.1063/1.3382344, role: original}
+
+  - key: d3bj
+    kind: dispersion_correction
+    short_name: D3(BJ)
+    full_name: Grimme D3 dispersion correction with Becke-Johnson damping
+    description: >-
+      The D3 atom-pairwise dispersion energy with rational Becke-Johnson damping, which tends to a constant at short
+      interatomic distances.
+    references:
+      - {doi: 10.1002/jcc.21759, role: original}
+      - {doi: 10.1063/1.3382344, role: component}
+
+  - key: cbs-qb3
+    kind: method
+    family: composite
+    short_name: CBS-QB3
+    full_name: Complete basis set model chemistry with B3LYP geometries and frequencies
+    description: >-
+      A composite method that combines a B3LYP geometry and frequencies with CCSD(T), MP4(SDQ) and MP2 energies, a
+      complete-basis-set extrapolation of the MP2 pair energies and empirical corrections.
+    references:
+      - {doi: 10.1063/1.477924, role: original}
+      - {doi: 10.1063/1.481224, role: original}
+
+  - key: g4
+    kind: method
+    family: composite
+    short_name: G4
+    full_name: Gaussian-4 theory
+    description: >-
+      A composite method that approximates a large-basis CCSD(T) energy from MP4, MP2 and CCSD(T) calculations at
+      a B3LYP geometry, with a Hartree-Fock basis-set extrapolation and an empirical higher-level correction.
+    references:
+      - {doi: 10.1063/1.2436888, role: original}
+
+  - key: m062x
+    kind: method
+    family: dft
+    short_name: M06-2X
+    full_name: Minnesota 2006 hybrid meta-GGA functional with double nonlocal exchange
+    description: >-
+      A global hybrid meta-GGA density functional with 54 percent Hartree-Fock exchange, parametrised on main-group
+      thermochemistry and kinetics data.
+    references:
+      - {doi: 10.1007/s00214-007-0310-x, role: original}
+
+  - key: mp2
+    kind: method
+    family: wavefunction
+    short_name: MP2
+    full_name: Second-order Møller-Plesset perturbation theory
+    description: >-
+      The second-order correction to the Hartree-Fock energy in Rayleigh-Schrödinger perturbation theory with the
+      Fock operator as the zeroth-order Hamiltonian.
+    references:
+      - {doi: 10.1103/PhysRev.46.618, role: original}
+
+  - key: casscf
+    kind: method
+    family: multireference
+    short_name: CASSCF
+    full_name: Complete active space self-consistent field
+    description: >-
+      A multiconfigurational self-consistent field method that includes every configuration of a chosen set of
+      active electrons in a chosen set of active orbitals and optimises orbitals and configuration coefficients
+      together.
+    references:
+      - {doi: 10.1016/0301-0104(80)80045-0, role: original}
+
+  - key: nevpt2
+    kind: method
+    family: multireference
+    short_name: NEVPT2
+    full_name: n-Electron valence state second-order perturbation theory
+    description: >-
+      Second-order multireference perturbation theory on a complete-active-space reference, with a zeroth-order
+      Hamiltonian that keeps the two-electron interactions among the active electrons.
+    references:
+      - {doi: 10.1063/1.1361246, role: original}

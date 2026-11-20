@@ -1,0 +1,460 @@
+# Articles the method and basis-set catalogue cites. One entry per DOI.
+#
+# Every field is the Crossref record for the DOI (https://api.crossref.org/works/<doi>), with markup tags
+# removed and whitespace collapsed. `authors` lists the family names in Crossref order; it is the
+# verification record and is not written to the database. Where the registry's own text is damaged,
+# `registry_title` / `registry_journal` keep it verbatim beside the repaired value.
+
+references:
+  - doi: "10.1021/acs.jctc.8b01176"
+    kind: article
+    title: "GFN2-xTB─An Accurate and Broadly Parametrized Self-Consistent Tight-Binding Quantum Chemical Method with Multipole Electrostatics and Density-Dependent Dispersion Contributions"
+    journal: "Journal of Chemical Theory and Computation"
+    year: 2019
+    volume: "15"
+    issue: "3"
+    pages: "1652-1671"
+    authors: ["Bannwarth", "Ehlert", "Grimme"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1002/wcms.1493"
+    kind: article
+    title: "Extended tight‐binding quantum chemistry methods"
+    journal: "WIREs Computational Molecular Science"
+    year: 2021
+    volume: "11"
+    issue: "2"
+    pages: "e1493"
+    authors: ["Bannwarth", "Caldeweyher", "Ehlert", "Hansen", "Pracht", "Seibert", "Spicher", "Grimme"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.464913"
+    kind: article
+    title: "Density-functional thermochemistry. III. The role of exact exchange"
+    journal: "The Journal of Chemical Physics"
+    year: 1993
+    volume: "98"
+    issue: "7"
+    pages: "5648-5652"
+    authors: ["Becke"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1103/PhysRevB.37.785"
+    kind: article
+    title: "Development of the Colle-Salvetti correlation-energy formula into a functional of the electron density"
+    journal: "Physical Review B"
+    year: 1988
+    volume: "37"
+    issue: "2"
+    pages: "785-789"
+    authors: ["Lee", "Yang", "Parr"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1021/j100096a001"
+    kind: article
+    title: "Ab Initio Calculation of Vibrational Absorption and Circular Dichroism Spectra Using Density Functional Force Fields"
+    journal: "The Journal of Physical Chemistry"
+    year: 1994
+    volume: "98"
+    issue: "45"
+    pages: "11623-11627"
+    authors: ["Stephens", "Devlin", "Chabalowski", "Frisch"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1139/p80-159"
+    kind: article
+    title: "Accurate spin-dependent electron liquid correlation energies for local spin density calculations: a critical analysis"
+    journal: "Canadian Journal of Physics"
+    year: 1980
+    volume: "58"
+    issue: "8"
+    pages: "1200-1211"
+    authors: ["Vosko", "Wilk", "Nusair"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1103/PhysRevA.38.3098"
+    kind: article
+    title: "Density-functional exchange-energy approximation with correct asymptotic behavior"
+    journal: "Physical Review A"
+    year: 1988
+    volume: "38"
+    issue: "6"
+    pages: "3098-3100"
+    authors: ["Becke"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1039/b810189b"
+    kind: article
+    title: "Long-range corrected hybrid density functionals with damped atom–atom dispersion corrections"
+    journal: "Physical Chemistry Chemical Physics"
+    year: 2008
+    volume: "10"
+    issue: "44"
+    pages: "6615"
+    authors: ["Chai", "Head-Gordon"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.2834918"
+    kind: article
+    title: "Systematic optimization of long-range corrected hybrid density functionals"
+    journal: "The Journal of Chemical Physics"
+    year: 2008
+    volume: "128"
+    issue: "8"
+    pages: "084106"
+    authors: ["Chai", "Head-Gordon"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1021/ct300715s"
+    kind: article
+    title: "Long-Range Corrected Hybrid Density Functionals with Improved Dispersion Corrections"
+    journal: "Journal of Chemical Theory and Computation"
+    year: 2013
+    volume: "9"
+    issue: "1"
+    pages: "263-272"
+    authors: ["Lin", "Li", "Mao", "Chai"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.4979993"
+    kind: article
+    title: "SparseMaps—A systematic infrastructure for reduced scaling electronic structure methods. V. Linear scaling explicitly correlated coupled-cluster method with pair natural orbitals"
+    journal: "The Journal of Chemical Physics"
+    year: 2017
+    volume: "146"
+    issue: "17"
+    pages: "174108"
+    authors: ["Pavošević", "Peng", "Pinski", "Riplinger", "Neese", "Valeev"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.4773581"
+    kind: article
+    title: "An efficient and near linear scaling pair natural orbital based local coupled cluster method"
+    journal: "The Journal of Chemical Physics"
+    year: 2013
+    volume: "138"
+    issue: "3"
+    pages: "034106"
+    authors: ["Riplinger", "Neese"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.4821834"
+    kind: article
+    title: "Natural triple excitations in local coupled cluster calculations with pair natural orbitals"
+    journal: "The Journal of Chemical Physics"
+    year: 2013
+    volume: "139"
+    issue: "13"
+    pages: "134101"
+    authors: ["Riplinger", "Sandhoefer", "Hansen", "Neese"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.4939030"
+    kind: article
+    title: "Sparse maps—A systematic infrastructure for reduced-scaling electronic structure methods. II. Linear scaling domain based pair natural orbital coupled cluster theory"
+    journal: "The Journal of Chemical Physics"
+    year: 2016
+    volume: "144"
+    issue: "2"
+    pages: "024109"
+    authors: ["Riplinger", "Pinski", "Becker", "Valeev", "Neese"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.5011798"
+    kind: article
+    title: "Communication: An improved linear scaling perturbative triples correction for the domain based local pair-natural orbital based singles and doubles coupled cluster method [DLPNO-CCSD(T)]"
+    journal: "The Journal of Chemical Physics"
+    year: 2018
+    volume: "148"
+    issue: "1"
+    pages: "011101"
+    authors: ["Guo", "Riplinger", "Becker", "Liakos", "Minenkov", "Cavallo", "Neese"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.2817618"
+    kind: article
+    title: "A simple and efficient CCSD(T)-F12 approximation"
+    journal: "The Journal of Chemical Physics"
+    year: 2007
+    volume: "127"
+    issue: "22"
+    pages: "221106"
+    authors: ["Adler", "Knizia", "Werner"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.3054300"
+    kind: article
+    title: "Simplified CCSD(T)-F12 methods: Theory and benchmarks"
+    journal: "The Journal of Chemical Physics"
+    year: 2009
+    volume: "130"
+    issue: "5"
+    pages: "054104"
+    authors: ["Knizia", "Adler", "Werner"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1016/S0009-2614(89)87395-6"
+    kind: article
+    title: "A fifth-order perturbation comparison of electron correlation theories"
+    journal: "Chemical Physics Letters"
+    year: 1989
+    volume: "157"
+    issue: "6"
+    pages: "479-483"
+    authors: ["Raghavachari", "Trucks", "Pople", "Head-Gordon"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.455556"
+    kind: article
+    title: "An efficient internally contracted multiconfiguration–reference configuration interaction method"
+    journal: "The Journal of Chemical Physics"
+    year: 1988
+    volume: "89"
+    issue: "9"
+    pages: "5803-5814"
+    authors: ["Werner", "Knowles"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1016/0009-2614(88)87412-8"
+    kind: article
+    title: "An efficient method for the evaluation of coupling coefficients in configuration interaction calculations"
+    journal: "Chemical Physics Letters"
+    year: 1988
+    volume: "145"
+    issue: "6"
+    pages: "514-522"
+    authors: ["Knowles", "Werner"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1002/qua.560080106"
+    kind: article
+    title: "Configuration interaction calculations on the nitrogen molecule"
+    journal: "International Journal of Quantum Chemistry"
+    year: 1974
+    volume: "8"
+    issue: "1"
+    pages: "61-72"
+    authors: ["Langhoff", "Davidson"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1017/S0305004100011919"
+    kind: article
+    title: "The Wave Mechanics of an Atom with a Non-Coulomb Central Field. Part I. Theory and Methods"
+    journal: "Mathematical Proceedings of the Cambridge Philosophical Society"
+    year: 1928
+    volume: "24"
+    issue: "1"
+    pages: "89-110"
+    authors: ["Hartree"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1007/BF01340294"
+    kind: article
+    title: "Näherungsmethode zur Lösung des quantenmechanischen Mehrkörperproblems"
+    registry_title: "N�herungsmethode zur L�sung des quantenmechanischen Mehrk�rperproblems"
+    journal: "Zeitschrift für Physik"
+    registry_journal: "Zeitschrift f�r Physik"
+    year: 1930
+    volume: "61"
+    issue: "1-2"
+    pages: "126-148"
+    authors: ["Fock"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1103/RevModPhys.23.69"
+    kind: article
+    title: "New Developments in Molecular Orbital Theory"
+    journal: "Reviews of Modern Physics"
+    year: 1951
+    volume: "23"
+    issue: "2"
+    pages: "69-89"
+    authors: ["Roothaan"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.2148954"
+    kind: article
+    title: "Semiempirical hybrid density functional with perturbative second-order correlation"
+    journal: "The Journal of Chemical Physics"
+    year: 2006
+    volume: "124"
+    issue: "3"
+    pages: "034108"
+    authors: ["Grimme"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.3382344"
+    kind: article
+    title: "A consistent and accurate ab initio parametrization of density functional dispersion correction (DFT-D) for the 94 elements H-Pu"
+    journal: "The Journal of Chemical Physics"
+    year: 2010
+    volume: "132"
+    issue: "15"
+    pages: "154104"
+    authors: ["Grimme", "Antony", "Ehrlich", "Krieg"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1002/jcc.21759"
+    kind: article
+    title: "Effect of the damping function in dispersion corrected density functional theory"
+    journal: "Journal of Computational Chemistry"
+    year: 2011
+    volume: "32"
+    issue: "7"
+    pages: "1456-1465"
+    authors: ["Grimme", "Ehrlich", "Goerigk"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.477924"
+    kind: article
+    title: "A complete basis set model chemistry. VI. Use of density functional geometries and frequencies"
+    journal: "The Journal of Chemical Physics"
+    year: 1999
+    volume: "110"
+    issue: "6"
+    pages: "2822-2827"
+    authors: ["Montgomery", "Frisch", "Ochterski", "Petersson"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.481224"
+    kind: article
+    title: "A complete basis set model chemistry. VII. Use of the minimum population localization method"
+    journal: "The Journal of Chemical Physics"
+    year: 2000
+    volume: "112"
+    issue: "15"
+    pages: "6532-6542"
+    authors: ["Montgomery", "Frisch", "Ochterski", "Petersson"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.2436888"
+    kind: article
+    title: "Gaussian-4 theory"
+    journal: "The Journal of Chemical Physics"
+    year: 2007
+    volume: "126"
+    issue: "8"
+    pages: "084108"
+    authors: ["Curtiss", "Redfern", "Raghavachari"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1007/s00214-007-0310-x"
+    kind: article
+    title: "The M06 suite of density functionals for main group thermochemistry, thermochemical kinetics, noncovalent interactions, excited states, and transition elements: two new functionals and systematic testing of four M06-class functionals and 12 other functionals"
+    journal: "Theoretical Chemistry Accounts"
+    year: 2008
+    volume: "120"
+    issue: "1-3"
+    pages: "215-241"
+    authors: ["Zhao", "Truhlar"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1103/PhysRev.46.618"
+    kind: article
+    title: "Note on an Approximation Treatment for Many-Electron Systems"
+    journal: "Physical Review"
+    year: 1934
+    volume: "46"
+    issue: "7"
+    pages: "618-622"
+    authors: ["Møller", "Plesset"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1016/0301-0104(80)80045-0"
+    kind: article
+    title: "A complete active space SCF method (CASSCF) using a density matrix formulated super-CI approach"
+    journal: "Chemical Physics"
+    year: 1980
+    volume: "48"
+    issue: "2"
+    pages: "157-173"
+    authors: ["Roos", "Taylor", "Sigbahn"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.1361246"
+    kind: article
+    title: "Introduction of n-electron valence states for multireference perturbation theory"
+    journal: "The Journal of Chemical Physics"
+    year: 2001
+    volume: "114"
+    issue: "23"
+    pages: "10252-10264"
+    authors: ["Angeli", "Cimiraglia", "Evangelisti", "Leininger", "Malrieu"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1039/b508541a"
+    kind: article
+    title: "Balanced basis sets of split valence, triple zeta valence and quadruple zeta valence quality for H to Rn: Design and assessment of accuracy"
+    journal: "Physical Chemistry Chemical Physics"
+    year: 2005
+    volume: "7"
+    issue: "18"
+    pages: "3297"
+    authors: ["Weigend", "Ahlrichs"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1039/b515623h"
+    kind: article
+    title: "Accurate Coulomb-fitting basis sets for H to Rn"
+    journal: "Physical Chemistry Chemical Physics"
+    year: 2006
+    volume: "8"
+    issue: "9"
+    pages: "1057"
+    authors: ["Weigend"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1002/jcc.20702"
+    kind: article
+    title: "Hartree–Fock exchange fitting basis sets for H to Rn †"
+    journal: "Journal of Computational Chemistry"
+    year: 2008
+    volume: "29"
+    issue: "2"
+    pages: "167-175"
+    authors: ["Weigend"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.456153"
+    kind: article
+    title: "Gaussian basis sets for use in correlated molecular calculations. I. The atoms boron through neon and hydrogen"
+    journal: "The Journal of Chemical Physics"
+    year: 1989
+    volume: "90"
+    issue: "2"
+    pages: "1007-1023"
+    authors: ["Dunning"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.462569"
+    kind: article
+    title: "Electron affinities of the first-row atoms revisited. Systematic basis sets and wave functions"
+    journal: "The Journal of Chemical Physics"
+    year: 1992
+    volume: "96"
+    issue: "9"
+    pages: "6796-6806"
+    authors: ["Kendall", "Dunning", "Harrison"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.1367373"
+    kind: article
+    title: "Gaussian basis sets for use in correlated molecular calculations. X. The atoms aluminum through argon revisited"
+    journal: "The Journal of Chemical Physics"
+    year: 2001
+    volume: "114"
+    issue: "21"
+    pages: "9244-9253"
+    authors: ["Dunning", "Peterson", "Wilson"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.2831537"
+    kind: article
+    title: "Systematically convergent basis sets for explicitly correlated wavefunctions: The atoms H, He, B–Ne, and Al–Ar"
+    journal: "The Journal of Chemical Physics"
+    year: 2008
+    volume: "128"
+    issue: "8"
+    pages: "084102"
+    authors: ["Peterson", "Adler", "Werner"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.3009271"
+    kind: article
+    title: "Optimized auxiliary basis sets for explicitly correlated methods"
+    journal: "The Journal of Chemical Physics"
+    year: 2008
+    volume: "129"
+    issue: "18"
+    pages: "184108"
+    authors: ["Yousaf", "Peterson"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.1445115"
+    kind: article
+    title: "Efficient use of the correlation consistent basis sets in resolution of the identity MP2 calculations"
+    journal: "The Journal of Chemical Physics"
+    year: 2002
+    volume: "116"
+    issue: "8"
+    pages: "3175-3183"
+    authors: ["Weigend", "Köhn", "Hättig"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1063/1.1677527"
+    kind: article
+    title: "Self—Consistent Molecular Orbital Methods. XII. Further Extensions of Gaussian—Type Basis Sets for Use in Molecular Orbital Studies of Organic Molecules"
+    journal: "The Journal of Chemical Physics"
+    year: 1972
+    volume: "56"
+    issue: "5"
+    pages: "2257-2261"
+    authors: ["Hehre", "Ditchfield", "Pople"]
+    verified: {source: crossref, date: 2026-11-20}
+  - doi: "10.1007/BF00533485"
+    kind: article
+    title: "The influence of polarization functions on molecular orbital hydrogenation energies"
+    journal: "Theoretica Chimica Acta"
+    year: 1973
+    volume: "28"
+    issue: "3"
+    pages: "213-222"
+    authors: ["Hariharan", "Pople"]
+    verified: {source: crossref, date: 2026-11-20}

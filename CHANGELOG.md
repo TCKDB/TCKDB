@@ -22,6 +22,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A method and basis-set catalogue names what a level of theory's spellings are (Unreleased)
+
+- **Behaviour:** new curated reference tables say what a stored method, dispersion or basis-set spelling names: `method_catalogue` (22 entries: 20 methods, 2 dispersion corrections) and `basis_set_catalogue` (15 entries), each with a short name, full name, one definitional sentence, and the articles that define it (45 `literature` rows, Crossref-resolved, `title_source = resolved_metadata`, matched to an existing row by DOI where one exists). Entries are keyed by the existing identity keys; `*_catalogue_key` lets several keys name one entry, so `gfn2` and `gfn2-xtb` both reach GFN2-xTB. `level_of_theory` and `lot_hash` are unchanged. No read route serves the catalogue yet.
+- **Behaviour:** the seed lives in `backend/app/data/catalogue/` (`methods.yml`, `basis_sets.yml`, `literature.yml`). `backend/scripts/ops/load_method_catalogue.py` compares the database with the seed (dry run by default), `--apply` writes the differences, and `--check` exits 1 when they differ. A second `--apply` changes nothing.
+- **Behaviour:** an archive restore treats the catalogue rows and their literature as migration seeds, like `reaction_family`.
+- **Schema and migration:** new revision `a6fc04f5667e` on top of `a7c3e1f5b942`: six tables (`method_catalogue`, `method_catalogue_key`, `method_catalogue_literature`, `basis_set_catalogue`, `basis_set_catalogue_key`, `basis_set_catalogue_literature`) and three enums (`catalogue_method_kind`, `basis_set_role`, `catalogue_reference_role`). The upgrade fills them from the seed. The downgrade drops them and keeps the literature rows. New public-ref prefixes `mcat_` and `bcat_` (content-derived from the key). No new environment variable. No distributed package changed.
+
 ## Read filters match software, workflow-tool and scheme names in any case, and DOIs in any link form (Unreleased)
 
 - **Behaviour:** a `software` or `workflow_tool` filter on the scientific searches, analytics, select endpoints and `/scientific/meta/*-versions`, and the `name` filter on `GET /software` and `software_name` on `GET /calculations`, now find the row stored as `Psi4` when asked for `PSI4` or ` psi4 `: names are compared by the key their public ref uses. They used to return nothing.
