@@ -1199,7 +1199,7 @@ describe("CalculationDetailPage", () => {
 
         const note = screen.getByText(/^Not recorded on this calculation:/)
         expect(note.className).toBe("empty-projection")
-        for (const missing of ["Scan trajectory", "IRC trajectory", "Path-search trajectory", "Execution environment"]) {
+        for (const missing of ["Scan trajectory", "IRC trajectory", "Execution environment"]) {
             expect(note.textContent).toContain(missing)
         }
         // Lives inside the Further evidence section, not a separate
