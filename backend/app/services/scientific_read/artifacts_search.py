@@ -74,6 +74,7 @@ from app.services.scientific_read.internal_ids import (
 )
 from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
+from app.services.software_resolution import software_name_clause, workflow_tool_name_clause
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "calculation",
@@ -529,7 +530,7 @@ def _apply_software_filters(stmt, request: ScientificArtifactSearchRequest):
         SoftwareRelease, SoftwareRelease.id == Calculation.software_release_id
     ).join(Software, Software.id == SoftwareRelease.software_id)
     if request.software is not None:
-        stmt = stmt.where(Software.name == request.software)
+        stmt = stmt.where(software_name_clause(request.software))
     if request.software_version is not None:
         stmt = stmt.where(SoftwareRelease.version == request.software_version)
     return stmt
@@ -545,7 +546,7 @@ def _apply_workflow_filters(stmt, request: ScientificArtifactSearchRequest):
         WorkflowTool, WorkflowTool.id == WorkflowToolRelease.workflow_tool_id
     )
     if request.workflow_tool is not None:
-        stmt = stmt.where(WorkflowTool.name == request.workflow_tool)
+        stmt = stmt.where(workflow_tool_name_clause(request.workflow_tool))
     if request.workflow_tool_version is not None:
         stmt = stmt.where(
             WorkflowToolRelease.version == request.workflow_tool_version

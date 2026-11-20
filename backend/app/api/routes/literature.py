@@ -17,6 +17,7 @@ from app.db.models.common import LiteratureKind
 from app.db.models.literature import Literature
 from app.schemas.entities.literature import LiteratureRead
 from app.services.literature_metadata import normalize_doi, normalize_isbn
+from app.services.literature_resolution import literature_doi_clause
 
 router = APIRouter(route_class=LegacyReadRoute)
 
@@ -41,7 +42,7 @@ def list_literature(
         normalized = normalize_doi(doi)
         if normalized is None:
             raise ValueError(f"Invalid DOI: {doi}")
-        base = base.where(Literature.doi == normalized)
+        base = base.where(literature_doi_clause(normalized))
     if isbn is not None:
         normalized = normalize_isbn(isbn)
         if normalized is None:

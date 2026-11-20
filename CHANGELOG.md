@@ -32,6 +32,23 @@ dataset must never require a code release.
 - **Behaviour:** `check_selfhosted_deployment.sh` reads Alembic's revision from the `tckdb-api` container when one runs, fails unless it is exactly one revision at head, takes `-p` / `COMPOSE_PROJECT_NAME`, and reads `DB_NAME` / `DB_USER` from the env file.
 - **Schema and migration:** none. New environment variables: `TCKDB_IMAGE_TAG`, `TCKDB_WEB_PORT`, `S3_PORT`, `S3_CONSOLE_PORT`, `SESSION_COOKIE_ALLOW_PLAIN_HTTP`, and `COMPOSE_ADMIN_ENV_FILE` for the check script. The existing `TCKDB_BOOTSTRAP_USERNAME` / `TCKDB_BOOTSTRAP_EMAIL` / `TCKDB_BOOTSTRAP_PASSWORD` now sit in `.env.db-admin`, where `init` reads them. No distributed package changed.
 
+## Read filters match software, workflow-tool and scheme names in any case, and DOIs in any link form (Unreleased)
+
+- **Behaviour:** a `software` or `workflow_tool` filter on the scientific searches, analytics, select endpoints and `/scientific/meta/*-versions`, and the `name` filter on `GET /software` and `software_name` on `GET /calculations`, now find the row stored as `Psi4` when asked for `PSI4` or ` psi4 `: names are compared by the key their public ref uses. They used to return nothing.
+- **Behaviour:** the energy-correction-scheme `name` filter (scientific search and `GET /energy-correction-schemes`) compares trimmed and case-folded, and the `doi` filter on `GET /literature` finds the row stored under the bare DOI when given a `dx.doi.org` link.
+- **Schema and migration:** none. No new environment variable. No distributed package changed.
+
+## Energy-correction scheme names that differ only in case resolve to one scheme (Unreleased)
+
+- **Behaviour:** an upload naming a correction scheme `cbs-qb3 aec` when `CBS-QB3 AEC` is stored with the same identity now reuses that scheme and its stored spelling. It used to fail with a 409 that aborted the whole upload. The scheme is looked up by its public ref, then by its identity columns; the insert runs in a savepoint, so losing a concurrent-insert race adopts the winner's row.
+- **Schema and migration:** none. No new environment variable. No distributed package changed.
+
+## A DOI written as a `dx.doi.org` link resolves to the citation stored under the bare DOI (Unreleased)
+
+- **Behaviour:** an upload citing `https://dx.doi.org/10.1000/ABC` (or `HTTPS://DOI.ORG/10.1000/abc`) when `10.1000/abc` is already stored now reuses that literature row. It used to fail with a 409. Literature is looked up by the key its public ref uses, in the upload resolver and in the contribution-bundle dry run.
+- **Behaviour:** a new DOI is stored and looked up at Crossref as the bare DOI whatever its spelling: the `doi:` prefix and the `http(s)://(dx.)doi.org/` prefixes are removed in any case. A `dx.doi.org` link or an upper-case prefix used to be stored with the prefix, and its Crossref lookup failed, so the typed title was kept; `Doi:10.1000/abc` was stored as `doi:10.1000/abc`, a second row beside the bare DOI's. Stored rows are not rewritten.
+- **Schema and migration:** none. No new environment variable. No distributed package changed.
+
 ## The CHEMKIN adapter converts KELVINS and EVOLTS activation energies with exact constants (Unreleased)
 
 - **Behaviour:** `tckdb-chemkin` converts an Ea given in `KELVINS` with R = 8.314462618 J mol⁻¹ K⁻¹ and one given in `EVOLTS` with 96.48533212331 kJ mol⁻¹ per eV, the values the CHEMKIN export uses. It used 8.31446 and 96.485, which moved such an Ea by 3 parts in 10⁷ and 3 parts in 10⁶ on a round trip.
