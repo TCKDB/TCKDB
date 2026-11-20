@@ -1,36 +1,31 @@
-# Local Contribution Bundle Export — v0
+# Exporting a contribution bundle
 
-Status: implemented (service + CLI; bundle file output only)
-See: [Bundle format](format.md),
-Local bundle export v0 spec,
-Local-offline implementation plan
+See also: [Bundle format](format.md).
 
-## What this milestone does
+## What export does
 
-Local export v0 turns selected local database rows into validated
-[`ContributionBundle`](../../backend/app/schemas/workflows/contribution_bundle.py)
+Local export turns selected local database rows into validated
+[`ContributionBundle`](https://github.com/TCKDB/TCKDB/blob/main/backend/app/schemas/workflows/contribution_bundle.py)
 JSON files.
 
-This is a **service + CLI** milestone. The service
-([`backend/app/services/contribution_bundle_export.py`](../../backend/app/services/contribution_bundle_export.py))
+Export is a **service and a CLI**. The service
+([`backend/app/services/contribution_bundle_export.py`](https://github.com/TCKDB/TCKDB/blob/main/backend/app/services/contribution_bundle_export.py))
 owns the conversion and validation logic; the CLI wrapper
-([`backend/scripts/export_contribution_bundle.py`](../../backend/scripts/export_contribution_bundle.py))
+([`backend/scripts/export_contribution_bundle.py`](https://github.com/TCKDB/TCKDB/blob/main/backend/scripts/export_contribution_bundle.py))
 handles argument parsing, database session setup, and writing JSON to
 disk.
 
-## What this milestone does **not** do
+## What export does **not** do
 
-- It does not import anything into a hosted instance.
-- It does not implement hosted dry-run, hosted submit, or hosted import.
+- It does not import anything into a hosted instance. A hosted instance
+  checks a bundle with a [dry run](hosted-dry-run.md) and accepts it with
+  [submit](hosted-submit.md).
 - It does not push local bundles to a remote.
 - It does not add a public API route for export.
 - It does not add any frontend UI.
 - It does not synchronize raw database rows between instances.
 - It does not package external artifacts (logs, geometries) into the
-  bundle — only the manifest *shape* exists in v0.
-
-These remain on the local-offline implementation plan
-as later milestones.
+  bundle — only the manifest *shape* exists.
 
 ## Supported export roots
 
@@ -247,7 +242,7 @@ family/local-ref/manifest rules.
 ## Testing
 
 Service + CLI tests live in
-[`backend/tests/services/test_contribution_bundle_export.py`](../../backend/tests/services/test_contribution_bundle_export.py)
+[`backend/tests/services/test_contribution_bundle_export.py`](https://github.com/TCKDB/TCKDB/blob/main/backend/tests/services/test_contribution_bundle_export.py)
 and cover thermo export, kinetics export, missing-root failures,
 incomplete-dependency failures, CLI smoke output, and a credential-leak
 guard.
@@ -258,8 +253,9 @@ Run them from `backend/`:
 conda run -n tckdb_env pytest tests/services/test_contribution_bundle_export.py -v
 ```
 
-## Hosted import is not implemented yet
+## Sending a bundle to a hosted instance
 
-These bundles are not sent anywhere. There is no hosted dry-run, no
-hosted submit, no push-to-hosted UX, and no import endpoint. Those
-arrive in later milestones on the local-offline implementation plan.
+Export only writes a file. To send it, run a [dry run](hosted-dry-run.md)
+against the hosted instance, then [submit](hosted-submit.md) it.
+[Local to hosted, step by step](manual-local-to-hosted.md) walks through
+the whole flow.

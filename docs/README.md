@@ -10,6 +10,7 @@ landing page for each curated subdirectory is linked below.
 | [clients/](clients/) | Client-side conventions (`base_url` + `api_key`, target selection, language clients). |
 | [contribution-bundles/](contribution-bundles/) | Bundle format and the local-to-hosted submission workflow. |
 | [deployment/](deployment/) | Deployment scenarios — local v0, self-hosted single-node, shared private, and HPC client access. Start with [deployment/README.md](deployment/README.md). |
+| [start/](start/) | Getting-started pages linked from the site's home page (`index.md`). |
 | [guides/](guides/) | How-to guides oriented at users and workflow tools (querying, demo data, cookbook examples). |
 | [specs/](specs/) | Tracked specifications for APIs, schemas, and upload semantics. |
 
@@ -21,14 +22,17 @@ Curated, tracked docs live **inside** the subdirectories above
 
 Ad-hoc Markdown files written directly at the root of `docs/` (scratch
 notes, working drafts, copied transcripts, prompt files) are
-**intentionally gitignored**. The only Markdown file tracked at the
-root of `docs/` is this README.
+**intentionally gitignored**. The only Markdown files tracked at the
+root of `docs/` are this README and `index.md`, the site's home page.
+This README is not published on the site; `mkdocs.yml` lists every
+page that is (`nav`) and every path kept off it (`exclude_docs`).
 
 The matching rule in `.gitignore`:
 
 ```gitignore
 docs/*.md
 !docs/README.md
+!docs/index.md
 docs/audits/
 docs/decisions/
 docs/roadmaps/

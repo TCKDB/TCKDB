@@ -153,7 +153,7 @@ export AUTH_ALLOW_OPEN_REGISTRATION=false
 ```
 
 Use the shared-deployment env example as a starting point:
-[`examples/deployment/lab-server.env.example`](../../examples/deployment/lab-server.env.example).
+[`examples/deployment/lab-server.env.example`](https://github.com/TCKDB/TCKDB/blob/main/examples/deployment/lab-server.env.example).
 
 ---
 
@@ -214,7 +214,7 @@ conda run -n tckdb_env alembic upgrade head
 The repo maintains an ordered Alembic revision chain. The command applies every
 pending revision through the current head; migrations require the database to
 exist and the RDKit cartridge to be loaded. Review the
-[migration runbook](../../backend/docs/deployment/migrations.md) before
+[migration runbook](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/deployment/migrations.md) before
 upgrading a database that already contains data.
 
 ---

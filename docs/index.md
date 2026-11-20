@@ -1,6 +1,6 @@
 # TCKDB
 
-![TCKDB wordmark](../assets/tckdb-wordmark.png){ width="760" }
+![TCKDB wordmark](assets/tckdb-wordmark.png){ width="760" }
 
 TCKDB, the Theoretical Chemical Kinetics Database, is a thermochemistry and
 kinetics database for computational and experimental chemistry records. It stores scientific values together
@@ -32,13 +32,13 @@ those records later through a stable HTTP API or Python client.
 
 If you are new to the project:
 
-1. Read [Getting Started](getting-started.md).
+1. Read [Install locally](start/getting-started.md).
 2. Run the local quick start.
-3. Load [Demo Data](demo-data.md).
-4. Try the [Querying](querying.md) examples.
+3. Load the [demo data](start/demo-data.md).
+4. Try the [query examples](start/querying.md).
 
-If you are integrating a workflow tool, start with [Uploads](uploads.md)
-and the [ARC adapter spec](../specs/arc-tckdb-adapter-spec.md).
+If you are integrating a workflow tool, start with [Upload](start/uploads.md)
+and [Configuring a client](clients/generic-client-targeting.md).
 
 If you are deploying TCKDB for other people, start with
-[Deployment](deployment.md).
+[Hosting TCKDB](deployment/README.md).

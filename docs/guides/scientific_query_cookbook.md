@@ -11,7 +11,7 @@ client-side ranking.
 > expectations) before working through the recipes here.
 
 The corresponding runnable script is
-[`clients/python/examples/query_cookbook.py`](../../clients/python/examples/query_cookbook.py).
+[`clients/python/examples/query_cookbook.py`](https://github.com/TCKDB/TCKDB/blob/main/clients/python/examples/query_cookbook.py).
 Each recipe in this guide maps 1:1 to a function named
 `recipe_<name>` in that script — pick one, lift it into your code,
 and it should work.
@@ -30,7 +30,7 @@ python examples/query_cookbook.py --recipe all --smiles "O" --json
 - **Integer ids are compatibility / debug fields.** They are hidden
   by default. Pass `include=["internal_ids"]` and run against a
   deployment that sets `ALLOW_PUBLIC_INTERNAL_IDS=true` to see them
-  again (see [internal-ids policy](../specs/internal_ids_visibility_policy.md)).
+  again (see [internal-ids policy](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/internal_ids_visibility_policy.md)).
 - **Hosted search is chemistry-first.** Callers ask about SMILES,
   reactants/products, level of theory — not table primary keys. The
   backend returns the resolved identity (ref) along with the
@@ -125,7 +125,7 @@ print("H298 =", rec["thermo"]["h298_kj_mol"], "kJ/mol")
 print("S298 =", rec["thermo"]["s298_j_mol_k"], "J/mol/K")
 ```
 
-The backend's locked display order for thermo (`review_rank ASC, created_at DESC, id DESC`: approved first, `under_review` and `not_reviewed` together, then newest deposited; see [Browse order](../specs/browse_order.md)) decides which record is listed first. It is the same order the export, CHEMKIN and ML export list records in, so the website and an export list the same record first. No read or export picks one: for that, use `select_species_thermo`. That is display order, not a scientific preference: TCKDB does not rank one method above another. Origin does not matter: a newer experimental record is listed before an older computed one with the same review status. The client does not re-rank.
+The backend's locked display order for thermo (`review_rank ASC, created_at DESC, id DESC`: approved first, `under_review` and `not_reviewed` together, then newest deposited; see [Browse order](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/browse_order.md)) decides which record is listed first. It is the same order the export, CHEMKIN and ML export list records in, so the website and an export list the same record first. No read or export picks one: for that, use `select_species_thermo`. That is display order, not a scientific preference: TCKDB does not rank one method above another. Origin does not matter: a newer experimental record is listed before an older computed one with the same review status. The client does not re-rank.
 
 Useful fields:
 
@@ -401,6 +401,6 @@ Two related rules:
 ## Cross-references
 
 - [Workflow-tool integration guide](workflow_tool_scientific_reads.md) — the long-form prose tour of the read API.
-- [Public identifier policy](../specs/public_identifier_policy.md) — the design behind the `*_ref` scheme.
-- [Internal-ID visibility policy](../specs/internal_ids_visibility_policy.md) — Phase D contract for the `internal_ids` opt-in.
-- [Scientific read demo data](scientific_read_demo_data.md) — the local seed dataset you can hit with every recipe in this cookbook.
+- [Public identifier policy](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/public_identifier_policy.md) — the design behind the `*_ref` scheme.
+- [Internal-ID visibility policy](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/internal_ids_visibility_policy.md) — the contract for the `internal_ids` opt-in.
+- [Load demo data](../start/demo-data.md) — the local seed dataset you can hit with every recipe in this cookbook.

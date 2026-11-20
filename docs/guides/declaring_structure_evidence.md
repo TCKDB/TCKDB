@@ -1,6 +1,6 @@
 # Declaring what a calculation ran and what it is evidence for
 
-One page for whoever builds a conformer, transition-state or computed-species deposit. Two things can be stated,
+This page is for building a conformer, transition-state or computed-species deposit. Two things can be stated,
 both optional and both attributed claims: the **actual protocol** of a calculation (the recipe that was really
 run), and a **structure determination** (which calculations, in which roles, support a claim about one geometry,
 conformer basin or saddle point). TCKDB stores exactly what you state, never infers it, and a record that

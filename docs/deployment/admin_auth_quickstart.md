@@ -22,7 +22,7 @@ Linux server.
 ## 1. Seed an admin (or curator) account
 
 Public registration is disabled on hosted deployments — admins are
-seeded directly. Use [bootstrap_admin.py](../../backend/scripts/bootstrap_admin.py)
+seeded directly. Use [bootstrap_admin.py](https://github.com/TCKDB/TCKDB/blob/main/backend/scripts/bootstrap_admin.py)
 (despite the name, it now handles any role):
 
 ```bash
@@ -64,7 +64,7 @@ with code 2 and a hint to re-run with `--force-role-change`.
 
 ## 2. Log in and mint an API key
 
-Use [tckdb_auth.sh](../../backend/scripts/tckdb_auth.sh), the
+Use [tckdb_auth.sh](https://github.com/TCKDB/TCKDB/blob/main/backend/scripts/tckdb_auth.sh), the
 deployment-agnostic helper:
 
 ```bash

@@ -1,12 +1,12 @@
 # Selecting network kinetics for a stated pressure-dependent question
 
-One page for whoever reads pressure-dependent kinetics and needs one rate coefficient (or one coherent set of them)
-for one stated gas-phase question, and for whoever deposits them and wants to know when a deposit can take part. It
+This page is for readers who need one pressure-dependent rate coefficient (or one coherent set of them)
+for one stated gas-phase question, and for depositors who want to know when a deposit can take part. It
 describes the selection endpoint, what each answer means, and what the endpoint refuses to claim.
 
 In plain terms: a network can hold several solves of its master equation, fitted in different forms, over different
 temperatures and pressures, in different baths. Browsing lists them in a fixed display order (see
-[`browse_order.md`](../specs/browse_order.md)). Selection is a separate, opt-in question: "which of the solves can
+[`browse_order.md`](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/browse_order.md)). Selection is a separate, opt-in question: "which of the solves can
 answer this exact question, and what is the situation among them?" TCKDB carries no ranking of one method above
 another, so the honest answer is "these solves answer your question, and none is preferred".
 
@@ -115,12 +115,10 @@ snapshot and requires everything scientific to match. Each refusal is a 422, not
 `administrative: true`: a display-order choice, not a method claim. It never bypasses an empty
 selection, an incomplete membership or an unsupported form.
 
-**Literature-reported rates (ADR 0010).** A solve of kind `reported` holds rates transcribed from a publication, and a
+**Literature-reported rates.** A solve of kind `reported` holds rates transcribed from a publication, and a
 mechanism file has no field for provenance (comments are routinely stripped). So a `reported` solve is written into CHEMKIN
 only when you pass `include_reported: true`; otherwise it is an `network_export_unsupported_form` refusal naming the
-literature. When included, the file opens with a note and every reaction carries `[reported; literature ...]`. The ADR left the
-mechanism open (annotate, exclude by default, or gate behind an include token); this implements the last two together, and
-annotation as well. Native output always carries `solve_kind` and `literature_ref`, so it is not gated.
+literature. When included, the file opens with a note and every reaction carries `[reported; literature ...]`. Native output always carries `solve_kind` and `literature_ref`, so it is not gated.
 
 **What is pinned, and what is echoed.** Each captured fit carries a digest of its stored numbers (coefficients, units,
 domain), so editing a coefficient in place makes a saved manifest `network_export_manifest_stale`. The bounds are the

@@ -36,8 +36,8 @@ application, same schema, same auth model — what changes is the
   is loopback only.
 
 > **Not a separate edition.** Use
-> [.env.selfhosted.example](../../.env.selfhosted.example) and
-> [docker-compose.yml](../../docker-compose.yml).
+> [.env.selfhosted.example](https://github.com/TCKDB/TCKDB/blob/main/.env.selfhosted.example) and
+> [docker-compose.yml](https://github.com/TCKDB/TCKDB/blob/main/docker-compose.yml).
 > The backend code is the same code the rest of the deployment
 > scenarios run.
 
@@ -223,13 +223,13 @@ Whenever you move a process into or out of a container, re-read the whole
 env file asking "who is *this* address relative to?" — not "is this address
 valid?". Then check `/api/v1/status`, which now reports the object-store
 endpoint it actually reached for (see
-[backend/docs/deployment/monitoring.md](../../backend/docs/deployment/monitoring.md)).
+[backend/docs/deployment/monitoring.md](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/deployment/monitoring.md)).
 
 ---
 
 ## Compose services
 
-[docker-compose.yml](../../docker-compose.yml)
+[docker-compose.yml](https://github.com/TCKDB/TCKDB/blob/main/docker-compose.yml)
 defines these services, split across **core** services that run by
 default and **opt-in** services behind Compose profiles:
 
@@ -258,7 +258,7 @@ an empty store. Start MinIO with its profile instead
 (`docker compose --profile minio up -d db minio`); both services publish
 `127.0.0.1:9000`, so running both fails on the port rather than silently.
 To move to SeaweedFS, follow
-[Moving from MinIO to SeaweedFS](../../backend/docs/deployment/migrating_minio_to_seaweedfs.md):
+[Moving from MinIO to SeaweedFS](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/deployment/migrating_minio_to_seaweedfs.md):
 a verified copy that changes no database row, with MinIO kept for rollback.
 
 > **Keep `--workers 1`.** The default rate limiter is in-process; each
@@ -509,7 +509,7 @@ If you choose nginx/Caddy/Traefik/Tailscale/etc., just don't pass
 
 ## Environment variables (hosted-safe defaults)
 
-Copy [`.env.selfhosted.example`](../../.env.selfhosted.example) to `.env.selfhosted` and fill in
+Copy [`.env.selfhosted.example`](https://github.com/TCKDB/TCKDB/blob/main/.env.selfhosted.example) to `.env.selfhosted` and fill in
 the placeholders. The non-negotiable hosted toggles:
 
 | Variable | Required value | Why |
@@ -528,7 +528,7 @@ the placeholders. The non-negotiable hosted toggles:
 | `TCKDB_API_HOST` | `127.0.0.1` | Only `cloudflared` talks to the API. |
 
 For the current default bucket budgets, see
-[`.env.selfhosted.example`](../../.env.selfhosted.example). This
+[`.env.selfhosted.example`](https://github.com/TCKDB/TCKDB/blob/main/.env.selfhosted.example). This
 deployment doc only documents controls that are required or
 policy-relevant; numeric rate-limit budgets
 (`RATE_LIMIT_*_PER_MINUTE`) are tunable deployment settings and live
@@ -539,7 +539,7 @@ in the env example to avoid two drifting sources of truth.
 ## Trusted proxy header
 
 The rate limiter and audit logging key off the client IP returned by
-[`_client_ip()`](../../backend/app/api/rate_limit.py). When
+[`_client_ip()`](https://github.com/TCKDB/TCKDB/blob/main/backend/app/api/rate_limit.py). When
 `TRUSTED_PROXY_HEADER` is set, the middleware reads that header; when
 unset, it falls back to the ASGI peer (which would be `127.0.0.1`
 because of `cloudflared`).
@@ -628,7 +628,7 @@ the Zero Trust dashboard enabled (the free tier is fine).
 
 > No router port-forward, no inbound firewall hole. UFW should still
 > block all inbound traffic except SSH (and SSH should be restricted —
-> see [Admin access](#sshadmin-access-hardening)).
+> see [Admin access](#ssh--admin-access-hardening)).
 
 ---
 
@@ -794,7 +794,7 @@ docker compose --env-file .env.selfhosted \
 
 ### Daily logical backup
 
-The [backup unit + timer](../../examples/deployment/systemd/) run
+The [backup unit + timer](https://github.com/TCKDB/TCKDB/tree/main/examples/deployment/systemd) run
 `pg_dump` inside the `db` container nightly at 03:15 and write
 `/var/backups/tckdb/tckdb-YYYY-MM-DD.sql.gz`. They retain 30 days and
 prune older files.
@@ -996,14 +996,14 @@ curl -fsS https://api.tckdb.example.org/api/v1/health
 ```
 
 Health verifies connectivity only. `/api/v1/health` is exempt from
-rate limiting (see [`rate_limit.py`](../../backend/app/api/rate_limit.py)),
+rate limiting (see [`rate_limit.py`](https://github.com/TCKDB/TCKDB/blob/main/backend/app/api/rate_limit.py)),
 so it does **not** exercise any bucket — use the smoke test in §3
 below for that.
 
 ### 2. Anonymous scientific read via `query_cookbook.py`
 
 The cookbook lives at
-[clients/python/examples/query_cookbook.py](../../clients/python/examples/query_cookbook.py).
+[clients/python/examples/query_cookbook.py](https://github.com/TCKDB/TCKDB/blob/main/clients/python/examples/query_cookbook.py).
 It uses refs as handles by default, which is what
 `ALLOW_PUBLIC_INTERNAL_IDS=false` requires:
 
@@ -1253,7 +1253,7 @@ backups, smoke tests — is identical to a non-Pi host.
   modes and how this recipe fits into Mode 2.
 - Cross-instance data movement (offline → hosted, etc.) is handled
   through the contribution bundle export/import flow.
-- [`.env.selfhosted.example`](../../.env.selfhosted.example) — full annotated env file.
-- [`docker-compose.yml`](../../docker-compose.yml) — the data-plane stack.
-- [`examples/deployment/systemd/`](../../examples/deployment/systemd/) — host service units.
-- [`docs/specs/public_read_abuse_controls.md`](../specs/public_read_abuse_controls.md) — the implemented abuse-control spec these env vars wire, including the threat model that motivates the hosted toggles above.
+- [`.env.selfhosted.example`](https://github.com/TCKDB/TCKDB/blob/main/.env.selfhosted.example) — full annotated env file.
+- [`docker-compose.yml`](https://github.com/TCKDB/TCKDB/blob/main/docker-compose.yml) — the data-plane stack.
+- [`examples/deployment/systemd/`](https://github.com/TCKDB/TCKDB/tree/main/examples/deployment/systemd) — host service units.
+- [`docs/specs/public_read_abuse_controls.md`](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/public_read_abuse_controls.md) — the implemented abuse-control spec these env vars wire, including the threat model that motivates the hosted toggles above.

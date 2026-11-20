@@ -1,7 +1,7 @@
 # Selecting a calculation, conformer or saddle for a stated question
 
-One page for whoever reads stored structures and energies of one species entry or one transition state entry and
-needs to know which stored result answers a stated question, and why. It describes the three selection endpoints,
+This page is for readers of the stored structures and energies of one species entry or one transition state entry who
+need to know which stored result answers a stated question, and why. It describes the three selection endpoints,
 what each answer means, and what they refuse to claim.
 
 In plain terms: an entry can hold many calculations from different programs, methods and basis sets, and several
@@ -22,7 +22,7 @@ For the energy difference between a conformer and a reference conformer you name
 - **Not a global-search certificate.** Coverage is the population you are allowed to see. A complete claim is not
   evidence that every conformer or saddle was found.
 - **No method ranking.** TCKDB ranks no method or protocol above another. A lower absolute energy never prefers a
-  protocol, and the first record in a list is display order ([`browse_order.md`](../specs/browse_order.md)).
+  protocol, and the first record in a list is display order ([`browse_order.md`](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/browse_order.md)).
 
 ## The three endpoints
 

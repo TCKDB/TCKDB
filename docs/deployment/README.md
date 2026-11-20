@@ -96,11 +96,11 @@ This is the rule the rest of this directory follows.
 
 ## See also
 
-- [Self-hosting TCKDB](self_hosting.md) — end-to-end guide: containerized vs native (systemd) API, Cloudflare tunnel/loopback exposure, scheduled `pg_dump` backups, and the CI/CD image build — with the arm64 (Raspberry Pi) rationale
 - [Production checklist](production_checklist.md) — the canonical list of env vars and pre-flight checks that must hold before any hosted / shared / public deployment is exposed
 - [Generic client targeting](../clients/generic-client-targeting.md) — the canonical `base_url` + `api_key` client model
 - DR-0022 — Auth and Roles v1 — auth model used by every deployment
 - DR-0023 — Local/Offline and Hosted Submission Model — same-schema commitment
-- [Moving from MinIO to SeaweedFS](../../backend/docs/deployment/migrating_minio_to_seaweedfs.md) — operator runbook for copying an existing deployment's stored files to SeaweedFS and verifying every database reference before switching `S3_ENDPOINT_URL`, with rollback
-- [Deployed-DB migration playbook](../../backend/docs/deployment/migrations.md) — operator runbook for `alembic upgrade` on a real database (bootstrap, upgrade, backup, rollback, public-ref backfill)
-- [Cutting a citable dataset release](../../backend/docs/deployment/cutting_a_dataset_release.md) — curator runbook for publishing a curated, checksummed dataset: policy, selections, publish, verify, and the manual Zenodo/DOI step (TCKDB never mints a DOI itself)
+- [Moving from MinIO to SeaweedFS](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/deployment/migrating_minio_to_seaweedfs.md) — operator runbook for copying an existing deployment's stored files to SeaweedFS and verifying every database reference before switching `S3_ENDPOINT_URL`, with rollback
+- [Deployed-DB migration playbook](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/deployment/migrations.md) — operator runbook for `alembic upgrade` on a real database (bootstrap, upgrade, backup, rollback, public-ref backfill)
+- [Monitoring](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/deployment/monitoring.md) — operator runbook for health checks and alerts on a running deployment
+- [Cutting a citable dataset release](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/deployment/cutting_a_dataset_release.md) — curator runbook for publishing a curated, checksummed dataset: policy, selections, publish, verify, and the manual Zenodo/DOI step (TCKDB never mints a DOI itself)
