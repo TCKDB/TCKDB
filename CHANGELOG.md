@@ -29,6 +29,14 @@ dataset must never require a code release.
 - **Schema and migration:** none. No new environment variable. No tool or behaviour changed.
 - **Versions:** `tckdb-mcp` 0.16.1.
 
+## tckdb-chemkin installs and imports from its own wheel (Unreleased)
+
+- **Behaviour:** `tckdb-chemkin` declares `rdkit>=2024.3`, so `pip install tckdb-chemkin` followed by `import tckdb_chemkin` works in a clean environment. Without it the import failed with `ModuleNotFoundError: rdkit`. An environment with conda's RDKit already satisfies the requirement.
+- **Behaviour:** the `tckdb-client` requirement is the window `>=0.208,<0.209`; it was unbounded.
+- **Packaging:** the distribution carries a README (its PyPI description), the MIT `LICENSE` (`license = "MIT"` with `license-files`), authors, classifiers, project URLs and `py.typed`, and the sdist leaves out the tests. The build needs setuptools 77 or later.
+- **Schema and migration:** none. No new environment variable.
+- **Versions:** `tckdb-chemkin` 0.7.5.
+
 ## tckdb_deploy.sh deploys onto any compose project (Unreleased)
 
 - **Behaviour:** the pre-deploy backup runs `pg_dump` as `DB_ADMIN_USER` (from `TCKDB_MIGRATION_ENV_FILE`, else `TCKDB_ENV_FILE`, else the db container's `POSTGRES_USER`) on `DB_NAME` (from `TCKDB_ENV_FILE`, else the container's `POSTGRES_DB`), each defaulting to `tckdb` as before. A stack built from the templates, whose administrator is `tckdb_admin` and appears only in the operator file, no longer fails the backup with `role "tckdb" does not exist`.
