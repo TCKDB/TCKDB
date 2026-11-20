@@ -20,14 +20,30 @@
 #   every time, regardless of whether a migration turns out to be pending.
 #
 # PINNING
-#   Deploy an immutable tag -- `sha-<commit>` or `v1.2.3`. `latest` moves, so a
-#   host running it cannot answer "which code is this?", and two hosts running
-#   it may differ. Passing `latest` requires --allow-mutable and says so.
+#   Deploy an immutable tag -- `sha-<commit>` or a release such as `0.2.0`.
+#   `latest` moves, so a host running it cannot answer "which code is this?",
+#   and two hosts running it may differ. Passing `latest` requires
+#   --allow-mutable and says so.
 #
 # USAGE
 #   tckdb_deploy.sh sha-<full-commit>       # deploy a pinned build
-#   tckdb_deploy.sh v1.2.3                  # deploy a release
+#   tckdb_deploy.sh 0.2.0                   # deploy a release
 #   tckdb_deploy.sh --check                 # report what is running vs available
+#
+#   This script is for an API container it manages itself, beside a compose
+#   `db`. A stack run with docker-compose.yml's `selfhost` profile upgrades
+#   with `TCKDB_IMAGE_TAG=<tag> docker compose ... --profile selfhost up -d`
+#   instead; running both collides on the `tckdb-api` name and port 8010.
+#
+# WHICH DATABASE
+#   TCKDB_DB_CONTAINER / TCKDB_DB_NETWORK name the compose project's `db`
+#   container and the network the API joins. Unset, they are found in order:
+#   COMPOSE_PROJECT_NAME (its `db` service and `<project>_default`); the
+#   container `tckdbv2-db-1` if it exists; `docker compose ps -q db` run here;
+#   else `tckdbv2-db-1` / `tckdbv2_default`.
+#   The backup runs pg_dump as DB_ADMIN_USER (TCKDB_MIGRATION_ENV_FILE, else
+#   TCKDB_ENV_FILE, else the db container's POSTGRES_USER) on DB_NAME
+#   (TCKDB_ENV_FILE, else the container's POSTGRES_DB), each else `tckdb`.
 #
 # EXTRA NETWORKS
 #   TCKDB_EXTRA_NETWORKS (optional, space- or comma-separated) names Docker
@@ -55,8 +71,10 @@ set -uo pipefail
 IMAGE_REPO="${TCKDB_IMAGE_REPO:-laxzal/tckdb-api}"
 CONTAINER="${TCKDB_CONTAINER:-tckdb-api}"
 API_PORT="${TCKDB_API_PORT:-8010}"
-DB_CONTAINER="${TCKDB_DB_CONTAINER:-tckdbv2-db-1}"
-DB_NETWORK="${TCKDB_DB_NETWORK:-tckdbv2_default}"
+DEFAULT_DB_CONTAINER="tckdbv2-db-1"
+DEFAULT_DB_NETWORK="tckdbv2_default"
+DB_CONTAINER="${TCKDB_DB_CONTAINER:-}"
+DB_NETWORK="${TCKDB_DB_NETWORK:-}"
 # No default for either path: this script is public, and a
 # path under one operator's home directory would mean every copy of it
 # defaults to that operator's environment file and backup location.
@@ -71,7 +89,11 @@ read -r -a EXTRA_NETWORKS <<<"${EXTRA_NETWORKS_RAW//,/ }"
 die() { echo "error: $*" >&2; exit 1; }
 
 running_image() {
-    docker inspect "$CONTAINER" --format '{{.Config.Image}}' 2>/dev/null || echo "(not running as a container)"
+    # `docker inspect` prints an empty line for a missing container, so test
+    # the output, not only the exit code.
+    local image
+    image="$(docker inspect --type container "$CONTAINER" --format '{{.Config.Image}}' 2>/dev/null)"
+    echo "${image:-(not running as a container)}"
 }
 
 if [[ "${1:-}" == "--check" ]]; then
@@ -79,8 +101,11 @@ if [[ "${1:-}" == "--check" ]]; then
     # does not require either to be set.
     check_body="$(curl -s "$STATUS_URL" 2>/dev/null)"
     echo "container:      $(running_image)"
-    echo "networks:       $(docker inspect "$CONTAINER" --format '{{range $k, $_ := .NetworkSettings.Networks}}{{$k}} {{end}}' 2>/dev/null || echo n/a)"
-    echo "systemd uvicorn: $(systemctl is-active tckdb-api.service 2>/dev/null || echo n/a)"
+    networks="$(docker inspect --type container "$CONTAINER" --format '{{range $k, $_ := .NetworkSettings.Networks}}{{$k}} {{end}}' 2>/dev/null)"
+    echo "networks:       ${networks:-n/a}"
+    # is-active prints a state even when it exits non-zero; n/a only when it prints nothing.
+    systemd_state="$(systemctl is-active tckdb-api.service 2>/dev/null)"
+    echo "systemd uvicorn: ${systemd_state:-n/a}"
     echo "live revision:  $(grep -o '"alembic_revision":"[^"]*"' <<<"$check_body" || echo unknown)"
     if command -v jq >/dev/null 2>&1; then
         # The object store is a hard dependency that fails independently of
@@ -97,11 +122,61 @@ fi
 [[ -z "$BACKUP_DIR" ]] && die "TCKDB_BACKUP_DIR is not set (directory to write pre-deploy backups to)"
 
 TAG="${1:-}"
-[[ -z "$TAG" ]] && die "usage: $0 <tag>|--check   (tag e.g. sha-<commit> or v1.2.3)"
+[[ -z "$TAG" ]] && die "usage: $0 <tag>|--check   (tag e.g. sha-<commit> or 0.2.0)"
 
 if [[ "$TAG" == "latest" && "${2:-}" != "--allow-mutable" ]]; then
-    die "'latest' moves, so the deployed version would be unanswerable. Pass an immutable tag (sha-<commit> or v1.2.3), or re-run with: $0 latest --allow-mutable"
+    die "'latest' moves, so the deployed version would be unanswerable. Pass an immutable tag (sha-<commit> or 0.2.0), or re-run with: $0 latest --allow-mutable"
 fi
+
+# The compose project's `db` container and default network (see WHICH DATABASE).
+compose_project_of() {
+    docker inspect --type container "$1" --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>/dev/null
+}
+if [[ -z "$DB_CONTAINER" ]]; then
+    if [[ -n "${COMPOSE_PROJECT_NAME:-}" ]]; then
+        DB_CONTAINER="$(docker ps -q --filter "label=com.docker.compose.project=${COMPOSE_PROJECT_NAME}" \
+            --filter "label=com.docker.compose.service=db" 2>/dev/null | head -1)"
+        [[ -n "$DB_CONTAINER" ]] \
+            || die "no running db container in compose project '${COMPOSE_PROJECT_NAME}'; nothing has been changed"
+    elif docker inspect --type container "$DEFAULT_DB_CONTAINER" >/dev/null 2>&1; then
+        DB_CONTAINER="$DEFAULT_DB_CONTAINER"
+    else
+        DB_CONTAINER="$(docker compose ps -q db 2>/dev/null | head -1)"
+        DB_CONTAINER="${DB_CONTAINER:-$DEFAULT_DB_CONTAINER}"
+    fi
+fi
+if [[ -z "$DB_NETWORK" ]]; then
+    if [[ -n "${COMPOSE_PROJECT_NAME:-}" ]]; then
+        DB_NETWORK="${COMPOSE_PROJECT_NAME}_default"
+    elif [[ "$DB_CONTAINER" == "$DEFAULT_DB_CONTAINER" ]]; then
+        DB_NETWORK="$DEFAULT_DB_NETWORK"
+    else
+        db_project="$(compose_project_of "$DB_CONTAINER")"
+        DB_NETWORK="${db_project:+${db_project}_default}"
+        DB_NETWORK="${DB_NETWORK:-$DEFAULT_DB_NETWORK}"
+    fi
+fi
+
+# env_value FILE KEY: the last `KEY=value` in FILE without surrounding quotes.
+env_value() {
+    [[ -n "$1" && -f "$1" ]] || return 0
+    sed -n "s/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}$2=//p" "$1" | tail -1 \
+        | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/"
+}
+# container_env CONTAINER KEY: KEY from the container's configured environment.
+# The admin is usually in neither env file (the migration file is owner-only),
+# but the postgres image was created with it as POSTGRES_USER.
+container_env() {
+    docker inspect --type container "$1" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null \
+        | sed -n "s/^$2=//p" | head -1
+}
+BACKUP_DB_USER="$(env_value "$MIGRATION_ENV_FILE" DB_ADMIN_USER)"
+BACKUP_DB_USER="${BACKUP_DB_USER:-$(env_value "$ENV_FILE" DB_ADMIN_USER)}"
+BACKUP_DB_USER="${BACKUP_DB_USER:-$(container_env "$DB_CONTAINER" POSTGRES_USER)}"
+BACKUP_DB_USER="${BACKUP_DB_USER:-tckdb}"
+BACKUP_DB_NAME="$(env_value "$ENV_FILE" DB_NAME)"
+BACKUP_DB_NAME="${BACKUP_DB_NAME:-$(container_env "$DB_CONTAINER" POSTGRES_DB)}"
+BACKUP_DB_NAME="${BACKUP_DB_NAME:-tckdb}"
 
 IMAGE="${IMAGE_REPO}:${TAG}"
 echo "==> deploying ${IMAGE}"
@@ -148,8 +223,8 @@ done
 mkdir -p "$BACKUP_DIR"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP="${BACKUP_DIR}/tckdb-predeploy-${STAMP}.dump"
-docker exec "$DB_CONTAINER" pg_dump -U tckdb -d tckdb -Fc > "$BACKUP" \
-    || die "backup failed; refusing to deploy"
+docker exec "$DB_CONTAINER" pg_dump -U "$BACKUP_DB_USER" -d "$BACKUP_DB_NAME" -Fc > "$BACKUP" \
+    || die "backup of database '${BACKUP_DB_NAME}' as '${BACKUP_DB_USER}' in ${DB_CONTAINER} failed; refusing to deploy"
 echo "    backup: $BACKUP ($(du -h "$BACKUP" | cut -f1))"
 
 # 2. Pull before stopping anything: a failed pull should change nothing.
