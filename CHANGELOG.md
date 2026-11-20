@@ -22,6 +22,16 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## TCKDB self-hosts with one compose command from the published images (Unreleased)
+
+- **Behaviour:** `docker compose --env-file .env.selfhosted --env-file .env.db-admin --profile selfhost up -d` (or `make selfhost`) runs the published `laxzal/tckdb-api` and `laxzal/tckdb-frontend` images: a one-shot `init` service provisions the database roles, migrates, checks the roles and creates the first administrator, then `tckdb-api` and `frontend` start on loopback ports. Without the profile, compose still starts only `db` and `seaweedfs`.
+- **Behaviour:** `backend/scripts/ops/tckdb_make_env.sh` writes `.env.selfhosted` and `.env.db-admin` with every secret generated (mode 600), asks only for deployment mode, public URL, proxy header and administrator, and refuses to overwrite without `--force`.
+- **Behaviour:** in `shared_private` and `hosted_public` the API refuses to start while `DB_PASSWORD`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` or `PAGING_CURSOR_KEY` is empty or a `change-me` placeholder; `init` and `check_selfhosted_deployment.sh` refuse the operator secrets too.
+- **Behaviour:** `shared_private` accepts `SESSION_COOKIE_SECURE=false` when `SESSION_COOKIE_ALLOW_PLAIN_HTTP=true`, for a lab network served over plain HTTP, where browsers drop a Secure cookie and login fails. `hosted_public` still refuses it.
+- **Behaviour:** `.env.selfhosted.example` defaults to `DEPLOYMENT_MODE=shared_private` with `TRUSTED_PROXY_HEADER` unset, and lists the values to set first. The `worker` service runs the published image. The object store's loopback ports follow `S3_PORT` / `S3_CONSOLE_PORT`.
+- **Behaviour:** `check_selfhosted_deployment.sh` reads Alembic's revision from the `tckdb-api` container when one runs, fails unless it is exactly one revision at head, takes `-p` / `COMPOSE_PROJECT_NAME`, and reads `DB_NAME` / `DB_USER` from the env file.
+- **Schema and migration:** none. New environment variables: `TCKDB_IMAGE_TAG`, `TCKDB_WEB_PORT`, `S3_PORT`, `S3_CONSOLE_PORT`, `SESSION_COOKIE_ALLOW_PLAIN_HTTP`, and `COMPOSE_ADMIN_ENV_FILE` for the check script. The existing `TCKDB_BOOTSTRAP_USERNAME` / `TCKDB_BOOTSTRAP_EMAIL` / `TCKDB_BOOTSTRAP_PASSWORD` now sit in `.env.db-admin`, where `init` reads them. No distributed package changed.
+
 ## The CHEMKIN adapter converts KELVINS and EVOLTS activation energies with exact constants (Unreleased)
 
 - **Behaviour:** `tckdb-chemkin` converts an Ea given in `KELVINS` with R = 8.314462618 J mol⁻¹ K⁻¹ and one given in `EVOLTS` with 96.48533212331 kJ mol⁻¹ per eV, the values the CHEMKIN export uses. It used 8.31446 and 96.485, which moved such an Ea by 3 parts in 10⁷ and 3 parts in 10⁶ on a round trip.

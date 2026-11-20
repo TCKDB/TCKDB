@@ -221,6 +221,10 @@ class Settings(BaseSettings):
     # TLS-terminating proxy in production; local/dev sets
     # ``SESSION_COOKIE_SECURE=false`` so plain-HTTP login works.
     session_cookie_secure: bool = True
+    # Lets ``shared_private`` run with ``SESSION_COOKIE_SECURE=false`` on a lab
+    # network served over plain HTTP, where browsers drop a Secure cookie and
+    # login silently fails. ``hosted_public`` ignores it.
+    session_cookie_allow_plain_http: bool = False
     session_cookie_samesite: str = "lax"
     session_cookie_httponly: bool = True
 
