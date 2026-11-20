@@ -17,6 +17,10 @@ from __future__ import annotations
 
 import fnmatch
 import importlib.util
+import os
+import re
+import shutil
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -28,7 +32,8 @@ BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "publish-python.yml"
 CLIENT_CI_PATH = REPO_ROOT / ".github" / "workflows" / "python-client-ci.yml"
-PUBLISH_ACTION = "pypa/gh-action-pypi-publish@release/v1"
+PUBLISH_ACTION = re.compile(r"^pypa/gh-action-pypi-publish@[0-9a-f]{40}$")
+DOWNLOAD_ACTION = re.compile(r"^actions/download-artifact@")
 
 
 def _load_module(name: str, path: Path):
@@ -119,6 +124,18 @@ def test_the_build_job_resolves_builds_checks_and_smoke_tests():
     assert "merge-base --is-ancestor" in script
 
 
+def _publish_step(job: dict) -> dict:
+    """The job's only steps: one artifact download, then one pinned publish."""
+    steps = job["steps"]
+    assert [step.get("run") for step in steps if "run" in step] == [], "a publish job runs no shell"
+    downloads = [step for step in steps if DOWNLOAD_ACTION.match(step.get("uses", ""))]
+    publishes = [step for step in steps if PUBLISH_ACTION.match(step.get("uses", ""))]
+    assert len(downloads) == 1, downloads
+    assert len(publishes) == 1, f"pypa/gh-action-pypi-publish must appear once, pinned by commit sha: {steps}"
+    assert len(steps) == 2, f"a publish job only downloads and publishes the build job's dist: {steps}"
+    return publishes[0]
+
+
 def test_publish_jobs_use_trusted_publishing_in_the_named_environments():
     workflow = _workflow()
     assert workflow["permissions"] == {"contents": "read"}
@@ -128,8 +145,9 @@ def test_publish_jobs_use_trusted_publishing_in_the_named_environments():
     assert testpypi["needs"] == "build"
     assert testpypi["environment"]["name"] == "testpypi"
     assert testpypi["permissions"] == {"id-token": "write"}
-    (publish,) = [step for step in testpypi["steps"] if step.get("uses") == PUBLISH_ACTION]
+    publish = _publish_step(testpypi)
     assert publish["with"]["repository-url"] == "https://test.pypi.org/legacy/"
+    assert publish["with"]["skip-existing"] is True
 
     pypi = jobs["publish-pypi"]
     assert set(pypi["needs"]) == {"build", "publish-testpypi"}
@@ -137,8 +155,77 @@ def test_publish_jobs_use_trusted_publishing_in_the_named_environments():
     assert pypi["permissions"] == {"id-token": "write"}
     assert "github.event_name == 'push'" in pypi["if"]
     assert "startsWith(github.ref, 'refs/tags/')" in pypi["if"]
-    (publish,) = [step for step in pypi["steps"] if step.get("uses") == PUBLISH_ACTION]
-    assert "repository-url" not in (publish.get("with") or {})
+    publish = _publish_step(pypi)
+    options = publish.get("with") or {}
+    assert "repository-url" not in options
+    assert "skip-existing" not in options, "PyPI must refuse a version that already exists, not skip it"
+
+
+def test_no_expression_is_spliced_into_a_shell_script():
+    """Values reach ``run:`` through ``env:``, never as ``${{ }}`` text."""
+    for name, job in _workflow()["jobs"].items():
+        for step in job.get("steps", []):
+            assert "${{" not in str(step.get("run", "")), f"{name}: {step.get('name')}"
+
+
+def test_the_build_checkout_does_not_keep_the_token():
+    (checkout,) = [
+        step for step in _workflow()["jobs"]["build"]["steps"] if str(step.get("uses", "")).startswith("actions/checkout@")
+    ]
+    assert checkout["with"]["persist-credentials"] is False
+
+
+def _shell_command(workflow: dict) -> list[str]:
+    """The shell GitHub runs a ``run:`` step with, given the workflow's default."""
+    shell = (workflow.get("defaults") or {}).get("run", {}).get("shell")
+    if shell == "bash":
+        return ["bash", "--noprofile", "--norc", "-eo", "pipefail"]
+    assert shell is None, f"unexpected default shell {shell!r}"
+    return ["bash", "-e"]
+
+
+def test_steps_run_under_bash_with_pipefail():
+    assert _workflow()["defaults"]["run"]["shell"] == "bash"
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+@pytest.mark.parametrize("event, tag, package", [("push", "tckdb-client-v0.0.0", ""), ("push", "v0.2.0", "")])
+def test_the_resolve_step_fails_the_job_on_a_refused_tag(tmp_path, event, tag, package):
+    """Run the step's own script the way GitHub would; a refused tag must stop the job."""
+    workflow = _workflow()
+    (step,) = [s for s in workflow["jobs"]["build"]["steps"] if s.get("id") == "resolve"]
+    script = tmp_path / "step.sh"
+    script.write_text(step["run"], encoding="utf-8")
+    output = tmp_path / "github_output"
+    env = {
+        **os.environ,
+        "EVENT_NAME": event,
+        "REF_NAME": tag,
+        "PACKAGE": package,
+        "GITHUB_OUTPUT": str(output),
+    }
+    result = subprocess.run(
+        [*_shell_command(workflow), str(script)], cwd=REPO_ROOT, env=env, capture_output=True, text=True
+    )
+    assert result.returncode != 0, f"the resolve step passed a refused tag:\n{result.stdout}{result.stderr}"
+    assert "::error::" in result.stderr
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_the_resolve_step_writes_its_outputs_for_a_known_package(tmp_path):
+    """The same harness passes a good run, so the refusal above is the tag's doing."""
+    workflow = _workflow()
+    (step,) = [s for s in workflow["jobs"]["build"]["steps"] if s.get("id") == "resolve"]
+    script = tmp_path / "step.sh"
+    script.write_text(step["run"], encoding="utf-8")
+    output = tmp_path / "github_output"
+    env = {**os.environ, "EVENT_NAME": "workflow_dispatch", "REF_NAME": "main", "PACKAGE": "tckdb-client"}
+    env["GITHUB_OUTPUT"] = str(output)
+    result = subprocess.run(
+        [*_shell_command(workflow), str(script)], cwd=REPO_ROOT, env=env, capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert "name=tckdb-client" in output.read_text(encoding="utf-8").splitlines()
 
 
 def test_the_workflow_stores_no_secret():
@@ -150,6 +237,8 @@ def test_client_ci_builds_and_checks_every_package():
     workflow = yaml.safe_load(CLIENT_CI_PATH.read_text(encoding="utf-8"))
     job = workflow["jobs"]["package-metadata"]
     script = "\n".join(str(step.get("run", "")) for step in job["steps"])
+    (checkout,) = [step for step in job["steps"] if str(step.get("uses", "")).startswith("actions/checkout@")]
+    assert checkout["with"]["persist-credentials"] is False
     assert "twine check --strict" in script
     for package in guard.PACKAGES:
         directory = str(Path(package.pyproject).parent)

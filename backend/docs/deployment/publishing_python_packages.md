@@ -103,6 +103,10 @@ pushing the next tag.
 Actions → "Publish Python package" → "Run workflow", choose the branch (normally
 `main`) and the package. The run builds, checks and smoke-tests the package at
 that ref and uploads it to TestPyPI only; it never publishes to PyPI.
+Dry-run from `main`: TestPyPI keeps the first upload of a version, so a dry
+run from another ref at an unchanged version turns the later tag's TestPyPI
+upload into a no-op (`skip-existing`), and TestPyPI then holds the other ref's
+build.
 
 Then install it in a clean environment. TestPyPI does not hold the third-party
 dependencies, so they come from PyPI:
