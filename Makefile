@@ -28,7 +28,7 @@
 #                      rather than in `reset` so the rotation is an
 #                      explicit, visible step.
 
-.PHONY: up down migrate reset reset-login test test-fast test-scientific test-api test-rest test-full test-profile update-openapi-golden api admin doctor check help
+.PHONY: up down migrate reset reset-login selfhost test test-fast test-scientific test-api test-rest test-full test-profile update-openapi-golden api admin doctor check help
 
 # Print available targets.
 help:
@@ -42,6 +42,7 @@ help:
 	@echo "  make reset-login  reset + dev admin + API key (uses dev_login.sh)"
 	@echo "  make down         Stop infra (volumes preserved)"
 	@echo "  make test         Run the backend test suite"
+	@echo "  make selfhost     Self-host from the published images (selfhost profile)"
 	@echo ""
 	@echo "Test ladder (see backend/docs/testing.md):"
 	@echo "  make test-fast        Tier 0/1: ARGS='<path> [-k expr]' for fast inner-loop"
@@ -155,3 +156,12 @@ admin:
 # `check` is an alias.
 doctor check:
 	bash backend/scripts/tckdb_doctor.sh
+
+# Self-host from the published images: write the env files if they are
+# missing, start the `selfhost` profile, wait until it is healthy.
+SELFHOST_COMPOSE = docker compose --env-file .env.selfhosted --env-file .env.db-admin --profile selfhost
+selfhost:
+	@if [ ! -f .env.selfhosted ] || [ ! -f .env.db-admin ]; then bash backend/scripts/ops/tckdb_make_env.sh; fi
+	$(SELFHOST_COMPOSE) up -d --wait
+	@web=$$(sed -n 's/^TCKDB_WEB_PORT=//p' .env.selfhosted); api=$$(sed -n 's/^TCKDB_API_PORT=//p' .env.selfhosted); \
+	    echo "web: http://127.0.0.1:$${web:-8011}"; echo "api: http://127.0.0.1:$${api:-8010}/api/v1"
