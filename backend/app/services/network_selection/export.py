@@ -49,6 +49,7 @@ from app.db.models.network_pdep import (
     NetworkSolve,
 )
 from app.db.models.species import Species, SpeciesEntry
+from app.schemas.reads.scientific_common import verified_doi
 from app.services.network_selection.manifest import ReplayError, replay_network
 from app.services.network_selection.models import DEFAULT_BOUNDS, NetworkRequest
 from app.services.network_selection.public import profile_has_floor, redact_manifest
@@ -378,14 +379,17 @@ def _species_content(session: Session, refs: set[str]) -> dict[str, dict[str, An
 
 
 def _solve_origin(session: Session, manifest: dict[str, Any], solve_ref: str) -> dict[str, Any]:
-    """The solve's kind (from the verified manifest) and the literature a reported solve was transcribed from."""
+    """The solve's kind (from the verified manifest) and the literature a reported solve was transcribed from.
+
+    The DOI is carried only when the registry resolved the literature row.
+    """
     kind = next(s["kind"] for s in manifest["solves"] if s["solve_ref"] == solve_ref)
     row = session.execute(
-        select(Literature.public_ref, Literature.doi)
+        select(Literature.public_ref, Literature.title_source, Literature.doi)
         .join(NetworkSolve, NetworkSolve.literature_id == Literature.id)
         .where(NetworkSolve.public_ref == solve_ref)
     ).first()
-    literature_ref, doi = (row[0], row[1]) if row is not None else (None, None)
+    literature_ref, doi = (row[0], verified_doi(row[1], row[2])) if row is not None else (None, None)
     return {"solve_ref": solve_ref, "solve_kind": kind, "literature_ref": literature_ref, "literature_doi": doi}
 
 

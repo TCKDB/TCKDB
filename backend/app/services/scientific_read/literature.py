@@ -31,7 +31,7 @@ from app.db.models.network_pdep import NetworkSolve
 from app.db.models.statmech import Statmech
 from app.db.models.thermo import Thermo
 from app.db.models.transport import Transport
-from app.schemas.reads.scientific_common import ReviewStatusSummary
+from app.schemas.reads.scientific_common import ReviewStatusSummary, verified_doi
 from app.schemas.reads.scientific_literature import (
     AvailableLiteratureSections,
     LiteratureAuthorSummary,
@@ -104,19 +104,21 @@ def get_literature(
     authors = _load_authors(session, lit.id)
     counts = _load_record_counts(session, lit.id)
 
+    identifiers = LiteratureIdentifiers(
+        doi=verified_doi(lit.title_source, lit.doi),
+        isbn=lit.isbn,
+        url=lit.url,
+    )
     record = ScientificLiteratureRecord(
         literature=_build_core(lit),
-        identifiers=LiteratureIdentifiers(
-            doi=lit.doi,
-            isbn=lit.isbn,
-            url=lit.url,
-        ),
+        identifiers=identifiers,
         authors=authors,
         record_counts=counts,
         available_sections=AvailableLiteratureSections(
             has_authors=bool(authors),
             has_identifiers=any(
-                v is not None for v in (lit.doi, lit.isbn, lit.url)
+                v is not None
+                for v in (identifiers.doi, identifiers.isbn, identifiers.url)
             ),
             has_linked_records=counts.total_records > 0,
         ),

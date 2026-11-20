@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Public reads and pages carry a literature DOI only when the registry resolved it (Unreleased)
+
+- **Behaviour:** the `doi` of a literature citation embedded in a scientific record (`LiteratureSummary`) and of `GET /scientific/literature/{ref}` (`identifiers.doi`) is served only when the row's metadata was resolved from the DOI registry (`title_source = resolved_metadata`); it is `null` for a depositor-supplied or unrecorded origin. The network CHEMKIN export writes a DOI beside its literature ref under the same rule.
+- **Behaviour:** the site prints a registry-resolved DOI after the citation as a `https://doi.org/<doi>` link. A depositor-typed DOI is still never printed.
+- **Schema and migration:** none. No new environment variable. No distributed package changed.
+
 ## The CHEMKIN adapter converts KELVINS and EVOLTS activation energies with exact constants (Unreleased)
 
 - **Behaviour:** `tckdb-chemkin` converts an Ea given in `KELVINS` with R = 8.314462618 J mol⁻¹ K⁻¹ and one given in `EVOLTS` with 96.48533212331 kJ mol⁻¹ per eV, the values the CHEMKIN export uses. It used 8.31446 and 96.485, which moved such an Ea by 3 parts in 10⁷ and 3 parts in 10⁶ on a round trip.
