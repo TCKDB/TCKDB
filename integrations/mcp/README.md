@@ -12,14 +12,11 @@ to mutate the database.
 > capability is a named tool with an explicit schema; there is no
 > generic endpoint-passthrough escape hatch.
 
-See `docs/specs/mcp_readonly_integration.md`
-for the full design.
-
 ## Status
 
 **Current scientific read/query tools implemented.** The MCP tracks the
 committed backend OpenAPI golden snapshot at
-[`backend/tests/api/golden/openapi.json`](../../backend/tests/api/golden/openapi.json).
+[`backend/tests/api/golden/openapi.json`](https://github.com/TCKDB/TCKDB/blob/main/backend/tests/api/golden/openapi.json).
 
 | Tool | Endpoint | Purpose |
 |---|---|---|
@@ -127,7 +124,14 @@ URL resolution rules:
 
 ### Install
 
-From the TCKDB repo root, install in editable mode. Python 3.11+ is required.
+Python 3.11+ is required.
+
+```bash
+python -m pip install tckdb-mcp
+```
+
+From a checkout of [TCKDB](https://github.com/TCKDB/TCKDB), install from the
+repo root in editable mode:
 
 ```bash
 # Runtime only: pulls httpx and the `mcp` SDK.
@@ -139,7 +143,7 @@ python -m pip install -e "integrations/mcp[test]"
 
 The package exposes a single console script — `tckdb-mcp` — which starts
 the stdio MCP server. It is defined in
-[`pyproject.toml`](pyproject.toml) as
+[`pyproject.toml`](https://github.com/TCKDB/TCKDB/blob/main/integrations/mcp/pyproject.toml) as
 `tckdb-mcp = "tckdb_mcp.server:main"`.
 
 ### Configure and run
@@ -986,7 +990,7 @@ TCKDB FastAPI  ──►  Postgres
 ### Why not `tckdb-client` yet?
 
 The first slice uses an internal ~80-line `httpx` wrapper rather than
-the existing [`clients/python`](../../clients/python)
+the existing [`clients/python`](https://github.com/TCKDB/TCKDB/tree/main/clients/python)
 package. Two reasons:
 
 1. `tckdb-client.health()` calls `{base_url}/health`. With the

@@ -22,6 +22,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## tckdb-mcp carries a licence file and working project links (Unreleased)
+
+- **Packaging:** `tckdb-mcp` declares `license = "MIT"` with `license-files` and ships the MIT `LICENSE` in its wheel and sdist (it used the deprecated `license = { text = "MIT" }` table and shipped no licence text). Its `project.urls` point at `https://github.com/TCKDB/TCKDB` and `https://tckdb.github.io/TCKDB/`; they named `github.com/tckdb` and `github.com/tckdb/tckdb_v2`, which do not exist. Python 3.13 is listed in the classifiers, the sdist leaves out the tests, and the build needs setuptools 77 or later.
+- **Docs:** the package README's links are absolute, so they work on its PyPI page, and it gives `pip install tckdb-mcp` alongside the editable install.
+- **Schema and migration:** none. No new environment variable. No tool or behaviour changed.
+- **Versions:** `tckdb-mcp` 0.16.1.
+
 ## tckdb_deploy.sh deploys onto any compose project (Unreleased)
 
 - **Behaviour:** the pre-deploy backup runs `pg_dump` as `DB_ADMIN_USER` (from `TCKDB_MIGRATION_ENV_FILE`, else `TCKDB_ENV_FILE`, else the db container's `POSTGRES_USER`) on `DB_NAME` (from `TCKDB_ENV_FILE`, else the container's `POSTGRES_DB`), each defaulting to `tckdb` as before. A stack built from the templates, whose administrator is `tckdb_admin` and appears only in the operator file, no longer fails the backup with `role "tckdb" does not exist`.

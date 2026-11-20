@@ -227,7 +227,11 @@ def test_known_operational_boundaries_are_recorded_where_a_reader_will_look():
 
 @pytest.mark.parametrize(
     "package_dir",
-    ["clients/python", "schemas/python/tckdb-schemas"],
+    [
+        "clients/python",
+        "schemas/python/tckdb-schemas",
+        "integrations/mcp",
+    ],
 )
 def test_published_package_license_is_the_root_license(package_dir):
     """Each PyPI package ships its own copy of the root ``LICENSE`` (a build
