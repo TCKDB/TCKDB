@@ -1,4 +1,3 @@
-import { GuideLink } from "../components/GuideLink"
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import "../browse.css"
@@ -66,11 +65,11 @@ export default function MethodsIndexPage() {
             <PageShell>
                 <h1 className="t-display-2">Methods</h1>
                 <p className="t-body section-intro">
-                    Levels of theory, software and workflow tools behind deposited calculations.<GuideLink to="level-of-theory" />
+                    Levels of theory, software and workflow tools behind deposited calculations.
                 </p>
 
                 <section className="ledger-section" aria-labelledby="methods-lot-heading">
-                    <SectionHeading id="methods-lot-heading">Levels of theory</SectionHeading>
+                    <SectionHeading id="methods-lot-heading" guide={{ to: "level-of-theory", question: "What is a level of theory?" }}>Levels of theory</SectionHeading>
                     {/* Stays visible while a server-side filter is chosen, even when
                         it matches nothing: hiding the control that caused an empty
                         list would leave no way back. */}
