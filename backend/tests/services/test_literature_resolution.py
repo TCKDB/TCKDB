@@ -463,3 +463,24 @@ def test_title_normalisation_is_fast_on_long_runs(title: str) -> None:
     started = time.perf_counter()
     _normalize_title_for_comparison(title)
     assert time.perf_counter() - started < 0.5
+
+
+@pytest.mark.parametrize(
+    "spelling",
+    [
+        "https://dx.doi.org/10.1000/ABC",
+        "http://dx.doi.org/10.1000/abc",
+        "HTTPS://DOI.ORG/10.1000/abc",
+    ],
+)
+def test_a_doi_url_spelling_reuses_the_row_stored_under_the_bare_doi(db_conn, monkeypatch, spelling) -> None:
+    monkeypatch.setattr("app.services.literature_resolution.fetch_doi_metadata", lambda doi: {"title": "A paper"})
+
+    with Session(db_conn) as session:
+        with session.begin():
+            existing = resolve_or_create_literature(session, LiteratureUploadRequest(doi="10.1000/abc"))
+
+            resolved = resolve_or_create_literature(session, LiteratureUploadRequest(doi=spelling))
+
+            assert resolved.id == existing.id
+            assert existing.doi == "10.1000/abc"

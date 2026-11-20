@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A DOI written as a `dx.doi.org` link resolves to the citation stored under the bare DOI (Unreleased)
+
+- **Behaviour:** an upload citing `https://dx.doi.org/10.1000/ABC` (or `HTTPS://DOI.ORG/10.1000/abc`) when `10.1000/abc` is already stored now reuses that literature row. It used to fail with a 409. Literature is looked up by the key its public ref uses, in the upload resolver and in the contribution-bundle dry run.
+- **Schema and migration:** none. No new environment variable. No distributed package changed.
+
 ## Software and workflow-tool names that differ only in case resolve to one row (Unreleased)
 
 - **Behaviour:** an upload naming `PSI4` (or ` psi4 `) when `Psi4` is already stored now reuses that software row and its stored spelling. It used to fail with a server error. Software is looked up by its public ref, in the upload resolver and in the contribution-bundle dry run, which reports the stored name.

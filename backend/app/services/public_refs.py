@@ -393,6 +393,12 @@ def _canonical_literature(obj: Any) -> str | None:
     return None
 
 
+def literature_doi_public_ref(doi: str) -> str | None:
+    """The public ref a ``Literature`` row storing *doi* is given on insert, or ``None`` when *doi* is blank."""
+    canonical = _canonical_literature(SimpleNamespace(doi=doi, isbn=None))
+    return make_content_ref(PREFIXES["Literature"], canonical) if canonical is not None else None
+
+
 def _canonical_conformer_assignment_scheme(obj: Any) -> str:
     return (
         f"cas:name={(obj.name or '').strip().lower()};"
