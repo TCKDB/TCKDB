@@ -52,11 +52,8 @@ and provenance summaries.
 > explicitly: `include=["all", "internal_ids"]`.
 >
 > Route inputs are unchanged — integer path handles and `*_id` query
-> filters still work as inputs. See
-> [`docs/specs/internal_ids_visibility_policy.md`](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/internal_ids_visibility_policy.md)
-> and
-> [`docs/specs/public_identifier_policy.md`](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/public_identifier_policy.md)
-> for the full contract.
+> filters still work as inputs. The ref formats are listed in
+> [How a record is named](api_vocabulary.md#how-a-record-is-named).
 
 ## What this guide does not cover
 
@@ -861,8 +858,7 @@ workflow adapter can decide whether the calculation is reusable. The
   workflow decides.
 - Some rich nested sections may currently be summaries (e.g. the
   per-section `*_summary` fields under species-search entries return
-  `{ids: [...]}` ID lists rather than fully embedded records). Future
-  phases may enrich these without breaking the outer envelope.
+  `{ids: [...]}` ID lists rather than fully embedded records).
 
 ## Checklist for workflow-tool integrations
 

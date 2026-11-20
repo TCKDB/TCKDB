@@ -459,7 +459,7 @@ The script is **Linux and iptables only**. The `iptables-legacy` and
   unit to match.
 - **SeaweedFS run natively, not in Docker.** This rule does not apply.
   Bind it to loopback instead, as
-  [native-advanced.md](native-advanced.md#object--artifact-storage)
+  [native-advanced.md](native-advanced.md#object-artifact-storage)
   describes.
 
 Whichever way you close it, the verification loop is the test. Every port
@@ -628,7 +628,7 @@ the Zero Trust dashboard enabled (the free tier is fine).
 
 > No router port-forward, no inbound firewall hole. UFW should still
 > block all inbound traffic except SSH (and SSH should be restricted —
-> see [Admin access](#ssh--admin-access-hardening)).
+> see [Admin access](#ssh-admin-access-hardening)).
 
 ---
 

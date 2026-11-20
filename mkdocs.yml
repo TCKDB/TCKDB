@@ -35,10 +35,7 @@ theme:
 
 markdown_extensions:
   - admonition
-  - toc:
-      slugify: !!python/object/apply:pymdownx.slugs.slugify
-        kwds:
-          case: lower
+  - toc
   - attr_list
   - def_list
   - md_in_html

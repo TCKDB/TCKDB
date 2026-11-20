@@ -401,6 +401,6 @@ Two related rules:
 ## Cross-references
 
 - [Workflow-tool integration guide](workflow_tool_scientific_reads.md) — the long-form prose tour of the read API.
-- [Public identifier policy](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/public_identifier_policy.md) — the design behind the `*_ref` scheme.
+- [How a record is named](api_vocabulary.md#how-a-record-is-named) — the `*_ref` formats.
 - [Internal-ID visibility policy](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/internal_ids_visibility_policy.md) — the contract for the `internal_ids` opt-in.
 - [Load demo data](../start/demo-data.md) — the local seed dataset you can hit with every recipe in this cookbook.

@@ -68,7 +68,7 @@ If none of those apply, choose Docker.
 
 | Component | Why | Source |
 |-----------|-----|--------|
-| **PostgreSQL** (recent stable) with the **RDKit cartridge** loaded | Identity tables use RDKit `mol` columns and chemistry-aware indexes. | [Build PostgreSQL+RDKit yourself](#postgresql--rdkit-cartridge), or use the upstream Docker image (`informaticsmatters/rdkit-cartridge-debian`) if Docker is acceptable for this *one* component. |
+| **PostgreSQL** (recent stable) with the **RDKit cartridge** loaded | Identity tables use RDKit `mol` columns and chemistry-aware indexes. | [Build PostgreSQL+RDKit yourself](#postgresql-rdkit-cartridge), or use the upstream Docker image (`informaticsmatters/rdkit-cartridge-debian`) if Docker is acceptable for this *one* component. |
 | **Conda / Miniforge** with the project's `tckdb_env` environment | The backend, worker, and Alembic CLI all run from this env. | Project repo (`environment.yml` / equivalent). |
 | **Object / artifact storage** (S3-compatible) | Artifact uploads (logs, geometries) write through the object store. | SeaweedFS, AWS S3, lab-managed S3, MinIO, or any S3 API-compatible service. |
 | **Service manager** (systemd, supervisord, runit, …) | To keep `uvicorn` and the upload worker running. | OS-native. |

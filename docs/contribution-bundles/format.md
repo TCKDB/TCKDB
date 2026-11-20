@@ -91,7 +91,7 @@ Identifies the TCKDB instance that produced the bundle.
 | Field | Required | Notes |
 |-------|----------|-------|
 | `instance_kind` | yes | `local` or `lab_server`. `hosted` is not allowed in version 1. |
-| `instance_name` | yes | Free-text label, e.g. `calvin-laptop` or `pi-rmgteam-server`. |
+| `instance_name` | yes | Free-text label, e.g. `workstation-01` or `group-server`. |
 | `schema_version` | yes | The Alembic revision the local DB is at, e.g. `d5b8e2f4a916`. |
 | `software_version` | no | Optional TCKDB software version label. |
 | `created_by_local_user` | no | Optional local username/label. |
@@ -105,7 +105,7 @@ authentication when the bundle is submitted.
 
 | Field | Required | Notes |
 |-------|----------|-------|
-| `local_user_label` | yes | Local label such as `calvin`. |
+| `local_user_label` | yes | Local label such as `alice`. |
 | `orcid` | no | ORCID iD if known. Not validated for format in version 1. |
 | `affiliation` | no | Free-text. |
 | `email` | no | Free-text contact. |

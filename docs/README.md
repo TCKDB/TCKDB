@@ -11,7 +11,7 @@ landing page for each curated subdirectory is linked below.
 | [contribution-bundles/](contribution-bundles/) | Bundle format and the local-to-hosted submission workflow. |
 | [deployment/](deployment/) | Deployment scenarios — local v0, self-hosted single-node, shared private, and HPC client access. Start with [deployment/README.md](deployment/README.md). |
 | [start/](start/) | Getting-started pages linked from the site's home page (`index.md`). |
-| [guides/](guides/) | How-to guides oriented at users and workflow tools (querying, demo data, cookbook examples). |
+| [guides/](guides/) | How-to guides oriented at users and workflow tools (querying, cookbook examples). |
 | [specs/](specs/) | Tracked specifications for APIs, schemas, and upload semantics. |
 
 ## Docs hygiene policy
