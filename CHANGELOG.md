@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## The CHEMKIN adapter converts KELVINS and EVOLTS activation energies with exact constants (Unreleased)
+
+- **Behaviour:** `tckdb-chemkin` converts an Ea given in `KELVINS` with R = 8.314462618 J mol⁻¹ K⁻¹ and one given in `EVOLTS` with 96.48533212331 kJ mol⁻¹ per eV, the values the CHEMKIN export uses. It used 8.31446 and 96.485, which moved such an Ea by 3 parts in 10⁷ and 3 parts in 10⁶ on a round trip.
+- **Schema and migration:** none. No new environment variable.
+- **Versions:** `tckdb-chemkin` 0.7.4.
+
 ## Software and workflow-tool names that differ only in case resolve to one row (Unreleased)
 
 - **Behaviour:** an upload naming `PSI4` (or ` psi4 `) when `Psi4` is already stored now reuses that software row and its stored spelling. It used to fail with a server error. Software is looked up by its public ref, in the upload resolver and in the contribution-bundle dry run, which reports the stored name.

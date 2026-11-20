@@ -36,7 +36,8 @@ MODEL_CHEBYSHEV = "chebyshev"
 # ---------------------------------------------------------------------------
 
 # CHEMKIN REACTIONS-header Ea token -> conversion factor to kJ/mol (§7).
-# R used for KELVIN is 8.31446e-3 kJ/mol/K; EVOLTS uses 96.485 kJ/mol per eV.
+# KELVIN uses R = 8.314462618e-3 kJ/mol/K and EVOLTS uses e*N_A = 96.48533212331 kJ/mol
+# per eV (both exact in the 2019 SI).
 EA_TOKEN_TO_KJ_MOL: dict[str, float] = {
     "CAL/MOLE": 4.184e-3,
     "CAL/MOL": 4.184e-3,
@@ -48,10 +49,10 @@ EA_TOKEN_TO_KJ_MOL: dict[str, float] = {
     "KJOULES/MOLE": 1.0,
     "KJOULES/MOL": 1.0,
     "KJOU/MOLE": 1.0,
-    "KELVIN": 8.31446e-3,
-    "KELVINS": 8.31446e-3,
-    "EVOLTS": 96.485,
-    "EVOLT": 96.485,
+    "KELVIN": 8.314462618e-3,
+    "KELVINS": 8.314462618e-3,
+    "EVOLTS": 96.48533212331,
+    "EVOLT": 96.48533212331,
 }
 
 # CHEMKIN Ea token -> TCKDB ActivationEnergyUnits value, when a lossless

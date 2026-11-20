@@ -180,3 +180,18 @@ def test_units_kcal_molecules_conversion():
     # KCAL/MOLE passes through natively as kcal_mol
     assert r.reported_ea == pytest.approx(12.0)
     assert r.reported_ea_units == "kcal_mol"
+
+
+@pytest.mark.parametrize(
+    ("token", "kj_mol"),
+    [
+        # 1 K of Ea/R is R in kJ/mol; 1 eV per particle is e * N_A in kJ/mol.
+        ("KELVINS", 8.314462618e-3),
+        ("KELVIN", 8.314462618e-3),
+        ("EVOLTS", 1.602176634e-19 * 6.02214076e23 / 1000.0),
+    ],
+)
+def test_ea_conversion_uses_exact_si_constants(token, kj_mol):
+    from tckdb_chemkin.normalizer import _ea_to_kj
+
+    assert _ea_to_kj(1.0, token) == pytest.approx(kj_mol, rel=1e-12)
