@@ -1,31 +1,42 @@
-# Getting Started
+# Install locally
 
-This page is the shortest path from a fresh clone to a running local
-TCKDB API.
+The shortest path from a fresh clone to a TCKDB API running from source, for
+working on the code.
 
-## Prerequisites
+Just want to run TCKDB, for yourself or a group? [Self-host](../deployment/README.md)
+does it from published images in three commands, with no Conda.
+
+<figure class="tk-figure">
+--8<-- "assets/dev-setup-flow.svg"
+</figure>
+
+## What you need
 
 - Git.
-- Docker Desktop or Docker Engine with Compose.
-- Conda or Mamba. The recommended environment uses conda-forge RDKit.
+- Docker Engine or Docker Desktop with Compose.
+- Conda or Mamba. The environment takes RDKit from conda-forge.
 - A Unix-like shell: Linux, macOS, or WSL on Windows.
 
-## Local Setup
+## Set up
 
 ```bash
-git clone <repo-url> tckdb
-cd tckdb
+git clone https://github.com/TCKDB/TCKDB.git
+cd TCKDB
 
 cp .env.example .env
 cp backend/.env.example backend/.env
 
 mamba env create -n tckdb_env -f backend/environment.yml
 conda activate tckdb_env
+pip install -e schemas/python/tckdb-schemas
 cd backend && pip install -e ".[dev]" && cd ..
 
 make up
 make api
 ```
+
+`make up` starts Postgres and SeaweedFS in Docker and runs the migrations.
+`make api` runs the API in the foreground on 127.0.0.1:8010.
 
 In another terminal:
 
@@ -34,20 +45,19 @@ make doctor
 curl http://127.0.0.1:8010/api/v1/health
 ```
 
-Expected health response:
+Expected response:
 
 ```json
 {"status":"ok"}
 ```
 
-At this point TCKDB is running. If you have not loaded or uploaded
-scientific records yet, query endpoints may return empty `records`
-arrays. That is normal for an empty database.
+TCKDB is running. Until you load or upload records, queries return empty
+`records` arrays.
 
-## Next Step
+## Next
 
-Load the small illustrative dataset in [Demo Data](demo-data.md), then
-try [Querying](querying.md).
+Load the small dataset in [Demo data](demo-data.md), then try
+[Querying](querying.md).
 
-For a longer local deployment guide, see
-[Local Development](../deployment/local-v0.md).
+Details, administrator accounts and API keys are on
+[Run from source](../deployment/local-v0.md).

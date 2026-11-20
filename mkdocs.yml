@@ -42,6 +42,9 @@ markdown_extensions:
   - pymdownx.details
   - pymdownx.highlight
   - pymdownx.superfences
+  - pymdownx.snippets:
+      base_path: [docs]
+      check_paths: true
 
 extra_css:
   - stylesheets/extra.css
@@ -70,14 +73,15 @@ nav:
   - Hosting TCKDB:
       - deployment/README.md
       - Which setup do I need?: deployment/deployment_modes.md
-      - Local development: deployment/local-v0.md
-      - Self-hosted single node: deployment/self_hosted_single_node.md
-      - Shared private (lab): deployment/shared-private-deployment.md
-      - Clients from HPC: deployment/client-access-from-hpc.md
-      - Without Docker: deployment/native-advanced.md
       - Admin accounts and API keys: deployment/admin_auth_quickstart.md
+      - Public server: deployment/self_hosted_single_node.md
+      - Lab server: deployment/shared-private-deployment.md
+      - Clients on HPC: deployment/client-access-from-hpc.md
       - Production checklist: deployment/production_checklist.md
       - Troubleshooting: deployment/troubleshooting.md
+      - Run from source: deployment/local-v0.md
+      - Without Docker: deployment/native-advanced.md
+      - Object store firewall: deployment/storage-firewall.md
   - Querying:
       - Public read API: guides/public_hosted_querying.md
       - Query cookbook: guides/scientific_query_cookbook.md

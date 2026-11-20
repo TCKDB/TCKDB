@@ -1,193 +1,134 @@
-# Admin auth quickstart
+# Admin accounts and API keys
 
-Operational recipe for seeding admin/curator accounts, logging in, and
-minting the API keys that ARC and other clients need to upload to a
-TCKDB deployment. Works against any TCKDB instance — local dev, a
-shared lab server, or a public self-hosted deployment at e.g.
-`https://tckdb.example.org/api/v1`.
+How to create accounts, log in, and mint the API keys that ARC and other
+clients use to upload. It works against any TCKDB instance.
 
-For the full self-hosted single-node setup (compose layout,
-reverse-proxy/tunnel, Postgres/object-store posture) see
-[self_hosted_single_node.md](self_hosted_single_node.md). That guide
-was tested on a Raspberry Pi but the recipe transfers to any small
-Linux server.
+None of the files below may be committed. `.gitignore` already covers them.
 
-> **Never commit any of the files this guide produces.** The repo's
-> `.gitignore` already covers `.tckdb_auth.env`, `.tckdb_api_key`,
-> `.tckdb_cookies.txt`, `cookies.txt`, and the `backend/`-prefixed
-> variants written by the older `dev_login.sh`.
+## 1. Create accounts
 
----
+Registration is closed on any shared instance, so accounts are created with
+[`bootstrap_admin.py`](../../backend/scripts/bootstrap_admin.py). On a
+[self-hosted](README.md) stack, `init` has already created the first
+administrator from `.env.db-admin`.
 
-## 1. Seed an admin (or curator) account
+A new account needs a password, from `TCKDB_BOOTSTRAP_PASSWORD` or
+`--password`. Use the environment variable so the password stays out of your
+shell history. `--role` is `user`, `curator` or `admin`, and defaults to
+`admin`.
 
-Public registration is disabled on hosted deployments — admins are
-seeded directly. Use [bootstrap_admin.py](https://github.com/TCKDB/TCKDB/blob/main/backend/scripts/bootstrap_admin.py)
-(despite the name, it now handles any role):
+**On a self-hosted stack**, run it in the API container:
 
 ```bash
-# From the backend/ directory — the script's sys.path shim makes
-# PYTHONPATH unnecessary.
-cd backend
+read -rsp "Password: " PW; echo
+docker compose --env-file .env.selfhosted --env-file .env.db-admin --profile selfhost \
+    exec -e TCKDB_BOOTSTRAP_PASSWORD="$PW" tckdb-api \
+    /opt/conda/bin/python scripts/bootstrap_admin.py \
+    --username bob --email bob@example.org --role curator
+unset PW
+```
 
-# Password may also come from $TCKDB_BOOTSTRAP_PASSWORD (preferable
-# in shared shells — it stays out of history).
-conda run -n tckdb_env python scripts/bootstrap_admin.py \
-    --username alice \
-    --email   alice@example.org \
-    --role    admin \
-    --password 'correct horse battery staple'
+**From source**, run it from `backend/`:
+
+```bash
+TCKDB_BOOTSTRAP_PASSWORD='a long passphrase' \
+  conda run -n tckdb_env python scripts/bootstrap_admin.py \
+    --username alice --email alice@example.org --role admin
 ```
 
 The script is idempotent:
 
-- creates the user if they don't exist,
-- reactivates them if disabled,
-- refuses to change an existing user's role unless you pass
-  `--force-role-change` (this is the break-glass override and applies
-  to demotions too).
-
-Curators are seeded the same way:
-
-```bash
-conda run -n tckdb_env python scripts/bootstrap_admin.py \
-    --username bob \
-    --email   bob@example.org \
-    --role    curator \
-    --password 'another long passphrase'
-```
-
-If the user already exists with a different role, the script exits
-with code 2 and a hint to re-run with `--force-role-change`.
-
----
+- it creates the user if none matches;
+- it reactivates a disabled user;
+- it refuses to change an existing user's role, promotion or demotion,
+  unless you pass `--force-role-change`. Without it the script exits with
+  code 2 and says so.
 
 ## 2. Log in and mint an API key
 
-Use [tckdb_auth.sh](https://github.com/TCKDB/TCKDB/blob/main/backend/scripts/tckdb_auth.sh), the
-deployment-agnostic helper:
+Use [`tckdb_auth.sh`](../../backend/scripts/tckdb_auth.sh) with any instance:
 
 ```bash
-# Point at whichever TCKDB you want to talk to.
-export TCKDB_BASE_URL="https://tckdb.example.org/api/v1"
-# Or for local dev:
-# export TCKDB_BASE_URL="http://127.0.0.1:8010/api/v1"
-
-# One-shot: prompts for credentials, saves cookie, mints API key,
-# writes both into .tckdb_auth.env (mode 0600).
-backend/scripts/tckdb_auth.sh login-create-key --name arc-pi-upload
-
-# Pull the key into the current shell.
+export TCKDB_BASE_URL="https://tckdb.example.org/api/v1"   # or http://127.0.0.1:8010/api/v1
+backend/scripts/tckdb_auth.sh login-create-key --name arc-upload
 source .tckdb_auth.env
 ```
 
-The script writes three things and prints none of them by default:
+It asks for your username and password, saves the session cookie, mints a
+key and writes two files. It prints neither the cookie nor the key:
 
 | File | Contents | Mode |
 |---|---|---|
-| `.tckdb_cookies.txt` | Session cookie from `POST /auth/login` | 0600 |
-| `.tckdb_auth.env`    | `TCKDB_BASE_URL`, `TCKDB_API_KEY`       | 0600 |
+| `.tckdb_cookies.txt` | the session cookie | 600 |
+| `.tckdb_auth.env` | `TCKDB_BASE_URL`, `TCKDB_API_KEY` | 600 |
 
-If you want to see the plaintext key once for copy-paste into a
-password manager, add `--show-key` — it is otherwise only visible by
-reading `.tckdb_auth.env` directly.
+Add `--show-key` to print the key once, for a password manager. To keep
+several instances apart, set `TCKDB_COOKIE_FILE` and `TCKDB_AUTH_ENV_FILE`
+to different paths.
 
-Override the paths with `TCKDB_COOKIE_FILE` and `TCKDB_AUTH_ENV_FILE`
-when you need to keep multiple deployments separate, e.g. one cookie
-jar for local dev and another for the Pi.
-
-### Subcommands
+Other subcommands:
 
 ```bash
-backend/scripts/tckdb_auth.sh me                            # whoami
-backend/scripts/tckdb_auth.sh login                         # cookie only
-backend/scripts/tckdb_auth.sh create-key --name arc-pi-upload   # needs cookie
-backend/scripts/tckdb_auth.sh login-create-key --name arc-pi-upload
+backend/scripts/tckdb_auth.sh me                          # who am I
+backend/scripts/tckdb_auth.sh login                       # cookie only
+backend/scripts/tckdb_auth.sh create-key --name arc-upload   # needs the cookie
 ```
 
-`me` prefers `TCKDB_API_KEY` (when set) over the cookie file, so it
-also works as a smoke test after `source .tckdb_auth.env`.
+`me` uses `TCKDB_API_KEY` when it is set, so after `source .tckdb_auth.env`
+it tests the key.
 
----
-
-## 3. Test the API key
+## 3. Test the key
 
 ```bash
-source .tckdb_auth.env
-
-# Should print your user row.
 curl -s -H "X-API-Key: $TCKDB_API_KEY" "$TCKDB_BASE_URL/auth/me" | jq
-
-# Or via the helper (same call, just uses the env var).
-backend/scripts/tckdb_auth.sh me
 ```
 
-`/auth/me` accepts either a session cookie or `X-API-Key`; uploads
-require the API key:
+`/auth/me` accepts a session cookie or a key. Uploads need the key, sent as
+`X-API-Key`.
 
-```text
-X-API-Key: $TCKDB_API_KEY
-```
+## 4. Point ARC at the instance
 
----
-
-## 4. Wire ARC against the deployment
-
-ARC's TCKDB adapter reads the same two environment variables:
+ARC's TCKDB adapter reads the same two variables:
 
 ```bash
 export TCKDB_BASE_URL="https://tckdb.example.org/api/v1"
-export TCKDB_API_KEY="..."
+export TCKDB_API_KEY="tck_..."
 ```
 
-Source `.tckdb_auth.env` (or copy the values into your ARC env file)
-before running an ARC job that should upload to TCKDB. The adapter
-sends every write as `X-API-Key: $TCKDB_API_KEY` against
-`$TCKDB_BASE_URL`; there is no second auth path.
+Source `.tckdb_auth.env`, or copy the values into ARC's env file, before an
+ARC run that should upload. The adapter sends every write with that key to
+that URL. There is no other login path.
 
----
-
-## 5. Check a deployment
-
-After spinning up or modifying any compose-based single-node TCKDB
-instance:
+## 5. Check an instance
 
 ```bash
-# Run from the repo root. Defaults target the self-hosted recipe
-# (docker-compose.yml, .env.selfhosted). Override
-# COMPOSE_FILE / TCKDB_BASE_URL for other deployments.
 backend/scripts/check_selfhosted_deployment.sh
-
-# Example: same script against a local compose dev stack.
-COMPOSE_FILE=docker-compose.yml \
-COMPOSE_ENV_FILE=.env \
-TCKDB_BASE_URL=http://127.0.0.1:8010/api/v1 \
-DB_NAME=tckdb_dev \
-    backend/scripts/check_selfhosted_deployment.sh
-
-# Example: same script against a public self-hosted instance.
-TCKDB_BASE_URL=https://tckdb.example.org/api/v1 \
-    backend/scripts/check_selfhosted_deployment.sh
 ```
 
-What the script verifies:
+Run it from the repository root. The defaults fit a self-hosted stack
+(`docker-compose.yml`, `.env.selfhosted`, `.env.db-admin`). It checks:
 
-1. `docker compose ps` works and `db`, `seaweedfs` services are running/healthy
-   (`STORAGE_SERVICE=minio` on a MinIO deployment)
-2. `psql` inside the `db` container responds
-3. The `rdkit` extension is installed in `$DB_NAME`
-4. `alembic current` reports a revision (best-effort — needs the
-   `tckdb_env` conda env on the host)
-5. `GET $TCKDB_BASE_URL/health` returns `{"status": "ok"}`
-6. `GET $TCKDB_BASE_URL/scientific/species/search?smiles=O` returns 200
+1. no secret is empty or a `change-me` placeholder;
+2. `db` and `seaweedfs` are running and healthy, and `tckdb-api` and
+   `frontend` too when they run (`STORAGE_SERVICE=minio` on a MinIO stack);
+3. the `rdkit` extension is installed in `DB_NAME`;
+4. the database is at the latest migration, read inside the `tckdb-api`
+   container, or with the host's `tckdb_env` when there is no container;
+5. `GET $TCKDB_BASE_URL/health` returns `{"status":"ok"}`;
+6. `GET $TCKDB_BASE_URL/scientific/species/search?smiles=O` returns `200`.
 
-Exit code is non-zero if any check fails; details go to stderr.
+It exits non-zero if any check fails and explains on stderr. For a compose
+project with another name, pass `-p NAME`. `--help` lists the other inputs.
+On a stack started from source, use `make doctor` instead: the developer
+`.env` has no `PAGING_CURSOR_KEY`, so the secret check fails there.
 
----
+## If a key leaks
 
-## What never to commit
+Revoke it with `DELETE /api/v1/auth/api-keys/{key_id}` on the instance that
+issued it, then mint a new one. Check that it never reached a commit:
+`git log --all --full-history -- <file>`.
 
-The `.gitignore` already covers these, but it's worth knowing the list:
+Files that must never be committed:
 
 ```text
 .tckdb_auth.env
@@ -200,8 +141,3 @@ backend/.tckdb_auth.env
 backend/.tckdb_api_key
 backend/cookies.txt
 ```
-
-If a key leaks: revoke it via `DELETE /api/v1/auth/api-keys/{key_id}`
-(or the admin UI when it exists), rotate it, and check git history
-with `git log --all --full-history -- <file>` to confirm it never
-landed in a commit.

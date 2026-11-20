@@ -25,3 +25,25 @@
     color: #3b1b1b;
   }
 }
+
+/* Step and layout diagrams, inlined from docs/assets/*.svg. */
+.md-typeset .tk-figure {
+  display: block;
+  width: 100%;
+  max-width: 500px;
+  margin: 1.5em auto;
+}
+
+.md-typeset .tk-figure svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.md-typeset .tk-figure figcaption {
+  margin: 0.6em auto 0;
+  max-width: none;
+  text-align: center;
+  font-style: normal;
+  color: var(--md-default-fg-color--light);
+}
