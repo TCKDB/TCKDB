@@ -1,395 +1,169 @@
-# Single-machine private deployment (Local v0)
+# Run from source
 
-Run TCKDB privately on a single machine — laptop, dev workstation, or
-single-user host — using the **same** backend schema, services,
-authentication model, and upload APIs as every other TCKDB deployment.
-This is a **deployment scenario**, not a separate edition or mode of
-TCKDB. The "Local v0" name comes from the milestone that delivered the
-first documented form of this scenario; the page describes the
-scenario, not a fork. See [the deployment guide overview](README.md)
-for the wider taxonomy.
+Run the API from your checkout, with Postgres and SeaweedFS in Docker. Use
+this to change TCKDB's code or run its tests. To run TCKDB without changing
+it, [Self-host](README.md) is quicker.
 
-> **Same backend, not a lite fork.**
-> A single-machine private deployment does **not** sync to hosted, and
-> it does **not** import or export contribution bundles.
-> Local-to-hosted contribution is handled separately through
-> contribution bundles.
+The short version, with a picture, is [Install locally](../start/getting-started.md).
+This page has the details.
 
-> **Need a shared lab/group instance?** See
-> [shared-private-deployment.md](shared-private-deployment.md).
-> **Submitting from HPC?** See
-> [client-access-from-hpc.md](client-access-from-hpc.md) — HPC is a
-> client environment, not a separate deployment.
-> **No Docker available?** See
-> [native-advanced.md](native-advanced.md) — native install is one
-> infrastructure strategy among several. All of these reuse the same
-> backend, schema, and auth model documented on this page.
+## What you need
 
-The page below uses the **Docker Compose quick-start** as its
-infrastructure strategy: containers for PostgreSQL+RDKit and SeaweedFS,
-plus the host-side conda env for the backend API and upload worker.
-This is a quick-start *recipe* for provisioning the application's
-dependencies — not the definition of a single-machine deployment.
-Other infrastructure strategies (managed PostgreSQL+RDKit,
-[native install](native-advanced.md), and the deferred Apptainer
-packaging) serve the same scenario.
+- Docker with Compose v2 (`docker compose version`).
+- Miniforge, Conda or Mamba.
+- `curl` for the checks below.
 
----
+Two working directories:
 
-## Prerequisites
+- **The repository root** for `docker compose` and `make`.
+- **`backend/`** for `alembic`, `uvicorn`, the worker and anything under
+  `scripts/`.
 
-- Docker and Docker Compose v2 (`docker compose version`)
-- Miniforge/Conda with the `tckdb_env` environment installed
-- `curl` for the smoke-test commands below
+The commands use `conda run -n tckdb_env ...`. Drop the prefix if the env is
+active.
 
-The host-side commands all use `conda run -n tckdb_env ...`; if your
-shell already has the env activated you can drop the prefix.
+## 1. Set up
 
-### Working directories
-
-The repo is split into `backend/` (Python/FastAPI) and `frontend/`
-(Vite/TS). Two cwd contexts in this guide:
-
-- **Project root** — `docker compose ...` commands. The compose files
-  live at the root.
-- **`backend/`** — every other host-side command (`alembic`,
-  `uvicorn`, `python -m app.workers.upload_worker`, anything under
-  `scripts/`). Get there once with `cd backend` and stay there.
-
-Each section below states which context it assumes.
-
----
-
-## 1. Start the local stack
-
-> Run from the **project root**.
+From the repository root:
 
 ```bash
+cp .env.example .env
 cp backend/.env.local.example backend/.env
-docker compose up -d
+mamba env create -n tckdb_env -f backend/environment.yml
+conda run -n tckdb_env pip install -e schemas/python/tckdb-schemas
+conda run -n tckdb_env pip install -e "./backend[dev]"
 ```
 
-This brings up:
+`.env` holds the values `docker-compose.yml` needs. `backend/.env` holds the
+backend's settings. Alembic reads it on its own; the API reads only its
+environment, so export the file in the shell that starts the API (step 4).
+`backend/.env.local.example` turns on open registration and runs the upload
+worker inside the API.
+
+## 2. Start Postgres and SeaweedFS
+
+```bash
+make up
+```
+
+This starts the `db` and `seaweedfs` containers and runs
+`alembic upgrade head` against `tckdb_dev`. Both containers publish their
+ports on 127.0.0.1 only: Postgres on `DB_PORT` (default 5432) and the S3 API
+on `S3_PORT` (default 9000). The API on the host reaches them there.
 
 | Service | Image | Purpose |
-|---------|-------|---------|
-| `db`    | `informaticsmatters/rdkit-cartridge-debian` | PostgreSQL with the RDKit cartridge |
-| `seaweedfs` | `chrislusf/seaweedfs` | S3-compatible artifact storage |
+|---|---|---|
+| `db` | `informaticsmatters/rdkit-cartridge-debian` | Postgres with the RDKit cartridge |
+| `seaweedfs` | `chrislusf/seaweedfs` | S3-compatible file storage |
 
-Both services run on `network_mode: host` so the host-side API reaches
-them at `127.0.0.1:5432` and `127.0.0.1:9000` without overrides.
+The first migration seeds reference data such as reaction families. Before
+upgrading a database that holds data you care about, read the
+[migration runbook](../../backend/docs/deployment/migrations.md).
 
-The backend API and upload worker are **not** containerized in Local v0
-— see [Future work](#future-work) for the rationale.
+## 3. Create an administrator
 
----
-
-## 2. Initialize the schema
-
-> Run from `backend/`.
-
-```bash
-cd backend
-set -a; source .env; set +a
-conda run -n tckdb_env alembic upgrade head
-```
-
-This applies the full ordered migration chain through the current head. The
-baseline revision seeds reference data (for example, `reaction_family`), and
-later revisions upgrade the deployed schema in place. Review the
-[migration runbook](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/deployment/migrations.md) before
-upgrading a database that already contains data.
-
----
-
-## 3. Bootstrap the first admin
-
-> Run from `backend/`.
-
-`backend/scripts/bootstrap_admin.py` is **idempotent**: it creates a
-new admin if no matching account exists, and promotes (and
-reactivates) an existing one if it does. Run it once after the schema
-is up.
-
-```bash
-conda run -n tckdb_env python scripts/bootstrap_admin.py \
-  --username admin \
-  --email admin@example.local \
-  --password "change-me" \
-  --full-name "Local Admin"
-```
-
-Avoid passing `--password` on a shared shell — use the env var instead:
+From `backend/`:
 
 ```bash
 TCKDB_BOOTSTRAP_PASSWORD='change-me' \
   conda run -n tckdb_env python scripts/bootstrap_admin.py \
-    --username admin \
-    --email admin@example.local
+    --username admin --email admin@example.local
 ```
 
-> **Containerized usage.** Once a backend image exists (see
-> [Future work](#future-work)) the same script will run as
-> `docker compose exec api python scripts/bootstrap_admin.py ...`.
-> For Local v0 the host-side command above is the supported path.
+A new account needs a password, from `TCKDB_BOOTSTRAP_PASSWORD` or
+`--password`. The environment variable keeps it out of your shell history.
+The script is idempotent: run it again and it reactivates the account. It
+changes an existing user's role only with `--force-role-change`. `make admin`
+runs the same script; set `TCKDB_BOOTSTRAP_PASSWORD` first.
 
----
-
-## 4. Start the backend API
-
-> Run from `backend/`.
+## 4. Start the API
 
 ```bash
-conda run -n tckdb_env uvicorn main:app \
-  --host 127.0.0.1 --port 8010 --reload
+set -a; source backend/.env; set +a
+make api
 ```
 
-By default `TCKDB_INLINE_WORKER=true` (in `backend/.env.local.example`)
-so the upload worker runs as a thread inside the API process. To run
-it separately for isolation, set `TCKDB_INLINE_WORKER=false` and start
-a second terminal (also in `backend/`):
+`make api` runs `uvicorn main:app --host 127.0.0.1 --port 8010` from
+`backend/` in the foreground. The API reads its settings from the
+environment, not from `backend/.env`, hence the `source`. The defaults match
+the development templates, so skipping it works until you change a value. With `TCKDB_INLINE_WORKER=true` (set by
+`backend/.env.local.example`), the upload worker runs inside the API. To run
+it on its own, set `TCKDB_INLINE_WORKER=false` and start it in a second
+terminal, from `backend/`:
 
 ```bash
 conda run -n tckdb_env python -m app.workers.upload_worker
 ```
 
----
-
-## 5. Verify the deployment (smoke test)
-
-### a. Health endpoint
+## 5. Check it
 
 ```bash
-curl -sf http://127.0.0.1:8010/api/v1/health
-# {"status":"ok"}
+make doctor
+curl -sf http://127.0.0.1:8010/api/v1/health    # {"status":"ok"}
 ```
 
-### b. Log in (or register, if open registration is enabled)
-
-If you bootstrapped an admin in step 3, log in:
+Log in and mint an API key. Keys can be minted only with a session cookie,
+never with another key:
 
 ```bash
-curl -sf -c cookies.txt \
-  -H "Content-Type: application/json" \
+curl -sf -c cookies.txt -H "Content-Type: application/json" \
   -X POST http://127.0.0.1:8010/api/v1/auth/login \
   -d '{"username": "admin", "password": "change-me"}'
-```
 
-Or, with `AUTH_ALLOW_OPEN_REGISTRATION=true`, register a new user:
-
-```bash
-curl -sf -c cookies.txt \
-  -H "Content-Type: application/json" \
-  -X POST http://127.0.0.1:8010/api/v1/auth/register \
-  -d '{"username": "alice", "password": "change-me-too", "email": "alice@example.local"}'
-```
-
-See [Single-machine private vs shared private deployment](#single-machine-private-vs-shared-private-deployment)
-for when to flip `AUTH_ALLOW_OPEN_REGISTRATION` off.
-
-### c. Create an API key
-
-API keys can only be minted with a session cookie — never with another
-API key.
-
-```bash
-curl -sf -b cookies.txt \
-  -H "Content-Type: application/json" \
+curl -sf -b cookies.txt -H "Content-Type: application/json" \
   -X POST http://127.0.0.1:8010/api/v1/auth/api-keys \
   -d '{"label": "local-dev"}'
 ```
 
-The response includes a one-time `key` field (e.g. `tck_...`). **Save
-it now** — the plaintext value is never shown again.
+The response holds the key (`tck_...`) once. Save it:
 
 ```bash
 export TCKDB_API_KEY='tck_...'
 ```
 
-### d. Confirm anonymous uploads are rejected
+`backend/scripts/tckdb_auth.sh login-create-key` does both steps and writes
+the key to a file; see [Admin accounts and API keys](admin_auth_quickstart.md).
+
+With open registration on, new users can also register themselves:
 
 ```bash
-curl -i -X POST http://127.0.0.1:8010/api/v1/uploads/...
-# HTTP/1.1 401 Unauthorized
+curl -sf -c cookies.txt -H "Content-Type: application/json" \
+  -X POST http://127.0.0.1:8010/api/v1/auth/register \
+  -d '{"username": "alice", "password": "change-me-too", "email": "alice@example.local"}'
 ```
 
-### e. Confirm API-key auth reaches the route
+Uploads without a key get `401`. With `-H "X-API-Key: $TCKDB_API_KEY"` they
+reach the upload route and are recorded under your account.
 
-Any upload route accepts the `X-API-Key` header. The exact path and
-payload depend on the workflow; using a generic placeholder:
-
-```bash
-curl -sf -X POST http://127.0.0.1:8010/api/v1/uploads/<workflow> \
-  -H "X-API-Key: $TCKDB_API_KEY" \
-  -H "Content-Type: application/json" \
-  --data @payload.json
-```
-
-A 200/202 (or schema-validation 4xx) response confirms the request
-reached the upload route under your `created_by` attribution.
-
----
-
-## Single-machine private vs shared private deployment
-
-The page above covers the **single-machine** scenario, where the API
-binds to `127.0.0.1` and only the local user can reach it. Open
-self-registration is acceptable and keeps the instance self-serve:
-
-```env
-AUTH_ALLOW_OPEN_REGISTRATION=true
-```
-
-If the API is instead reachable on a lab network (for example
-`0.0.0.0:8000` behind a reverse proxy at
-`http://tckdb.lab.example.org`), open registration becomes a soft
-account-creation backdoor. Disable it:
-
-```env
-AUTH_ALLOW_OPEN_REGISTRATION=false
-```
-
-…and seed every account explicitly with
-`backend/scripts/bootstrap_admin.py` (run from `backend/`):
-
-```bash
-conda run -n tckdb_env python scripts/bootstrap_admin.py \
-  --username alice --email alice@lab.example.org
-```
-
-That posture — closed registration, per-user API keys, reverse proxy,
-backups, access control — is the **shared private deployment**
-scenario, documented in detail in
-[shared-private-deployment.md](shared-private-deployment.md). It is
-the same backend you bring up on this page; only operational policy
-changes.
-
----
-
-## Generic client targeting
-
-Any TCKDB API client — script, notebook, lab pipeline, workflow tool,
-future CLI, future frontend — targets a deployment by configuring just
-two values:
-
-- `base_url`
-- `api_key`
-
-```yaml
-# Local
-tckdb:
-  base_url: "http://localhost:8010/api/v1"
-  api_key: "tck_..."
-```
-
-```yaml
-# Shared private deployment (e.g. lab service node)
-tckdb:
-  base_url: "https://tckdb.lab.example.org/api/v1"
-  api_key: "tck_..."
-```
-
-```yaml
-# Hosted
-tckdb:
-  base_url: "https://tckdb.example.org/api/v1"
-  api_key: "tck_..."
-```
-
-The client behavior is identical across deployments — TCKDB is not tied
-to a particular workflow tool.
-
----
+Open registration is fine while the API listens on 127.0.0.1. Turn it off
+(`AUTH_ALLOW_OPEN_REGISTRATION=false`) as soon as anyone else can reach the
+API; see [Lab server](shared-private-deployment.md).
 
 ## Stop and reset
 
-### Stop (preserve data)
-
 ```bash
-docker compose down
+make down     # stop the containers, keep the data
+make reset    # delete the database and files, start again, migrate
 ```
 
-### Full reset (drop volumes — destroys local DB and artifacts)
+After `make reset`, create the administrator again. `make reset-login` does
+that too, and mints a dev API key, while the API is running.
 
-```bash
-docker compose down -v
-```
+## Common problems
 
-You'll need to re-run the migration (step 2) and bootstrap admin (step
-3) afterward.
+- **`alembic upgrade head` cannot connect.** Check the `db` container is
+  healthy with `docker compose ps`.
+- **Port 5432 is taken.** Stop the other Postgres, or set `DB_PORT` to a free
+  port in both `.env` and `backend/.env`, and export it in the shell that
+  starts the API. The container still listens on 5432 inside; only the host
+  port moves.
+- **`401` with a session cookie.** Make curl keep cookies
+  (`-c cookies.txt -b cookies.txt`). Sessions expire; log in again.
+- **`403` with a valid key.** A key has its owner's role, and some routes
+  need a curator or administrator.
+- **The artifact bucket is missing.** The `seaweedfs` service creates
+  `S3_BUCKET` each time it starts. On MinIO or an external store, create it
+  with any S3 client, for example
+  `aws --endpoint-url http://127.0.0.1:9000 s3 mb s3://tckdb-artifacts`.
 
----
-
-## Troubleshooting
-
-- **`alembic upgrade head` cannot connect.** Confirm the DB container is
-  healthy: `docker compose ps`. The default
-  port (5432) must be free on the host because the compose file uses
-  `network_mode: host`.
-- **Port 5432 already in use.** Either stop the existing Postgres
-  service or change `DB_PORT` in `.env` *and* in your environment.
-  The application reads `DB_PORT` from env.
-- **`401 Authentication required` even with a session cookie.** Make
-  sure the client is preserving cookies (`-c cookies.txt -b cookies.txt`
-  for curl). Sessions expire — re-login if needed.
-- **API key works but upload returns 403.** API keys inherit the
-  user's role. Curators/admins are required for some endpoints — log in
-  as a curator/admin before minting the key, or promote the user via
-  the admin endpoints.
-- **Artifact bucket missing.** The compose `seaweedfs` service creates
-  `S3_BUCKET` each time it starts, so with it this needs no action. On
-  MinIO or an external store, `/status` reports the bucket as missing
-  until it exists. Create it with any S3 client, e.g.
-  `aws --endpoint-url http://127.0.0.1:9000 s3 mb s3://tckdb-artifacts`
-  (keys `S3_ACCESS_KEY` / `S3_SECRET_KEY`); on MinIO the console at
-  `http://localhost:9001` or `mc mb` also work.
-
----
-
-## What Local v0 explicitly does *not* include
-
-These are deliberately deferred — they are not bugs:
-
-- Contribution bundle export
-- Hosted bundle import
-- Local-to-hosted push
-- Raw database synchronization
-- Lite/reduced schema
-- A local-only backend fork
-- Apptainer/Singularity images
-- Native installer automation
-- Frontend bundle UI
-- Service accounts
-- Production hardening (TLS, secrets management, hardened cookies, etc.)
-
-Local v0 makes TCKDB runnable privately. It does not create a separate
-product, separate schema, or separate scientific validation path.
-
----
-
-## Future work
-
-- **Backend container packaging.** Tracked as its own milestone.
-  Local v0 deliberately runs the API and worker on the host because
-  the repo has not yet standardized a Python dependency manifest.
-  Containerizing the backend without that foundation is out of scope.
-- **Shared private deployment.** Closed registration, reverse proxy,
-  TLS, backups, access control on a lab service node. Documented in
-  [shared-private-deployment.md](shared-private-deployment.md). Same
-  backend; different operational policy.
-- **Client access from HPC.** HPC jobs are TCKDB API clients, not a
-  separate deployment. Patterns and Apptainer/Singularity status are
-  in [client-access-from-hpc.md](client-access-from-hpc.md).
-  Apptainer image build files are deferred packaging.
-- **Native install (advanced infrastructure strategy).** Documented in
-  [native-advanced.md](native-advanced.md); installer automation is
-  still out of scope.
-
----
-
-## Reference
-
-- [Deployment guide overview](README.md) — the full taxonomy
-- [Shared private deployment](shared-private-deployment.md) — same backend on a shared lab/group machine
-- [Client access from HPC](client-access-from-hpc.md) — HPC jobs as TCKDB clients; Apptainer/Singularity is deferred packaging
-- [Native advanced install](native-advanced.md) — infrastructure strategy when Docker/Apptainer aren't available
+More in [Troubleshooting](troubleshooting.md).
