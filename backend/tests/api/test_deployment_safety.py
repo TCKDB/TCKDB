@@ -17,10 +17,20 @@ from app.api.startup_checks import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _real_object_store_keys(monkeypatch):
+    """Pin the S3 keys the guard reads, so the ambient test env cannot decide a case."""
+    from app.services import artifact_storage
+
+    monkeypatch.setattr(artifact_storage, "S3_ACCESS_KEY", "tckdb-test-access")
+    monkeypatch.setattr(artifact_storage, "S3_SECRET_KEY", "tckdb-test-secret")
+
+
 def _safe_settings(mode: str) -> Settings:
     """Return a Settings instance configured for hosted-safe operation."""
     return Settings(
         deployment_mode=mode,  # type: ignore[arg-type]
+        db_password="a-real-runtime-password",
         auth_allow_open_registration=False,
         expose_api_docs=False,
         expose_api_reference=True,  # hosted mode must ALLOW this; it is the whole
@@ -91,6 +101,78 @@ def test_shared_private_rejects_unsafe_setting(case: _UnsafeCase):
 
 def test_shared_private_accepts_safe_settings():
     validate_deployment_safety(_safe_settings("shared_private"))
+
+
+def test_shared_private_allows_plain_http_cookies_only_when_opted_in():
+    s = _safe_settings("shared_private")
+    s.session_cookie_secure = False
+    s.session_cookie_allow_plain_http = True
+    validate_deployment_safety(s)  # does not raise
+
+
+def test_hosted_public_ignores_the_plain_http_opt_in():
+    s = _safe_settings("hosted_public")
+    s.session_cookie_secure = False
+    s.session_cookie_allow_plain_http = True
+    with pytest.raises(UnsafeDeploymentConfigError) as ei:
+        validate_deployment_safety(s)
+    assert ei.value.violations == ["SESSION_COOKIE_SECURE must be true"]
+
+
+# ---------------------------------------------------------------------------
+# Secrets still at a template placeholder, or empty
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("mode", ["shared_private", "hosted_public"])
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("DB_PASSWORD", "change-me-strong-runtime-db-password"),
+        ("DB_PASSWORD", ""),
+        ("S3_ACCESS_KEY", "change-me-s3-access-key"),
+        ("S3_ACCESS_KEY", ""),
+        ("S3_SECRET_KEY", "change-me-s3-secret-key"),
+        ("S3_SECRET_KEY", "  "),
+        ("PAGING_CURSOR_KEY", "change-me-a-paging-cursor-key-of-40-chars"),
+    ],
+)
+def test_hosted_modes_refuse_placeholder_secrets(monkeypatch, mode, name, value):
+    from app.services import artifact_storage
+
+    s = _safe_settings(mode)
+    if name == "DB_PASSWORD":
+        s.db_password = value
+    elif name == "PAGING_CURSOR_KEY":
+        s.paging_cursor_key = value
+    else:
+        monkeypatch.setattr(artifact_storage, name, value)
+    with pytest.raises(UnsafeDeploymentConfigError) as ei:
+        validate_deployment_safety(s)
+    assert len(ei.value.violations) == 1, ei.value.violations
+    assert ei.value.violations[0].startswith(f"{name} ")
+    if value:
+        # The placeholder is named by its prefix, never echoed in full.
+        assert value not in str(ei.value)
+
+
+def test_local_mode_ignores_placeholder_secrets(monkeypatch):
+    from app.services import artifact_storage
+
+    monkeypatch.setattr(artifact_storage, "S3_SECRET_KEY", "change-me-s3-secret-key")
+    validate_deployment_safety(Settings(deployment_mode="local", db_password="change-me"))
+
+
+def test_placeholder_violations_are_listed_together(monkeypatch):
+    from app.services import artifact_storage
+
+    monkeypatch.setattr(artifact_storage, "S3_ACCESS_KEY", "change-me-s3-access-key")
+    monkeypatch.setattr(artifact_storage, "S3_SECRET_KEY", "change-me-s3-secret-key")
+    s = _safe_settings("shared_private")
+    s.db_password = "change-me-strong-runtime-db-password"
+    with pytest.raises(UnsafeDeploymentConfigError) as ei:
+        validate_deployment_safety(s)
+    assert [v.split()[0] for v in ei.value.violations] == ["DB_PASSWORD", "S3_ACCESS_KEY", "S3_SECRET_KEY"]
 
 
 # ---------------------------------------------------------------------------

@@ -44,12 +44,12 @@ def test_seaweedfs_is_on_the_storage_network_only() -> None:
 
 def test_only_store_clients_join_the_storage_network() -> None:
     on_storage = {name for name in SERVICES if "storage" in _networks(name)}
-    assert on_storage == {"seaweedfs", "minio", "worker"}, on_storage
+    assert on_storage == {"seaweedfs", "minio", "worker", "tckdb-api"}, on_storage
     assert "storage" not in _networks("db")
 
 
 def test_seaweedfs_publishes_only_the_s3_gateway_on_loopback() -> None:
-    assert SERVICES["seaweedfs"]["ports"] == ["127.0.0.1:9000:9000"]
+    assert SERVICES["seaweedfs"]["ports"] == ["127.0.0.1:${S3_PORT:-9000}:9000"]
 
 
 def test_the_key_is_not_a_compose_interpolation_requirement() -> None:
