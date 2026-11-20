@@ -1,371 +1,165 @@
-# Native install (advanced infrastructure strategy)
+# Without Docker
 
-Native install is one of several
-[infrastructure strategies](README.md#infrastructure-strategies) for
-bringing up the TCKDB application — alongside the Docker Compose
-quick-start and (deferred) Apptainer packaging. It is an **advanced**
-strategy: operators provision PostgreSQL+RDKit, Python, and object
-storage themselves and run the standard TCKDB commands against them.
+Run TCKDB with no containers: Postgres with RDKit, the Python backend and an
+object store installed on the host. It serves the same setups as the Docker
+route, a personal instance or a [lab server](shared-private-deployment.md),
+with the same schema, API and accounts.
 
-> **This is a strategy, not a separate deployment scenario.** A
-> natively-installed TCKDB serves the same deployment scenarios as a
-> Docker-based one: a [single-machine private deployment](local-v0.md)
-> or a [shared private deployment](shared-private-deployment.md). What
-> changes is the install method, not the application.
->
-> Read this only if Docker (and the deferred Apptainer path) are off
-> the table. If Docker works, use the Docker Compose quick-start in
-> [local-v0.md](local-v0.md) — re-used unchanged for shared
-> deployments per [shared-private-deployment.md](shared-private-deployment.md).
-> For HPC, see [client-access-from-hpc.md](client-access-from-hpc.md);
-> HPC is a client environment, not a deployment.
+Use it only when Docker is not an option: institution policy, an
+unsupported OS, or a lab that already runs Postgres with RDKit and wants
+TCKDB to use it. Otherwise [Self-host](README.md) is far less work.
 
-This is a **documentation-only** page. There is no installer script,
-no system packages, and no native automation here.
+## What you install
 
----
+| Component | Why | Where from |
+|---|---|---|
+| Postgres with the RDKit cartridge | Identity tables use RDKit `mol` columns and chemistry-aware indexes. | [See below](#postgres-with-rdkit) |
+| The `tckdb_env` conda environment | Runs the API, the worker and Alembic. | `backend/environment.yml` |
+| An S3-compatible object store | Holds uploaded files such as ESS logs. | SeaweedFS, AWS S3, Google Cloud Storage, a lab S3 service, MinIO |
+| A service manager | Keeps the API and worker running across crashes and reboots. | systemd, supervisord, runit |
+| A reverse proxy, if anyone else connects | TLS, cookies and `X-API-Key` passed through. | nginx, Caddy, Traefik; see [Lab server](shared-private-deployment.md#reverse-proxy) |
 
-## Overview
+The hard parts are Postgres with RDKit and a durable object store. Everything
+above them works as in the Docker route.
 
-A native install brings TCKDB up by:
+## Postgres with RDKit
 
-1. Installing **PostgreSQL with the RDKit cartridge** as a host service.
-2. Installing the **`tckdb_env` conda environment** for the Python
-   backend.
-3. Providing **object/artifact storage** (SeaweedFS, AWS S3, MinIO, or
-   another S3-compatible service).
-4. Running the standard Alembic migrations against the host DB.
-5. Bootstrapping the first admin via `backend/scripts/bootstrap_admin.py`.
-6. Starting the API (`uvicorn main:app`) and, optionally, the upload
-   worker (`python -m app.workers.upload_worker`) under a service
-   manager you choose. Both are launched from `backend/`.
+TCKDB needs the RDKit cartridge inside the database, not only the RDKit
+Python library. Options, from least to most work:
 
-Everything above the database and storage layer is identical to a
-Docker-based deployment ([single-machine](local-v0.md) or
-[shared private](shared-private-deployment.md)). The hard part of a
-native install is steps 1 and 3 — provisioning PostgreSQL+RDKit and
-durable object storage on a host — which the Docker quick-start
-otherwise hides.
+1. **Run only the database in a container**, with podman or plain
+   `docker run`, from `informaticsmatters/rdkit-cartridge-debian`.
+2. **Install a distribution package** that bundles RDKit for Postgres, if
+   yours has one, and run `CREATE EXTENSION rdkit;`.
+3. **Build the cartridge from source** against your Postgres headers. This
+   depends closely on the Postgres and RDKit versions; follow RDKit's own
+   build documentation.
 
----
-
-## When native install might be appropriate
-
-- Docker is unavailable (institution policy, OS support, security
-  posture).
-- Apptainer/Singularity is unavailable (and image support is deferred —
-  see [client-access-from-hpc.md §Apptainer/Singularity (deferred packaging)](client-access-from-hpc.md#apptainersingularity-deferred-packaging)).
-- The lab already runs and manages a PostgreSQL+RDKit service for
-  other purposes and wants TCKDB to attach to it.
-- The host is a single workstation under one user's full admin
-  control.
-
-If none of those apply, choose Docker.
-
----
-
-## Required components
-
-| Component | Why | Source |
-|-----------|-----|--------|
-| **PostgreSQL** (recent stable) with the **RDKit cartridge** loaded | Identity tables use RDKit `mol` columns and chemistry-aware indexes. | [Build PostgreSQL+RDKit yourself](#postgresql-rdkit-cartridge), or use the upstream Docker image (`informaticsmatters/rdkit-cartridge-debian`) if Docker is acceptable for this *one* component. |
-| **Conda / Miniforge** with the project's `tckdb_env` environment | The backend, worker, and Alembic CLI all run from this env. | Project repo (`environment.yml` / equivalent). |
-| **Object / artifact storage** (S3-compatible) | Artifact uploads (logs, geometries) write through the object store. | SeaweedFS, AWS S3, lab-managed S3, MinIO, or any S3 API-compatible service. |
-| **Service manager** (systemd, supervisord, runit, …) | To keep `uvicorn` and the upload worker running. | OS-native. |
-| **Reverse proxy** (only if exposing the API beyond `127.0.0.1`) | TLS termination, cookie + `X-API-Key` passthrough. | nginx / Caddy / Traefik, etc. See [shared-private-deployment.md §Reverse proxy basics](shared-private-deployment.md#reverse-proxy-basics). |
-
----
-
-## PostgreSQL + RDKit cartridge
-
-This is the part that makes native install hard. TCKDB depends on the
-RDKit cartridge being available *inside* the database, not just as a
-Python library.
-
-Options, roughly in increasing order of operational pain:
-
-1. **Use the upstream RDKit-cartridge container.** Pull
-   `informaticsmatters/rdkit-cartridge-debian` and run it under
-   whatever container runtime you do have (podman, plain `docker run`
-   on a workstation). This is the lowest-effort native-ish path.
-2. **Use a distro package that bundles RDKit.** A few distributions
-   ship `postgresql-rdkit` (or similar). If yours does, install it
-   alongside Postgres and `CREATE EXTENSION rdkit;` in the database.
-3. **Build the cartridge from source.** Install Postgres dev headers,
-   build RDKit with the cartridge target, install the resulting
-   shared object into the Postgres extension directory. This is
-   deeply version-sensitive (Postgres major version × RDKit version)
-   and is **not** documented in detail here. If you must, follow the
-   upstream RDKit build documentation.
-
-After the cartridge is installed:
-
-`ENCODING 'UTF8' TEMPLATE template0` is required, not cosmetic: a bare
-`CREATE DATABASE` copies `template1`, whose encoding is whatever `initdb`
-chose for the cluster, and a `SQL_ASCII` database stores invalid bytes without
-complaint. See
-[troubleshooting.md](troubleshooting.md#the-cluster-template-disagrees-with-the-production-database).
+Then create the database and a login:
 
 ```sql
 CREATE DATABASE tckdb_dev ENCODING 'UTF8' TEMPLATE template0;
 \c tckdb_dev
 CREATE EXTENSION IF NOT EXISTS rdkit;
-CREATE USER tckdb WITH PASSWORD '…';
+CREATE USER tckdb WITH PASSWORD '...';
 GRANT ALL PRIVILEGES ON DATABASE tckdb_dev TO tckdb;
 ```
 
-The TCKDB initial migration assumes the extension is already
-available; do not skip the `CREATE EXTENSION` step.
+Keep `ENCODING 'UTF8' TEMPLATE template0`. A bare `CREATE DATABASE` copies
+`template1`, whose encoding may be `SQL_ASCII`, which stores invalid bytes
+without complaint. See
+[Troubleshooting](troubleshooting.md#the-cluster-template-disagrees-with-the-production-database).
+The first migration expects the `rdkit` extension to exist already.
 
----
+For a shared instance, split the database owner from the API's login as
+described in [database roles](../../backend/docs/deployment/database_roles.md);
+`scripts/configure_database_roles.py` does it.
 
-## Python backend environment
-
-The repo's `tckdb_env` conda environment is the supported Python
-runtime. The Docker Compose quick-start runs the API and worker from
-this env on the host already; native install does the same.
+## Python environment
 
 ```bash
-# Install Miniforge or your preferred conda distribution.
-conda env create -f environment.yml          # or your project's manifest
-conda run -n tckdb_env python -V
+mamba env create -n tckdb_env -f backend/environment.yml
+conda run -n tckdb_env pip install -e schemas/python/tckdb-schemas
+conda run -n tckdb_env pip install -e ./backend
 ```
 
-Once a standardized Python dependency manifest is in place,
-backend container packaging will land too — at which point native
-install becomes even more clearly the *advanced* path.
+Install nothing else into `tckdb_env` by hand; `environment.yml` is the
+source of truth.
 
-Set the standard environment variables before running migrations or
-starting the API:
+Set the settings in the environment or an env file. Start from
+[`examples/deployment/lab-server.env.example`](../../examples/deployment/lab-server.env.example):
 
 ```bash
-export DB_USER=tckdb
-export DB_PASSWORD='…'
-export DB_NAME=tckdb_dev
-export DB_HOST=127.0.0.1
-export DB_PORT=5432
-export S3_ENDPOINT_URL=https://s3.lab.example.org
-export S3_ACCESS_KEY=…
-export S3_SECRET_KEY=…
-export S3_BUCKET=tckdb-artifacts
-export S3_REGION=us-east-1
+export DB_HOST=127.0.0.1 DB_PORT=5432 DB_NAME=tckdb_dev DB_USER=tckdb DB_PASSWORD='...'
+export S3_ENDPOINT_URL=https://s3.lab.example.org S3_BUCKET=tckdb-artifacts S3_REGION=us-east-1
+export S3_ACCESS_KEY=... S3_SECRET_KEY=...
 export AUTH_ALLOW_OPEN_REGISTRATION=false
 ```
 
-Use the shared-deployment env example as a starting point:
-[`examples/deployment/lab-server.env.example`](https://github.com/TCKDB/TCKDB/blob/main/examples/deployment/lab-server.env.example).
+## Object store
 
----
+Pick one:
 
-## Object / artifact storage
+- **SeaweedFS as a host service.** One binary:
+  `weed mini -dir=<dir> -s3.port=9000`, run under systemd, with its data
+  directory in your backups.
+    - Export `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (the same
+      values as `S3_ACCESS_KEY` and `S3_SECRET_KEY`). Without them it accepts
+      unauthenticated requests.
+    - Set `S3_ENDPOINT_URL=http://127.0.0.1:9000` and create the
+      `$S3_BUCKET` bucket.
+    - Its filer (8888), master (9333), volume server (9340) and their gRPC
+      ports (18888, 19333, 19340, 19000) take no credentials, and over gRPC
+      anyone who connects can delete objects. Bind everything to loopback
+      with `-ip=127.0.0.1 -ip.bind=127.0.0.1`. On 4.47, as measured, that
+      closes every port but the admin gRPC port 33646, which listens on all
+      interfaces even with `-admin.ui=false`; block it in the host firewall.
+    - Add the `WEED_JWT_*` keys and `WEED_GUARD_WHITE_LIST=127.0.0.1,@` from
+      the `seaweedfs` service in `docker-compose.yml` to lock the HTTP ports
+      as well.
+    - Set `S3_SEAWEEDFS_MASTER_URL=http://127.0.0.1:9333` so the API can tell
+      a full store from a fault.
+- **A lab S3 service.** Point `S3_ENDPOINT_URL` at it and get a bucket and
+  keys.
+- **AWS S3.** Set `S3_ENDPOINT_URL=https://s3.<region>.amazonaws.com` and a
+  matching `S3_REGION`. Don't leave `S3_ENDPOINT_URL` unset: its default is
+  `http://localhost:9000`.
+- **Google Cloud Storage.** Use `S3_ENDPOINT_URL=https://storage.googleapis.com`
+  with HMAC keys as `S3_ACCESS_KEY` and `S3_SECRET_KEY`.
+- **An existing MinIO.** Works the same as SeaweedFS.
 
-TCKDB writes artifacts (input/output logs, geometries, parsed files)
-through an S3-compatible interface. A native install needs *some*
-object store.
+Back up the object store as well as the database.
 
-Choose one of:
+## Migrate and create an administrator
 
-- **SeaweedFS** as a host-managed binary. Single Go binary (`weed mini
-  -dir=<dir> -s3.port=9000`), runs under systemd, persists to a
-  directory you back up. Give it an admin identity by exporting
-  `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (the same values as
-  `S3_ACCESS_KEY` / `S3_SECRET_KEY`) -- without them it accepts
-  unauthenticated requests. Configure
-  `S3_ENDPOINT_URL=http://127.0.0.1:9000` and create a bucket named
-  `$S3_BUCKET`. Its filer (8888), master (9333) and volume server (9340),
-  and their gRPC ports (18888, 19333, 19340, 19000), take no credentials,
-  and over gRPC anyone who can connect can delete objects and whole
-  collections (measured on 4.47). On a single host where the API is the
-  only client, bind everything to loopback: `-ip=127.0.0.1
-  -ip.bind=127.0.0.1`. Measured on 4.47, that closes every port but one:
-  the admin gRPC port 33646 still listens on all interfaces even with
-  `-admin.ui=false`, so block it in the host firewall. Add the `WEED_JWT_*`
-  keys and
-  `WEED_GUARD_WHITE_LIST=127.0.0.1,@` from the `seaweedfs` service in
-  `docker-compose.yml` for the HTTP ports as well. Set
-  `S3_SEAWEEDFS_MASTER_URL=http://127.0.0.1:9333` so the API can tell a full
-  store from a fault. An existing host-managed MinIO works the same way.
-- **Lab-managed S3.** Point `S3_ENDPOINT_URL` at the institutional
-  endpoint; provision a bucket and credentials.
-- **AWS S3.** Set `S3_ENDPOINT_URL` to the regional endpoint
-  (`https://s3.<region>.amazonaws.com`) and `S3_REGION` to match; use
-  real AWS credentials. Do not leave `S3_ENDPOINT_URL` unset: its
-  default is `http://localhost:9000`.
-- **Google Cloud Storage.** Use its S3 interoperability endpoint,
-  `S3_ENDPOINT_URL=https://storage.googleapis.com`, with HMAC keys as
-  `S3_ACCESS_KEY` / `S3_SECRET_KEY`.
-
-Database backups alone are **not** sufficient if artifacts live
-outside the database. Plan artifact backups too — see
-[shared-private-deployment.md §Backup and restore basics](shared-private-deployment.md#backup-and-restore-basics).
-
----
-
-## Migrations
-
-Alembic migrations are run identically to every other infrastructure
-strategy. From `backend/`:
+From `backend/`:
 
 ```bash
-cd backend
 conda run -n tckdb_env alembic upgrade head
-```
-
-The repo maintains an ordered Alembic revision chain. The command applies every
-pending revision through the current head; migrations require the database to
-exist and the RDKit cartridge to be loaded. Review the
-[migration runbook](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/deployment/migrations.md) before
-upgrading a database that already contains data.
-
----
-
-## Bootstrap admin
-
-`backend/scripts/bootstrap_admin.py` is the supported account-seeding
-tool on any deployment, including native. Run from `backend/`:
-
-```bash
-TCKDB_BOOTSTRAP_PASSWORD='change-me' \
+TCKDB_BOOTSTRAP_PASSWORD='...' \
   conda run -n tckdb_env python scripts/bootstrap_admin.py \
-    --username admin \
-    --email admin@lab.example.org \
-    --full-name "Lab Admin"
+    --username admin --email admin@lab.example.org
 ```
 
-The script is idempotent — re-run it with the same username to
-promote/reactivate. Subsequent users can be seeded the same way and
-promoted via admin endpoints.
+Before upgrading a database that holds data, read the
+[migration runbook](../../backend/docs/deployment/migrations.md). Other
+accounts are created the same way; see
+[Admin accounts and API keys](admin_auth_quickstart.md).
 
----
+## Run the API and the worker
 
-## API and worker startup
-
-Same commands as the reference path; the only thing that changes is
-that you wire them under a service manager so they restart on
-failure.
-
-### API
-
-> Run from `backend/` (or set `WorkingDirectory=…/backend` in your
-> service unit) so `main:app` resolves.
+From `backend/`, or with `WorkingDirectory=.../backend` in the unit:
 
 ```bash
-conda run -n tckdb_env uvicorn main:app \
-  --host 127.0.0.1 --port 8010
+conda run -n tckdb_env uvicorn main:app --host 127.0.0.1 --port 8010
 ```
 
-Bind to `127.0.0.1` and front it with a reverse proxy that
-terminates TLS and forwards `X-API-Key` and session cookies — see
-[shared-private-deployment.md §Reverse proxy basics](shared-private-deployment.md#reverse-proxy-basics).
-
-### Upload worker
-
-If you want the worker to run separately from the API process (for
-isolation), set `TCKDB_INLINE_WORKER=false` in the environment and
-start it from `backend/`:
+Keep one Uvicorn worker: the rate limiter counts in process memory. The
+upload worker runs inside the API while `TCKDB_INLINE_WORKER=true`. To run it
+on its own, set `TCKDB_INLINE_WORKER=false` and start:
 
 ```bash
 conda run -n tckdb_env python -m app.workers.upload_worker
 ```
 
-### Example systemd unit (sketch)
+[`examples/deployment/systemd/tckdb-api.service`](../../examples/deployment/systemd/tckdb-api.service)
+is a unit for the API on the host. It expects Docker for the database, so on
+a host without Docker remove its `Requires=docker.service` and
+`After=docker.service` lines and order it after your Postgres service
+instead. Adapt the paths, the user and the env file. A worker unit is the
+same with the worker module in `ExecStart`.
 
-Sketch only — adapt paths, user, and env file location to your host.
+## Things that go wrong
 
-```ini
-# /etc/systemd/system/tckdb-api.service
-[Unit]
-Description=TCKDB API
-After=network.target postgresql.service
-
-[Service]
-Type=simple
-User=tckdb
-WorkingDirectory=/opt/tckdb/backend
-EnvironmentFile=/etc/tckdb/lab-server.env
-ExecStart=/opt/conda/bin/conda run -n tckdb_env \
-  uvicorn main:app --host 127.0.0.1 --port 8010
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-```
-
-A matching `tckdb-worker.service` follows the same pattern with
-`ExecStart` pointing at the worker module.
-
----
-
-## Caveats
-
-Things that bite people on native installs:
-
-- **RDKit cartridge version drift.** Upgrading PostgreSQL or the
-  cartridge in place is a manual operation; mismatched versions can
-  silently corrupt the schema's chemistry-aware indexes. Pin both.
-- **Conda env drift.** The `tckdb_env` environment is the source of
-  truth for Python dependencies. Don't `pip install` into it ad-hoc.
-- **Backup blindness.** Without the Docker volume layout to point at,
-  it's easy to forget that artifacts live outside the DB. Cover both
-  PostgreSQL and the object store. See
-  [shared-private-deployment.md §Backup and restore basics](shared-private-deployment.md#backup-and-restore-basics).
-- **TLS, cookies, and `X-API-Key` forwarding.** Same considerations
-  as a Docker-based shared deployment. See
-  [shared-private-deployment.md §Reverse proxy basics](shared-private-deployment.md#reverse-proxy-basics).
-- **Open registration on a reachable native install.** Same hazard as
-  any reachable shared deployment: set
-  `AUTH_ALLOW_OPEN_REGISTRATION=false` if more than one user can reach
-  the API.
-- **Self-managed PostgreSQL.** You are now responsible for upgrades,
-  WAL retention, vacuuming, and disk monitoring. None of that is
-  TCKDB-specific, but TCKDB will not paper over it for you.
-- **Service-manager restarts.** A bare `uvicorn` will not come back
-  up after a reboot. Use systemd / supervisord / equivalent.
-
----
-
-## Why the Docker quick-start is preferred
-
-- The RDKit cartridge image is the painful step on native installs;
-  the Docker quick-start skips it.
-- The reference Docker Compose file (`docker-compose.yml`) is
-  tested as part of the documented single-machine /
-  [shared private deployment](shared-private-deployment.md) flow.
-  Native install is documented but not part of that tested path.
-- Backups, networking, and service supervision are simpler when the
-  DB and object store are isolated container processes with named
-  volumes.
-- A standardized backend container image is on the roadmap.
-  When it ships, a Docker-based shared deployment becomes a single
-  `docker compose up` deployment — the gap between native and
-  Docker will widen, not narrow.
-
-Native install remains valid for advanced operators, but it is not
-the path the project's tooling is optimized for.
-
----
-
-## Non-goals
-
-- No native installer automation (no `.deb`, `.rpm`, `brew`,
-  installer script, or Ansible role).
-- No prescribed RDKit cartridge build recipe — the upstream project
-  documents that better than this repo can.
-- No production SRE runbook (HA, replication, observability).
-- No Kubernetes manifests.
-- No Apptainer image definitions.
-- No native frontend deployment.
-- No service accounts.
-- No raw database synchronization.
-
----
-
-## See also
-
-- [Deployment guide overview](README.md)
-- [Single-machine private deployment](local-v0.md)
-- [Shared private deployment](shared-private-deployment.md)
-- [Client access from HPC](client-access-from-hpc.md)
-- [Generic client targeting](../clients/generic-client-targeting.md)
-- DR-0022 — Auth and Roles v1
-- DR-0023 — Local/Offline and Hosted Submission Model
+- **RDKit cartridge drift.** Upgrading Postgres or the cartridge in place is
+  manual, and mismatched versions can silently corrupt the chemistry
+  indexes. Pin both.
+- **Forgotten files.** Without Docker volumes to point at, it is easy to back
+  up the database and not the object store.
+- **Open registration.** Set `AUTH_ALLOW_OPEN_REGISTRATION=false` as soon as
+  anyone else can reach the API, and set `DEPLOYMENT_MODE` to match; see the
+  [Production checklist](production_checklist.md).
+- **Postgres upkeep.** Upgrades, WAL retention, vacuuming and disk space are
+  now yours.
+- **No restart after a reboot.** A bare `uvicorn` stays down. Use a service
+  manager.
