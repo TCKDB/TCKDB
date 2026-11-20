@@ -30,6 +30,7 @@ from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.services.scientific_read.common import ids_withheld_as_evidence
 from app.services.scientific_read.handles import NO_MATCH, reconcile_level_of_theory_pair
 from app.services.scientific_read.lot_identity_filters import basis_matches, method_family_matches, method_matches
+from app.services.software_resolution import software_name_clause, workflow_tool_name_clause
 
 
 def shown_calculations(session: Session, calculation_ids: Collection[int]) -> set[int]:
@@ -81,7 +82,7 @@ def calculations_matching(
             Software, Software.id == SoftwareRelease.software_id
         )
         if software is not None:
-            stmt = stmt.where(Software.name == software)
+            stmt = stmt.where(software_name_clause(software))
         if software_version is not None:
             stmt = stmt.where(SoftwareRelease.version == software_version)
     if workflow_tool is not None or workflow_tool_version is not None:
@@ -89,7 +90,7 @@ def calculations_matching(
             WorkflowTool, WorkflowTool.id == WorkflowToolRelease.workflow_tool_id
         )
         if workflow_tool is not None:
-            stmt = stmt.where(WorkflowTool.name == workflow_tool)
+            stmt = stmt.where(workflow_tool_name_clause(workflow_tool))
         if workflow_tool_version is not None:
             stmt = stmt.where(WorkflowToolRelease.version == workflow_tool_version)
     return set(session.scalars(stmt))

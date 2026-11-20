@@ -26,6 +26,22 @@ dataset must never require a code release.
 
 - **Behaviour:** the `doi` of a literature citation embedded in a scientific record (`LiteratureSummary`) and of `GET /scientific/literature/{ref}` (`identifiers.doi`) is served only when the row's metadata was resolved from the DOI registry (`title_source = resolved_metadata`); it is `null` for a depositor-supplied or unrecorded origin. The network CHEMKIN export writes a DOI beside its literature ref under the same rule.
 - **Behaviour:** the site prints a registry-resolved DOI after the citation as a `https://doi.org/<doi>` link. A depositor-typed DOI is still never printed.
+
+## Read filters match software, workflow-tool and scheme names in any case, and DOIs in any link form (Unreleased)
+
+- **Behaviour:** a `software` or `workflow_tool` filter on the scientific searches, analytics, select endpoints and `/scientific/meta/*-versions`, and the `name` filter on `GET /software` and `software_name` on `GET /calculations`, now find the row stored as `Psi4` when asked for `PSI4` or ` psi4 `: names are compared by the key their public ref uses. They used to return nothing.
+- **Behaviour:** the energy-correction-scheme `name` filter (scientific search and `GET /energy-correction-schemes`) compares trimmed and case-folded, and the `doi` filter on `GET /literature` finds the row stored under the bare DOI when given a `dx.doi.org` link.
+- **Schema and migration:** none. No new environment variable. No distributed package changed.
+
+## Energy-correction scheme names that differ only in case resolve to one scheme (Unreleased)
+
+- **Behaviour:** an upload naming a correction scheme `cbs-qb3 aec` when `CBS-QB3 AEC` is stored with the same identity now reuses that scheme and its stored spelling. It used to fail with a 409 that aborted the whole upload. The scheme is looked up by its public ref, then by its identity columns; the insert runs in a savepoint, so losing a concurrent-insert race adopts the winner's row.
+- **Schema and migration:** none. No new environment variable. No distributed package changed.
+
+## A DOI written as a `dx.doi.org` link resolves to the citation stored under the bare DOI (Unreleased)
+
+- **Behaviour:** an upload citing `https://dx.doi.org/10.1000/ABC` (or `HTTPS://DOI.ORG/10.1000/abc`) when `10.1000/abc` is already stored now reuses that literature row. It used to fail with a 409. Literature is looked up by the key its public ref uses, in the upload resolver and in the contribution-bundle dry run.
+- **Behaviour:** a new DOI is stored and looked up at Crossref as the bare DOI whatever its spelling: the `doi:` prefix and the `http(s)://(dx.)doi.org/` prefixes are removed in any case. A `dx.doi.org` link or an upper-case prefix used to be stored with the prefix, and its Crossref lookup failed, so the typed title was kept; `Doi:10.1000/abc` was stored as `doi:10.1000/abc`, a second row beside the bare DOI's. Stored rows are not rewritten.
 - **Schema and migration:** none. No new environment variable. No distributed package changed.
 
 ## The CHEMKIN adapter converts KELVINS and EVOLTS activation energies with exact constants (Unreleased)

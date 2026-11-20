@@ -6,6 +6,7 @@ import { SpeciesEntryLink } from "./SpeciesEntryLink"
 import { RecordGlyph, type RecordKind } from "./RecordGlyph"
 import { ReviewChip } from "./ReviewChip"
 import { Lede } from "./Lede"
+import { GuideLink, type GuideRef } from "./GuideLink"
 import type { LedeText } from "../domain/ledeText"
 import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
 import { facetChips } from "../domain/recordFacets"
@@ -83,13 +84,15 @@ type OwnerProps =
     | { identity?: never; ownFacts: ReactNode }
 
 export function RecordIdentityHeader({
-    kicker, pill, glyph, review, lede, title, subtitle, intro,
+    kicker, pill, glyph, review, lede, title, subtitle, intro, guide,
     identity, facets, submissionRef, explainTransitionStateIdentity = true, ownRef, ownFacts,
 }: OwnerProps & {
     kicker: ReactNode
     pill?: ReactNode
     /** The record kind's glyph, shown before the kicker. */
     glyph?: RecordKind
+    /** A guide glyph right after the kicker, for the guide entry that explains this kind of record. */
+    guide?: GuideRef
     /** The record's review status, shown as a `ReviewChip` beside the kicker. */
     review?: string
     /** The one sentence under the title, built with `ledeText`. When both `lede` and `intro` are given only `lede` renders. */
@@ -126,6 +129,7 @@ export function RecordIdentityHeader({
             <div className="record-identity-kicker-row">
                 {glyph && <RecordGlyph kind={glyph} size={16} />}
                 <span className="t-kicker record-identity-kicker">{kicker}</span>
+                {guide && <GuideLink to={guide.to} question={guide.question} />}
                 {review !== undefined && <ReviewChip status={review} />}
                 {pill}
             </div>
