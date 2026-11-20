@@ -61,6 +61,14 @@ def test_the_api_gets_runtime_settings_only_and_container_addresses() -> None:
     assert SERVICES["init"]["env_file"] == [".env.selfhosted", ".env.db-admin"]
 
 
+def test_the_worker_reaches_the_bundled_store_by_service_name() -> None:
+    env = SERVICES["worker"]["environment"]
+    assert env["S3_ENDPOINT_URL"] == "http://seaweedfs:9000"
+    assert env["S3_ACCESS_KEY"] == "${S3_ACCESS_KEY:-tckdb}"
+    assert env["S3_SECRET_KEY"] == "${S3_SECRET_KEY:-}"
+    assert env["S3_BUCKET"] == "${S3_BUCKET:-tckdb-artifacts}"
+
+
 def test_published_images_share_one_tag() -> None:
     for name in ("init", "tckdb-api", "worker"):
         assert SERVICES[name]["image"] == "laxzal/tckdb-api:${TCKDB_IMAGE_TAG:-0.2.0}", name
@@ -88,7 +96,7 @@ def run_init(tmp_path: Path):
     (bindir / "python").write_text(
         "#!/bin/sh\n"
         f'echo "python $*" >> "{log}"\n'
-        'if [ "$2" = check ] && [ ! -e "$ROLES_OK" ]; then exit 1; fi\n'
+        'if [ "$2" = check ] && [ ! -e "$ROLES_OK" ]; then echo "- owner role missing" >&2; exit 1; fi\n'
         'if [ "$2" = apply ]; then : > "$ROLES_OK"; fi\n'
         "exit 0\n"
     )
@@ -131,6 +139,9 @@ def test_init_applies_the_role_split_only_while_the_check_fails(run_init) -> Non
     first, calls = run_init()
     assert first.returncode == 0, first.stderr
     assert calls == [f"{roles} check", f"{roles} apply", "alembic upgrade head", f"{roles} check", bootstrap]
+    # The failed check's own report is kept, not swallowed.
+    assert "- owner role missing" in first.stderr
+    assert "init: role check failed; provisioning the role split" in first.stderr
 
     second, calls = run_init()
     assert second.returncode == 0, second.stderr
@@ -155,6 +166,7 @@ def _make_env(out: Path, *args: str) -> subprocess.CompletedProcess:
         text=True,
         timeout=60,
         stdin=subprocess.DEVNULL,
+        env={k: v for k, v in os.environ.items() if k != "TCKDB_BOOTSTRAP_PASSWORD"},
     )
 
 
@@ -194,8 +206,25 @@ def test_make_env_refuses_to_overwrite(tmp_path: Path) -> None:
     assert again.returncode == 1
     assert "already exists" in again.stderr
     assert (tmp_path / ".env.selfhosted").read_text() == before
-    assert _make_env(tmp_path, "--force").returncode == 0
+    forced = _make_env(tmp_path, "--force")
+    assert forced.returncode == 0
+    assert "warning: overwriting" in forced.stderr
     assert (tmp_path / ".env.selfhosted").read_text() != before
+
+
+def test_make_env_takes_the_admin_password_from_the_environment(tmp_path: Path) -> None:
+    result = subprocess.run(
+        ["bash", str(MAKE_ENV), "--yes", "--dir", str(tmp_path)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        stdin=subprocess.DEVNULL,
+        env={**os.environ, "TCKDB_BOOTSTRAP_PASSWORD": "a-chosen-admin-password"},
+    )
+    assert result.returncode == 0, result.stderr
+    assert _values(tmp_path / ".env.db-admin")["TCKDB_BOOTSTRAP_PASSWORD"] == "a-chosen-admin-password"
+    # Chosen, not generated, so not echoed.
+    assert "a-chosen-admin-password" not in result.stdout
 
 
 @pytest.mark.parametrize(

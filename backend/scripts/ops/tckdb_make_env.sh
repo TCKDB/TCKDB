@@ -18,11 +18,16 @@
 #                          X-Real-IP (default: none)
 #   --admin-user NAME      first administrator's username (default admin)
 #   --admin-email EMAIL    first administrator's email (default: none)
-#   --admin-password PW    use this password instead of generating one
+#   --admin-password PW    use this password instead of generating one; the
+#                          TCKDB_BOOTSTRAP_PASSWORD environment variable does
+#                          the same without showing it in the process list
 #   --set KEY=VALUE        set any other variable; repeatable. Written to
 #                          whichever template defines KEY, else .env.selfhosted
 #   --dir DIR              where to write the files (default: repository root)
-#   --force                overwrite existing files
+#   --force                overwrite existing files. Every password is
+#                          regenerated, so use it only before the first start
+#                          or with a fresh database volume: the roles keep the
+#                          old passwords (see .env.db-admin.example)
 #   -y, --yes              do not ask; use flags and defaults
 #   -h, --help             show this help
 #
@@ -35,7 +40,8 @@ usage_error() { echo "error: $*" >&2; echo "run with --help for usage" >&2; exit
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 OUT_DIR="$REPO_ROOT"
-MODE="" PUBLIC_URL="" PROXY_HEADER="" ADMIN_USER="" ADMIN_EMAIL="" ADMIN_PASSWORD=""
+MODE="" PUBLIC_URL="" PROXY_HEADER="" ADMIN_USER="" ADMIN_EMAIL=""
+ADMIN_PASSWORD="${TCKDB_BOOTSTRAP_PASSWORD:-}"
 MODE_SET=0 URL_SET=0 PROXY_SET=0 USER_SET=0 EMAIL_SET=0
 FORCE=0 ASSUME_YES=0
 EXTRA=()
@@ -69,11 +75,11 @@ for template in "$RUNTIME_TEMPLATE" "$ADMIN_TEMPLATE"; do
     [[ -r "$template" ]] || die "template not found: $template"
 done
 [[ -d "$OUT_DIR" ]] || die "not a directory: $OUT_DIR"
-if [[ $FORCE -eq 0 ]]; then
-    for file in "$RUNTIME_FILE" "$ADMIN_FILE"; do
-        [[ -e "$file" ]] && die "$file already exists; nothing written (pass --force to overwrite it)"
-    done
-fi
+for file in "$RUNTIME_FILE" "$ADMIN_FILE"; do
+    [[ -e "$file" ]] || continue
+    [[ $FORCE -eq 1 ]] || die "$file already exists; nothing written (pass --force to overwrite it)"
+    echo "warning: overwriting $file with new passwords; a database volume provisioned with the old ones will refuse them" >&2
+done
 
 interactive=0
 [[ $ASSUME_YES -eq 0 && -t 0 ]] && interactive=1

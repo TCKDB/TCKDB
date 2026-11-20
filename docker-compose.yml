@@ -327,13 +327,23 @@ services:
   #
   # `init` refuses empty or change-me secrets, provisions the database
   # roles, migrates, checks the roles and creates the first admin, then
-  # exits; the API starts only after it succeeds. Every step is idempotent, so it runs on every `up`. The API
-  # gets .env.selfhosted only; the owner and admin credentials in
-  # .env.db-admin reach `init` and nothing else. Both services address
-  # Postgres and the object store by service name, overriding the host-side
-  # DB_HOST / DB_PORT / S3_ENDPOINT_URL in the env file.
+  # exits; the API starts only after it succeeds. Every step is idempotent,
+  # so it runs on every `up`. The API gets .env.selfhosted only; the owner
+  # and admin credentials in .env.db-admin reach `init` and nothing else.
+  # Both services address Postgres and the object store by service name,
+  # overriding the host-side DB_HOST / DB_PORT / S3_ENDPOINT_URL in the env
+  # file.
   #
-  # TCKDB_IMAGE_TAG picks the release: a version or `sha-<commit>`.
+  # This profile uses the bundled SeaweedFS. An external S3 store (AWS, an
+  # existing MinIO) needs a host-run API or backend/scripts/ops/tckdb_deploy.sh.
+  #
+  # TCKDB_IMAGE_TAG picks the release: a version or `sha-<commit>`. Upgrade
+  # by re-running `up -d` with a new tag; `init` migrates before the API
+  # restarts.
+  #
+  # `init` checks that the roles and grants are in place, not their
+  # passwords: changing a DB password in the env files later needs the
+  # matching ALTER ROLE ... PASSWORD (see .env.db-admin.example).
   # ---------------------------------------------------------------------------
   init:
     profiles: ["selfhost"]
@@ -344,8 +354,8 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: "5432"
-    # `check || apply`: apply refuses once approval history exists, so it
-    # runs only while the role split is not yet in place.
+    # apply runs only while the role check fails: it refuses once approval
+    # history exists.
     command:
       - sh
       - -ec
@@ -356,7 +366,7 @@ services:
           esac
         done
         roles() { python scripts/configure_database_roles.py "$$@"; }
-        roles check >/dev/null 2>&1 || roles apply
+        if ! roles check; then echo "init: role check failed; provisioning the role split" >&2; roles apply; fi
         alembic upgrade head
         roles check
         set -- --role admin --username "$${TCKDB_BOOTSTRAP_USERNAME:?set TCKDB_BOOTSTRAP_USERNAME in .env.db-admin}"
@@ -448,6 +458,12 @@ services:
       DB_USER: ${DB_USER:-tckdb}
       DB_PASSWORD: ${DB_PASSWORD:-}
       DB_NAME: ${DB_NAME:-tckdb_dev}
+      # The bundled store by service name, like the DB, so jobs with
+      # artifacts can be processed.
+      S3_ENDPOINT_URL: http://seaweedfs:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-tckdb}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+      S3_BUCKET: ${S3_BUCKET:-tckdb-artifacts}
       TCKDB_INLINE_WORKER: "false"
     # `storage` to reach the object store, which is on no other network.
     networks:
