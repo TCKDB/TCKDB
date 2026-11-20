@@ -34,6 +34,6 @@ the two stages that touch the network, and only through a caller-supplied
 
 from __future__ import annotations
 
-__version__ = "0.9.6"
+__version__ = "0.9.7"
 
 __all__ = ["__version__"]

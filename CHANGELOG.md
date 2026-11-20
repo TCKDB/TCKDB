@@ -7,8 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## Two things are versioned, and they are not the same
 
 **The software** (`tckdb-backend`, `tckdb-client`, `tckdb-schemas`,
-`tckdb-mcp`, `tckdb-chemkin`) is versioned per package and described in this
-file.
+`tckdb-mcp`, `tckdb-chemkin`, `tckdb-qcschema`) is versioned per package and
+described in this file.
 
 **A curated scientific dataset** is versioned independently as a *dataset
 release* — a tag such as `2026.07.0`, an immutable SHA-256-checksummed
@@ -21,6 +21,14 @@ the software (see [`CITATION.cff`](CITATION.cff)) when you use the code.
 Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
+
+## tckdb-qcschema carries the metadata a PyPI release needs (Unreleased)
+
+- **Behaviour:** `tckdb-qcschema` requires `tckdb-client>=0.208,<0.209` and `tckdb-schemas>=0.175,<0.176`; they were floors without a ceiling (`>=0.160.0`, `>=0.131.0`). It declares `numpy>=1.26` and `pydantic>=2.6`, which it imports directly and used to get only through `qcelemental`.
+- **Packaging:** the distribution declares its README (its PyPI description) and carries the MIT `LICENSE` (`license = "MIT"` with `license-files`), authors, classifiers, project URLs and `py.typed`; the sdist leaves out the tests and fixture scripts. The build needs setuptools 77 or later. The README's install line is `pip install tckdb-qcschema`.
+- **Tests:** `tests/test_package_version.py` fails when `__version__` and the pyproject version disagree.
+- **Schema and migration:** none. No new environment variable.
+- **Versions:** `tckdb-qcschema` 0.9.7.
 
 ## tckdb_deploy.sh deploys onto any compose project (Unreleased)
 
@@ -2508,6 +2516,7 @@ Per-package maturity classifiers:
 | `tckdb-schemas` | Alpha | Upload wire contracts; version bumped on every change — **enforced in CI since 2026-08-17; five earlier versions are not unique, listed under Unreleased** |
 | `tckdb-mcp` | Alpha | Agent integration surface |
 | `tckdb-chemkin` | Alpha | Mechanism-export adapter |
+| `tckdb-qcschema` | Alpha | QCSchema import and export adapter |
 
 The client is deliberately ahead of the backend: it is a thin, well-tested
 wrapper over a contract that is itself still moving.
