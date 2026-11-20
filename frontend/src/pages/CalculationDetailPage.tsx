@@ -71,6 +71,7 @@ import { calculationLede, calculationTitleWords, dependsOn, usedBy, type Lineage
 import { equationNeedsStructure } from "../domain/reactionEquation"
 import { useCalculationSection, type CalculationSectionState } from "../hooks/useCalculationSection"
 import { LiteratureCitation } from "../components/LiteratureCitation"
+import { PathSearchFigure } from "../components/PathSearchFigure"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 // ---------------------------------------------------------------------------
@@ -1618,13 +1619,16 @@ function PathSearchSection({ calculationRef, available, applicable }: { calculat
     return (
         <LazySection id="section-path-search-trajectory" heading="Path-search trajectory" available={available} applicable={applicable} state={state} onOpen={open}>
             {(pathSearch) => (!pathSearch ? <p className="empty-projection">The archive returned no path-search summary.</p> : (
-                <KVList pairs={[
-                    ["Method", statusLabel(pathSearch.method)],
-                    ["Converged", boolLabel(pathSearch.converged)],
-                    ["Stored points", pathSearch.stored_point_count],
-                    ["TS guesses", pathSearch.ts_guess_count],
-                    ["Climbing images", pathSearch.climbing_image_count],
-                ]} />
+                <>
+                    <KVList pairs={[
+                        ["Method", statusLabel(pathSearch.method)],
+                        ["Converged", boolLabel(pathSearch.converged)],
+                        ["Stored points", pathSearch.stored_point_count],
+                        ["TS guesses", pathSearch.ts_guess_count],
+                        ["Climbing images", pathSearch.climbing_image_count],
+                    ]} />
+                    <PathSearchFigure calculationRef={calculationRef} />
+                </>
             ))}
         </LazySection>
     )

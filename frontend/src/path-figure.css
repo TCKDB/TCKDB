@@ -1,0 +1,200 @@
+/* Energy along a path: one axis, thin marks, a crosshair tooltip, and a table of the same points. */
+.path-figure {
+    margin: var(--s-4) 0;
+}
+
+.path-figure-toggle {
+    display: flex;
+    gap: .4rem;
+    margin-bottom: var(--s-2);
+}
+
+.path-figure-toggle button {
+    min-height: 44px;
+    padding: .3rem .8rem;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--accent);
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
+    cursor: pointer;
+}
+
+.path-figure-toggle button:hover {
+    border-color: var(--accent);
+    background: var(--accent-50);
+}
+
+.path-figure-toggle button[aria-pressed="true"] {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--surface);
+}
+
+.path-figure-toggle button:focus-visible,
+.path-figure-box:focus-visible,
+.path-figure-scroll:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.path-figure-box {
+    overflow-x: auto;
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+}
+
+.path-figure-stage {
+    position: relative;
+    min-width: 36rem;
+}
+
+.path-figure-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.path-figure-grid {
+    stroke: var(--line-2);
+    stroke-width: 1;
+}
+
+.path-figure-zero {
+    stroke: var(--divider-strong);
+    stroke-width: 1.5;
+}
+
+.path-figure-tick,
+.path-figure-axis-title {
+    fill: var(--muted);
+    font-size: 15px;
+}
+
+.path-figure-line {
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 2;
+    stroke-linejoin: round;
+}
+
+.path-figure-crosshair {
+    stroke: var(--muted);
+    stroke-width: 1;
+    stroke-dasharray: 4 4;
+}
+
+.path-figure-hover {
+    fill: transparent;
+}
+
+.path-figure-marker {
+    fill: var(--surface);
+    stroke: var(--ink);
+    stroke-width: 2;
+}
+
+.path-figure-marker--filled {
+    fill: var(--accent);
+    stroke: var(--accent);
+}
+
+.path-figure-marker--climbing {
+    stroke: var(--kind-ts);
+}
+
+.path-figure-marker--climbing.path-figure-marker--filled {
+    fill: var(--kind-ts);
+}
+
+.path-figure-point {
+    cursor: default;
+}
+
+.path-figure-point[role="button"] {
+    cursor: pointer;
+}
+
+.path-figure-point:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.path-figure-ring {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2;
+}
+
+.path-figure-label {
+    fill: var(--ink-2);
+    font-size: 15px;
+}
+
+.path-figure-label--strong {
+    fill: var(--accent);
+    font-weight: 600;
+}
+
+.path-figure-tooltip {
+    position: absolute;
+    z-index: 1;
+    display: grid;
+    gap: .1rem;
+    min-width: 10rem;
+    padding: var(--s-2) var(--s-3);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--ink-2);
+    font: var(--type-ui-font);
+    pointer-events: none;
+    transform: translate(14px, -50%);
+}
+
+.path-figure-tooltip--left {
+    transform: translate(calc(-100% - 14px), -50%);
+}
+
+.path-figure-tooltip strong {
+    color: var(--ink);
+}
+
+.path-figure-caption {
+    margin-top: var(--s-2);
+    color: var(--ink-2);
+    font: var(--type-body-font);
+    max-width: var(--measure-prose);
+}
+
+.path-figure-hint {
+    margin: 0 0 var(--s-2);
+    color: var(--muted);
+    font: var(--type-ui-font);
+}
+
+.path-figure-scroll {
+    max-height: 32rem;
+    overflow: auto;
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-sm);
+}
+
+.path-figure-table {
+    width: 100%;
+    min-width: 44rem;
+    border-collapse: collapse;
+}
+
+.path-figure-caption-table {
+    padding: var(--s-2) var(--s-3);
+    color: var(--muted);
+    font: var(--type-ui-font);
+    text-align: left;
+}
+
+.path-figure-row--marked td {
+    background: var(--accent-50);
+}
