@@ -1,15 +1,12 @@
-# Hosted bundle submit/import v0
+# Submitting a bundle to a hosted instance
 
 The hosted submit endpoint lets an authenticated user POST a
 `ContributionBundle` and have its records imported into the hosted
 database through the existing thermo/kinetics upload workflows. A
 `submission` row plus matching audit and record-link rows are created so
-the contribution is fully traceable.
-
-This is milestone 7 of the local-offline-and-hosted-submission
-implementation plan.
-The previous milestone shipped read-only dry-run; this milestone is the
-first **write** path for contribution bundles.
+the contribution is fully traceable. Submit is the **write** path for
+contribution bundles; the [dry run](hosted-dry-run.md) is its read-only
+preview.
 
 ## Core policy
 
@@ -25,7 +22,7 @@ or "best available". The submit response and the moderation row both
 report `unreviewed` / `pending_review` wording so this distinction is
 explicit at every layer.
 
-Curator review (accept/reject/queue/UI) is **not** in this milestone.
+Submit does not review anything. Curator review is a separate step.
 
 ## Endpoint
 
@@ -49,7 +46,7 @@ POST /api/v1/bundles/submit
 
 ## Supported bundle kinds
 
-Submit/import v0 supports the same families as the bundle format:
+Submit supports the same families as the bundle format:
 
 - `thermo`
 - `kinetics`
@@ -110,7 +107,7 @@ request in a single SQLAlchemy transaction:
   `submission`, audit events, record links, and every scientific row
   that the workflows created during the call.
 
-There are no partial imports in v0. If the third upload of a five-upload
+There are no partial imports. If the third upload of a five-upload
 kinetics bundle raises mid-workflow, the first two uploads, the
 submission row, and any audit/link rows are all rolled back together.
 
@@ -127,8 +124,7 @@ Submit/import creates `submission_record_link` rows for two layers:
 
 Deeper identity/provenance rows (species, chem_reaction, literature,
 software_release, workflow_tool_release) are intentionally **not**
-linked in v0 — that is a follow-up once a curator UI exists to consume
-the richer trail. Links are deduped per `(record_type, record_id)` so a
+linked. Links are deduped per `(record_type, record_id)` so a
 bundle that touches the same species_entry from multiple uploads still
 produces a single link row.
 
@@ -156,7 +152,7 @@ The existing `submission_status` enum has:
 - `rejected`,
 - `superseded`.
 
-Submit/import v0 always lands rows at `pending`. That is the existing
+Submit always lands rows at `pending`. That is the existing
 status that best means "publicly visible via read APIs that don't gate
 on review, but not curator-approved" — `Submission.is_public` returns
 `True` only for `approved`, so application code that already gates on
@@ -227,42 +223,32 @@ underlying validation service. Submit additionally:
 - writes through the existing thermo/kinetics workflows,
 - creates the submission/audit/link rows.
 
-Since #577 the dry run also *rehearses* submit -- the same
+The dry run also *rehearses* submit -- the same
 `submit_contribution_bundle` call, in a savepoint that is always rolled
 back -- so every refusal submit can give, the dry run gives first, with
-the same `code` and message. Before that, the checks inside the
-thermo/kinetics workflows (the enthalpy-reference rule among them) ran on
-submit only, and a bundle could pass a dry run and then be refused.
+the same `code` and message, including the checks inside the
+thermo/kinetics workflows (the enthalpy-reference rule among them).
 
 A client that wants to preview before committing can call `/dry-run`
 first; submit also runs the preview internally as a gate, so the preview
 is not strictly required.
 
-## What this milestone is not
+## What submit does not do
 
-Out of scope for v0:
-
-- curator accept/reject workflow,
-- moderation UI,
-- frontend bundle upload page,
-- local push-to-hosted UX,
-- artifact import,
-- network bundle import,
-- raw database synchronization,
-- service accounts,
-- review-status exposure on read schemas (still derived from
-  `Submission.is_public`),
-- duplicate scientific-product detection beyond what existing workflows
-  already perform.
+- import artifacts,
+- import network bundles,
+- synchronize raw database rows,
+- detect duplicate scientific products beyond what the upload workflows
+  already do.
 
 ## Validation vs curation
 
-This is the central policy of submit/import v0:
+This is the central policy of submit:
 
 | State            | What it means                                                           |
 |------------------|-------------------------------------------------------------------------|
 | **submitted**    | Bundle was posted by an authenticated hosted user.                      |
 | **imported**     | Records were persisted through the normal upload workflows.             |
 | **unreviewed**   | No curator has yet evaluated the submission.                            |
-| **pending_review** | Submission is queued for future curator review (this milestone exits here). |
-| accepted / approved / curated | **Not** produced by this milestone.                          |
+| **pending_review** | Submission is queued for curator review. Submit stops here. |
+| accepted / approved / curated | **Not** produced by submit.                                  |

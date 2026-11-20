@@ -1,8 +1,4 @@
-# Contribution Bundle - Format Specification
-
-Status: implemented (schema/format only)
-See: DR-0023 Local/Offline and Hosted Submission Model,
-contribution-bundle-format-spec roadmap
+# Contribution bundle format
 
 ## What this document covers
 
@@ -14,11 +10,11 @@ TCKDB instance.
 
 This document defines bundle **version 1** (`bundle_version == 1`, an integer) and the
 schemas implemented in
-[`backend/app/schemas/workflows/contribution_bundle.py`](../../backend/app/schemas/workflows/contribution_bundle.py).
+[`backend/app/schemas/workflows/contribution_bundle.py`](https://github.com/TCKDB/TCKDB/blob/main/backend/app/schemas/workflows/contribution_bundle.py).
 
 ## What this version is
 
-- A schema/format milestone only.
+- A schema and file format.
 - Re-uses existing thermo and kinetics upload schemas as the bundle's
   scientific payload, so nested validation runs through the same code
   paths as a normal API upload.
@@ -26,9 +22,10 @@ schemas implemented in
 
 ## What this version is not
 
-- Version 1 does **not** export records from any database.
-- Version 1 does **not** import into any hosted instance.
-- Version 1 does **not** create submissions, jobs, or moderation events.
+- The format does **not** export, import or submit anything by itself.
+  [Local export](local-export.md) writes bundles; a hosted instance checks
+  them with a [dry run](hosted-dry-run.md) and accepts them with
+  [submit](hosted-submit.md).
 - Version 1 does **not** support raw database synchronization between instances.
 - Version 1 does **not** ship artifact packaging — only the manifest *shape*.
 - Version 1 does **not** support full network bundles, arbitrary graph export, or
@@ -94,7 +91,7 @@ Identifies the TCKDB instance that produced the bundle.
 | Field | Required | Notes |
 |-------|----------|-------|
 | `instance_kind` | yes | `local` or `lab_server`. `hosted` is not allowed in version 1. |
-| `instance_name` | yes | Free-text label, e.g. `calvin-laptop` or `pi-rmgteam-server`. |
+| `instance_name` | yes | Free-text label, e.g. `workstation-01` or `group-server`. |
 | `schema_version` | yes | The Alembic revision the local DB is at, e.g. `d5b8e2f4a916`. |
 | `software_version` | no | Optional TCKDB software version label. |
 | `created_by_local_user` | no | Optional local username/label. |
@@ -104,11 +101,11 @@ Identifies the TCKDB instance that produced the bundle.
 
 Provenance-only metadata about who produced the bundle. **This is not the
 hosted actor identity.** Hosted actor identity comes from hosted
-authentication during the future import milestone.
+authentication when the bundle is submitted.
 
 | Field | Required | Notes |
 |-------|----------|-------|
-| `local_user_label` | yes | Local label such as `calvin`. |
+| `local_user_label` | yes | Local label such as `alice`. |
 | `orcid` | no | ORCID iD if known. Not validated for format in version 1. |
 | `affiliation` | no | Free-text. |
 | `email` | no | Free-text contact. |
@@ -162,11 +159,9 @@ the object omitted — the exporter never invents consent.
 > **Note on `local_bundle` and the database enum.** The
 > `submission.source_kind` field on the *bundle* uses a format-level enum
 > (`BundleSubmissionSourceKind`). The database enum `SubmissionSourceKind`
-> in `backend/app/db/models/common.py` does **not** yet include `local_bundle`.
-> Adding it is deferred to the hosted-import milestone — the bundle format
-> only states "this submission came from a local bundle", and the hosted
-> importer will be responsible for translating that to its own submission
-> machinery.
+> in `backend/app/db/models/common.py` does **not** include `local_bundle`.
+> The bundle format only states "this submission came from a local bundle";
+> the hosted importer translates that to its own submission machinery.
 
 ### `records`
 
@@ -386,11 +381,9 @@ resolution, deduplication, etc.) is **not** done in version 1.
 
 ## Future extension points (not in version 1)
 
-- Adding `local_bundle` to the DB `SubmissionSourceKind` enum, when the
-  hosted-import milestone needs to persist bundle-origin submissions.
+- Adding `local_bundle` to the DB `SubmissionSourceKind` enum.
 - Wider `bundle_kind` support (`statmech`, `transport`, `network`, etc.).
 - Cross-payload references that consume `local_refs` keys directly inside
   scientific upload payloads.
 - Real artifact packaging (tarball/zip layout, content-addressed storage).
-- Hosted dry-run, hosted import, and hosted submission lifecycle.
 - Frontend UX for bundle authoring and review.

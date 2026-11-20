@@ -29,6 +29,11 @@
     color: var(--accent);
 }
 
+/* The guide glyph sits against the kicker it explains, closer than the row's other items. */
+.record-identity-kicker + .guide-link--icon {
+    margin-left: calc(var(--s-1) - var(--s-3));
+}
+
 .record-identity-title {
     margin: 0;
     min-width: 0;

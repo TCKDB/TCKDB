@@ -1,8 +1,9 @@
 site_name: TCKDB
 site_description: Theoretical Chemical Kinetics Database documentation
-site_url: https://calvinp0.github.io/tckdbv2/
-repo_url: https://github.com/calvinp0/tckdbv2
-repo_name: calvinp0/tckdbv2
+site_url: https://tckdb.github.io/TCKDB/
+repo_url: https://github.com/TCKDB/TCKDB
+repo_name: TCKDB/TCKDB
+edit_uri: edit/main/docs/
 
 docs_dir: docs
 site_dir: site
@@ -34,6 +35,7 @@ theme:
 
 markdown_extensions:
   - admonition
+  - toc
   - attr_list
   - def_list
   - md_in_html
@@ -44,75 +46,91 @@ markdown_extensions:
 extra_css:
   - stylesheets/extra.css
 
+hooks:
+  - docs/hooks/repo_links.py
+
 validation:
   nav:
-    omitted_files: ignore
+    omitted_files: warn
     not_found: warn
     absolute_links: ignore
   links:
-    not_found: ignore
+    not_found: warn
     absolute_links: ignore
-    unrecognized_links: ignore
-    anchors: ignore
+    unrecognized_links: warn
+    anchors: warn
 
 nav:
-  - Home: site/index.md
-  - Getting Started:
-      - Overview: site/getting-started.md
-      - Demo Data: site/demo-data.md
-      - Querying: site/querying.md
-      - Uploads: site/uploads.md
-      - Deployment: site/deployment.md
-  - Concepts:
-      - Core Concepts: guides/core_concepts.md
-      - Scientific Check Register: guides/scientific_check_register.md
-      - API Vocabulary: guides/api_vocabulary.md
-      - Public Identifiers: specs/public_identifier_policy.md
-      - Internal ID Visibility: specs/internal_ids_visibility_policy.md
-  - Guides:
-      - Depositing a Thermo Record: guides/depositing_a_thermo_record.md
-      - Declaring a Kinetics Record: guides/declaring_a_kinetics_record.md
-      - Declaring Calculation and Structure Evidence: guides/declaring_structure_evidence.md
-      - Declaring Statmech Models: guides/declaring_statmech_models.md
-      - Declaring a Network Solve: guides/declaring_a_network_solve.md
-      - Selecting Thermo for H298: guides/selecting_thermo_for_h298.md
-      - Selecting Structures: guides/selecting_structures.md
-      - Selecting Statmech Models: guides/selecting_statmech_models.md
-      - Selecting Kinetics: guides/selecting_kinetics.md
-      - Selecting Network Kinetics: guides/selecting_network_kinetics.md
-      - Query Cookbook: guides/scientific_query_cookbook.md
-      - Schema Reference: guides/schema_reference.md
-      - Public Hosted Querying: guides/public_hosted_querying.md
-      - Workflow Tool Reads: guides/workflow_tool_scientific_reads.md
-      - Demo Data Details: guides/scientific_read_demo_data.md
-  - Deployment:
-      - Deployment Modes: deployment/deployment_modes.md
-      - Local Development: deployment/local-v0.md
-      - Self-Hosted Single Node: deployment/self_hosted_single_node.md
-      - Shared Private Deployment: deployment/shared-private-deployment.md
-      - HPC Client Access: deployment/client-access-from-hpc.md
+  - Home: index.md
+  - Getting started:
+      - Install locally: start/getting-started.md
+      - Load demo data: start/demo-data.md
+      - Query: start/querying.md
+      - Upload: start/uploads.md
+  - Hosting TCKDB:
+      - deployment/README.md
+      - Which setup do I need?: deployment/deployment_modes.md
+      - Local development: deployment/local-v0.md
+      - Self-hosted single node: deployment/self_hosted_single_node.md
+      - Shared private (lab): deployment/shared-private-deployment.md
+      - Clients from HPC: deployment/client-access-from-hpc.md
+      - Without Docker: deployment/native-advanced.md
+      - Admin accounts and API keys: deployment/admin_auth_quickstart.md
+      - Production checklist: deployment/production_checklist.md
       - Troubleshooting: deployment/troubleshooting.md
-  - Clients and Uploads:
-      - Generic Client Targeting: clients/generic-client-targeting.md
-      - TCKDB Client Spec: specs/tckdb-client-spec.md
-      - ARC Adapter Spec: specs/arc-tckdb-adapter-spec.md
-      - Contribution Bundle Format: contribution-bundles/format.md
-  - Project:
-      - Documentation Index: README.md
-      - Public Read Abuse Controls: specs/public_read_abuse_controls.md
-      - Browse Order: specs/browse_order.md
-      - API Containerization Notes: deployment/api_containerization_notes.md
+  - Querying:
+      - Public read API: guides/public_hosted_querying.md
+      - Query cookbook: guides/scientific_query_cookbook.md
+      - From a workflow tool: guides/workflow_tool_scientific_reads.md
+      - Selecting thermo for H298: guides/selecting_thermo_for_h298.md
+      - Selecting structures: guides/selecting_structures.md
+      - Selecting statmech models: guides/selecting_statmech_models.md
+      - Selecting kinetics: guides/selecting_kinetics.md
+      - Selecting network kinetics: guides/selecting_network_kinetics.md
+      - Relative conformer energies: guides/relative_conformer_energies.md
+  - Depositing:
+      - Thermo record: guides/depositing_a_thermo_record.md
+      - Kinetics record: guides/declaring_a_kinetics_record.md
+      - Structure evidence: guides/declaring_structure_evidence.md
+      - Statmech models: guides/declaring_statmech_models.md
+      - Network solve: guides/declaring_a_network_solve.md
+      - Contribution bundles:
+          - Bundle format: contribution-bundles/format.md
+          - Export a bundle: contribution-bundles/local-export.md
+          - Dry run on a hosted instance: contribution-bundles/hosted-dry-run.md
+          - Submit to a hosted instance: contribution-bundles/hosted-submit.md
+          - Local to hosted, step by step: contribution-bundles/manual-local-to-hosted.md
+      - Configuring a client: clients/generic-client-targeting.md
+  - Concepts:
+      - Core concepts: guides/core_concepts.md
+  - Reference:
+      - API vocabulary (generated): guides/api_vocabulary.md
+      - Schema reference (generated): guides/schema_reference.md
+      - Scientific check register (generated): guides/scientific_check_register.md
 
-# Internal/dev-facing docs kept on disk but untracked and unpublished.
-# Excluded so the still-present local copies are not built (avoids strict
-# "not in nav" errors) and their content is not shipped to the public site.
+# Pages kept in the repository but not published on the site:
+# maintainer notes, design records, plans, reviews, implementation specs,
+# and pages superseded by a published one.
 exclude_docs: |
-  specs/read_api_mvp.md
-  roadmaps/
+  /*.md
+  /requirements.txt
+  !/index.md
+  adr/
   audits/
-  paper/
   decisions/
-  specs/bulk_export_design.md
-  specs/chemkin_importer_design.md
-  specs/codex-prompt-upload-idempotency-key.md
-  specs/mcp_readonly_integration.md
+  hooks/
+  paper/
+  plans/
+  proposals/
+  research/
+  reviews/
+  roadmaps/
+  specs/
+  validation/
+  deployment/api_containerization_notes.md
+  deployment/frontend-pi.md
+  deployment/self_hosting.md
+  guides/scientific_read_demo_data.md
+  guides/system_flow.md
+  guides/the_story_of_a_datapoint.md
+  start/deployment.md

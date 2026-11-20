@@ -131,8 +131,8 @@ The full key-management surface lives at:
 - `GET  /auth/api-keys` — list keys (session-only)
 - `DELETE /auth/api-keys/{id}` — revoke a key (session-only)
 
-See DR-0022 — Auth and Roles v1
-for the full auth model.
+See [Admin accounts and API keys](../deployment/admin_auth_quickstart.md)
+for creating the first account and key.
 
 ### Sending a key
 
@@ -208,7 +208,7 @@ curl -X POST "$TCKDB_BASE_URL/uploads/thermo" \
 ### Python
 
 A minimal generic client lives at
-[`examples/clients/simple_upload.py`](../../examples/clients/simple_upload.py).
+[`examples/clients/simple_upload.py`](https://github.com/TCKDB/TCKDB/blob/main/examples/clients/simple_upload.py).
 It reads `TCKDB_BASE_URL` and `TCKDB_API_KEY` from the environment and
 issues an authenticated `GET /auth/me`. Deliberately dependency-light
 (`requests` only) and not coupled to any workflow tool.
@@ -246,8 +246,7 @@ re-executing the write.
 
 Use it whenever a client may retry a request after a network glitch,
 process restart, queued HPC job re-submission, or operator-driven
-replay of a saved payload. The behavior is contractual — see
-DR-0024 — Upload Idempotency Keys.
+replay of a saved payload. The behavior is contractual.
 
 ### Sending the header
 
@@ -376,16 +375,12 @@ identity space. Pointing a client at a different `base_url` simply makes
 the client talk to a different database.
 
 Local-to-hosted contribution — the explicit, validated, moderated path
-from a private local instance to the hosted community database — will be
-delivered later through **contribution bundles**: a portable export of
-selected scientific records that hosted imports through its existing
-validation, deduplication, and submission/moderation pipeline. Bundles are
-not raw database dumps and not a sync mechanism. See
-DR-0023 — Local/Offline and Hosted Submission Model
-for the full rationale.
-
-Until contribution bundles ship, the only way to put data on a given
-instance is to upload it to that instance directly via its API.
+from a private local instance to a hosted database — goes through
+**contribution bundles**: a portable export of selected scientific records
+that the hosted instance imports through its existing validation,
+deduplication, and submission/moderation pipeline. Bundles are not raw
+database dumps and not a sync mechanism. See
+[Local to hosted, step by step](../contribution-bundles/manual-local-to-hosted.md).
 
 ---
 
@@ -451,7 +446,7 @@ The distinction worth building on is what a client should *do*:
 | --- | --- | --- |
 | `species_geometry_composition_mismatch`, `species_geometry_isotope_mismatch`, `species_smiles_charge_mismatch` | the structure you deposited and the label you gave it describe different molecules | fix the payload and retry — one of the two is a typo |
 | `reaction_mass_balance_failed`, `reaction_charge_not_conserved`, `transition_state_composition_mismatch`, `transition_state_charge_mismatch` | the reaction as written is not a reaction | stop and investigate; retrying the same thing cannot help |
-| `atom_map_*`, `transition_state_irc_mapping_element_mismatch` | the mechanism you described contradicts itself, or an index counts against the wrong geometry | correct the mapping; note that indices are geometry-relative (ADR 0011) |
+| `atom_map_*`, `transition_state_irc_mapping_element_mismatch` | the mechanism you described contradicts itself, or an index counts against the wrong geometry | correct the mapping; note that indices are geometry-relative |
 | `transition_state_no_imaginary_mode`, `transition_state_reaction_coordinate_*`, `n_imag_contradicts_minimum` | the frequency evidence contradicts the kind of stationary point declared; for a minimum, at least one imaginary mode is at or above the protocol's tolerance `tau` (or its magnitude was not deposited) | re-declare the entry as what it is, or deposit no frequency evidence; for a minimum, deposit the full frequency list so each mode can be judged against `tau` |
 | `arrhenius_a_units_molecularity_mismatch` | `a_units` do not have the dimensionality the reaction order requires | fix the unit token |
 | `validation_error` | a refusal that carries no more specific code | read `detail`; and please report it, because a scientific refusal reaching you as this is a gap |
@@ -526,10 +521,9 @@ knowing before you write a branch that reads it:
   be `{}` and that is the honest answer, not a gap: there is no second
   fact to report.
 
-### Cap refusals tell you the cap (since 2026-08-18)
+### Cap refusals tell you the cap
 
-`limit_too_large` was the example in the second bullet above until
-2026-08-18. It is now a relationship code, and so is every other cap:
+`limit_too_large` is a relationship code, and so is every other cap:
 
 | code | `context` |
 |---|---|
@@ -604,16 +598,11 @@ path into your own request and may name your local keys.
 - [Native advanced install](../deployment/native-advanced.md) —
   fallback infrastructure strategy when Docker and Apptainer are
   unavailable.
-- DR-0022 — Auth and Roles v1 —
-  authoritative description of the dual-mode auth (sessions for humans,
-  API keys for clients) referenced throughout this document.
-- DR-0023 — Local/Offline and Hosted Submission Model
-  — the architectural commitment that local, lab-server, and hosted
-  instances run the same backend and that contribution flows through
-  bundles, not sync.
+- [Contribution bundle format](../contribution-bundles/format.md) —
+  how records move from a local instance to a hosted one.
 - Example configs:
-  [`tckdb.local.yml`](../../examples/clients/tckdb.local.yml),
-  [`tckdb.lab-server.yml`](../../examples/clients/tckdb.lab-server.yml),
-  [`tckdb.hosted.yml`](../../examples/clients/tckdb.hosted.yml).
+  [`tckdb.local.yml`](https://github.com/TCKDB/TCKDB/blob/main/examples/clients/tckdb.local.yml),
+  [`tckdb.lab-server.yml`](https://github.com/TCKDB/TCKDB/blob/main/examples/clients/tckdb.lab-server.yml),
+  [`tckdb.hosted.yml`](https://github.com/TCKDB/TCKDB/blob/main/examples/clients/tckdb.hosted.yml).
 - Example client:
-  [`simple_upload.py`](../../examples/clients/simple_upload.py).
+  [`simple_upload.py`](https://github.com/TCKDB/TCKDB/blob/main/examples/clients/simple_upload.py).
