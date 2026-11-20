@@ -95,9 +95,11 @@ def test_a_level_of_theory_carries_its_catalogue_cards_only_when_asked(client, d
 
     plain = client.get(url).json()["record"]
     assert "catalogue" not in plain
-    assert plain["available_sections"]["has_catalogue"] is True
+    assert plain["available_sections"]["has_catalogue"] is None
 
-    catalogue = client.get(url, params={"include": "catalogue"}).json()["record"]["catalogue"]
+    asked = client.get(url, params={"include": "catalogue"}).json()["record"]
+    assert asked["available_sections"]["has_catalogue"] is True
+    catalogue = asked["catalogue"]
     assert catalogue["method"]["key"] == "b3lyp"
     assert catalogue["dispersion"]["key"] == "d3bj"
     assert catalogue["dispersion"]["spellings_seen"] == ["b3lyp-d3bj"]

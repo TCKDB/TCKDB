@@ -34,18 +34,15 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from sqlalchemy import exists, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.errors import not_found
-from app.chemistry.basis_set_names import basis_identity_key
-from app.chemistry.dispersion_names import level_identity_keys
 from app.db.models.calculation import Calculation
 from app.db.models.common import SubmissionRecordType
 from app.db.models.energy_correction import EnergyCorrectionScheme, FrequencyScaleFactor
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
-from app.db.models.method_catalogue import BasisSetCatalogueKey, MethodCatalogueKey
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import CompositeSchemeSummary, ReviewStatusSummary
@@ -187,7 +184,6 @@ def build_level_of_theory_record(
         has_frequency_scale_factors=has_fsf,
         has_used_by=calc_usage_count > 0,
         has_software=bool(software_rows),
-        has_catalogue=_has_catalogue(session, lot),
     )
 
     core = LevelOfTheoryCoreBlock(
@@ -234,6 +230,16 @@ def build_level_of_theory_record(
     if "catalogue" in includes:
         index = catalogue_index if catalogue_index is not None else load_catalogue_index(session)
         catalogue_block = index.level_catalogue(lot)
+        available.has_catalogue = any(
+            card is not None
+            for card in (
+                catalogue_block.method,
+                catalogue_block.dispersion,
+                catalogue_block.basis,
+                catalogue_block.aux_basis,
+                catalogue_block.cabs_basis,
+            )
+        )
 
     return ScientificLevelOfTheoryRecord(
         level_of_theory=core,
@@ -298,17 +304,6 @@ def _has_correction_schemes(session: Session, lot_id: int) -> bool:
         )
         is not None
     )
-
-
-def _has_catalogue(session: Session, lot: LevelOfTheory) -> bool:
-    """Whether any of the level's identity keys names a catalogue entry."""
-    method_key, dispersion_key = level_identity_keys(lot.method, lot.dispersion)
-    basis_keys = {key for spelling in (lot.basis, lot.aux_basis, lot.cabs_basis) if (key := basis_identity_key(spelling))}
-    method_keys = {method_key} | ({dispersion_key} if dispersion_key else set())
-    found = select(MethodCatalogueKey.key).where(MethodCatalogueKey.key.in_(method_keys))
-    if basis_keys:
-        found = found.union_all(select(BasisSetCatalogueKey.key).where(BasisSetCatalogueKey.key.in_(basis_keys)))
-    return bool(session.scalar(select(exists(found.subquery().select()))))
 
 
 def _has_frequency_scale_factors(session: Session, lot_id: int) -> bool:

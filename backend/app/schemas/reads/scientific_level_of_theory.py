@@ -314,9 +314,10 @@ class AvailableLevelOfTheorySections(BaseModel):
     #: it is still correct when requested, this flag just does not
     #: promise to predict it.
     has_software: bool
-    #: True when the level's method, dispersion or a basis column keys to a catalogue entry
-    #: (``include=catalogue``).
-    has_catalogue: bool = False
+    #: Whether the level's method, dispersion or a basis column keys to a catalogue entry. Answered only with
+    #: ``include=catalogue`` (from the cards built for it); ``null`` otherwise, so a read that does not ask costs no
+    #: statement.
+    has_catalogue: bool | None = None
 
 
 # ---------------------------------------------------------------------------

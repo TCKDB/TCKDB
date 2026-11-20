@@ -2744,9 +2744,15 @@
         "description": "Boolean map describing which heavy include sections have data.",
         "properties": {
           "has_catalogue": {
-            "default": false,
-            "title": "Has Catalogue",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Catalogue"
           },
           "has_correction_schemes": {
             "title": "Has Correction Schemes",
