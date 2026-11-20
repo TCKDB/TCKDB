@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="tk-svg" viewBox="0 0 400 420" role="img" aria-labelledby="tk-where-title tk-where-desc">
+<title id="tk-where-title">What runs where</title>
+<desc id="tk-where-desc">Clients (a browser, curl, tckdb-client, ARC) reach an optional ingress (nginx, Caddy, Cloudflare Tunnel or Tailscale). The ingress forwards to the web UI on 127.0.0.1:8011 or the API on 127.0.0.1:8010. The web UI passes /api/ to the API. The API uses Postgres with RDKit and the SeaweedFS object store. Everything on the server binds to 127.0.0.1.</desc>
+<style>
+.tk-svg{color:var(--md-default-fg-color,#1f2328);font-family:var(--md-text-font-family,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif)}
+.tk-svg text{fill:currentColor}
+.tk-svg .tk-box{fill:var(--md-default-bg-color,#fff);stroke:currentColor;stroke-opacity:.3;stroke-width:1.2}
+.tk-svg .tk-opt{fill:var(--md-default-bg-color,#fff);stroke:currentColor;stroke-opacity:.45;stroke-width:1.2;stroke-dasharray:5 4}
+.tk-svg .tk-host{fill:currentColor;fill-opacity:.05;stroke:currentColor;stroke-opacity:.25}
+.tk-svg .tk-rail{stroke:currentColor;stroke-opacity:.45;stroke-width:1.5;fill:none}
+.tk-svg .tk-h{font-size:14.5px;font-weight:700}
+.tk-svg .tk-c{font-family:var(--md-code-font-family,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);font-size:11.5px}
+.tk-svg .tk-d{font-size:12px;fill-opacity:.75}
+.tk-svg .tk-lab{font-size:11.5px;fill-opacity:.75}
+</style>
+<defs>
+<marker id="tk-where-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor" fill-opacity=".6"/></marker>
+</defs>
+<rect class="tk-box" x="8" y="8" width="384" height="58" rx="8"/>
+<text class="tk-h" x="200" y="32" text-anchor="middle">Clients</text>
+<text class="tk-d" x="200" y="52" text-anchor="middle">browser · curl · tckdb-client · ARC</text>
+<path class="tk-rail" d="M200 66V94" marker-end="url(#tk-where-arrow)"/>
+<rect class="tk-opt" x="8" y="96" width="384" height="58" rx="8"/>
+<text class="tk-h" x="200" y="120" text-anchor="middle">Ingress (optional)</text>
+<text class="tk-d" x="200" y="140" text-anchor="middle">nginx · Caddy · Cloudflare Tunnel · Tailscale</text>
+<rect class="tk-host" x="8" y="174" width="384" height="238" rx="10"/>
+<path class="tk-rail" d="M94 154V206" marker-end="url(#tk-where-arrow)"/>
+<path class="tk-rail" d="M306 154V206" marker-end="url(#tk-where-arrow)"/>
+<rect class="tk-box" x="22" y="208" width="144" height="58" rx="8"/>
+<text class="tk-h" x="94" y="232" text-anchor="middle">Web UI</text>
+<text class="tk-c" x="94" y="252" text-anchor="middle">127.0.0.1:8011</text>
+<rect class="tk-box" x="234" y="208" width="144" height="58" rx="8"/>
+<text class="tk-h" x="306" y="232" text-anchor="middle">API</text>
+<text class="tk-c" x="306" y="252" text-anchor="middle">127.0.0.1:8010</text>
+<path class="tk-rail" d="M166 237H232" marker-end="url(#tk-where-arrow)"/>
+<text class="tk-c" x="200" y="230" text-anchor="middle">/api/</text>
+<path class="tk-rail" d="M306 266V318" marker-end="url(#tk-where-arrow)"/>
+<path class="tk-rail" d="M272 266V290H94V318" marker-end="url(#tk-where-arrow)"/>
+<rect class="tk-box" x="22" y="320" width="144" height="58" rx="8"/>
+<text class="tk-h" x="94" y="344" text-anchor="middle">Postgres + RDKit</text>
+<text class="tk-c" x="94" y="364" text-anchor="middle">db</text>
+<rect class="tk-box" x="234" y="320" width="144" height="58" rx="8"/>
+<text class="tk-h" x="306" y="344" text-anchor="middle">SeaweedFS</text>
+<text class="tk-c" x="306" y="364" text-anchor="middle">S3 object store</text>
+<text class="tk-lab" x="200" y="400" text-anchor="middle">One server. Every port binds to 127.0.0.1.</text>
+</svg>

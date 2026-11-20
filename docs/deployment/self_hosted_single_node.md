@@ -1,914 +1,308 @@
-# Self-hosted single-node deployment
+# Public server
 
-> This guide describes a self-hosted single-node TCKDB deployment
-> using Docker Compose. It was tested on a Raspberry Pi, but the
-> architecture applies to any small Linux server — a home/lab server,
-> a small VPS, an old workstation. Substitute your host wherever the
-> doc mentions a Pi.
->
-> This is the canonical recipe for **Mode 2 — self-hosted online
-> TCKDB**. For the broader picture (the three deployment modes,
-> domain/tunnel requirements, air-gapped HPC notes, and how data
-> moves between instances) see
-> [deployment_modes.md](deployment_modes.md).
+This page turns a [self-hosted](README.md) stack into a public instance on
+one small Linux server. Anyone can read `/api/v1/scientific/*`. Only accounts
+you create can write. Every abuse control is on.
 
-The deployment exposes anonymous reads under `/api/v1/scientific/*`
-publicly through a reverse-proxy/tunnel (Cloudflare Tunnel in this
-worked example) and restricts authenticated writes to seeded
-accounts. Anything with Docker, ~4 GB RAM, and SSD-backed storage
-will do as the host.
+The example uses Cloudflare Tunnel, so the server needs no open inbound port.
+A reverse proxy with a certificate works the same way; see
+[Ingress options](#ingress-options).
 
-Public reach happens through a **reverse-proxy or tunnel**
-(Cloudflare Tunnel is what this example walks through), **not** a
-router port-forward.
+Before anyone else can reach it, tick every row of the
+[Production checklist](production_checklist.md).
 
-This is the **hosted** sibling of [local-v0.md](local-v0.md) and
-[shared-private-deployment.md](shared-private-deployment.md). Same
-application, same schema, same auth model — what changes is the
-**operational posture**:
+## The host
 
-- The API is reachable from the public internet.
-- Anonymous scientific reads are allowed, but every hosted abuse-control
-  knob is on.
-- Postgres and the object store are not reachable from anything but the API
-  process on the host.
-- TLS terminates at Cloudflare; the hop from `cloudflared` to the API
-  is loopback only.
+- 64-bit Linux. Debian, Ubuntu and Raspberry Pi OS (64-bit) are the easiest,
+  because Docker publishes packages for them. A Raspberry Pi 4 or 5 works;
+  32-bit Raspberry Pi OS does not.
+- 4 GB of RAM, 8 GB more comfortable under search traffic.
+- An SSD for the Docker volumes. An SD card wears out under database writes
+  within months.
+- Wired Ethernet if you can.
 
-> **Not a separate edition.** Use
-> [.env.selfhosted.example](https://github.com/TCKDB/TCKDB/blob/main/.env.selfhosted.example) and
-> [docker-compose.yml](https://github.com/TCKDB/TCKDB/blob/main/docker-compose.yml).
-> The backend code is the same code the rest of the deployment
-> scenarios run.
-
-> **Before you expose the deployment:** confirm every row of the
-> [Production checklist](production_checklist.md) is satisfied. The
-> `.env.selfhosted.example` referenced above already encodes every
-> required value; the checklist is the page you use to verify it on
-> the actual deploy.
-
----
-
-## Where this scenario fits
-
-| Scenario | Audience | Reachability | Reads | Writes |
-|---|---|---|---|---|
-| [Single-machine private](local-v0.md) | One user | `127.0.0.1` | Open | Open registration |
-| [Shared private](shared-private-deployment.md) | A lab | Lab URL | Auth | Seeded accounts |
-| **Self-hosted single-node (this doc)** | Public | Tunnel hostname | Anon, throttled | Seeded accounts |
-| Hosted community | Public | Public URL | Anon, throttled | Operator-managed |
-
----
-
-## Prerequisites
-
-### Hardware
-
-Any small Linux server with:
-
-- 4 GB RAM minimum (8 GB more comfortable under concurrent search traffic).
-- SSD-backed storage for the Postgres volume — **do not use an SD card**.
-  WAL traffic will wear it out within months.
-- Wired Ethernet preferred over Wi-Fi for a server role.
-
-Pi-specific hardware notes are in [Raspberry Pi notes](#raspberry-pi-notes)
-at the end of this doc.
-
-### OS
-
-- 64-bit Linux. Debian-derivative (Debian, Ubuntu, Raspberry Pi OS
-  Bookworm) is the smoothest path because Docker has first-class
-  packages.
-- The RDKit cartridge image (`informaticsmatters/rdkit-cartridge-debian`)
-  publishes `linux/amd64` and `linux/arm64`, so x86_64 servers and
-  64-bit Raspberry Pis both run it natively.
-
-### Host packages
+Install the basics and Docker Engine from Docker's apt repository (`docker.io`
+from the distribution also works but lags):
 
 ```bash
 sudo apt update
-sudo apt install -y \
-    ca-certificates curl gnupg lsb-release \
-    git ufw fail2ban unattended-upgrades \
-    postgresql-client jq
-```
-
-### Conda environment
-
-The backend runs on the host inside `tckdb_env`. Install Miniforge for
-your host architecture (`x86_64` or `aarch64`):
-
-```bash
-# Pick the matching installer for `uname -m`:
-#   x86_64 -> Miniforge3-Linux-x86_64.sh
-#   aarch64 -> Miniforge3-Linux-aarch64.sh
-curl -L -o /tmp/miniforge.sh \
-    "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-$(uname -m).sh"
-sudo bash /tmp/miniforge.sh -b -p /opt/conda
-sudo /opt/conda/bin/conda env create -n tckdb_env -f /opt/tckdb/backend/environment.yml
-```
-
-(Substitute your project layout — the systemd unit assumes the repo is
-checked out at `/opt/tckdb`.)
-
----
-
-## Docker installation
-
-Use the Docker Engine apt repo (the distro-shipped `docker.io` is
-fine but lags). On Debian/Ubuntu/Raspberry Pi OS:
-
-```bash
+sudo apt install -y ca-certificates curl gnupg git openssl ufw fail2ban unattended-upgrades jq
 curl -fsSL https://download.docker.com/linux/debian/gpg | \
     sudo gpg --dearmor -o /usr/share/keyrings/docker.gpg
-# `arch=` should match your host: amd64 or arm64.
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker.gpg] \
     https://download.docker.com/linux/debian bookworm stable" | \
     sudo tee /etc/apt/sources.list.d/docker.list
 sudo apt update
-sudo apt install -y docker-ce docker-ce-cli containerd.io \
-    docker-buildx-plugin docker-compose-plugin
-sudo usermod -aG docker tckdb   # create the `tckdb` system user first
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 ```
 
-Verify Compose v2:
+On Ubuntu, replace `debian` and `bookworm` with `ubuntu` and your release
+name.
+
+Run TCKDB as a dedicated, unprivileged user, never as root or a default
+account such as `pi` or `ubuntu`:
 
 ```bash
-docker compose version
+sudo adduser --system --group --home /var/lib/tckdb tckdb
+sudo usermod -aG docker tckdb
+sudo install -d -o tckdb -g tckdb /opt/tckdb
 ```
 
----
+## Install
 
-## Filesystem layout
-
-```text
-/opt/tckdb/                          # git checkout of TCKDB_v2
-    backend/                         # python backend
-    docker-compose.yml            # symlink or copy from repo
-    .env.selfhosted                          # NOT committed; created from .env.selfhosted.example
-/var/backups/tckdb/                  # nightly pg_dump output
-/var/log/                            # journald + Docker json-file logs
+```bash
+sudo -u tckdb git clone https://github.com/TCKDB/TCKDB.git /opt/tckdb
+cd /opt/tckdb
+sudo -u tckdb backend/scripts/ops/tckdb_make_env.sh --mode hosted_public \
+    --public-url https://tckdb.example.org --proxy-header CF-Connecting-IP
+sudo -u tckdb docker compose --env-file .env.selfhosted --env-file .env.db-admin --profile selfhost up -d --wait
+sudo -u tckdb backend/scripts/check_selfhosted_deployment.sh
 ```
 
-Owner everything by a dedicated unprivileged `tckdb` user/group; the
-systemd units run as that user.
+The script still asks for the administrator's username and email. Run the
+later `docker compose` commands on this page as `tckdb` too.
 
----
+`--public-url` is the address people will use, without `/api/v1`. The web UI
+answers at its root and the API under `/api/v1`. `CF-Connecting-IP` is the
+header Cloudflare sets; see [Trusted proxy header](#trusted-proxy-header).
 
-## Host ports vs container ports
+## The settings that matter
 
-The host and the container have separate port namespaces. This catches
-new operators out, so the convention used by this deployment is spelled
-out explicitly here.
+`tckdb_make_env.sh` writes safe values for all of these.
+`DEPLOYMENT_MODE=hosted_public` makes the API refuse to start if one is
+wrong.
 
-A compose `ports:` entry like:
-
-```yaml
-ports:
-  - "127.0.0.1:5434:5432"
-```
-
-means:
-
-```text
-host 127.0.0.1, port 5434   forwards to   container port 5432
-```
-
-Postgres inside the container still listens on `5432`. The host
-publishes that as `5434` only to avoid clashing with a host-installed
-Postgres that already binds `5432`.
-
-The mapping splits how the rest of the stack talks to the DB:
-
-| Where the consumer runs | `DB_HOST` | `DB_PORT` |
+| Variable | Value | Why |
 |---|---|---|
-| On the host (Alembic, Uvicorn under systemd, `psql` from the host) | `127.0.0.1` | host-published port (e.g. `5432` or `5434`) |
-| Inside the same compose network as `db` (a future `api:` service) | `db` (the service name) | `5432` (the container port) |
-
-The default `docker-compose.yml` publishes
-`127.0.0.1:${DB_PORT:-5432}:5432`, so if you set `DB_PORT=5434` in
-`.env.selfhosted`, the host sees Postgres at `127.0.0.1:5434` and you
-must use that same value in any host-side `DB_PORT`. The container
-itself does not move.
-
-The same logic applies to the object store: SeaweedFS's S3 port `9000`
-is published to `127.0.0.1:9000` (and, on a MinIO deployment, its console
-`9001` to `127.0.0.1:9001`). Never republish them on `0.0.0.0`.
-
-### If the API runs in a container, address siblings by service name
-
-**A containerised API must reach its sibling services by their compose
-service name — `db`, `seaweedfs` — never `localhost` or `127.0.0.1`.** Inside a
-container, loopback is *that container's own* loopback. Nothing else is
-listening on it, and the connection fails with no indication that the address
-was ever wrong.
-
-This applies to every service coordinate, not just the database:
-
-| Setting | API on the host | API in the compose network |
-|---|---|---|
-| `DB_HOST` / `DB_PORT` | `127.0.0.1` / host-published port | `db` / `5432` |
-| `S3_ENDPOINT_URL` | `http://127.0.0.1:9000` | `http://seaweedfs:9000` (`http://minio:9000` on a MinIO deployment) |
-
-The reason this deserves its own heading: **migrating the API from the host to
-a container does not change the config file, so nothing looks wrong.** Every
-value in it is still individually valid — a well-formed URL, a port that is
-genuinely published, a host that genuinely resolves. Only the *frame of
-reference* changed. This is not a hypothetical: on 2026-08-05 exactly this
-happened here with `S3_ENDPOINT_URL=http://127.0.0.1:9000`, and every
-artifact-bearing upload returned 503 while the deployment reported itself
-healthy.
-
-Whenever you move a process into or out of a container, re-read the whole
-env file asking "who is *this* address relative to?" — not "is this address
-valid?". Then check `/api/v1/status`, which now reports the object-store
-endpoint it actually reached for (see
-[backend/docs/deployment/monitoring.md](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/deployment/monitoring.md)).
-
----
-
-## Compose services
-
-[docker-compose.yml](https://github.com/TCKDB/TCKDB/blob/main/docker-compose.yml)
-defines these services, split across **core** services that run by
-default and **opt-in** services behind Compose profiles:
-
-| Service | Image | Binding | Public? | Profile |
-|---|---|---|---|---|
-| `db` | `informaticsmatters/rdkit-cartridge-debian` | `127.0.0.1:5432` | **No** | (always) |
-| `seaweedfs` | `chrislusf/seaweedfs` (pinned by digest) | `127.0.0.1:9000` | **No** | (always) |
-| `minio` | `minio/minio` | `127.0.0.1:9000` + `127.0.0.1:9001` | **No** | `minio` (existing MinIO deployments only) |
-| `cloudflared` | `cloudflare/cloudflared` | host network (egress only) | tunnel only | `cloudflare` (opt-in) |
-
-The FastAPI backend and (inline) upload worker run **on the host** as
-a systemd unit, not in Docker, so the existing conda-based dev/test
-workflow is preserved. The host process talks to Docker services over
-loopback.
-
-**The object store is replaceable.** TCKDB is a plain S3 client, so
-`seaweedfs` is only the default. To use AWS S3, Google Cloud Storage
-(through its S3 interoperability endpoint with HMAC keys) or any other
-S3-compatible service, set `S3_ENDPOINT_URL`, `S3_ACCESS_KEY`,
-`S3_SECRET_KEY`, `S3_BUCKET` and `S3_REGION` to that service and do not
-start `seaweedfs`.
-
-**An existing MinIO deployment keeps running MinIO.** Its artifacts live
-in the `tckdb_minio` volume, and starting `seaweedfs` would give the API
-an empty store. Start MinIO with its profile instead
-(`docker compose --profile minio up -d db minio`); both services publish
-`127.0.0.1:9000`, so running both fails on the port rather than silently.
-To move to SeaweedFS, follow
-[Moving from MinIO to SeaweedFS](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/deployment/migrating_minio_to_seaweedfs.md):
-a verified copy that changes no database row, with MinIO kept for rollback.
-
-> **Keep `--workers 1`.** The default rate limiter is in-process; each
-> extra Uvicorn worker multiplies the effective per-IP bucket budget.
-> Do not add `--workers N` to the systemd unit until the limiter is
-> moved to a shared backend (e.g. Redis). See
-> [Rate limiter and Uvicorn workers](production_checklist.md#rate-limiter-and-uvicorn-workers).
-
-`ports:` entries are all `127.0.0.1:...:...`. **Never change them** to
-bare `5432:5432` — that publishes Postgres on every interface,
-including the LAN.
-
----
-
-## Closing the object store to the host
-
-**Install this on every Linux host that runs the bundled `seaweedfs`
-service.** It is one firewall rule, applied at boot by a systemd unit.
-
-### What it closes
-
-Besides the S3 gateway on 9000, SeaweedFS runs a filer (8888), a master
-(9333) and a volume server (9340), each with a gRPC port (18888, 19333,
-19340; the S3 gateway has 19000), plus admin ports 23646 and 33646. The gRPC
-ports take no credentials: SeaweedFS secures gRPC only with mTLS. Over
-gRPC, `weed shell` deletes objects and the bucket's whole collection
-(measured on 4.47).
-
-`docker-compose.yml` puts `seaweedfs` on its own `storage` network, which
-keeps every other container away from those ports (#545). It does not keep
-the **host** away. Docker bridge addresses are routable from the host's
-own network namespace. So any process on the host, and any container
-started with `network_mode: host` (such as the `cloudflared` service), can
-reach every SeaweedFS port on the container's `storage` address, gRPC
-included (#548).
-
-The rule closes that route. It is one line at the top of the host's
-`OUTPUT` chain:
-
-```
--A OUTPUT -d <storage subnet> -p tcp -m tcp ! --dport 9000 -m conntrack --ctstate NEW \
-   -m comment --comment tckdb-548-storage-hostfw -j REJECT --reject-with tcp-reset
-```
-
-New TCP connections from the host to the `storage` subnet are reset,
-except to port 9000. That port must stay open. The published S3 forward
-(`127.0.0.1:9000` to the container's 9000) is opened from the host's
-namespace by `docker-proxy`, so blocking 9000 would cut off the S3 API
-itself. S3 checks a signature on every request. If the network has an IPv6
-subnet, the same rule is added with `ip6tables`.
-
-**Why `OUTPUT` and not `DOCKER-USER`:**
-
-- `DOCKER-USER` is jumped to only from `FORWARD`, which carries traffic
-  routed *through* the host. Traffic the host *originates* never passes
-  `FORWARD`, so a `DOCKER-USER` rule cannot see it.
-- Traffic between containers on the `storage` network is bridged. It goes
-  through `FORWARD`, never `OUTPUT`, so this rule cannot touch the API or
-  the worker.
-
-**What stays reachable, by design.** Members of the `storage` network
-can still use gRPC: the API container, the worker, and MinIO and the copy
-tool during a migration. They already hold the S3 credentials, which can
-delete every object, so gRPC gives them nothing new. That is why only
-something you would trust with `S3_SECRET_KEY` may join `storage`. Root
-on the host can remove the rule. What the rule stops is unprivileged
-local processes and host-network containers.
-
-**Measured on the development instance (2026-09-29), with this rule
-installed by this unit:**
-
-- from the host, every port listed above was refused, and 9000 was open;
-- an unsigned S3 request on the published port got 403;
-- the API's SeaweedFS capacity probe and an artifact read both worked;
-- `/api/v1/status` was ok;
-- after repeated restarts of the unit there was still exactly one rule.
-
-### Install
-
-Run as root. The script needs root for `iptables`. Install a root-owned
-copy rather than pointing the unit at your checkout: root must not run a
-file that an unprivileged user can edit. Copy it again whenever it changes
-in the repository.
-
-```bash
-sudo install -o root -g root -m 0755 backend/scripts/ops/tckdb_storage_hostfw.sh /usr/local/sbin/
-sudo install -o root -g root -m 0644 backend/scripts/ops/tckdb-storage-hostfw.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now tckdb-storage-hostfw
-sudo systemctl status tckdb-storage-hostfw      # active (exited), and the rule it inserted
-```
-
-**Which network.** The script takes the first of these that is set:
-
-1. `--network`;
-2. `TCKDB_STORAGE_NETWORK`;
-3. `${COMPOSE_PROJECT_NAME}_storage`;
-4. otherwise, the one network Compose labelled `storage`.
-
-If this host has more than one (another project, a test stack), the script
-refuses to guess and the unit fails. Name yours:
-
-```bash
-sudo systemctl edit tckdb-storage-hostfw
-#   [Service]
-#   Environment=TCKDB_STORAGE_NETWORK=tckdbv2_storage   # your <project>_storage
-sudo systemctl restart tckdb-storage-hostfw
-```
-
-**Which ports stay open.** Set this with `--allow-ports` or
-`TCKDB_STORAGE_ALLOW_PORTS` (comma-separated container ports; the default
-is `9000`). Widen it only for a forward you published yourself:
-
-- An API on the host that uses `S3_SEAWEEDFS_MASTER_URL` through
-  `127.0.0.1`-published 9333 and 9340 needs `9000,9333,9340`. The gRPC ports
-  stay closed.
-- While MinIO runs (it joins `storage` too), its console forward on
-  `127.0.0.1:9001` may be refused. Add `9001` for the duration.
-
-**When to run it again.** The rule holds the subnet the network had when
-the script ran.
-
-- **The network is recreated** (`docker compose down`, then `up`) and
-  may get a new subnet. Run `sudo systemctl restart tckdb-storage-hostfw`.
-- **Docker is restarted.** The unit restarts with it, through
-  `Requires=docker.service`.
-- **A firewall manager reloads** (`ufw reload`, `firewall-cmd --reload`,
-  an `iptables-restore`) and may drop the rule or put its own rules above
-  it. Restart the unit.
-
-In every case `--check`, below, reports the problem.
-
-### Verify
-
-```bash
-sudo /usr/local/sbin/tckdb_storage_hostfw.sh --check
-# expect: "present for <network> (<subnet>)" and "OK"; exit 0
-```
-
-If the unit sets `TCKDB_STORAGE_NETWORK` or `TCKDB_STORAGE_ALLOW_PORTS`,
-give `--check` the same values (`--network`, `--allow-ports`). It compares
-against what it is given.
-
-`--check` changes nothing. It exits non-zero if any of these is true:
-
-- the rule is missing for the network's current subnet;
-- a stale or duplicate tagged rule is left;
-- another `OUTPUT` rule comes before it. `ufw`'s output chains accept new
-  connections, so they would win.
-
-Then test the ports from the host, as an ordinary user:
-
-```bash
-NET=tckdbv2_storage          # your <project>_storage
-IP=$(docker network inspect "$NET" \
-      --format '{{range .Containers}}{{.Name}} {{.IPv4Address}}{{println}}{{end}}' \
-    | awk '/seaweedfs/ {sub(/\/.*/, "", $2); print $2}')
-echo "seaweedfs on $NET: ${IP:?not found}"
-for p in 8888 9333 9340 18888 19333 19340 19000 23646 33646 9000; do
-  if timeout 3 bash -c "exec 3<>/dev/tcp/$IP/$p" 2>/dev/null; then echo "$p open"; else echo "$p closed"; fi
-done
-# expect: every port "closed" except "9000 open"
-curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:9000/   # expect 403 (unsigned)
-```
-
-Finally confirm TCKDB still reaches its store. `/api/v1/status` should
-show `artifact_storage.healthy: true`.
-
-### Remove
-
-Stopping the unit does not remove the rule. The unit has no `ExecStop`
-on purpose: a Docker restart stops and starts it, and the host must not
-be open in between.
-
-```bash
-sudo systemctl disable --now tckdb-storage-hostfw
-sudo /usr/local/sbin/tckdb_storage_hostfw.sh --remove    # every tagged rule, IPv4 and IPv6; needs no Docker
-sudo rm /etc/systemd/system/tckdb-storage-hostfw.service /usr/local/sbin/tckdb_storage_hostfw.sh
-sudo systemctl daemon-reload
-```
-
-### Hosts without iptables
-
-The script is **Linux and iptables only**. The `iptables-legacy` and
-`iptables-nft` backends both work. Elsewhere:
-
-- **Pure nftables, with no iptables tools.** Add the same rule to an
-  `output` hook chain, and re-add it at boot the same way:
-  `nft add rule inet filter output ip daddr <subnet> tcp dport != 9000 ct state new reject with tcp reset`
-  (and `ip6 daddr` for an IPv6 subnet). The `inet filter` table and its
-  `output` chain must exist.
-- **Docker Desktop (macOS, Windows) and rootless Docker.** The bridge
-  lives in a VM or in a separate network namespace, and is normally not
-  routable from the host at all. There is no route to close. Confirm it
-  with the port loop above.
-- **Docker installed under another unit name** (for example the snap's
-  `snap.docker.dockerd.service`). Change `After=` and `Requires=` in the
-  unit to match.
-- **SeaweedFS run natively, not in Docker.** This rule does not apply.
-  Bind it to loopback instead, as
-  [native-advanced.md](native-advanced.md#object-artifact-storage)
-  describes.
-
-Whichever way you close it, the verification loop is the test. Every port
-except 9000 must be closed from the host.
-
----
-
-## Ingress options
-
-The core stack (`db`, `seaweedfs`, plus the host-side API) is independent
-of how you publish the API. Ingress is a separate layer; pick **one**
-of these, do not stack them:
-
-| Option | What it gives you | Where it's configured |
-|---|---|---|
-| **Cloudflare Tunnel via Compose (this repo's worked example)** | Public HTTPS hostname through Cloudflare; no inbound firewall hole. | The `cloudflared` service in `docker-compose.yml`, behind the `cloudflare` Compose profile. Token in `.env.selfhosted`. |
-| **Cloudflare Tunnel via host systemd `cloudflared`** | Same as above, run as a regular OS service. | Operator-managed; do **not** also start the Compose `cloudflared` service. |
-| **nginx / Caddy / Traefik reverse proxy** | TLS-terminating proxy in front of `127.0.0.1:8010`. | Operator-managed, outside this compose file. Set `TRUSTED_PROXY_HEADER` to whatever the proxy injects (e.g. `X-Real-IP` for nginx). |
-| **Tailscale / WireGuard / SSH tunnel** | Reach the API over a private overlay only — no public surface. | Operator-managed. Useful for lab-only deployments. |
-| **No ingress (loopback only)** | The API is reachable on `127.0.0.1:8010` from the host. Useful for local dev and validation runs. | Nothing to do. |
-
-The Compose default brings up only the core services:
-
-```bash
-docker compose --env-file .env.selfhosted \
-    --env-file .env.db-admin \
-    up -d db seaweedfs
-```
-
-Cloudflare Tunnel ingress is opt-in via the `cloudflare` profile:
-
-```bash
-docker compose --env-file .env.selfhosted \
-    --env-file .env.db-admin \
-    --profile cloudflare up -d cloudflared
-```
-
-If you choose nginx/Caddy/Traefik/Tailscale/etc., just don't pass
-`--profile cloudflare` and configure your proxy/tunnel separately.
-
-> **Don't run two ingresses pointing at the same API.** Cloudflare
-> Tunnel via Compose AND a host-side `cloudflared` systemd unit will
-> both try to register the tunnel and one of them will lose. Pick one
-> path.
-
----
-
-## Environment variables (hosted-safe defaults)
-
-Copy [`.env.selfhosted.example`](https://github.com/TCKDB/TCKDB/blob/main/.env.selfhosted.example) to `.env.selfhosted` and fill in
-the placeholders. The non-negotiable hosted toggles:
-
-| Variable | Required value | Why |
-|---|---|---|
-| `DEPLOYMENT_MODE` | `hosted_public` | Activates the startup safety guard so unsafe values for the rows below cause the API to exit at boot instead of silently misconfiguring production. Use `shared_private` for lab-internal deployments. |
-| `EXPOSE_API_DOCS` | `false` | Don't ship Swagger UI's live request console to the public surface. |
-| `EXPOSE_API_REFERENCE` | operator choice (default `false`) | Set `true` to publish the read-only ReDoc reference at `/redoc` plus `/openapi.json` while `/docs` stays unregistered. |
-| `LEGACY_READS_REQUIRE_AUTH` | `true` | Legacy `/api/v1/{thermo,…}` routes leak integer PKs. |
-| `ALLOW_PUBLIC_INTERNAL_IDS` | `false` | Clients use refs as handles. |
-| `RATE_LIMIT_ENABLED` | `true` | Hosted abuse control is mandatory. |
-| `PAGING_CURSOR_KEY` | random, 32+ characters | Seals paging cursors; the API refuses to start without it. Rotating it only invalidates cursors in flight. |
-| `SESSION_COOKIE_SECURE` | `true` | TLS-only cookies. Cloudflare terminates TLS. |
-| `AUTH_ALLOW_OPEN_REGISTRATION` | `false` | Seeded accounts only. |
-| `TRUSTED_PROXY_HEADER` | `CF-Connecting-IP` | See next section. |
-| `DB_STATEMENT_TIMEOUT_MS` | `30000` (or stricter) | Per-session SQL cap. |
-| `TCKDB_API_HOST` | `127.0.0.1` | Only `cloudflared` talks to the API. |
-
-For the current default bucket budgets, see
-[`.env.selfhosted.example`](https://github.com/TCKDB/TCKDB/blob/main/.env.selfhosted.example). This
-deployment doc only documents controls that are required or
-policy-relevant; numeric rate-limit budgets
-(`RATE_LIMIT_*_PER_MINUTE`) are tunable deployment settings and live
-in the env example to avoid two drifting sources of truth.
-
----
+| `DEPLOYMENT_MODE` | `hosted_public` | Turns on the startup safety check. |
+| `AUTH_ALLOW_OPEN_REGISTRATION` | `false` | Only accounts you create. |
+| `EXPOSE_API_DOCS` | `false` | No live request console on the public site. |
+| `EXPOSE_API_REFERENCE` | your choice, default `false` | `true` publishes the read-only `/redoc` and `/openapi.json`. `/docs` stays off. |
+| `LEGACY_READS_REQUIRE_AUTH` | `true` | The legacy `/api/v1/{thermo,…}` routes expose database row IDs. |
+| `ALLOW_PUBLIC_INTERNAL_IDS` | `false` | Clients use public refs. |
+| `RATE_LIMIT_ENABLED` | `true` | Abuse control. |
+| `PAGING_CURSOR_KEY` | random, 32+ characters | Seals paging cursors. Changing it only breaks cursors in flight. |
+| `SESSION_COOKIE_SECURE` | `true` | Cookies only over HTTPS. Cloudflare terminates TLS. |
+| `TRUSTED_PROXY_HEADER` | `CF-Connecting-IP` | See below. |
+| `DB_STATEMENT_TIMEOUT_MS` | `30000` or lower | Caps any one query. |
+
+The rate-limit budgets live in [`.env.selfhosted.example`](../../.env.selfhosted.example)
+and the [Production checklist](production_checklist.md#recommended-settings).
 
 ## Trusted proxy header
 
-The rate limiter and audit logging key off the client IP returned by
-[`_client_ip()`](https://github.com/TCKDB/TCKDB/blob/main/backend/app/api/rate_limit.py). When
-`TRUSTED_PROXY_HEADER` is set, the middleware reads that header; when
-unset, it falls back to the ASGI peer (which would be `127.0.0.1`
-because of `cloudflared`).
+The rate limiter keys on the client's IP address. Behind a tunnel or proxy,
+every request arrives from the proxy, so the API reads the real address from
+`TRUSTED_PROXY_HEADER`.
 
-**Use `CF-Connecting-IP`, not `X-Forwarded-For`.** On a Cloudflare
-Tunnel egress:
+Behind Cloudflare, use `CF-Connecting-IP`. Cloudflare's edge sets it and it
+reaches the server over the authenticated tunnel. Don't use
+`X-Forwarded-For`: Cloudflare passes on whatever the client sent in it.
 
-- `CF-Connecting-IP` is injected by Cloudflare's edge and arrives at
-  the host over the authenticated tunnel. Origin spoofing is not
-  reachable.
-- `X-Forwarded-For` is forwarded as-is from the client request — an
-  abuser can prepend anything to it.
+If you change the ingress, change this too. The right value is the header
+that your ingress always overwrites.
 
-Set it once in `.env.selfhosted`:
+## Ingress options
 
-```dotenv
-TRUSTED_PROXY_HEADER=CF-Connecting-IP
-```
+Pick one. Two ingresses in front of one API fight each other.
 
-If you ever change the ingress (e.g. swap in a different tunnel
-product or add a local reverse proxy), revisit this — the **only**
-correct value is the header the trusted ingress overwrites
-unconditionally.
+| Option | Gives you | Set up |
+|---|---|---|
+| Cloudflare Tunnel, as the compose `cloudflared` service | A public HTTPS hostname, no open inbound port | Below |
+| Cloudflare Tunnel, as a `cloudflared` system service | The same | Cloudflare's instructions; don't also start the compose service |
+| nginx, Caddy or Traefik | TLS in front of `127.0.0.1:8011` | Your proxy config; see [Lab server](shared-private-deployment.md#reverse-proxy) |
+| Tailscale, WireGuard or an SSH tunnel | Private access only, no public surface | Your overlay network |
 
----
+## Cloudflare Tunnel
 
-## Cloudflare Tunnel setup
+Three things have to line up:
 
-> **DNS, tunnel, ingress: three separate things.** They're easy to
-> confuse and it pays to keep them straight from the start.
->
-> - A **DNS record** decides where a name points. Adding
->   `tckdb.example.org` to your DNS zone tells the internet "if you
->   want to reach this name, ask Cloudflare." Nothing about the DNS
->   record knows or cares what TCKDB is.
-> - A **Cloudflare Tunnel** is a long-lived outbound connection from
->   `cloudflared` on your host to Cloudflare. Once it's running,
->   Cloudflare can route requests inbound through that connection
->   instead of needing an open port on your firewall.
-> - **Ingress rules** inside the tunnel config say "when a request
->   arrives for hostname X, forward it to local URL Y." This is the
->   step that actually wires `https://tckdb.example.org` to
->   `127.0.0.1:8010`.
->
-> Creating a Cloudflare DNS record or a tunnel does not by itself
-> route traffic anywhere — you also have to add the ingress rule.
-> Conversely, an ingress rule for a hostname that has no DNS record
-> pointing at Cloudflare is dead-on-arrival. Both have to line up.
->
-> If you just added a new hostname and `curl` says
-> `NXDOMAIN`/"could not resolve host", that may be DNS negative-cache
-> on your local resolver. The cache duration is bounded by the
-> zone's negative TTL (often a few minutes); waiting it out, or
-> flushing your resolver, fixes it.
+- a **DNS record** that sends the name to Cloudflare;
+- a **tunnel**, an outbound connection from `cloudflared` on your server to
+  Cloudflare;
+- an **ingress rule** in the tunnel that forwards the hostname to a local
+  address.
 
-You need a Cloudflare account, a zone (e.g. `tckdb.example.org`), and
-the Zero Trust dashboard enabled (the free tier is fine).
+Creating one of them routes nothing on its own.
 
-1. **Create the tunnel** in the Zero Trust dashboard (Networks →
-   Tunnels → Create a tunnel → Cloudflared). Pick a name like
-   `tckdb-selfhosted`. Cloudflare prints a tunnel token — this is
-   the value for `CLOUDFLARED_TUNNEL_TOKEN`.
+You need a Cloudflare account, a zone such as `example.org`, and Zero Trust
+enabled (the free tier is enough).
 
-2. **Store the token** outside the committed repo. Add a line to
-   `/opt/tckdb/.env.selfhosted` (do **not** add it to `.env.selfhosted.example`):
+1. **Create the tunnel** in the Zero Trust dashboard: Networks → Tunnels →
+   Create a tunnel → Cloudflared. Copy the token it prints.
+2. **Store the token** in `.env.selfhosted`, never in the template:
 
-   ```dotenv
-   CLOUDFLARED_TUNNEL_TOKEN=eyJhIjoi...   # from the Zero Trust UI
-   ```
+    ```dotenv
+    CLOUDFLARED_TUNNEL_TOKEN=eyJhIjoi...
+    ```
 
-3. **Configure the public hostname.** In the same UI, add a Public
-   Hostname:
+3. **Add a public hostname** to the tunnel: subdomain `tckdb`, domain
+   `example.org`, type `HTTP`, URL `127.0.0.1:8011`. That serves the web UI
+   and the API. Use `127.0.0.1:8010` instead for the API alone. Add no other
+   rule: never 5432 (Postgres), 9000 (the object store) or 9001.
+4. **Start it:**
 
-   - Subdomain: `api`
-   - Domain: `tckdb.example.org`
-   - Type: `HTTP`
-   - URL: `127.0.0.1:8010`
+    ```bash
+    docker compose --env-file .env.selfhosted --env-file .env.db-admin \
+        --profile cloudflare up -d cloudflared
+    ```
 
-   That is the **only** ingress rule. Do not add rules for `9001`
-   (MinIO console, where MinIO runs), `5432` (Postgres), or any other
-   internal port.
+Cloudflare manages the certificate. Set the zone's SSL/TLS mode to
+**Full (strict)**.
 
-4. **Launch.** Once the rest of the stack is up (next section), the
-   `cloudflared` service authenticates with the token and the public
-   URL goes live. Cloudflare manages the cert.
+A new hostname can fail with "could not resolve host" for a few minutes while
+your resolver caches the earlier "no such name" answer. Wait, or flush the
+resolver; see [Troubleshooting](troubleshooting.md#cloudflare-tunnel-and-dns).
 
-> No router port-forward, no inbound firewall hole. UFW should still
-> block all inbound traffic except SSH (and SSH should be restricted —
-> see [Admin access](#ssh-admin-access-hardening)).
+### Optional: a database GUI through the tunnel
 
----
-
-## HTTPS / public hostname
-
-Cloudflare terminates TLS at the edge with a managed cert. Confirm:
-
-- **SSL/TLS mode** for the zone is set to **Full (strict)** or
-  **Strict** — `Flexible` mode would expose the tunnel-side hop as
-  plain HTTP from the edge perspective, which it is, but more
-  importantly it weakens the public-facing posture.
-- For TCKDB the origin is reached via the tunnel (not via an A record),
-  so `Strict` is the right setting — the origin certificate is
-  Cloudflare's own.
-
-`TCKDB_PUBLIC_BASE_URL` in `.env.selfhosted` should be the public URL:
-
-```dotenv
-TCKDB_PUBLIC_BASE_URL=https://api.tckdb.example.org/api/v1
-```
-
----
-
-## Optional: protected DB-GUI access via TCP tunnel
-
-Day-to-day operators may want a DataGrip / DBeaver / `psql` session
-against the production database without exposing Postgres publicly.
-The right pattern is a **second** Cloudflare Tunnel ingress rule of
-type `TCP`, gated behind a Cloudflare Access policy. Postgres still
-binds only to `127.0.0.1` on the host — the tunnel forwards from
-Cloudflare to the loopback port, and Access authenticates *who* is
-allowed to use the forward.
-
-> **Do not expose Postgres on `0.0.0.0`.** The compose file binds
-> `127.0.0.1:5432` exactly so this can never happen by accident. The
-> tunnel adds a *separately authenticated* path on top of that
-> loopback binding.
-
-Setup (one-time, on Cloudflare side):
-
-1. In the same tunnel, add a second public hostname:
-   - Subdomain: `pg-tckdb`
-   - Domain: `tckdb.example.org` → `pg-tckdb.example.org`
-   - Type: `TCP`
-   - URL: `tcp://127.0.0.1:5432`
-2. In Cloudflare Access, create an Application of type
-   "Self-hosted" for `pg-tckdb.example.org`, with a policy that only
-   permits your operator email/identity provider.
-
-Then, from any operator workstation:
+To use DataGrip, DBeaver or `psql` against the server without publishing
+Postgres, add a second public hostname of type `TCP` with URL
+`tcp://127.0.0.1:5432`, for example `pg-tckdb.example.org`. Protect it with a
+Cloudflare Access application whose policy admits only you. Then, on your
+workstation:
 
 ```bash
-# Forwards localhost:15434 on your machine to pg-tckdb.example.org
-# over the authenticated tunnel. cloudflared opens an Access prompt
-# in the browser on the first call.
-cloudflared access tcp \
-    --hostname pg-tckdb.example.org \
-    --url localhost:15434
+cloudflared access tcp --hostname pg-tckdb.example.org --url localhost:15434
 ```
 
-Leave that running, then configure your DB GUI:
+Connect the GUI to `127.0.0.1:15434` with the `DB_NAME`, `DB_USER` and
+`DB_PASSWORD` from `.env.selfhosted`. Three checks stand in the way of an
+attacker: the Access policy, the tunnel token Access issues, and the database
+password. A leaked password alone does not reach the database.
 
-```text
-Host:     127.0.0.1
-Port:     15434
-Database: tckdb
-User:     tckdb
-Password: <DB_PASSWORD from .env.selfhosted>
-```
+## Statement timeout
 
-Three independent authentication layers stack here, and that's the
-point:
+Two limits, both on by default:
 
-| Layer | What it checks |
-|---|---|
-| Cloudflare Access policy | Are you a permitted operator identity? |
-| `cloudflared access tcp` tunnel | Did Access issue you a valid token? |
-| Postgres `pg_hba` + role/password | Is this `username`/`password` valid for this database? |
+- `DB_STATEMENT_TIMEOUT_MS=30000` in `.env.selfhosted` applies to every
+  connection the API opens.
+- `init` sets the same limit on the runtime database role when it provisions
+  the roles, so every client of that role inherits it. Check it:
 
-A leaked DB password alone cannot reach the database from the
-internet — the tunnel never opens without an Access token first.
+    ```bash
+    docker compose --env-file .env.selfhosted --env-file .env.db-admin exec db \
+        psql -U tckdb_app -d tckdb -c 'SHOW statement_timeout;'
+    ```
 
----
+    Use your `DB_USER` and `DB_NAME` if you changed them.
 
-## Postgres `statement_timeout`
-
-Two layers — both should be on:
-
-1. **App-session level.** `DB_STATEMENT_TIMEOUT_MS=30000` in `.env.selfhosted`.
-   This is applied on every new DBAPI connection and protects against
-   a runaway query in the pool. Set it as a positive integer in ms.
-
-2. **Role level.** `configure_database_roles.py apply` persists the same
-   value on the restricted runtime role so any client inherits it. Verify it
-   without exposing operator credentials to the API:
-
-   ```bash
-   PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" \
-       -c "SHOW statement_timeout;"
-   ```
-
-   Tighten further (e.g. `10s`) once you've observed legitimate query
-   shapes for a few days.
-
----
-
-## Bring-up sequence
-
-```bash
-# 0. Clone and prep
-sudo mkdir -p /opt/tckdb && sudo chown -R tckdb:tckdb /opt/tckdb
-sudo -u tckdb git clone <repo-url> /opt/tckdb
-cd /opt/tckdb
-sudo -u tckdb cp .env.selfhosted.example .env.selfhosted
-sudo -u tckdb cp .env.db-admin.example .env.db-admin
-sudo -u tckdb chmod 600 .env.selfhosted .env.db-admin
-sudo -u tckdb $EDITOR .env.selfhosted .env.db-admin  # fill every placeholder
-
-# 1. Bring up the data plane
-docker compose --env-file .env.selfhosted --env-file .env.db-admin up -d db seaweedfs
-
-# 2. Run migrations.
-#    For first bootstrap of an empty DB this is straightforward.
-#    For upgrades against a DB that already holds data, follow the
-#    operator runbook in
-#    backend/docs/deployment/migrations.md (pg_dump first, read
-#    revision docstrings, upgrade, smoke-test).
-cd backend
-set -a
-source ../.env.selfhosted
-source ../.env.db-admin
-set +a
-/opt/conda/bin/conda run -n tckdb_env python scripts/configure_database_roles.py apply
-/opt/conda/bin/conda run -n tckdb_env alembic upgrade head
-/opt/conda/bin/conda run -n tckdb_env python scripts/configure_database_roles.py check
-
-# 3. Persist the statement_timeout at role level (see above)
-
-# 4. Seed an admin account (and later, log in / mint API keys).
-#    See docs/deployment/admin_auth_quickstart.md for the full recipe,
-#    including curator seeding and how to wire ARC against the deployment.
-/opt/conda/bin/conda run -n tckdb_env python scripts/bootstrap_admin.py \
-    --username admin --email admin@tckdb.example.org --role admin
-
-# 5. Start the API as a service
-sudo cp ../examples/deployment/systemd/tckdb-api.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now tckdb-api.service
-
-# 6. (Optional, if using Cloudflare Tunnel via Compose) Bring up the
-#    tunnel last - this is what publishes the API.
-#    For nginx/Caddy/Traefik/Tailscale/etc., skip this step and
-#    configure that ingress separately.
-cd ..
-docker compose --env-file .env.selfhosted \
-    --env-file .env.db-admin \
-    --profile cloudflare up -d cloudflared
-```
-
----
+Tighten it, to 10 s for example, once you have seen a few days of real
+queries.
 
 ## Backups and restore
 
-### Daily logical backup
+### Nightly database dump
 
-The [backup unit + timer](https://github.com/TCKDB/TCKDB/tree/main/examples/deployment/systemd) run
-`pg_dump` inside the `db` container nightly at 03:15 and write
-`/var/backups/tckdb/tckdb-YYYY-MM-DD.sql.gz`. They retain 30 days and
-prune older files.
-
-Install:
+The example [backup unit and timer](../../examples/deployment/systemd/) run
+`pg_dump` in the `db` container every night at 03:15. They write
+`/var/backups/tckdb/tckdb-YYYY-MM-DD.sql.gz` and delete dumps older than 30
+days. They expect the repository at `/opt/tckdb` and run as `tckdb`.
 
 ```bash
 sudo cp examples/deployment/systemd/tckdb-backup.service /etc/systemd/system/
 sudo cp examples/deployment/systemd/tckdb-backup.timer /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now tckdb-backup.timer
-sudo systemctl list-timers | grep tckdb-backup    # verify next run
+sudo systemctl list-timers | grep tckdb-backup
 ```
 
-### Off-box copy
+### Copy it off the machine
 
-A copy on the same host is not a backup. Sync `/var/backups/tckdb/` to an
-off-box target — examples:
+A backup on the same disk is not a backup. Sync `/var/backups/tckdb/` to
+another machine, for example with `rclone sync /var/backups/tckdb remote:tckdb-backups`
+or `rsync` to a NAS. Encrypt it where it is stored.
 
-- `rclone sync /var/backups/tckdb remote:tckdb-backups` (any rclone
-  remote — Backblaze B2 is cheap and arm64-friendly).
-- `rsync` to a NAS over the LAN.
+### Files
 
-Schedule via a second timer or piggyback on the existing one. Encrypt
-at the storage layer (rclone crypt or B2 server-side encryption).
-
-### Artifact backups
-
-If `S3_BUCKET=tckdb-artifacts` accumulates real data (parsed-output
-attachments etc.), mirror it the same way. Any S3 client can copy the bucket out through the S3 API, whatever store
-serves it (SeaweedFS, MinIO, AWS S3). With `rclone`, given a remote named
-`tckdb` configured for `S3_ENDPOINT_URL` and the S3 keys:
+Copy the artifact bucket out through the S3 API with any S3 client. With an
+`rclone` remote named `tckdb` that points at `http://127.0.0.1:9000` with the
+keys from `.env.selfhosted`:
 
 ```bash
 rclone sync tckdb:tckdb-artifacts /srv/backups/tckdb-artifacts/$(date +%F)
 ```
 
-On a MinIO deployment, MinIO's own client inside the container does the
-same:
+Keep copies of `.env.selfhosted` and `.env.db-admin` somewhere private as
+well. Never commit them.
+
+### Restore
+
+Run this on a scratch copy at least once a quarter. A backup you have never
+restored is a guess.
 
 ```bash
-docker compose exec -T minio \
-    mc mirror /data/tckdb-artifacts /data/.snapshots/$(date +%F)
+C="docker compose --env-file .env.selfhosted --env-file .env.db-admin --profile selfhost"
+
+$C stop frontend tckdb-api
+$C exec -T db psql -U tckdb_admin -d postgres \
+    -c "DROP DATABASE IF EXISTS tckdb;" \
+    -c "CREATE DATABASE tckdb OWNER tckdb_owner ENCODING 'UTF8' TEMPLATE template0;"
+
+# A nightly .sql.gz dump:
+gunzip -c /var/backups/tckdb/tckdb-YYYY-MM-DD.sql.gz | $C exec -T db psql -U tckdb_admin -d tckdb
+# or a .dump file from the Self-host page:
+$C exec -T db pg_restore -U tckdb_admin -d tckdb < tckdb-YYYY-MM-DD.dump
+
+$C up -d --wait
 ```
 
-…and rclone-sync the snapshot directory off-box.
+The names are the template defaults: `DB_ADMIN_USER`, `DB_OWNER_USER` and
+`DB_NAME`. Use yours if you changed them.
 
-### Restore drill
+Keep `ENCODING 'UTF8' TEMPLATE template0`. Without it the new database copies
+`template1`, which on many clusters is `SQL_ASCII`. The restore then succeeds
+and every non-ASCII string is silently wrong. See
+[Troubleshooting](troubleshooting.md#the-cluster-template-disagrees-with-the-production-database).
 
-`ENCODING 'UTF8' TEMPLATE template0` is not optional. `CREATE DATABASE` with
-no `TEMPLATE` copies `template1`, whose encoding is whatever `initdb` chose
-for the cluster — often `SQL_ASCII`. A `SQL_ASCII` database accepts every
-byte a `UTF8` dump contains and only mis-counts them afterwards, so the
-restore succeeds, exits 0, and leaves every non-ASCII string silently wrong.
-Recreating the database is exactly the moment the template's encoding becomes
-the production database's encoding. See
-[troubleshooting.md](troubleshooting.md#the-cluster-template-disagrees-with-the-production-database).
+## Upgrade and roll back
+
+Upgrade as on the [Self-host page](README.md#upgrade): back up, set
+`TCKDB_IMAGE_TAG` in `.env.selfhosted`, run `up -d --wait`. `init` migrates
+before the new API starts. On a database with data, read the
+[migration runbook](../../backend/docs/deployment/migrations.md) first.
+
+To roll back:
+
+1. Stop the ingress so nobody reads a half-upgraded instance:
+   `docker compose --env-file .env.selfhosted --env-file .env.db-admin stop cloudflared`
+   (or stop your proxy).
+2. Set `TCKDB_IMAGE_TAG` back to the previous tag.
+3. If the upgrade ran a migration, [restore](#restore) the last backup.
+4. Run `up -d --wait`, check it, then start the ingress again.
+
+Copy the env file before you edit it, so a bad setting is one `cp` away from
+undone:
 
 ```bash
-# Drop and recreate the DB (destructive)
-docker compose --env-file .env.selfhosted --env-file .env.db-admin exec -T db \
-    psql -U "$DB_ADMIN_USER" -d postgres \
-    -c "DROP DATABASE IF EXISTS $DB_NAME; CREATE DATABASE $DB_NAME OWNER $DB_OWNER_USER ENCODING 'UTF8' TEMPLATE template0;"
-
-# Restore from a dump
-gunzip -c /var/backups/tckdb/tckdb-2026-05-12.sql.gz | \
-    docker compose --env-file .env.selfhosted --env-file .env.db-admin exec -T db \
-    psql -U "$DB_ADMIN_USER" -d "$DB_NAME"
+cp .env.selfhosted .env.selfhosted.$(date +%F)
 ```
 
-Run this drill on a scratch DB at least quarterly — an untested backup
-is not a backup.
+**Emergency stop.** Stopping the ingress takes the instance off the internet.
+For Cloudflare Tunnel the URL then shows the "tunnel offline" page. The
+database, object store and API keep running on 127.0.0.1, so you can debug
+from the server.
 
----
+## Logs
 
-## Log rotation
+- Docker logs: the compose file caps each service at five 10 MB files.
+- journald (the backup unit): cap it in `/etc/systemd/journald.conf` with
+  `SystemMaxUse=500M` and `SystemKeepFree=1G`, then
+  `sudo systemctl restart systemd-journald`.
+- Set `LOG_FORMAT=json` (the template default) when you ship logs to a
+  collector. Each line then carries `request_id`, `level`, `logger` and
+  `message`.
 
-Three log sources, three rotation strategies — all bounded:
+## SSH and host hardening
 
-1. **systemd / journald (API + backup units).** Cap the journal size
-   in `/etc/systemd/journald.conf`:
+The instance is public through Cloudflare. SSH should not be.
 
-   ```ini
-   SystemMaxUse=500M
-   SystemKeepFree=1G
-   ```
-
-   Apply with `sudo systemctl restart systemd-journald`.
-
-2. **Docker container logs (db, seaweedfs, cloudflared).** The compose
-   file pins `json-file` driver with `max-size: 10m`, `max-file: 5`
-   per service.
-
-3. **Backup files.** The `tckdb-backup.service` prunes files older
-   than 30 days.
-
----
-
-## SSH / admin access hardening
-
-The host is on the internet via Cloudflare, but SSH should *not* be.
-Lock it to LAN-only or, better, to Cloudflare Access:
-
-### Minimum (LAN-only SSH)
-
-```bash
+```text
 # /etc/ssh/sshd_config.d/tckdb.conf
 PasswordAuthentication no
 PermitRootLogin no
 KbdInteractiveAuthentication no
-AllowUsers tckdb
 ```
-
-Plus firewall:
 
 ```bash
 sudo ufw default deny incoming
@@ -917,343 +311,108 @@ sudo ufw allow from 192.168.0.0/16 to any port 22 proto tcp
 sudo ufw enable
 ```
 
-### Better (SSH through Cloudflare Tunnel)
+Better still, add an `SSH` public hostname to the tunnel for `127.0.0.1:22`
+behind a Cloudflare Access policy, then close port 22 to the LAN too.
 
-Add a second tunnel ingress rule of type `SSH` pointing at
-`127.0.0.1:22`, gated behind a Cloudflare Access policy (email-based
-identity). Then close port 22 to the LAN as well — the only path to
-SSH becomes `cloudflared access ssh ...` with an authenticated user.
+Also enable `fail2ban` for SSH and `unattended-upgrades` for security
+updates, and turn off Avahi/mDNS on an untrusted network.
 
-### Other hardening
-
-- `fail2ban` for the SSH jail (already installed in prerequisites).
-- `unattended-upgrades` enabled for security updates.
-- Disable Avahi/mDNS if the host runs on a hostile LAN.
-- **Never** run the API as root or as a default OS account (e.g. the
-  `pi` user on Raspberry Pi OS, the `ubuntu` user on Ubuntu cloud
-  images). The systemd unit
-  uses an unprivileged `tckdb` user.
-
----
-
-## Health checks
-
-### Internal (Docker)
-
-`docker compose ps` should show every service `healthy`:
+## Health and monitoring
 
 ```bash
-docker compose --env-file .env.selfhosted ps
+curl -fsS https://tckdb.example.org/api/v1/health   # {"status":"ok"}: the process is up and reaches the database
+curl -fsS https://tckdb.example.org/api/v1/readyz   # {"status":"ready","database":"ok","alembic_revision":"<rev>"}
 ```
 
-### External (tunnel)
+- `/health` failing means the tunnel is misrouted or the API container is
+  down (`docker compose ... ps`).
+- `/readyz` failing while `/health` passes means the database is unreachable
+  or not migrated. Fix it before sending traffic.
 
-```bash
-# Liveness — process up, DB reachable.
-curl -fsS https://api.tckdb.example.org/api/v1/health
-# -> {"status":"ok"}
-
-# Readiness — DB reachable AND schema migrated. Body includes the
-# Alembic revision currently installed.
-curl -fsS https://api.tckdb.example.org/api/v1/readyz
-# -> {"status":"ready","database":"ok","alembic_revision":"<rev>"}
-```
-
-A non-200 on `/health` means either the tunnel is misrouted (Cloudflare
-side) or `tckdb-api.service` is down (`systemctl status tckdb-api`).
-A non-200 on `/readyz` while `/health` is `200` means the process is
-up but the database is unreachable or the schema has not been
-migrated — fix before re-routing traffic.
-
-Every response carries an `X-Request-ID` header. Clients may set their
-own value (matching `^[A-Za-z0-9._\-]+$`, max 128 chars) for
-end-to-end correlation; the server echoes it when safe and otherwise
-generates a UUID-style id. Hosted log shipping should enable
-`LOG_FORMAT=json` so each log record carries `request_id`, `level`,
-`logger`, and `message` fields.
-
-### Monitoring
-
-For a single-node deployment, a recurring uptime check from an external
-service (UptimeRobot, healthchecks.io) against `/api/v1/readyz` is
-the right probe for load-balancer decisions (it reports both
-connectivity and schema state); `/api/v1/health` is a strictly
-lighter liveness probe useful for process-up alerts. Page on three
-consecutive failures.
-
----
+Point an external uptime check (UptimeRobot, healthchecks.io) at `/readyz`
+and alert after three failures in a row. Every response carries an
+`X-Request-ID` header. Clients may send their own, and the server echoes it
+when it is safe. More in the
+[monitoring runbook](../../backend/docs/deployment/monitoring.md).
 
 ## Smoke tests
 
-Run these from a workstation, **not** on the host (you want to exercise
-the public path).
-
-### 1. Health
+Run these from another machine, so they go through the tunnel.
 
 ```bash
-curl -fsS https://api.tckdb.example.org/api/v1/health
-# {"status":"ok"}
+base=https://tckdb.example.org/api/v1
+
+# Anonymous read works.
+curl -fsS -G "$base/scientific/species/search" --data-urlencode "smiles=O"
+
+# Legacy routes need a login: expect 401.
+curl -s -o /dev/null -w "%{http_code}\n" "$base/thermo/"
+
+# The web UI answers at the root: expect 200.
+curl -s -o /dev/null -w "%{http_code}\n" https://tckdb.example.org/
+
+# Postgres is not reachable: expect a refusal or a timeout.
+nc -vz tckdb.example.org 5432
 ```
 
-Health verifies connectivity only. `/api/v1/health` is exempt from
-rate limiting (see [`rate_limit.py`](https://github.com/TCKDB/TCKDB/blob/main/backend/app/api/rate_limit.py)),
-so it does **not** exercise any bucket — use the smoke test in §3
-below for that.
+If `nc` connects, stop the stack. Something forwards a port you did not mean
+to open.
 
-### 2. Anonymous scientific read via `query_cookbook.py`
-
-The cookbook lives at
-[clients/python/examples/query_cookbook.py](https://github.com/TCKDB/TCKDB/blob/main/clients/python/examples/query_cookbook.py).
-It uses refs as handles by default, which is what
-`ALLOW_PUBLIC_INTERNAL_IDS=false` requires:
+On the server, check the API's own address. The web UI answers every path
+outside `/api/`, so through the tunnel these return 200 whatever the setting.
 
 ```bash
-cd clients/python
-pip install -e .
-
-python examples/query_cookbook.py --recipe species_search \
-    --smiles "O" \
-    --base-url https://api.tckdb.example.org/api/v1
+# The /docs console is off: expect 404.
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8010/docs
+# Expect 404, or 200 if you set EXPOSE_API_REFERENCE=true.
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8010/openapi.json
 ```
 
-A populated deployment returns a non-empty `results` list; an empty DB
-returns the "no results" friendly message. Either is success — what
-you're checking is that the anonymous path works through the tunnel
-and that ref-based handles round-trip.
-
-### 3. Rate-limit smoke test
-
-This exercises the **`anon_read`** bucket — anonymous scientific
-reads keyed by client IP. `RATE_LIMIT_ANON_READ_PER_MINUTE=60`
-(default) means the 61st anonymous scientific-read request from one
-IP inside a fixed window must be rejected with `429`.
-
-`/api/v1/health` is exempt, so the loop targets a real public
-scientific search endpoint (`POST /scientific/reactions/search`)
-with a minimal valid body that does not depend on seeded data — an
-empty `results` list is fine, the point is to land in the
-`anon_read` bucket and get rate-limited:
+**Rate limit.** The 61st anonymous search in one minute should get `429`
+(`RATE_LIMIT_ANON_READ_PER_MINUTE=60`). `/health` is exempt, so use a search:
 
 ```bash
-base=https://api.tckdb.example.org/api/v1
 for i in $(seq 1 70); do
-    code=$(curl -sS -o /dev/null -w "%{http_code}" \
-        -X POST "$base/scientific/reactions/search" \
+    curl -s -o /dev/null -w "%{http_code}\n" -X POST "$base/scientific/reactions/search" \
         -H "Content-Type: application/json" \
-        --data '{"reactants":["CC"],"products":["C[CH2]"],"limit":1}')
-    printf "%s %s\n" "$i" "$code"
-done | tail -15
+        --data '{"reactants":["CC"],"products":["C[CH2]"],"limit":1}'
+done | sort | uniq -c
 ```
 
-Expected: a run of `200`s (the search may legitimately return zero
-results on an empty DB) followed by `429`s once the per-minute
-budget is exhausted. If you raised `RATE_LIMIT_ANON_READ_PER_MINUTE`
-above 60, raise the loop count accordingly.
+Expect a run of `200`s, then `429`s whose body names `"bucket":"anon_read"`.
+Don't send an API key in this loop: that moves the requests to the
+authenticated bucket (300 per minute). No `429` at all means
+`RATE_LIMIT_ENABLED` is off or `TRUSTED_PROXY_HEADER` is wrong.
 
-The `429` response body identifies the bucket:
+## Closing the object store to the host
 
-```json
-{"detail":"...","code":"rate_limit_exceeded","bucket":"anon_read","retry_after_seconds":...}
-```
+On Linux, also install the [object store firewall](storage-firewall.md). It
+keeps local processes and host-network containers such as `cloudflared` off
+SeaweedFS's unauthenticated internal ports.
 
-Do **not** add `-H "X-API-Key: ..."` to this loop — that would
-switch the request into the `auth_read` bucket (300/min, keyed by
-credential fingerprint) and the anonymous limiter would not be
-exercised.
+## Running the API outside compose
 
-If you never see `429`, the usual causes are:
+Two other layouts start only `db` and `seaweedfs` from compose:
 
-- `RATE_LIMIT_ENABLED=false` slipped into `.env.selfhosted`.
-- `TRUSTED_PROXY_HEADER` is misconfigured: behind Cloudflare Tunnel
-  every request arrives over loopback, so without
-  `TRUSTED_PROXY_HEADER=CF-Connecting-IP` the limiter sees every
-  caller as `127.0.0.1` and lumps unrelated callers into one bucket
-  (or fails to distinguish them from the origin). Check the audit
-  log for the IP the limiter actually recorded.
+- `backend/scripts/ops/tckdb_deploy.sh` runs a published API image as a
+  container it manages. It backs up, migrates, swaps the container and
+  checks `/status`. Use it for an external S3 store, which the `selfhost`
+  profile does not support. It passes its env file to the container
+  unchanged, so `S3_ENDPOINT_URL` there must be an address the container can
+  reach: `http://seaweedfs:9000` for the bundled store.
+- The API on the host under systemd, from the conda environment: see
+  [Without Docker](native-advanced.md).
 
-### 4. Legacy-route auth check
+Keep a single API process either way. The rate limiter counts in process
+memory, so each extra Uvicorn worker multiplies every budget; see
+[Rate limiter and Uvicorn workers](production_checklist.md#rate-limiter-and-uvicorn-workers).
 
-Legacy entity routes must require auth:
+## What this setup does not do
 
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" \
-    https://api.tckdb.example.org/api/v1/thermo/
-# expect 401 (LEGACY_READS_REQUIRE_AUTH=true), not 200
-```
-
-### 5. OpenAPI hidden check
-
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" \
-    https://api.tckdb.example.org/docs
-# expect 404, always
-curl -s -o /dev/null -w "%{http_code}\n" \
-    https://api.tckdb.example.org/openapi.json
-# expect 404 with EXPOSE_API_REFERENCE unset or false;
-# expect 200 with EXPOSE_API_REFERENCE=true, which is intended
-curl -s -o /dev/null -w "%{http_code}\n" \
-    https://api.tckdb.example.org/
-# expect 404 — the API serves no human-facing root; if you want one,
-# deploy a frontend container in front of it and point the tunnel at
-# that instead, proxying /api/ through
-```
-
-If `/docs` returns 200, `EXPOSE_API_DOCS=true` slipped through — fix
-`.env.selfhosted` and restart the API container.
-
-### 6. Postgres not publicly reachable
-
-From *off* the Pi:
-
-```bash
-nc -vz api.tckdb.example.org 5432
-# expect: connection refused / no route to host
-```
-
-There is no ingress rule for 5432, so Cloudflare returns `530` for any
-non-matching hostname and the LAN/WAN have no route. If `nc` succeeds,
-stop the deployment — you have a port-forward you didn't mean to
-create.
-
----
-
-## Rollback plan
-
-The two reversible failure modes are **migration / image upgrade
-regressions** and **config regressions**. Both have a clean undo:
-
-### Image / migration rollback
-
-```bash
-# 1. Stop the public surface IMMEDIATELY so partial state doesn't
-#    leak into a downstream client. The exact "stop ingress" step
-#    depends on which ingress you chose (see "Ingress options").
-#    For the Compose cloudflared service:
-docker compose --env-file .env.selfhosted --env-file .env.db-admin stop cloudflared
-#    For a host-side cloudflared systemd unit:
-#      sudo systemctl stop cloudflared
-#    For nginx/Caddy/Traefik: stop or reload-with-503 the proxy.
-sudo systemctl stop tckdb-api
-
-# 2. Pin the previous git revision and restart.
-cd /opt/tckdb
-sudo -u tckdb git checkout <prev-good-sha>
-sudo systemctl start tckdb-api
-# Restart the ingress that matches your setup:
-docker compose --env-file .env.selfhosted \
-    --env-file .env.db-admin \
-    --profile cloudflare start cloudflared
-```
-
-If a schema migration is the culprit and the DB is now ahead of the
-checked-out code, restore the previous nightly:
-
-```bash
-# from /var/backups/tckdb/
-sudo systemctl stop tckdb-api
-# ENCODING/TEMPLATE as in the restore drill above -- without them the
-# recreated database inherits template1's encoding and the restore is
-# silently corrupt for every non-ASCII value.
-docker compose ... exec db psql -U $DB_ADMIN_USER -d postgres \
-    -c "DROP DATABASE $DB_NAME; CREATE DATABASE $DB_NAME OWNER $DB_OWNER_USER ENCODING 'UTF8' TEMPLATE template0;"
-gunzip -c tckdb-YYYY-MM-DD.sql.gz | docker compose ... exec -T db \
-    psql -U $DB_ADMIN_USER -d $DB_NAME
-sudo systemctl start tckdb-api
-```
-
-### Config rollback
-
-`.env.selfhosted` is the runtime-posture source; `.env.db-admin` contains
-operator-only database credentials. Keep encrypted/private backups of both,
-never commit them to this repository, and copy them before edits:
-
-```bash
-sudo cp /opt/tckdb/.env.selfhosted /opt/tckdb/.env.selfhosted.$(date +%F)
-$EDITOR /opt/tckdb/.env.selfhosted
-sudo systemctl restart tckdb-api
-# verify smoke tests; if anything regressed:
-sudo cp /opt/tckdb/.env.selfhosted.$(date +%F) /opt/tckdb/.env.selfhosted
-sudo systemctl restart tckdb-api
-```
-
-### Emergency kill switch
-
-Stop whichever ingress is in front of the API. For the Compose
-cloudflared service:
-
-```bash
-docker compose --env-file .env.selfhosted \
-    --env-file .env.db-admin \
-    stop cloudflared
-```
-
-For a host-side cloudflared systemd unit: `sudo systemctl stop
-cloudflared`. For nginx/Caddy/Traefik: stop or reload the proxy with a
-503-everything config.
-
-This drops the public surface — for Cloudflare Tunnel the URL returns
-the "tunnel offline" page. Everything else — Postgres, the object store, the API
-— stays up on loopback so you can debug at leisure.
-
----
-
-## What this deployment does *not* do
-
-- **No federation, no sync to hosted community instance.** This *is*
-  a hosted instance, but it's an independent one. Contribution
-  bundles (see `docs/contribution-bundles/`) remain the cross-instance
-  mechanism.
-- **No managed Postgres.** Postgres runs on the Pi in Docker. For a
-  hosted instance with significant write traffic, graduate to a
-  managed Postgres+RDKit service and treat the Pi as the API/worker
-  tier.
-- **No CDN cache of API responses.** Cloudflare's HTTP cache is
-  bypassed for `/api/v1/*` by default (no `Cache-Control` set). That
-  is correct — scientific responses are id-bearing and not safe to
-  cache anonymously. Don't enable Cloudflare caching for these paths.
-- **No public submission UI.** Writes are seeded-account only. If you
-  later expose a write UI, revisit CORS and rate-limit budgets first.
-
----
-
-## Raspberry Pi notes
-
-The first working deployment of this recipe ran on a Raspberry Pi 4
-under Raspberry Pi OS Bookworm (64-bit). Everything in this guide
-applies, with these specifics worth knowing:
-
-- **Hardware.** Use the 4 GB or 8 GB SKU. SD-card storage is the
-  failure mode — put the Postgres volume on a USB-3 SSD or NVMe HAT.
-  Wired Ethernet beats Wi-Fi for a server role.
-- **OS.** Raspberry Pi OS Bookworm (64-bit) or Debian Bookworm arm64.
-  32-bit Pi OS will not work — the RDKit cartridge image is
-  `linux/arm64`, not `linux/arm`.
-- **Image arch.** The `informaticsmatters/rdkit-cartridge-debian`
-  image publishes `linux/arm64`, so the Pi runs it natively — no
-  qemu/binfmt setup required.
-- **Default user.** Raspberry Pi OS ships with a `pi` user. Do
-  **not** run the API or DB as `pi`. Create the unprivileged `tckdb`
-  user/group exactly as documented above.
-- **Cloudflared tunnel name.** A name like `tckdb-pi` is a reasonable
-  hint about where the tunnel runs, but it has no operational
-  meaning — pick whatever helps you recognize the tunnel in the Zero
-  Trust dashboard.
-
-Everything else — compose layout, env vars, abuse-control posture,
-backups, smoke tests — is identical to a non-Pi host.
-
----
-
-## See also
-
-- [admin_auth_quickstart.md](admin_auth_quickstart.md) — seeding
-  admin/curator accounts, logging in, minting API keys, and the
-  `check_selfhosted_deployment.sh` sanity-check script.
-- [deployment_modes.md](deployment_modes.md) — the three deployment
-  modes and how this recipe fits into Mode 2.
-- Cross-instance data movement (offline → hosted, etc.) is handled
-  through the contribution bundle export/import flow.
-- [`.env.selfhosted.example`](https://github.com/TCKDB/TCKDB/blob/main/.env.selfhosted.example) — full annotated env file.
-- [`docker-compose.yml`](https://github.com/TCKDB/TCKDB/blob/main/docker-compose.yml) — the data-plane stack.
-- [`examples/deployment/systemd/`](https://github.com/TCKDB/TCKDB/tree/main/examples/deployment/systemd) — host service units.
-- [`docs/specs/public_read_abuse_controls.md`](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/public_read_abuse_controls.md) — the implemented abuse-control spec these env vars wire, including the threat model that motivates the hosted toggles above.
+- **Sync with other instances.** It is independent. Records move between
+  instances as [contribution bundles](../contribution-bundles/format.md).
+- **Cache API responses at Cloudflare.** Cloudflare does not cache
+  `/api/v1/*` by default. Leave it that way.
+- **Run a managed database.** Postgres runs in Docker on the same machine.
+  For heavy write traffic, move to a managed Postgres with RDKit and keep this
+  machine for the API.

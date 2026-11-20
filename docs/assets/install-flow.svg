@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="tk-svg" viewBox="0 0 400 572" role="img" aria-labelledby="tk-install-title tk-install-desc">
+<title id="tk-install-title">Installing TCKDB with Docker Compose</title>
+<desc id="tk-install-desc">Five steps. 1, clone the repository. 2, run tckdb_make_env.sh, which asks five questions and generates every password. 3, run docker compose up: the database and SeaweedFS start, then init sets up roles, runs migrations and creates the first admin, then the API and the web UI start. 4, open the web UI at 127.0.0.1:8011 and log in as the admin, or mint an API key. 5, run the check script.</desc>
+<style>
+.tk-svg{color:var(--md-default-fg-color,#1f2328);font-family:var(--md-text-font-family,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif)}
+.tk-svg text{fill:currentColor}
+.tk-svg .tk-box{fill:var(--md-default-bg-color,#fff);stroke:currentColor;stroke-opacity:.3;stroke-width:1.2}
+.tk-svg .tk-chip{fill:currentColor;fill-opacity:.06;stroke:currentColor;stroke-opacity:.22}
+.tk-svg .tk-num{fill:var(--md-primary-fg-color,#546e7a)}
+.tk-svg .tk-numtxt{fill:#fff;font-weight:700;font-size:14px}
+.tk-svg .tk-rail{stroke:currentColor;stroke-opacity:.4;stroke-width:1.5;fill:none}
+.tk-svg .tk-h{font-size:14.5px;font-weight:700}
+.tk-svg .tk-c{font-family:var(--md-code-font-family,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);font-size:11.5px}
+.tk-svg .tk-d{font-size:12px;fill-opacity:.75}
+.tk-svg .tk-s{font-size:12px}
+</style>
+<defs>
+<marker id="tk-install-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor" fill-opacity=".55"/></marker>
+</defs>
+<path class="tk-rail" d="M22 54V108" marker-end="url(#tk-install-arrow)"/>
+<path class="tk-rail" d="M22 146V200" marker-end="url(#tk-install-arrow)"/>
+<path class="tk-rail" d="M22 238V398" marker-end="url(#tk-install-arrow)"/>
+<path class="tk-rail" d="M22 436V490" marker-end="url(#tk-install-arrow)"/>
+<rect class="tk-box" x="46" y="10" width="346" height="74" rx="8"/>
+<circle class="tk-num" cx="22" cy="36" r="14"/><text class="tk-numtxt" x="22" y="41" text-anchor="middle">1</text>
+<text class="tk-h" x="60" y="33">Clone the repository</text>
+<text class="tk-c" x="60" y="53">git clone …/TCKDB.git &amp;&amp; cd TCKDB</text>
+<text class="tk-d" x="60" y="72">Needs Git, and Docker with Compose.</text>
+<rect class="tk-box" x="46" y="102" width="346" height="74" rx="8"/>
+<circle class="tk-num" cx="22" cy="128" r="14"/><text class="tk-numtxt" x="22" y="133" text-anchor="middle">2</text>
+<text class="tk-h" x="60" y="125">Make the env files</text>
+<text class="tk-c" x="60" y="145">backend/scripts/ops/tckdb_make_env.sh</text>
+<text class="tk-d" x="60" y="164">Asks 5 questions. Generates every password.</text>
+<rect class="tk-box" x="46" y="194" width="346" height="186" rx="8"/>
+<circle class="tk-num" cx="22" cy="220" r="14"/><text class="tk-numtxt" x="22" y="225" text-anchor="middle">3</text>
+<text class="tk-h" x="60" y="217">Start the stack</text>
+<text class="tk-c" x="60" y="237">docker compose … up -d --wait</text>
+<rect class="tk-chip" x="60" y="250" width="318" height="30" rx="6"/>
+<text class="tk-s" x="72" y="269">db (Postgres + RDKit) and SeaweedFS</text>
+<path class="tk-rail" d="M219 281V294" marker-end="url(#tk-install-arrow)"/>
+<rect class="tk-chip" x="60" y="296" width="318" height="30" rx="6"/>
+<text class="tk-s" x="72" y="315">init: roles, migrations, first admin</text>
+<path class="tk-rail" d="M219 327V340" marker-end="url(#tk-install-arrow)"/>
+<rect class="tk-chip" x="60" y="342" width="318" height="30" rx="6"/>
+<text class="tk-s" x="72" y="361">API on :8010 and web UI on :8011</text>
+<rect class="tk-box" x="46" y="398" width="346" height="74" rx="8"/>
+<circle class="tk-num" cx="22" cy="424" r="14"/><text class="tk-numtxt" x="22" y="429" text-anchor="middle">4</text>
+<text class="tk-h" x="60" y="421">Open it</text>
+<text class="tk-c" x="60" y="441">http://127.0.0.1:8011</text>
+<text class="tk-d" x="60" y="460">Log in as the admin, or mint an API key.</text>
+<rect class="tk-box" x="46" y="490" width="346" height="74" rx="8"/>
+<circle class="tk-num" cx="22" cy="516" r="14"/><text class="tk-numtxt" x="22" y="521" text-anchor="middle">5</text>
+<text class="tk-h" x="60" y="513">Check it</text>
+<text class="tk-c" x="60" y="533">check_selfhosted_deployment.sh</text>
+<text class="tk-d" x="60" y="552">Secrets, containers, RDKit, migrations, API.</text>
+</svg>

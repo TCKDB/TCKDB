@@ -1,50 +1,133 @@
-# TCKDB troubleshooting
+# Troubleshooting
 
-Concrete fixes for the failure modes that have actually bitten
-people. The first stop for any "won't start" problem should be:
+Fixes for problems people have actually hit. Start with the check that fits
+your setup:
 
 ```bash
-backend/scripts/tckdb_doctor.sh
+backend/scripts/check_selfhosted_deployment.sh   # a self-hosted stack
+make doctor                                      # running from source
 ```
 
-which surfaces most of these with an actionable hint inline. This
-page is the longer write-up: one entry per real-world issue, each
-with **symptom**, **cause**, **fix**, and **verify** sections.
+Both print a hint next to most of the problems below. Each entry gives the
+symptom, the cause, the fix and a way to confirm it.
+
+The commands below shorten the self-hosted compose command to `docker compose
+...`. In full it is
+`docker compose --env-file .env.selfhosted --env-file .env.db-admin --profile selfhost`.
+
+---
+
+## Self-hosted stack
+
+### `up --wait` fails and `init` exited with an error
+
+**Symptom.** `docker compose ... up -d --wait` reports `init` exited non-zero,
+and `tckdb-api` never starts.
+
+**Cause.** `init` stops at the first step that fails: a secret check, the
+database roles, the migrations, or creating the administrator. The API starts
+only after `init` succeeds.
+
+**Fix.** Read its log:
+
+```bash
+docker compose ... logs init
+```
+
+- `DB_PASSWORD is empty or still a change-me placeholder` (or another
+  secret): the env files were copied by hand. Generate them with
+  `backend/scripts/ops/tckdb_make_env.sh`.
+- `set TCKDB_BOOTSTRAP_USERNAME in .env.db-admin`: add it.
+- `hint: pass --password or set TCKDB_BOOTSTRAP_PASSWORD` from
+  `bootstrap_admin.py`: the administrator does not exist yet and
+  `TCKDB_BOOTSTRAP_PASSWORD` is empty. Set it in `.env.db-admin` and run `up`
+  again.
+- `password authentication failed`: see the next entry.
+
+**Verify.** `docker compose ... ps -a` shows `init` as `Exited (0)` and
+`tckdb-api` as `healthy`.
+
+---
+
+### The API cannot log in to the database after a password change
+
+**Symptom.** `init` or `tckdb-api` fails with `password authentication failed
+for user "tckdb_app"` (or the owner), on a stack that used to work.
+
+**Cause.** A database password is set on its role when the volume is first
+created. Editing it in an env file later, or rerunning `tckdb_make_env.sh
+--force`, changes the file and not the role.
+
+**Fix.** Put the old password back, or change the role to match the file:
+
+```bash
+docker compose ... exec db psql -U tckdb_admin -d tckdb \
+    -c "ALTER ROLE tckdb_app PASSWORD '<the new DB_PASSWORD>'"
+docker compose ... up -d --wait
+```
+
+Use your `DB_ADMIN_USER`, `DB_NAME` and role names if you changed them. The
+same applies to `DB_OWNER_PASSWORD` and the owner role. On a stack with no
+data yet, `docker compose ... down -v` and a fresh `up` is quicker.
+
+**Verify.** `backend/scripts/check_selfhosted_deployment.sh` passes.
+
+---
+
+### Browser login does nothing on a lab address
+
+**Symptom.** The web UI's login form is accepted, but you stay logged out.
+`POST /api/v1/auth/login` returns `200` and `GET /auth/me` returns `401`. It
+works on `http://127.0.0.1:8011`.
+
+**Cause.** The session cookie is marked `Secure`. Browsers drop a secure
+cookie served over plain HTTP from any host but localhost.
+
+**Fix.** Serve the instance over HTTPS. On a trusted lab network in
+`shared_private` mode you can instead set, in `.env.selfhosted`:
+
+```dotenv
+SESSION_COOKIE_SECURE=false
+SESSION_COOKIE_ALLOW_PLAIN_HTTP=true
+```
+
+and run `up -d --wait` again. The cookie then crosses the network
+unencrypted. `hosted_public` refuses this.
+
+**Verify.** After logging in, `GET /api/v1/auth/me` from the browser returns
+your user.
 
 ---
 
 ## Networking and ports
 
-### `port is already allocated` / `address already in use` on 5432
+### `port is already allocated` / `address already in use`
 
 **Symptom**
 
 ```text
-Error response from daemon: ... Bind for 0.0.0.0:5432 failed: port is already allocated
+Error response from daemon: ... Bind for 127.0.0.1:5432 failed: port is already allocated
 ```
 
-or, on Linux:
+or `listen tcp 127.0.0.1:5432: bind: address already in use`. The same can
+happen on 9000, 8010 or 8011.
 
-```text
-listen tcp 127.0.0.1:5432: bind: address already in use
-```
+**Cause.** Something on the host already uses the port: often a
+host-installed Postgres on 5432, or a second TCKDB stack.
 
-**Cause**
+**Fix.** Stop the other service, or move TCKDB's host port. In the env file,
+set the matching variable to a free port:
 
-A host-installed Postgres is already listening on 5432.
+| Port | Variable |
+|---|---|
+| 5432 | `DB_PORT` |
+| 9000 | `S3_PORT` |
+| 8010 | `TCKDB_API_PORT` |
+| 8011 | `TCKDB_WEB_PORT` |
 
-**Fix**
-
-Pick one:
-
-- Stop the host Postgres: `sudo systemctl stop postgresql` (Debian/Ubuntu).
-- Or remap the TCKDB container to a different host port. In your env
-  file set `DB_PORT=5434` (any free port) — the compose file
-  publishes `127.0.0.1:${DB_PORT:-5432}:5432`, so the **host port**
-  becomes 5434 and the **container port** stays at 5432.
-
-If you choose the remap, **also** set `DB_PORT=5434` for the host-run
-Alembic / Uvicorn — see the next entry.
+Only the host side moves; inside the containers nothing changes. When running
+from source, also set `DB_PORT` (and `S3_ENDPOINT_URL`) in `backend/.env`, so
+the API on the host follows.
 
 **Verify**
 
@@ -55,33 +138,25 @@ docker compose up -d db
 
 ---
 
-### Confusion between host port and container port
+### Host port and container port
 
-**Symptom**
+**Symptom.** `docker compose ps` shows `127.0.0.1:5434->5432/tcp`, and a
+host-run Alembic fails with `could not connect to server`.
 
-`docker compose ps` shows something like:
+**Cause.** A `ports:` entry is `<host_ip>:<host_port>:<container_port>`.
+Postgres in the container always listens on 5432. The host sees it on the
+left-hand port.
 
-```text
-127.0.0.1:5434->5432/tcp
-```
+**Fix.** Use the address for where the process runs:
 
-…and a host-run Alembic fails with `could not connect to server` on
-the wrong port.
+| Process runs | `DB_HOST` / `DB_PORT` | `S3_ENDPOINT_URL` |
+|---|---|---|
+| On the host (Alembic, a host-run API, `psql`) | `127.0.0.1` / the host port | `http://127.0.0.1:9000` |
+| In a container on the compose network | `db` / `5432` | `http://seaweedfs:9000` |
 
-**Cause**
-
-Docker `ports:` entries are `<host_ip>:<host_port>:<container_port>`.
-The container Postgres always listens on `5432`. The **host** sees it
-on whichever host port the compose file publishes.
-
-**Fix**
-
-- When the API and Alembic run on **the host** (the local dev
-  default), use `DB_HOST=127.0.0.1` and `DB_PORT=<host port>` —
-  whatever the left-hand side of the mapping is.
-- When the API runs **inside** the compose network (in a future
-  containerized API setup), use `DB_HOST=db` and `DB_PORT=5432` —
-  service-to-service, no host port involved.
+The `selfhost` profile and `tckdb_deploy.sh` set `DB_HOST=db` and
+`DB_PORT=5432` for their containers. The `selfhost` profile also sets
+`S3_ENDPOINT_URL`; `tckdb_deploy.sh` does not.
 
 **Verify**
 
@@ -90,41 +165,33 @@ docker compose ps db
 psql -h 127.0.0.1 -p ${DB_PORT:-5432} -U tckdb -d tckdb_dev -c '\dx'
 ```
 
-You should see the `rdkit` extension listed.
+The `rdkit` extension is listed.
 
 ---
 
 ### `Connection refused` from the host to a SeaweedFS port other than 9000
 
-**Symptom**
+**Symptom.** From the host, or a host-network container, SeaweedFS's filer,
+master, volume or gRPC ports refuse at once, and so does a port you published
+yourself on 127.0.0.1 (such as 9333 for `S3_SEAWEEDFS_MASTER_URL`). The S3 API
+on 9000 works. `weed shell` on the host cannot connect.
 
-From the host, or from a host-network container, SeaweedFS's filer,
-master, volume or gRPC ports refuse at once, and so does a port you
-published yourself on `127.0.0.1` (for example 9333 for
-`S3_SEAWEEDFS_MASTER_URL`). The S3 API on 9000 works. `weed shell` run
-on the host cannot connect.
-
-**Cause**
-
-The host firewall rule from
-[Closing the object store to the host](self_hosted_single_node.md#closing-the-object-store-to-the-host)
-is working as intended. It resets new TCP connections from the host to
-the `storage` network, except to 9000. The gRPC ports take no credentials,
-so this is the only thing keeping local processes away from them.
+**Cause.** The [object store firewall](storage-firewall.md) is doing its job.
+It resets new TCP connections from the host to the `storage` network, except
+to 9000. The gRPC ports take no credentials, and this rule is what keeps
+local processes away from them.
 
 **Fix**
 
-- To run `weed shell` or read a status page, do it from inside the
-  container: `docker compose exec seaweedfs weed shell`.
+- Run `weed shell`, or read a status page, inside the container:
+  `docker compose exec seaweedfs weed shell`.
 - For a forward you published yourself, allow its container port:
   `sudo /usr/local/sbin/tckdb_storage_hostfw.sh --allow-ports 9000,9333,9340`,
   and set the same value as `TCKDB_STORAGE_ALLOW_PORTS` in the unit
   (`sudo systemctl edit tckdb-storage-hostfw`) so it survives a reboot.
   Never allow the gRPC ports (18888, 19333, 19340, 19000).
 
-**Verify**
-
-`--check` compares against the ports it is given, so give it the same list:
+**Verify.** Give `--check` the same list:
 `sudo /usr/local/sbin/tckdb_storage_hostfw.sh --check --allow-ports 9000,9333,9340`.
 The rule as installed is in `sudo iptables -S OUTPUT | grep tckdb-548`.
 
@@ -132,26 +199,24 @@ The rule as installed is in `sudo iptables -S OUTPUT | grep tckdb-548`.
 
 ### Uploads with files return 503, but everything else works
 
-**Symptom**
+**Symptom.** Uploads without files succeed. Any upload carrying an artifact
+(an ESS output log, a checkpoint) returns `503` with
+`"code": "artifact_storage_unavailable"`. `/api/v1/health` and
+`/api/v1/readyz` are fine.
 
-Plain uploads succeed. Any upload carrying an artifact (an ESS output log, a
-checkpoint) returns `503` with `"code": "artifact_storage_unavailable"`.
-`/api/v1/health` and `/api/v1/readyz` are fine.
-
-**Cause**
-
-The API cannot reach the object store. By far the most common reason is a
-containerised API still configured with the host's address:
+**Cause.** The API cannot reach the object store. Most often, an API in a
+container still has the host's address:
 
 ```text
-S3_ENDPOINT_URL=http://127.0.0.1:9000     # correct on the host
-S3_ENDPOINT_URL=http://seaweedfs:9000     # correct inside the compose network
-                                          # (http://minio:9000 on a MinIO deployment)
+S3_ENDPOINT_URL=http://127.0.0.1:9000     # right for an API on the host
+S3_ENDPOINT_URL=http://seaweedfs:9000     # right for an API in a container
+                                          # (http://minio:9000 on a MinIO stack)
 ```
 
-Inside a container, `127.0.0.1` is the container's own loopback. The setting
-is not malformed, which is why it survives a migration from a host deployment
-unnoticed.
+Inside a container, `127.0.0.1` is the container itself. The value is a valid
+URL, so it survives a move from host to container unnoticed. The `selfhost`
+profile sets the container value itself. `tckdb_deploy.sh` passes its env
+file to the container unchanged, so that file needs `http://seaweedfs:9000`.
 
 **Verify**
 
@@ -159,168 +224,83 @@ unnoticed.
 curl -s http://127.0.0.1:8010/api/v1/status | jq '.components.artifact_storage'
 ```
 
-`/status` reports the endpoint and bucket it actually reached for, and splits
-`reachable: false` (wrong address, or the store is down) from `reachable:
-true` with an unhealthy verdict (the store answered but the bucket is missing
-or the credentials are refused). The server log also carries the underlying
-botocore error for each 503 — `journalctl -u tckdb-api` or
-`docker logs tckdb-api`, filtered on `ArtifactStorageUnavailable`.
+`/status` reports the endpoint and bucket it tried. `reachable: false` means
+the address is wrong or the store is down. `reachable: true` with an
+unhealthy verdict means the store answered but the bucket is missing or the
+keys are refused. The API log has the underlying error for each 503
+(`docker compose ... logs tckdb-api`, `docker logs tckdb-api` or
+`journalctl -u tckdb-api`; search for `ArtifactStorageUnavailable`).
 
-**Fix**
-
-Set `S3_ENDPOINT_URL` to the compose service name and restart the API. See
-[self_hosted_single_node.md](self_hosted_single_node.md#if-the-api-runs-in-a-container-address-siblings-by-service-name).
+**Fix.** Set `S3_ENDPOINT_URL` to the compose service name and restart the
+API. Whenever a process moves into or out of a container, reread every
+address in its env file and ask who it is relative to.
 
 ---
 
 ### Uploads with files return 507 `artifact_storage_full`
 
-**Symptom**
+**Symptom.** An upload carrying an artifact returns `507` with
+`"code": "artifact_storage_full"`. Reads, queries, uploads without files and
+downloads all work.
 
-An upload carrying an artifact returns `507` with
-`"code": "artifact_storage_full"`. Reads, queries, and file-less uploads all
-work normally. Downloads of existing artifacts also work normally.
+**Cause.** The object store answered and refused the write: it is out of disk
+or the bucket is over its quota. Retrying does not help, which is why it is
+507 and not 503.
 
-**Which stores produce this.** MinIO says it is full in its own error code
-(`XMinioStorageFull`, `XMinioAdminBucketQuotaExceeded`), and everything below
-about thresholds, quotas, `mc` and the admin API is about MinIO deployments.
+**Which stores report it**
 
-**SeaweedFS, the default store, does not say so.** Measured on 4.47, a full
-disk, exhausted volume slots and an enforced bucket quota all answer
-`InternalError` (HTTP 500), the same code as any internal fault. So when
-`S3_SEAWEEDFS_MASTER_URL` is set (e.g. `http://seaweedfs:9333` for an API
-container on the compose network), TCKDB asks SeaweedFS for its room after an
-`InternalError` write refusal: free disk on the volume server, and free volume
-slots on the master. If the store reports less room than the refused write,
-the upload gets this 507, the refusal is recorded, and `/status` goes degraded,
-exactly as for MinIO. The API log line reads `artifact storage refused a
-<n>-byte write for want of room (S3 code InternalError) ... SeaweedFS reports
-<n> bytes of room (disk free <n>, volume slots <free>/<max> free ...)`, which
-tells you which of the two ran out:
+- **MinIO** says so in its own error codes (`XMinioStorageFull`,
+  `XMinioAdminBucketQuotaExceeded`).
+- **SeaweedFS** does not: a full disk, exhausted volume slots and an
+  enforced bucket quota all answer `InternalError` (HTTP 500), like any
+  internal fault. With `S3_SEAWEEDFS_MASTER_URL` set (for example
+  `http://seaweedfs:9333` for an API container on the `storage` network),
+  TCKDB then asks SeaweedFS how much room it has. If it is less than the
+  refused write, the upload gets 507, the refusal is recorded and `/status`
+  goes degraded. Without `S3_SEAWEEDFS_MASTER_URL`, a full SeaweedFS shows as
+  `503 artifact_storage_unavailable` with `/status` healthy.
 
-- **Disk** (`limited by free_space`). `weed mini` keeps 1 % of the disk
-  free and checks every 60 s; below that every volume turns read-only and
-  even a 1 KiB write is refused (measured on 4.47). So on a 500 GB disk
-  writes stop with about 5 GB still "free". The log line shows raw `disk
-  free` and the `usable` bytes above the 1 %, and says `BELOW the minimum`
-  in that state; `/status`'s headroom warning already subtracts the 1 %.
-  Free disk on the volume that holds the `tckdb_seaweedfs` data. Measured:
-  the volumes were writable again at the next check, within 75 s, with no
-  restart.
-- **Volume slots** (`limited by volume_slots`). `volume slots 0/<max> free`
-  with `0 bytes of room`, and disk still above the 1 % minimum (measured:
-  slots ran out at 192 MiB written with 63 MiB of disk left). Below the 1 %
-  minimum the slot count also collapses to 0 free, but that is the disk
-  case above and is reported as `free_space`; adding slots would not help.
-  SeaweedFS sizes its slot count from the disk when it starts; give it more
-  (`-volume.max=<n>` on the `seaweedfs` command) or more disk, then
-  recreate the container.
+The API log line names the limit that ran out
+(`artifact storage refused a <n>-byte write for want of room ...`):
 
-- **Bucket quota** (S3 code `SeaweedFSBucketQuotaExceeded` on `/status`, see
-  below). Free disk and free slots cannot see a quota, so it is a separate
-  question, asked only when the store reports room.
+- **Disk** (`limited by free_space`). `weed mini` keeps 1 % of the disk free
+  and checks every 60 s. Below that, every volume turns read-only and even a
+  1 KiB write is refused, so a 500 GB disk stops taking writes with about
+  5 GB still free. The log shows raw `disk free` and the `usable` bytes above
+  the 1 %. Free disk on the volume that holds `tckdb_seaweedfs`; the volumes
+  become writable at the next check, with no restart.
+- **Volume slots** (`limited by volume_slots`): `volume slots 0/<max> free`
+  while the disk is above the 1 %. SeaweedFS sizes its slot count from the
+  disk when it starts. Give it more (`-volume.max=<n>` on the `seaweedfs`
+  command) or more disk, then recreate the container.
+- **Bucket quota** (S3 code `SeaweedFSBucketQuotaExceeded` in `/status`).
+  When the store reports room, TCKDB reads the bucket's quota with the S3
+  keys it already holds (`GET /<bucket>?seaweedfs-quota` and the bucket's
+  capacity object). If the quota is on and less is available than the
+  refused write, it is recorded as a quota refusal, which free space never
+  clears.
 
-Two cases still surface as `503 artifact_storage_unavailable` with `/status`
-healthy: `S3_SEAWEEDFS_MASTER_URL` is unset (neither the store's room nor its
-quota is ever asked about), or the store reports room and no exhausted quota,
-which is what a real fault looks like. If SeaweedFS uploads return 503 while
-`/status` shows the store reachable, check its disk (`df -h` on the volume)
-and its container log, which names the cause (`no space left on device`,
-`No writable volumes and no free volumes left`, or
-`read only ... (e.g. bucket over quota)`).
+Limits of the SeaweedFS check:
 
-**A SeaweedFS bucket quota is readable over S3, and TCKDB reads it (#545).**
-Measured on 4.47 (the pinned image, `weed mini`, the compose lockdown), with a
-20 MiB quota and 30 MiB in the bucket:
+- The quota reading is approximate. `Available` is the quota less the gross
+  volume size. Deleted objects keep their bytes until the volume is vacuumed
+  (`weed mini` vacuums only above 30 % garbage), so a bucket near its quota
+  after deletions can read as full while writes still work. It never misses
+  a real quota refusal. If it names a quota while uploads of that size work,
+  compare `s3.bucket.list` (logical size) with the quota and vacuum first.
+- `AccessDenied` is never read as a quota. On SeaweedFS a write
+  `AccessDenied` is a bucket policy.
+- The room check and the quota reads share a 4 s budget per refusal.
 
-- Once the bucket is read-only, every write is refused, including a 1-byte and
-  a 0-byte `PutObject` and `CreateMultipartUpload`, with HTTP 500, `Code:
-  InternalError`, `Message: We encountered an internal error, please try
-  again.` and no quota-specific header. Reads and deletes still work. That is
-  4.47's wire behaviour; it never answers a quota with 403. Upstream maps a
-  read-only bucket to `AccessDenied`, so a later image might, and the quota
-  probe should then be revisited (see below for why `AccessDenied` is not a
-  trigger today).
-- 4.47 enforces quotas on a 60 s sweep of its own. Nobody has to run
-  `s3.bucket.quota.enforce`: write past a quota and the writes start failing
-  about a minute later, and raising the quota clears it within about a minute.
-  `s3.bucket.quota -op=remove` lifts it at once (measured: the next write
-  returned 200).
-- The quota is readable with the credentials the API already holds (both
-  reads refuse an unsigned request with 403): `GET /<bucket>?seaweedfs-quota`
-  returns `{"quota_size":20971520,"quota_unit":"B","quota_enabled":true}`, and
-  the capacity object
-  `GET /<bucket>/.system-d26a9498-cb7c-4a87-a44a-8ae204f5ba6c/capacity.xml`
-  returns `<Capacity>20971520</Capacity><Available>0</Available><Used>31457840</Used>`.
+In `weed shell`, `s3.bucket.list` shows each bucket's `quota:` and `usage:`.
+Raise a quota with `s3.bucket.quota -name=<bucket> -op=set -sizeMB=<larger>`
+or remove it with `-op=remove`.
 
-So when `S3_SEAWEEDFS_MASTER_URL` is set, an `InternalError` write refusal that
-the room check did not explain is followed by those two signed reads (2 s per
-request, nothing written, no opinion on any failure). The room check and the
-quota reads share one 4 s budget, so a refusal waits at most 4 s in total. If
-the quota is enabled and `Available` is below the refused size, the refusal is
-classified full exactly as a MinIO quota is: the upload gets 507, `/status`
-goes degraded with S3 code `SeaweedFSBucketQuotaExceeded`, and **free space
-cannot clear it** (only a successful write of at least the refused size, or an
-operator clear, can; a copy refusal whose size could not be measured can only
-be cleared by an operator). The row's detail keeps the store's own code.
-
-Three limits, all deliberate:
-
-- **This is an approximation.** `Available` is the quota less the *gross*
-  volume size, while the enforcer compares the *logical* size. Deleted objects
-  keep their bytes until the volume is vacuumed, and `weed mini` never vacuums
-  a volume under 30 % garbage, so a bucket near its quota after deletions can
-  read `Available 0` for as long as that lasts, not for a minute: measured over
-  five minutes with 1 MiB writes succeeding throughout (logical 38.3 MB,
-  gross 46.2 MB, quota 41.9 MB). Any real `InternalError` in that band is
-  recorded as a quota. It never *misses* a real quota refusal, because gross is
-  never smaller than logical. Nothing cheap over S3 separates the two (the
-  logical size is a sum over a listing of every object), so the recorded detail
-  states the gross numbers and this caveat instead. If it names a quota while
-  uploads of that size work, compare `s3.bucket.list` (logical size) with the
-  quota and vacuum before raising it.
-- **`AccessDenied` is not a trigger.** On SeaweedFS it is never a
-  bad-credentials answer (a wrong secret is `SignatureDoesNotMatch`, an unknown
-  key `InvalidAccessKeyId`); a write `AccessDenied` is a bucket policy, and the
-  same credentials read the quota fine, so it would record a policy denial as a
-  quota. Measured: a `Deny s3:PutObject` policy on a bucket with room under its
-  quota was recorded full. Revisit if a pinned image starts answering 403 for a
-  quota.
-- **Abandoned probes are bounded.** A probe that runs past its budget is
-  abandoned, not killed. Each response body is read against a time budget, so
-  its thread ends within about 12 s (two reads, each bounded), and at most 4 probe threads exist at once
-  in a process: with none free a probe is no opinion without a request. What
-  the cap bounds is a server that withholds even the response headers a byte at
-  a time.
-
-To check on the host: `weed shell`, `s3.bucket.list` (each bucket line shows
-`quota:` and `usage:`). To lift it: raise it with
-`s3.bucket.quota -name=<bucket> -op=set -sizeMB=<larger>` (or `-op=remove`);
-no `lock` or `enforce` is needed.
-
-**Recovery.** While a refusal is outstanding, each `/status` poll asks the
-store again, and clears the refusal once it reports at least the refused size
-free (on SeaweedFS: the smaller of free disk and free slot room). Deleting
-objects on SeaweedFS does not return disk until the volume is vacuumed, so
-freeing disk on the host, or adding slots, is the faster lever. A quota
-refusal is the exception: free space never clears it, so after raising the
-quota it clears on the next successful upload of at least the refused size, or
-by an operator clear.
-
-**"Full" is not all-or-nothing, and this is the confusing part.** MinIO
-refuses a write that would breach its free-space threshold, sized against the
-object being written — so on a store in this state a large ESS log is refused
-while a small text artifact still succeeds. Measured: a store that refused an
-8 MiB artifact accepted a 1-byte one in the same second. So *some uploads
-still working is not evidence that the store is fine*, and the refused size in
-the `/status` reason is the number that tells you how close to the edge you
-are.
-
-**Cause**
-
-The object store answered and refused the *write*: it is out of disk, or the
-bucket is over its quota. This is not transient from a depositor's side — no
-number of retries clears it, which is why the status is 507 rather than 503.
+**"Full" depends on the size.** MinIO refuses a write that would cross its
+free-space threshold, judged against the object being written. A store in
+this state refuses a large ESS log and still accepts a small file. So some
+uploads still working is no evidence the store is fine; the refused size in
+the `/status` reason tells you how close to the edge it is.
 
 **Verify**
 
@@ -329,108 +309,72 @@ curl -s http://127.0.0.1:8010/api/v1/status | jq '.components.artifact_storage'
 ```
 
 Look for `"storage_full": true` and `"storage_full_observed_at"`. The
-`reason` names the store's own error code and the size of the write it
-refused.
+`reason` names the store's error code and the refused size.
 
-Read this next part before trusting a green `/status`. The `/status` probe is
-a `head_bucket`, and a full store answers a `head_bucket` with **200**:
+A green `/status` does not prove there is room. The probe is a `head_bucket`,
+which a full store answers with 200, and S3 has no capacity query.
+`storage_full` reports what the real write path was told. It is stored in the
+append-only `artifact_storage_capacity_event` table, so it survives a
+restart, and `"storage_full": false` means only that no refusal is
+outstanding.
 
-- On MinIO `RELEASE.2025-09-07T16-13-09Z`, measured on a volume filled to its
-  free-space threshold, every read succeeded and even a **1-byte** write
-  succeeded on the same store that refused a 4 MiB one — MinIO's threshold
-  check is sized against the incoming object.
-- So a *capacity* problem is invisible to any read-only probe, and a cheap
-  synthetic write probe would miss it too. The S3 API exposes no capacity or
-  quota query to ask instead.
+**How it clears.** TCKDB records the size it was refused at and clears only
+on evidence of at least that size:
 
-`storage_full` therefore reports what the **real write path** was told, not
-what a probe found. It is recorded in the append-only
-`artifact_storage_capacity_event` table, so:
-
-- **It survives a restart.** It used to be process memory, and a restart
-  silently reset it to healthy while every upload still failed.
-- **`"storage_full": false` does not mean there is space.** It means no
-  refusal is outstanding. A store that fills while TCKDB is idle still reads
-  healthy until the next depositor arrives — onset needs one upload attempt.
-
-**How it clears**, which is the part worth reading carefully. Because a full
-store still accepts small writes, TCKDB records the *size* it was refused at
-and clears only on evidence of at least that size:
-
-| what happened | does it clear? |
+| What happened | Clears? |
 |---|---|
-| a write of **at least** the refused size succeeds | yes |
-| a write **smaller** than the refused size succeeds | **no** — recorded, but the store is still refusing real artifacts |
-| deduplicating against an object already stored | no — that is a read |
-| MinIO reports **at least** the refused size free | yes, unless the refusal was a bucket quota |
-| SeaweedFS (with `S3_SEAWEEDFS_MASTER_URL` set) reports **at least** the refused size of room, disk and slots both | yes |
-| an operator clears it explicitly | yes, always |
-| time passing | **never** — there is deliberately no expiry |
+| A write of at least the refused size succeeds | yes |
+| A smaller write succeeds | no |
+| An upload deduplicates against an object already stored | no; that is a read |
+| MinIO reports at least the refused size free | yes, unless the refusal was a quota |
+| SeaweedFS (with `S3_SEAWEEDFS_MASTER_URL`) reports at least the refused size of disk and slot room | yes, unless the refusal was a quota |
+| An administrator clears it | yes |
+| Time passes | never |
 
-There is no timer because a timer guesses and a size-qualified success
-measures. A stale "full" you can clear in one command is safer than a flag
-that goes quiet while the disk is still full.
+While a refusal is outstanding, each `/status` poll asks the store again, so
+recovery shows on the next poll rather than the next large upload. Against
+AWS S3 or another store, it asks nothing and changes nothing.
 
-While a refusal is outstanding, `/status` also asks MinIO's admin API how
-much room it has, so **recovery is noticed on the next poll rather than on
-the next large upload**. It uses the credentials the API already holds, writes
-nothing, and is skipped entirely on a healthy store. SeaweedFS is asked the
-same question through `S3_SEAWEEDFS_MASTER_URL` (its volume server's
-`/status` and its master's status page). Against AWS S3, or any store that is
-neither, it returns no opinion and changes nothing.
-
-It cannot see a bucket quota: measured, MinIO refused a 2 MiB write with
-`XMinioAdminBucketQuotaExceeded` while reporting **418 MiB free**. A quota
-refusal therefore clears only on a real successful write or an operator.
-
-To check capacity directly, ask the store rather than the API:
+To check capacity directly, ask the store:
 
 ```bash
 docker exec <minio-container> mc admin info local     # MinIO
-df -h /path/to/minio/data                             # the underlying volume
+df -h /path/to/data                                    # the volume underneath
 ```
 
-**If the store is fine and the flag is stale**, an admin can clear it. Use
-this when you have fixed the cause and do not want to wait for a large upload
-— or when the refusal was a quota, which no free-space reading will clear:
+**If the store is fine and the flag is stale**, an administrator can clear
+it, for example after raising a quota, which no free-space reading clears.
+Use an administrator's API key:
 
 ```bash
 curl -s -X POST http://127.0.0.1:8010/api/v1/admin/artifact-storage/capacity/clear \
-  -H "Authorization: Bearer $TCKDB_ADMIN_TOKEN" \
+  -H "X-API-Key: $TCKDB_API_KEY" \
   -H 'Content-Type: application/json' \
-  -d '{"reason": "added a 2 TB volume and restarted MinIO"}'
+  -d '{"reason": "added a 2 TB volume"}'
 ```
 
-The reason is required and is recorded with your user id. Clearing **appends**
-— it never edits or deletes the refusal, so the incident stays in the log. If
-the store is in fact still full, the next refused upload records a new refusal
-and `/status` degrades again.
-
-To see the current state without changing it:
+The reason is required and is recorded with your user. Clearing appends; the
+refusal stays in the log. If the store is still full, the next refused upload
+records a new refusal. To read the state without changing it:
 
 ```bash
 curl -s http://127.0.0.1:8010/api/v1/admin/artifact-storage/capacity \
-  -H "Authorization: Bearer $TCKDB_ADMIN_TOKEN"
+  -H "X-API-Key: $TCKDB_API_KEY"
 ```
 
-**Fix**
+**Fix.** Free space or raise the quota, then upload one artifact at least as
+large as the refused size to confirm:
 
-Free space or raise the quota. `/status` clears itself on the next poll once
-MinIO reports enough room; to confirm end to end, upload one artifact **at
-least as large as the refused size** shown in the `reason` — a small one will
-succeed without clearing anything, by design:
+- Delete or archive unreferenced objects with
+  `backend/scripts/ops/verify_artifact_integrity.py --reclaim-orphans`, which
+  moves month-old unreferenced objects to a hold; a later
+  `--purge-hold-days` run deletes from the hold. The sweep copies before it
+  deletes, so on a completely full store free a little space by hand first.
+- Grow the volume, or raise the bucket quota (`mc quota set local/<bucket>
+  --size ...` on MinIO). MinIO enforces quotas from its usage scanner, so the
+  refusal and the recovery both lag a change by a minute or two.
 
-- delete or archive unreferenced objects. The reclaim sweep is the supported
-  route: `backend/scripts/ops/verify_artifact_integrity.py --reclaim-orphans`
-  moves month-old unreferenced objects to a hold, and a separate
-  `--purge-hold-days` run deletes from the hold. **Note that the sweep itself
-  writes** (it copies before deleting), so on a completely full store the
-  copy is refused too and the first pass may fail with the same condition;
-  free a little space by hand first.
-- grow the volume, or raise the bucket quota
-  (`mc quota set local/<bucket> --size ...`). MinIO enforces a hard quota
-  asynchronously from its data-usage scanner, so both the refusal and the
-  recovery lag the change by a minute or two.
+---
 
 ### Moving an existing MinIO deployment to SeaweedFS
 
@@ -438,32 +382,28 @@ succeed without clearing anything, by design:
 
 - `docker compose up -d seaweedfs` on a MinIO host fails with `port is
   already allocated` on `127.0.0.1:9000`.
-- After switching `S3_ENDPOINT_URL` to SeaweedFS, some downloads return
-  `502` with `"code": "artifact_object_missing"`, and `/status` is healthy.
+- After switching `S3_ENDPOINT_URL` to SeaweedFS, some downloads return `502`
+  with `"code": "artifact_object_missing"`, and `/status` is healthy.
 
-**Cause**
+**Cause.** Both services publish `127.0.0.1:9000` on purpose, so the API
+cannot be switched to an empty store by accident. The second symptom means
+the API was switched before the copy finished. Each such download also
+records an `object_missing` integrity event.
 
-Both services publish `127.0.0.1:9000`, on purpose, so the API cannot be
-switched to an empty store by accident. The second symptom means the API
-was switched before the copy was complete. Every such download also
-records an `object_missing` integrity event against the calculation.
+**Fix.** Follow
+[Moving from MinIO to SeaweedFS](../../backend/docs/deployment/migrating_minio_to_seaweedfs.md).
+It publishes SeaweedFS on another host port during the copy and switches the
+endpoint only after `backend/scripts/ops/migrate_object_store.py --verify-only`
+has read every referenced file back and exited 0.
 
-**Fix**
-
-Follow
-[Moving from MinIO to SeaweedFS](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/deployment/migrating_minio_to_seaweedfs.md).
-It publishes SeaweedFS on another host port for the duration of the copy,
-and it switches the endpoint only after
-`backend/scripts/ops/migrate_object_store.py --verify-only` has read every
-referenced file back from SeaweedFS and exited 0. If you already switched
-early, do not switch back: uploads since the switch exist only in
-SeaweedFS. Stop the API. Then finish the copy with the source named
-explicitly, since the env file now names SeaweedFS:
+If you already switched early, don't switch back: uploads since the switch
+exist only in SeaweedFS. Stop the API, then finish the copy with both stores
+named, since the env file now names SeaweedFS:
 `migrate_object_store.py --source-endpoint http://minio:9000 --dest-endpoint http://seaweedfs:9000 --commit`
-(use the `127.0.0.1` ports on a host API). Start the API again once
-`--verify-only` with the same two flags exits 0. A clean re-read then
-clears the `object_missing` events that were recorded
-(`verify_artifact_integrity.py --sha256 <digest>`, or `--all`).
+(use the 127.0.0.1 ports for an API on the host). Start the API once
+`--verify-only` with the same flags exits 0. A clean re-read then clears the
+recorded `object_missing` events (`verify_artifact_integrity.py --sha256 <digest>`,
+or `--all`).
 
 ---
 
@@ -478,105 +418,76 @@ psql: error: connection to server at "127.0.0.1", port 5432 failed:
 FATAL: database "tckdb_dev" does not exist
 ```
 
-**Cause**
+**Cause.** The container is up but the database was never created. Either
+`POSTGRES_DB` was unset on the volume's first start, or the volume is left
+over from a setup that used another name. `POSTGRES_DB` is read only on a
+volume's first start.
 
-The container is up but the DB itself was never created — usually
-because compose was started without `POSTGRES_DB` set, or the data
-volume survived from a previous experiment that used a different
-name.
-
-**Fix**
-
-The fastest reset: wipe the volume and bring the stack back up. The
-`POSTGRES_DB=tckdb_dev` env var (in `docker-compose.yml` /
-`docker-compose.yml`) is only consulted on the **first** start of a
-volume.
+**Fix.** On a development stack, the quickest fix is a fresh volume:
 
 ```bash
-docker compose down -v
-docker compose up -d
-cd backend
-conda run -n tckdb_env alembic upgrade head
+make reset
 ```
 
-Or, less destructive, create the DB by hand. **Pass `-E UTF8 -T
-template0`** — a bare `createdb` copies `template1`, which on many clusters
-is `SQL_ASCII`, and you would be creating the exact problem the next section
-describes:
+Or create the database by hand. Pass `-E UTF8 -T template0`: a bare
+`createdb` copies `template1`, which on many clusters is `SQL_ASCII` (next
+entry).
 
 ```bash
-docker compose exec db \
-    createdb -U tckdb -E UTF8 -T template0 tckdb_dev
+docker compose exec db createdb -U tckdb -E UTF8 -T template0 tckdb_dev
 ```
 
 **Verify**
 
 ```bash
-docker compose exec db \
-    psql -U tckdb -l
+docker compose exec db psql -U tckdb -l
 ```
 
 ---
 
 ### Postgres rejects writes / weird text behavior — `SQL_ASCII` instead of `UTF8`
 
-**Symptom**
-
-Weird Unicode breakage, or migrations fail with `invalid byte
-sequence for encoding "SQL_ASCII"`. `psql -l` shows the database with
+**Symptom.** Broken Unicode, or migrations fail with `invalid byte sequence
+for encoding "SQL_ASCII"`. `psql -l` shows the database with
 `Encoding | SQL_ASCII`.
 
-**Cause**
+**Cause.** The data volume was created before the compose file pinned the
+encoding. With no locale set, `initdb` fell back to `SQL_ASCII`, which stores
+any bytes and checks none. Docker never reruns `initdb` on an existing
+volume, so the encoding is fixed when the volume is created.
 
-A Postgres data volume created before the encoding was pinned. The
-`db` image sets no locale of its own, so `initdb` fell back to
-`SQL_ASCII` — a cluster that stores whatever bytes it is handed and
-validates none of them. Docker will not re-run `initdb` on an existing
-volume, so the encoding a deployment gets is decided once, at volume
-creation, and is permanent.
+`docker-compose.yml` now sets `LANG=C.UTF-8` and
+`POSTGRES_INITDB_ARGS=--encoding=UTF8` on `db`, so new volumes are `UTF8`.
+That cannot fix an existing volume.
 
-`docker-compose.yml` now pins `LANG=C.UTF-8` and
-`POSTGRES_INITDB_ARGS=--encoding=UTF8` on the `db` service, so volumes
-created from this repo are `UTF8`. That fixes new deployments; it
-cannot fix an existing volume.
+`SQL_ASCII` works until the first non-ASCII byte arrives, then rolls back the
+whole transaction carrying it, possibly months after the volume was created.
+The API logs the cluster's `server_encoding` at startup and reports it in
+`/api/v1/status`, so you can check before that happens.
 
-**Why it bites so late.** `SQL_ASCII` works perfectly until the first
-non-ASCII byte arrives. On 2026-08-04 that byte was an em dash in a
-warning message, months after the volume was created, and it rolled
-back the whole upload carrying it. Nothing connected the two. The API
-now logs its cluster's `server_encoding` at startup and reports it in
-`/api/v1/status`, so the question is answerable before something
-strange happens rather than after.
-
-**Fix**
-
-Changing a cluster's encoding needs a dump and restore; there is no
-in-place conversion. On a **dev** database, where the data is
-disposable, that reduces to a clean slate:
+**Fix.** Changing a cluster's encoding takes a dump and a restore. On a
+development database you can just start again:
 
 ```bash
-docker compose down -v      # destroys the volume
+docker compose down -v      # deletes the volume
 docker compose up -d
 ```
 
-On a database with anything worth keeping, dump first, **verify the dump
-while the volume still exists**, then recreate and restore. Substitute
-your own `DB_USER` / `DB_NAME` if they differ from the compose defaults.
+On a database worth keeping, dump it, check the dump while the volume still
+exists, then recreate and restore. Use your own `DB_USER` / `DB_NAME` (on a
+self-hosted stack, the `DB_ADMIN_USER` from `.env.db-admin`).
 
 ```bash
-# 1. Dump. -T is not optional: without it `docker compose exec` allocates
-#    a pseudo-TTY, whose line discipline rewrites LF to CRLF *inside the
-#    binary -Fc stream*. The dump looks fine and is silently corrupt.
+# 1. Dump. Keep -T: without it docker compose allocates a terminal, which
+#    rewrites LF to CRLF inside the binary dump and silently corrupts it.
 docker compose exec -T db \
     pg_dump -U "${DB_USER:-tckdb}" -d "${DB_NAME:-tckdb_dev}" -Fc > tckdb.dump
 
-# 2. Verify BEFORE destroying anything. `down -v` is irreversible, so a
-#    dump that cannot be read must be discovered while the original is
-#    still there. Expect a table of contents; `did not find magic string`
-#    means the dump is corrupt -- stop, and do not run step 3.
+# 2. Check it BEFORE deleting anything. Expect a table of contents.
+#    "did not find magic string" means the dump is corrupt: stop here.
 pg_restore --list tckdb.dump | head
 
-# 3. Only now destroy the volume and recreate it with UTF8.
+# 3. Only now delete the volume and recreate it as UTF8.
 docker compose down -v
 docker compose up -d
 
@@ -585,23 +496,22 @@ docker compose exec -T db \
     pg_restore -U "${DB_USER:-tckdb}" -d "${DB_NAME:-tckdb_dev}" < tckdb.dump
 ```
 
-If `pg_restore` is not installed on the host, run step 2 inside the
-container instead — it must still happen before step 3:
+Without `pg_restore` on the host, run step 2 in the container, still before
+step 3:
 
 ```bash
 docker compose exec -T db pg_restore --list /dev/stdin < tckdb.dump | head
 ```
 
-`DB_CLIENT_ENCODING=utf8` in the env templates, `?client_encoding=utf8`
-in the URL both `app/api/config.py` and `alembic/env.py` build, and
-`PGCLIENTENCODING=UTF8` in `backend/Dockerfile` are all belt-and-braces
-on the *client* side. None of them can rescue a `SQL_ASCII` server.
+`DB_CLIENT_ENCODING=utf8`, `?client_encoding=utf8` in the database URL and
+`PGCLIENTENCODING=UTF8` in the API image all act on the client side. None of
+them can rescue a `SQL_ASCII` server.
 
 **Verify**
 
 ```bash
 docker compose exec db psql -U tckdb -l
-# expect: Encoding | UTF8   -- for tckdb AND for template1
+# expect: Encoding | UTF8   for tckdb AND for template1
 
 curl -s localhost:8010/api/v1/status | jq '.components.database'
 # expect: server_encoding "UTF8" AND template_encoding "UTF8"
@@ -611,47 +521,35 @@ curl -s localhost:8010/api/v1/status | jq '.components.database'
 
 ### The cluster template disagrees with the production database
 
-**Symptom**
+**Symptom.** `psql -l` shows the application database as `UTF8` but
+`template1` (usually also `template0` and `postgres`) as `SQL_ASCII`.
+`/api/v1/status` reports `server_encoding: "UTF8"` and
+`template_encoding: "SQL_ASCII"`.
 
-`psql -l` shows the application database as `UTF8` but `template1` (and
-usually `template0` and `postgres`) as `SQL_ASCII`. `/api/v1/status` reports
-`server_encoding: "UTF8"` and `template_encoding: "SQL_ASCII"`.
+**Why it is a problem.** `CREATE DATABASE` with no `TEMPLATE` copies `template1`.
+A cluster in this state gives `SQL_ASCII` to every database created next,
+including the one a restore recreates. That is the most likely way a fixed
+cluster turns broken again.
 
-**Why it matters**
-
-`CREATE DATABASE` with no `TEMPLATE` clause copies `template1`. So a cluster
-in this state hands `SQL_ASCII` to every database created next to a correct
-one — including the database a **restore** recreates. Every restore runbook
-in this repo drops and recreates before loading the dump, which makes this
-the single most likely way a cluster that was fixed reverts to broken.
-
-The reversion is silent. A `SQL_ASCII` database accepts every byte a `UTF8`
-dump contains — there is no validation to fail — so `psql -f dump.sql` exits
-0 and the data looks present. What changes is that multi-byte characters stop
-being characters. Measured on a `SQL_ASCII` cluster (PostgreSQL 17):
+Nothing errors when it happens. A `SQL_ASCII` database accepts every byte of
+a `UTF8` dump, so the restore exits 0 and the data looks present. But
+multi-byte characters stop being characters:
 
 ```
 UTF8 source db:   'em dash: —'  length() = 10   octet_length() = 12
 naive restore:    'em dash: —'  length() = 12   octet_length() = 12
 ```
 
-Nothing errors. `length()`, `substring()`, `LIKE`, and every index built on
-them are now wrong for every non-ASCII value, and the damage is only
-discovered when something downstream cares.
+`length()`, `substring()`, `LIKE` and every index built on them are then
+wrong for every non-ASCII value.
 
-**How a cluster gets here**
+**How a cluster gets here.** Its application database was converted in
+place (dumped, dropped, recreated with an explicit encoding, restored) and
+the templates were left alone.
 
-By having its application database converted in place — dumped, dropped,
-recreated with an explicit encoding, restored — without anyone touching the
-cluster's templates. That is precisely what happened to the live deployment
-after the 2026-08-04 incident: `tckdb` was corrected, `template1` was not,
-and the two still disagreed when checked on 2026-08-12.
-
-**Fix**
-
-Do **not** rebuild the cluster for this. The templates only matter at
-`CREATE DATABASE` time, so the durable fix is to make every `CREATE DATABASE`
-explicit — which the runbooks in this repo now are:
+**Fix.** Don't rebuild the cluster. The templates matter only at `CREATE
+DATABASE`, so make every `CREATE DATABASE` explicit, as the restore steps in
+these docs do:
 
 ```sql
 CREATE DATABASE tckdb ENCODING 'UTF8' TEMPLATE template0;
@@ -661,10 +559,9 @@ CREATE DATABASE tckdb ENCODING 'UTF8' TEMPLATE template0;
 createdb -E UTF8 -T template0 tckdb
 ```
 
-`TEMPLATE template0` is load-bearing and is **not** made wrong by `template0`
-itself being `SQL_ASCII`. `template0` exists precisely to be copied into a
-database with a different encoding; specifying an encoding without it is
-refused outright:
+`TEMPLATE template0` is needed even when `template0` is itself `SQL_ASCII`:
+`template0` exists to be copied into a database with another encoding.
+Asking for an encoding without it is refused:
 
 ```
 ERROR:  new encoding (UTF8) is incompatible with the encoding of the
@@ -673,22 +570,18 @@ HINT:  Use the same encoding as in the template database, or use
        template0 as template.
 ```
 
-That refusal is safe — it fails loudly rather than producing the wrong
-thing. The dangerous form is the bare `CREATE DATABASE`, which succeeds and
-inherits `SQL_ASCII` without comment.
+That refusal is safe. The dangerous form is the bare `CREATE DATABASE`,
+which succeeds and inherits `SQL_ASCII` silently.
 
-Do not add `LC_COLLATE`/`LC_CTYPE` unless you specifically want them. Omitted,
-they are inherited from `template0`, which is `C` on these clusters, and `C`
-is compatible with any encoding. Naming a non-`C` locale that disagrees with
-`UTF8` is how this incantation actually goes wrong.
+Leave out `LC_COLLATE` and `LC_CTYPE` unless you need them. Omitted, they
+come from `template0`, which is `C` on these clusters and works with any
+encoding. A non-`C` locale that disagrees with `UTF8` is how this command
+goes wrong.
 
-Correcting `template1` itself is possible but is deliberately **not**
-recommended here. There is no in-place encoding change for a template any
-more than for an ordinary database, so it means dropping `template1` and
-recreating it from `template0` with an explicit encoding — a cluster-level
-operation, with an outage, that wants a rehearsed runbook and buys nothing
-that explicit `CREATE DATABASE` statements do not already buy. It also does
-nothing for any database that already exists.
+Rebuilding `template1` from `template0` is possible but not recommended
+here. It is a cluster-level change with an outage, and it gains nothing over
+explicit `CREATE DATABASE` statements. It also does nothing for databases
+that already exist.
 
 **Verify**
 
@@ -701,42 +594,27 @@ curl -s localhost:8010/api/v1/status | jq '.components.database.template_encodin
 
 ---
 
-## Python / FastAPI
+## Python / FastAPI (running from source)
 
-### `ModuleNotFoundError: No module named 'app'` when running Uvicorn or scripts
+### `ModuleNotFoundError: No module named 'app'`
 
-**Symptom**
+**Symptom.** `ModuleNotFoundError: No module named 'app'` when running
+`uvicorn main:app` or a backend script.
 
-```text
-ModuleNotFoundError: No module named 'app'
-```
+**Cause.** The backend imports `app.*` relative to `backend/`. Run from
+anywhere else, the wrong directory is on `sys.path`.
 
-…when running `uvicorn main:app` or a backend script.
-
-**Cause**
-
-The backend imports `app.*` relative to the `backend/` directory.
-Running Uvicorn from the **repo root** (or anywhere else) puts the
-wrong directory on `sys.path`.
-
-**Fix**
-
-`cd backend/` first, then run Uvicorn:
+**Fix.** Run from `backend/`, or use the Make target:
 
 ```bash
 cd backend
 conda run -n tckdb_env uvicorn main:app --host 127.0.0.1 --port 8010
-```
-
-The Make target handles this:
-
-```bash
+# or, from the repository root:
 make api
 ```
 
-`backend/scripts/bootstrap_admin.py` adds a `sys.path` shim so it can
-be invoked either from `backend/` or the repo root; older scripts may
-require `backend/` as the working directory.
+`backend/scripts/bootstrap_admin.py` fixes `sys.path` itself and runs from
+either place. Older scripts may need `backend/`.
 
 **Verify**
 
@@ -761,33 +639,24 @@ or
 TypeError: ASGI callable is not a coroutine. Did you mean to pass --factory?
 ```
 
-**Cause**
+**Cause.** `app.api.app:create_app` is a factory that builds and returns the
+app. Uvicorn needs `--factory` to call it, and `app.api.app:app` does not
+exist.
 
-`app.api.app:create_app` is a **factory** — it builds an app and
-returns it. Pointing Uvicorn at the factory module without
-`--factory` (or skipping the factory and asking for `app.api.app:app`
-when that name doesn't exist) leaves Uvicorn confused.
-
-**Fix**
-
-Use the bundled `backend/main.py` shim, which imports the factory
-and exposes a plain ASGI `app`:
+**Fix.** Use `backend/main.py`, which calls the factory and exposes `app`:
 
 ```bash
 # from backend/
 conda run -n tckdb_env uvicorn main:app --host 127.0.0.1 --port 8010
 ```
 
-Or, if you must point Uvicorn at the factory directly, pass
-`--factory`:
+Or pass `--factory`:
 
 ```bash
 # from backend/
 conda run -n tckdb_env uvicorn app.api.app:create_app --factory \
     --host 127.0.0.1 --port 8010
 ```
-
-The repo's standard form is `main:app`.
 
 **Verify**
 
@@ -806,40 +675,36 @@ curl http://127.0.0.1:8010/api/v1/health
 ERROR: Could not find a version that satisfies the requirement rdkit (...)
 ```
 
-or, on a platform without a prebuilt RDKit wheel:
+or, on a platform without a prebuilt RDKit wheel,
+`ERROR: Failed building wheel for rdkit`.
 
-```text
-ERROR: Failed building wheel for rdkit
-```
+**Cause.** `backend/pyproject.toml` makes RDKit an optional extra. Conda users
+get it from conda-forge through `backend/environment.yml`; pip users must ask
+for it.
 
-**Cause**
+**Fix.** Install `tckdb-schemas` first either way; it is not on PyPI.
 
-`backend/pyproject.toml` keeps RDKit as an **opt-in extra**, not a
-hard runtime dependency. Conda users get it from conda-forge via
-`backend/environment.yml`; pure-pip users have to ask for it
-explicitly.
+- **With conda** (the easiest):
 
-**Fix**
+    ```bash
+    mamba env create -n tckdb_env -f backend/environment.yml
+    conda activate tckdb_env
+    pip install -e schemas/python/tckdb-schemas
+    cd backend && pip install -e ".[dev]"   # not .[dev,rdkit]: conda has RDKit
+    ```
 
-Pick one:
+- **With pip or uv**, add the `rdkit` extra:
 
-- **Have conda available?** Use the conda-forge build — it's the
-  smoothest:
-  ```bash
-  mamba env create -n tckdb_env -f backend/environment.yml
-  conda activate tckdb_env
-  cd backend && pip install -e ".[dev]"   # NOT .[dev,rdkit] — conda has it
-  ```
-- **Pure pip / uv?** Include the `rdkit` extra:
-  ```bash
-  cd backend
-  uv sync --extra dev --extra rdkit
-  # or:
-  pip install -e ".[dev,rdkit]"
-  ```
-  The pip RDKit wheel exists on x86_64 Linux/macOS and aarch64
-  Linux. On other platforms (Windows ARM, musl-Linux, exotic
-  architectures) you'll need conda-forge.
+    ```bash
+    cd backend
+    uv sync --extra dev --extra rdkit
+    # or:
+    pip install -e ../schemas/python/tckdb-schemas
+    pip install -e ".[dev,rdkit]"
+    ```
+
+  RDKit wheels exist for x86_64 Linux and macOS and for aarch64 Linux.
+  Elsewhere (Windows on ARM, musl Linux) use conda-forge.
 
 **Verify**
 
@@ -861,55 +726,34 @@ curl "http://127.0.0.1:8010/api/v1/scientific/species/search?smiles=C[CH]C"
 # curl: (3) bad range in URL position 64: ... ?smiles=C[CH]C
 ```
 
-**Cause**
+**Cause.** curl reads `[...]` in a URL as a range to expand, and the SMILES
+brackets collide with it.
 
-`curl` interprets `[...]` in a URL as a range expansion (it'll happily
-expand `host[1-3].example.org` for you). The square brackets in the
-SMILES are colliding with that feature.
-
-**Fix**
-
-Use `-G` + `--data-urlencode` and `curl` will encode the value
-correctly:
+**Fix.** Let curl encode the value:
 
 ```bash
 curl -G "http://127.0.0.1:8010/api/v1/scientific/species/search" \
     --data-urlencode "smiles=C[CH]C"
 ```
 
-Equivalent: `curl --globoff "...?smiles=C%5BCH%5DC"`.
+Or `curl --globoff "...?smiles=C%5BCH%5DC"`.
 
-**Verify**
-
-You should get a JSON response (possibly empty `results`), not a
-curl error.
+**Verify.** You get JSON, possibly with empty `results`, not a curl error.
 
 ---
 
 ### `jq: parse error` when piping `curl -i`
 
-**Symptom**
+**Symptom.** `jq: parse error: Invalid numeric literal at line 1, column 9`.
 
-```text
-jq: parse error: Invalid numeric literal at line 1, column 9
-```
+**Cause.** `curl -i` prints the headers before the body, and jq tries to
+parse them.
 
-**Cause**
-
-`curl -i` writes the HTTP headers and a blank line **before** the
-body. `jq` tries to parse the whole stream as JSON.
-
-**Fix**
-
-Drop `-i`, or split header from body:
+**Fix.** Drop `-i`, or keep the status apart from the body:
 
 ```bash
 curl -s "$TCKDB_BASE_URL/scientific/species/search?smiles=O" | jq .
-```
 
-For HTTP-status debugging without breaking `jq`:
-
-```bash
 curl -s -o /tmp/body.json -w 'HTTP %{http_code}\n' "$URL"
 jq . /tmp/body.json
 ```
@@ -918,144 +762,76 @@ jq . /tmp/body.json
 
 ## Cloudflare Tunnel and DNS
 
-These only apply to self-hosted public deployments. Local dev does
-not need Cloudflare.
+Only for a public instance behind Cloudflare.
 
 ### `curl: could not resolve host` after adding a Cloudflare DNS route
 
-**Symptom**
+**Symptom.** `curl: (6) Could not resolve host: tckdb.example.org`, though
+the record shows in the Cloudflare dashboard.
 
-```text
-curl: (6) Could not resolve host: tckdb.example.org
-```
+**Cause.** Your resolver cached the earlier "no such name" answer, for up to
+the zone's negative TTL (often a few minutes).
 
-…even though the DNS record is visibly added in the Cloudflare
-dashboard.
-
-**Cause**
-
-Your local DNS resolver has cached the previous **NXDOMAIN** answer.
-Negative caching is bounded by the zone's negative TTL (often a few
-minutes).
-
-**Fix**
-
-Wait it out, or flush:
+**Fix.** Wait, or flush the cache:
 
 ```bash
-# systemd-resolved
-sudo resolvectl flush-caches
-
-# nscd
-sudo systemctl restart nscd
-
-# macOS
-sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder
+sudo resolvectl flush-caches                                    # systemd-resolved
+sudo systemctl restart nscd                                     # nscd
+sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder # macOS
 ```
 
-Try a different resolver to confirm:
+Ask another resolver to confirm: `dig +short tckdb.example.org @1.1.1.1`.
 
-```bash
-dig +short tckdb.example.org @1.1.1.1
-```
-
-**Verify**
-
-```bash
-curl -fsS https://tckdb.example.org/api/v1/health
-```
+**Verify.** `curl -fsS https://tckdb.example.org/api/v1/health`.
 
 ---
 
-### DNS record vs tunnel vs ingress rule — all three needed
+### DNS record, tunnel and ingress rule: all three needed
 
-**Symptom**
+**Symptom.** The public URL shows Cloudflare's "1033: Argo Tunnel error" or
+"1016: Origin DNS error", or hangs.
 
-Public URL returns Cloudflare's "1033: Argo Tunnel error" or
-"1016: Origin DNS error" page, or just hangs.
+**Cause.** Three separate pieces must line up:
 
-**Cause**
+1. **DNS:** `tckdb.example.org` points at Cloudflare (a `CNAME` to the
+   tunnel's hostname).
+2. **Tunnel:** `cloudflared` runs on the server and is registered with the
+   same account.
+3. **Ingress rule:** the tunnel forwards `tckdb.example.org` to
+   `http://127.0.0.1:8011` (or `:8010` for the API alone).
 
-The three layers are independent and all have to line up:
+**Fix.** In the Zero Trust dashboard check that:
 
-1. **DNS** — `tckdb.example.org` points at Cloudflare (`CNAME` to
-   the tunnel-managed hostname).
-2. **Tunnel** — `cloudflared` is running on the host and registered
-   with the same Cloudflare account.
-3. **Ingress rule** — inside the tunnel config, `tckdb.example.org`
-   forwards to `http://127.0.0.1:8010`.
-
-Missing any one of these breaks the path.
-
-**Fix**
-
-Verify in the Cloudflare Zero Trust dashboard:
-
-- Networks → Tunnels → your tunnel is "Healthy".
-- The tunnel's Public Hostnames list includes `tckdb.example.org`
-  with `Type: HTTP` and `URL: 127.0.0.1:8010`.
-- DNS → the corresponding `CNAME` exists (Cloudflare usually
-  auto-creates it; double-check).
+- Networks → Tunnels shows your tunnel as "Healthy";
+- its public hostnames include `tckdb.example.org`, type `HTTP`, with the
+  right local URL;
+- DNS has the matching `CNAME` (Cloudflare usually creates it).
 
 **Verify**
 
 ```bash
-docker compose --env-file .env.selfhosted \
+docker compose --env-file .env.selfhosted --env-file .env.db-admin \
     --profile cloudflare logs cloudflared | tail -50
 curl -fsS https://tckdb.example.org/api/v1/health
 ```
 
 ---
 
-### DataGrip / DBeaver through a protected `cloudflared access tcp` tunnel
+### A database GUI through `cloudflared access tcp`
 
-**Symptom**
-
-You want a DB GUI session against a remote TCKDB without opening
-Postgres on `0.0.0.0`.
-
-**Fix**
-
-The pattern is documented in
-[self_hosted_single_node.md](self_hosted_single_node.md) ("Optional:
-protected DB-GUI access via TCP tunnel"). One-liner reminder:
+To reach the database from DataGrip or DBeaver without publishing Postgres,
+see [Public server](self_hosted_single_node.md#optional-a-database-gui-through-the-tunnel):
 
 ```bash
-cloudflared access tcp \
-    --hostname pg-tckdb.example.org \
-    --url localhost:15434
-```
-
-Leave that running, then point DataGrip at:
-
-```text
-Host:     127.0.0.1
-Port:     15434
-Database: tckdb
-User:     tckdb
-Password: <DB_PASSWORD from .env.selfhosted>
-```
-
-Three auth layers stack: Cloudflare Access policy → tunnel access
-token → Postgres role/password. A leaked DB password alone cannot
-reach the database from the internet.
-
-**Verify**
-
-```bash
-psql -h 127.0.0.1 -p 15434 -U tckdb -d tckdb -c 'select 1'
+cloudflared access tcp --hostname pg-tckdb.example.org --url localhost:15434
+psql -h 127.0.0.1 -p 15434 -U tckdb_app -d tckdb -c 'select 1'
 ```
 
 ---
 
-## When in doubt
+## Still stuck
 
-1. Run the doctor first:
-   ```bash
-   backend/scripts/tckdb_doctor.sh
-   ```
-2. Read the matching section above. Every entry includes a verify
-   command — running it after the fix confirms the issue is closed
-   out, rather than just silently masked.
-3. If the failure is novel, file a small reproducer (env vars, exact
-   command, error output) before opening an issue.
+1. Run the check script or `make doctor`.
+2. Find the matching entry above and run its verify step after the fix.
+3. If it is new, open an issue with the env variable names (not the
+   secrets), the exact command and its output.

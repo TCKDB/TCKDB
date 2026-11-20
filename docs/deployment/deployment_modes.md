@@ -1,254 +1,99 @@
-# TCKDB deployment modes
+# Which setup do I need?
 
-## Purpose
+TCKDB is one application. A laptop, a lab server and a public instance run
+the same images, schema, API and login model. Two things differ: how clients
+reach the server, and the settings in the env file.
 
-TCKDB is one application — one schema, one API, one auth model — that
-can be run in several operational scenarios. This document is the
-plain-language map of those scenarios, oriented around two questions
-operators and contributors actually ask:
+<figure class="tk-figure">
+--8<-- "assets/what-runs-where.svg"
+<figcaption>The same application everywhere. Only the ingress and the env file differ.</figcaption>
+</figure>
 
-1. Do I need a domain or internet connection to use TCKDB?
-2. Where does my data live and who can read or write it?
+## Pick one
 
-The scenarios described here are deployment **modes**, not separate
-products or codepaths. A workflow tool, a notebook, or a CLI talks to
-all of them through the same `base_url` + `api_key` client model. See
-[Generic client targeting](../clients/generic-client-targeting.md) and
-the deployment [README](README.md) for the wider context.
-
-The three modes are:
-
-```text
-1. local/offline TCKDB
-2. self-hosted online TCKDB
-3. hosted/community TCKDB
-```
-
-## Mode 1: local/offline TCKDB
-
-A TCKDB instance running on a single machine or private network with
-no public exposure.
-
-- No domain required.
-- No public internet required.
-- Runs on `localhost` or a private/LAN address.
-- Suitable for a laptop, workstation, single-user lab server, or an
-  air-gapped HPC login node.
-- Workflow tools (ARC, RMG, custom scripts, future CLI) point to the
-  local/private API URL.
-- The hosted-mode read-hardening toggles
-  (`LEGACY_READS_REQUIRE_AUTH`, `ALLOW_PUBLIC_INTERNAL_IDS=false`,
-  rate limits, hidden OpenAPI) can remain enabled for parity, but
-  there is no public attack surface to defend.
-- Operator policy is whatever the single user or small team agrees
-  on; there is no submission/review queue requirement.
-
-Typical workflow-tool configuration:
-
-```text
-TCKDB_BASE_URL=http://127.0.0.1:8010/api/v1
-TCKDB_API_KEY=...
-```
-
-The reference recipe is
-[local-v0.md](local-v0.md). The single-machine private scenario in
-the deployment [README](README.md) is the authoritative how-to.
-
-## Mode 2: self-hosted online TCKDB
-
-A TCKDB instance run by a lab, group, or institution that **is**
-reachable from outside the host but is operated by a small team for
-their own users and downstream workflow tools.
-
-- A domain is **strongly recommended** for stable public access.
-- Public reach is provided by a Cloudflare Tunnel or a reverse proxy
-  (nginx/Caddy/Traefik) mapping a public hostname to the local API
-  port. Router port-forwarding is discouraged.
-- Postgres and object storage (SeaweedFS or another S3 store) must never be exposed
-  publicly. Only the API is reachable through the tunnel/proxy.
-- The canonical self-hosted single-node recipe belongs in this mode
-  — see [self_hosted_single_node.md](self_hosted_single_node.md) for
-  the worked example (tested on a Raspberry Pi but portable to any
-  small Linux server) and the hosted-safe environment-variable
-  defaults.
-- Quick tunnels (random `*.trycloudflare.com` URLs, ngrok free tier,
-  etc.) are acceptable **for testing only** — they rotate, lack a
-  managed cert story, and are not appropriate for stable hosting.
-- Authenticated uploads and (optionally) anonymous scientific reads;
-  the operator chooses whether `/api/v1/scientific/*` is public.
-- Backups, log rotation, and TLS are operator responsibilities; the
-  Pi guide documents the minimum bar.
-
-The shared-private variant (LAN-only lab/group server, no public
-hostname) is described in
-[shared-private-deployment.md](shared-private-deployment.md). It uses
-the same backend and most of the same hardening toggles; only the
-ingress changes.
-
-## Mode 3: hosted/community TCKDB
-
-A community-facing TCKDB instance run by a group or institution as a
-shared scientific resource.
-
-- Run by a designated operator team.
-- Public scientific reads under `/api/v1/scientific/*`.
-- Authenticated uploads and imports only.
-- Submission, moderation, and review workflows are exercised in
-  earnest — anonymous uploads are not permitted, and contributed
-  records pass through the documented review queue (see
-  `submission-moderation-schema.md`
-  and
-  `species-entry-review.md`).
-- May receive contribution bundles from offline/local instances — the
-  cross-instance data-movement path is the export/import flow
-  documented in
-  export_import_roadmap.md.
-- Operationally indistinguishable from a self-hosted instance from
-  the backend's perspective; what changes is the policy posture and
-  the operator's commitments to availability, backups, and review SLA.
-
-## Comparison table
-
-| Property | Mode 1 — local/offline | Mode 2 — self-hosted online | Mode 3 — hosted/community |
+| You want | `DEPLOYMENT_MODE` | Reached at | Follow |
 |---|---|---|---|
-| Audience | One user / small team | Lab, group, institution | Public scientific community |
-| Network reach | `127.0.0.1` or LAN | Public hostname via tunnel/proxy | Public hostname |
-| Domain | Not required | Strongly recommended | Required |
-| Internet required at runtime | No | Yes (for tunnel) | Yes |
-| TLS | Not required | Required (edge or origin) | Required |
-| Anonymous reads | N/A (no public surface) | Operator choice | Yes (throttled) |
-| Uploads | Any local user | Seeded accounts | Seeded accounts + review queue |
-| Review/moderation workflow | Optional | Optional | Required |
-| Backups | Operator choice | Required | Required, with off-box copy |
-| Receives contribution bundles | No (origin) | Optional | Yes (primary import target) |
-| Reference recipe | [local-v0.md](local-v0.md) | [self_hosted_single_node.md](self_hosted_single_node.md), [shared-private-deployment.md](shared-private-deployment.md) | (operator-managed) |
+| To try TCKDB or work on it alone | `local` | `127.0.0.1` | [Self-host](README.md) with `--mode local`, or [Run from source](local-v0.md) to change the code |
+| A private instance for a lab or group | `shared_private` | the lab network, a VPN or an internal proxy | [Self-host](README.md), then [Lab server](shared-private-deployment.md) |
+| A public instance that anyone can read | `hosted_public` | a public HTTPS hostname | [Self-host](README.md), then [Public server](self_hosted_single_node.md) |
+| To upload from cluster jobs | none: jobs are clients | | [Clients on HPC](client-access-from-hpc.md) |
 
-## Domain and tunnel requirements
+No domain or internet connection is needed for `local` or a lab network. A
+domain is needed only for a stable public address.
 
-```text
-Offline/local:
-  no domain
-  no tunnel
-  no public DNS
+Clients use the same two values everywhere: a base URL and an API key. See
+[Configuring a client](../clients/generic-client-targeting.md).
 
-Testing online tunnel:
-  temporary trycloudflare-style URL acceptable
-  do NOT distribute the URL to downstream consumers
-  rotate or tear down after the test
+## What the mode changes
 
-Stable public Pi/server:
-  a domain (or a controlled public hostname under one) is strongly
-  recommended
-  named Cloudflare Tunnel or a reverse proxy with a managed cert
+- **`local`** allows the developer defaults: open registration, the `/docs`
+  console, and session cookies over plain HTTP. It is the default when
+  `DEPLOYMENT_MODE` is unset.
+- **`shared_private`** refuses to start while any safety setting is at an
+  unsafe value: open registration, `/docs`, unauthenticated legacy routes,
+  internal IDs in responses, insecure cookies, rate limiting off, `*` in
+  `CORS_ALLOW_ORIGINS`, or a missing or placeholder secret. The error lists
+  every problem at once. On a trusted lab network it allows plain-HTTP
+  cookies with an explicit opt-in.
+- **`hosted_public`** enforces the same settings and always requires secure
+  cookies.
 
-Institutional:
-  institutional domain, institutional reverse proxy, or institutional
-  Cloudflare/CDN account
-  TLS terminated by the institutional ingress
-```
+The full list of settings is the [Production checklist](production_checklist.md).
 
-A domain is **never** required to use TCKDB. It is required only when
-you want a stable, externally-reachable URL.
-
-## Air-gapped HPC notes
-
-TCKDB is usable on an air-gapped HPC environment as a Mode 1
-(local/offline) deployment. The constraints to keep in mind:
-
-- No external auth dependency. TCKDB's auth is fully self-contained
-  (sessions for humans, API keys for clients) — no external IdP,
-  OAuth provider, or DNS lookup is required at runtime.
-- Local API only. The API binds to `127.0.0.1` (or a head-node
-  internal address) and is reached over the cluster's internal
-  network. Do not assume any hosted TCKDB is reachable from compute
-  nodes.
-- No Cloudflare. The hosted-Pi tunnel pattern does not apply; there
-  is nothing to tunnel to.
-- No online docs. The `/docs` Swagger UI can be left enabled
-  (`EXPOSE_API_DOCS=true`) on a local-only instance, since there is
-  no public surface; consult this repository's `docs/` tree for
-  reference material that does not require internet access.
-- Export files manually after job completion. When data is to leave
-  the air-gapped environment, the export path is the contribution
-  bundle, not a database dump — see
-  export_import_roadmap.md.
-- Workflow tools should always use the configured `TCKDB_BASE_URL`
-  and `TCKDB_API_KEY` rather than hard-coded URLs, so the same code
-  works against the air-gapped local instance and against any future
-  hosted target.
-
-For the broader HPC client picture (login-node uploads, credential
-handling, batch workflows), see
-[client-access-from-hpc.md](client-access-from-hpc.md). HPC is a
-**client environment**; the deployment mode it talks to is whichever
-TCKDB instance it is configured against.
-
-## Security posture by mode
-
-| Concern | Mode 1 — local/offline | Mode 2 — self-hosted online | Mode 3 — hosted/community |
+| | `local` | `shared_private` | `hosted_public` |
 |---|---|---|---|
-| Public attack surface | None | Tunnel/proxy ingress only | Public ingress |
-| Internal-ID exposure | Tolerated | `ALLOW_PUBLIC_INTERNAL_IDS=false` | `ALLOW_PUBLIC_INTERNAL_IDS=false` |
-| Legacy entity routes | Open | `LEGACY_READS_REQUIRE_AUTH=true` | `LEGACY_READS_REQUIRE_AUTH=true` |
-| Open registration | Operator choice | Off (`AUTH_ALLOW_OPEN_REGISTRATION=false`) | Off; seeded accounts |
-| Rate limiting | Optional | Required | Required |
-| Swagger UI (`/docs`) | Operator choice | Hidden (`EXPOSE_API_DOCS=false`) | Hidden |
-| API reference (`/redoc`, `/openapi.json`) | Operator choice | Operator choice (`EXPOSE_API_REFERENCE`) | Published (`EXPOSE_API_REFERENCE=true`) |
-| API root (`/`) | Not served by the API; no frontend in this mode ([non-goal](local-v0.md)) | Not served by the API; the canonical recipe has no frontend container (a frontend container is optional, separate) | Not served by the API; the frontend SPA container owns it |
-| TLS | Not required | Required (edge cert via Cloudflare or origin cert via proxy) | Required |
-| Secrets management | `.env` on local disk | `.env.selfhosted` outside repo, restricted perms | Operator-managed (vault/secret store) |
+| Who can connect | this machine | your network | anyone, through the ingress |
+| Open registration | allowed | off | off |
+| Internal IDs in responses | allowed | hidden | hidden |
+| Legacy entity routes | open | need login | need login |
+| Rate limiting | optional | on | on |
+| `/docs` console | allowed | off | off |
+| `/redoc` and `/openapi.json` | allowed | your choice (`EXPOSE_API_REFERENCE`) | your choice |
+| HTTPS | not needed | recommended | required |
+| Review of uploads | optional | optional | expected |
+| Backups | your choice | required | required, with a copy on another machine |
 
-The full hosted-mode abuse controls are documented in
-[public_read_abuse_controls.md](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/public_read_abuse_controls.md).
+## Domains and tunnels
 
-## Data movement between modes
+- **On a laptop or a lab network**, use `localhost` or a private address. No
+  domain, no tunnel, no public DNS.
+- **For a public instance**, use a domain, or a hostname under one, with a
+  named Cloudflare Tunnel or a reverse proxy that has a managed certificate.
+- **For a quick test**, a temporary tunnel URL (`*.trycloudflare.com`, ngrok)
+  is fine. These URLs change, so do not give one to anyone and tear it down
+  afterwards.
+- **At an institution**, use its domain and its proxy or CDN, which then
+  terminates TLS.
 
-There is **no built-in synchronization** between TCKDB instances.
-Cross-instance data movement happens through explicit contribution
-bundles:
+Never forward a router port to the server, and never publish Postgres or the
+object store. Only the web UI and the API go through the ingress.
+
+## Air-gapped clusters
+
+TCKDB runs in `local` mode with no network beyond the cluster.
+
+- Login needs nothing external: no identity provider, OAuth or DNS lookup.
+- Bind the API to `127.0.0.1` or a head-node address that the cluster can
+  reach. Don't assume any hosted TCKDB is reachable from compute nodes.
+- Pull the images on a connected machine and copy them across with
+  `docker save` and `docker load`.
+- The documentation is in the repository's `docs/` folder and works offline.
+- To move data out, export a [contribution bundle](../contribution-bundles/format.md).
+  A database dump is not the way to move records between instances.
+- Give workflow tools `TCKDB_BASE_URL` and `TCKDB_API_KEY` instead of
+  hard-coded URLs, so the same code works against any instance.
+
+## Moving data between instances
+
+Instances never sync. Records move as contribution bundles that you export
+from one instance and submit to another:
 
 ```text
-Mode 1 (local/offline)  --export-->  bundle file  --import-->  Mode 2 or 3
-Mode 2 (self-hosted)    --export-->  bundle file  --import-->  Mode 3
-Mode 3 (community)      --export-->  bundle file  --import-->  any target
+local instance  --export-->  bundle file  --submit-->  lab or public instance
 ```
 
-Bundle export and import:
-
-- preserve scientific identity, provenance, artifact hashes, and
-  literature/software references;
-- do **not** carry raw database PKs as stable identity — public
-  refs and content-derived identities are the carrier;
-- support dry-run, validate-only, and submit-for-review modes on
-  import.
-
-The full design and phased rollout are tracked internally. The
-bundle format work in progress is tracked under
-[contribution bundle pages](../contribution-bundles/format.md) and the
-related roadmap specs (`local-bundle-export-v0-spec.md`,
-`hosted-bundle-dry-run-import-spec.md`,
-`hosted-bundle-submit-v0-spec.md`,
-`manual-local-to-hosted-flow-v0-spec.md`).
-
-## Related documentation
-
-- [README.md](README.md) — deployment guide overview, scenarios vs
-  client environments, infrastructure strategies.
-- [local-v0.md](local-v0.md) — single-machine private (Mode 1)
-  reference.
-- [shared-private-deployment.md](shared-private-deployment.md) —
-  shared LAN-only lab/group instance.
-- [self_hosted_single_node.md](self_hosted_single_node.md)
-  — hosted Pi (Mode 2) reference.
-- [client-access-from-hpc.md](client-access-from-hpc.md) — HPC as a
-  client environment.
-- [native-advanced.md](native-advanced.md) — advanced native install
-  fallback.
-- [Generic client targeting](../clients/generic-client-targeting.md)
-  — `base_url` + `api_key` model for all clients.
-- [public_hosted_querying.md](../guides/public_hosted_querying.md) —
-  framing-neutral entry point for the public read surface.
-- [workflow_tool_scientific_reads.md](../guides/workflow_tool_scientific_reads.md)
-  — workflow-tool integration patterns.
-- Cross-instance data movement is handled through the contribution
-  bundle export/import flow.
+A bundle keeps scientific identity, provenance, artifact hashes, and
+literature and software references. It carries public refs and
+content-derived identities, never database row IDs. The receiving instance
+supports a dry run, validation only, and submit for review. See
+[Local to hosted, step by step](../contribution-bundles/manual-local-to-hosted.md).
