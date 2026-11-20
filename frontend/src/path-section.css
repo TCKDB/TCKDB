@@ -96,3 +96,41 @@
         transform: rotate(90deg);
     }
 }
+
+.path-card {
+    margin-top: var(--s-4);
+}
+
+.path-card-facts {
+    margin: var(--s-3) 0;
+}
+
+.path-sparkline {
+    display: block;
+    width: 20rem;
+    max-width: 100%;
+    height: auto;
+    margin-bottom: var(--s-2);
+}
+
+.path-sparkline-rule {
+    stroke: var(--divider-strong);
+    stroke-width: 1.5;
+}
+
+.path-sparkline-line {
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 1.5;
+}
+
+.path-sparkline-point {
+    fill: var(--surface);
+    stroke: var(--ink);
+    stroke-width: 1.5;
+}
+
+.path-sparkline-point--marked {
+    fill: var(--accent);
+    stroke: var(--accent);
+}

@@ -1040,6 +1040,40 @@ describe("TransitionStateEntryPage", () => {
         expect(screen.getByText(/Path search.*1 point/)).toBeVisible()
     })
 
+    it("replaces the path-search geometry disclosure with how the saddle point was found", async () => {
+        server.use(
+            http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+                HttpResponse.json({
+                    record: mockRecord({
+                        calculations: [{
+                            calculation_ref: "calc_ps", type: "path_search", quality: "raw", review: { status: "not_reviewed" },
+                            level_of_theory: { level_of_theory_ref: "lot_gfn2", method: "gfn2", basis: null, display: "gfn2" },
+                            software_release: null, workflow_tool_release: null,
+                        }],
+                        geometries: [
+                            { geometry_ref: "geom_final", input_order: null, output_order: 1, role: "final", natoms: 18, geom_hash: "a" },
+                            { geometry_ref: "geom_ps_1", input_order: null, output_order: 2, role: "path_search_point", natoms: 18, geom_hash: "b" },
+                        ],
+                    }),
+                })
+            )),
+            http.get("/api/v1/scientific/calculations/calc_ps/path-search", () => HttpResponse.json({
+                path_search: { method: "gsm", n_points: 3, selected_ts_point_index: 1, stored_point_count: 3, ts_guess_count: 1, climbing_image_count: 0 },
+                points: [0, 1, 2].map((index) => ({ point_index: index, path_coordinate: index * 2, is_ts_guess: index === 1, geometry_ref: `geom_ps_${index}` })),
+                pagination: { returned: 3, total: 3 },
+                next_cursor: null,
+            })),
+        )
+        page()
+        const card = (await screen.findByRole("heading", { name: "How the saddle point was found" })).closest("section") as HTMLElement
+        expect(await within(card).findByText("point 1 · 2.000 along the path")).toBeVisible()
+        expect(within(card).getByText("gfn2")).toBeVisible()
+        expect(within(card).getByRole("img", { name: "3 points along the path; no energies were deposited." })).toBeInTheDocument()
+        expect(within(card).getByText(/Not part of the energy hill above\./)).toBeVisible()
+        expect(within(card).getByRole("link", { name: /The whole path/ })).toHaveAttribute("href", "/calculations/calc_ps#path-heading")
+        expect(screen.queryByText(/Path search.*1 point/)).toBeNull()
+    })
+
     it("shows a geometry cited by several calculations once, and counts it once", async () => {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
             HttpResponse.json({
