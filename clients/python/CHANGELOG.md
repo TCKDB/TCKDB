@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.208.3 - 2026-11-21
+
+No client behaviour changed. `tckdb-client` declares `pydantic>=2.6`, which it imports directly and used to get only through `tckdb-schemas`. The `Documentation` project URL points at https://tckdb.github.io/TCKDB/.
+
 ## 0.208.2 - 2026-11-14
 
 No client behaviour changed. Docstrings and comments in the client and the QCSchema adapter explain behaviour in terms of what any producer sends, naming a workflow tool only as one example.

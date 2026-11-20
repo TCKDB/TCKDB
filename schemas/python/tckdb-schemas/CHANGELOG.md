@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.175.3 - 2026-11-21
+
+No schema, payload or code change. The `Documentation` project URL points at https://tckdb.github.io/TCKDB/, and the README links this changelog by its full GitHub address, so the link works on the package's PyPI page.
+
 ## 0.175.2 - 2026-11-14
 
 No schema, payload or code change. Field descriptions and docstrings explain a rule in terms of what any producer sends, naming a workflow tool only as one example. The generated producer contract carries the same text.

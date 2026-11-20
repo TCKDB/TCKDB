@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## tckdb-client declares pydantic; client and schemas link the documentation site (Unreleased)
+
+- **Packaging:** `tckdb-client` declares `pydantic>=2.6`, which its builders import directly; it used to arrive only through `tckdb-schemas`. The `Documentation` URL of both packages is https://tckdb.github.io/TCKDB/, and the schemas README links its changelog by its full address, so the link works on PyPI.
+- **Schema and migration:** none. No new environment variable. No behaviour changed.
+- **Versions:** `tckdb-client` 0.208.3, `tckdb-schemas` 0.175.3 (metadata and text only; the client's `tckdb-schemas` window `>=0.158,<0.176` is unchanged and contains 0.175.3).
+
 ## tckdb_deploy.sh deploys onto any compose project (Unreleased)
 
 - **Behaviour:** the pre-deploy backup runs `pg_dump` as `DB_ADMIN_USER` (from `TCKDB_MIGRATION_ENV_FILE`, else `TCKDB_ENV_FILE`, else the db container's `POSTGRES_USER`) on `DB_NAME` (from `TCKDB_ENV_FILE`, else the container's `POSTGRES_DB`), each defaulting to `tckdb` as before. A stack built from the templates, whose administrator is `tckdb_admin` and appears only in the operator file, no longer fails the backup with `role "tckdb" does not exist`.
