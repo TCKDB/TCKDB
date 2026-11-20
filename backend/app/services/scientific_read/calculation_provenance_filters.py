@@ -42,6 +42,7 @@ from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.services.scientific_read.lot_identity_filters import basis_matches, method_family_matches, method_matches
+from app.services.software_resolution import software_name_clause, workflow_tool_name_clause
 
 
 class ProvenanceFilterRequest(Protocol):
@@ -124,7 +125,7 @@ def apply_calculation_provenance_filter(
             SoftwareRelease.id == Calculation.software_release_id,
         ).join(Software, Software.id == SoftwareRelease.software_id)
         if request.software is not None:
-            sub_select = sub_select.where(Software.name == request.software)
+            sub_select = sub_select.where(software_name_clause(request.software))
         if request.software_version is not None:
             sub_select = sub_select.where(
                 SoftwareRelease.version == request.software_version
@@ -139,7 +140,7 @@ def apply_calculation_provenance_filter(
         )
         if request.workflow_tool is not None:
             sub_select = sub_select.where(
-                WorkflowTool.name == request.workflow_tool
+                workflow_tool_name_clause(request.workflow_tool)
             )
         if request.workflow_tool_version is not None:
             sub_select = sub_select.where(

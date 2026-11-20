@@ -149,6 +149,7 @@ from app.services.scientific_read.species import search_species
 from app.services.scientific_read.species_identity import (
     species_entry_label_for,
 )
+from app.services.software_resolution import software_name_clause, workflow_tool_name_clause
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "provenance",
@@ -719,9 +720,9 @@ def _query_candidate_calculations(
     if classification.active:
         stmt = stmt.where(method_family_matches(classification))
     if request.software is not None:
-        stmt = stmt.where(Software.name == request.software)
+        stmt = stmt.where(software_name_clause(request.software))
     if request.workflow_tool is not None:
-        stmt = stmt.where(WorkflowTool.name == request.workflow_tool)
+        stmt = stmt.where(workflow_tool_name_clause(request.workflow_tool))
     # CalculationQuality filter (separate from review's "rejected").
     if request.calculation_quality is not None:
         stmt = stmt.where(Calculation.quality == request.calculation_quality)

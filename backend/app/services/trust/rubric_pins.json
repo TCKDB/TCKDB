@@ -16,7 +16,7 @@
       "1": "e358f9d314fc9932a3a041cc928e44dbee95e5b694872a6dbaefcfac0bbf3969"
     },
     "computed_transition_state": {
-      "2": "412051f63c201522c5ada766c5fc97e4d6880b4a9161d1f3c52fc1589ec5c0f5"
+      "2": "c80faf4292838fb833e46396c97b2d042adabea3064747719e17643953157cdc"
     },
     "computed_transport": {
       "1": "13dab1e06c1df4ba078d326f530d3f51a6a790aca3612b319924cde9f2eab786"
@@ -482,6 +482,11 @@
       "name": "tckdb_reproducibility_ts_statmech",
       "version": 1,
       "reason": "the manifest name check compares by public ref; it accepts only manifests whose names differ in case, which could not be stored before"
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "selection filters compare software and workflow-tool names by public ref; the badge task states neither filter, so grading never runs that match"
     }
   ]
 }

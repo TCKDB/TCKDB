@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import re
 
-from sqlalchemy import select
+from sqlalchemy import false, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import ColumnElement
 from tckdb_schemas.software import normalize_software_name
 
 from app.db.models.software import Software, SoftwareRelease
+from app.db.models.workflow import WorkflowTool
 from app.schemas.fragments.refs import SoftwareReleaseRef
-from app.services.public_refs import software_public_ref
+from app.services.public_refs import software_public_ref, workflow_tool_public_ref
 
 #: Programs that are workflow tools and can never be the electronic-structure
 #: package that ran a calculation. Keyed by the lowercased,
@@ -117,6 +118,20 @@ def _null_safe_equals(column: ColumnElement, value: str | None) -> ColumnElement
     return column.is_(None) if value is None else column == value
 
 
+def software_name_clause(name: str) -> ColumnElement[bool]:
+    """Match the software row whose public ref equals the one *name* would be given."""
+
+    if not name.strip():
+        return false()
+    return Software.public_ref == software_public_ref(normalize_software_name(name))
+
+
+def workflow_tool_name_clause(name: str) -> ColumnElement[bool]:
+    """Match the workflow tool whose public ref equals the one *name* would be given."""
+
+    return WorkflowTool.public_ref == workflow_tool_public_ref(name)
+
+
 def find_software_by_name(session: Session, name: str) -> Software | None:
     """Return the software row whose public ref equals the one *name* would be given."""
 
@@ -144,12 +159,12 @@ def resolve_software(
                 software = Software(name=normalized_name)
                 session.add(software)
                 session.flush()
-        except IntegrityError:
+        except IntegrityError as exc:
             software = find_software_by_name(session, normalized_name)
             if software is None:
                 raise RuntimeError(
                     f"software {normalized_name!r} violated a uniqueness constraint on insert but no matching row was found"
-                ) from None
+                ) from exc
 
     return software
 
