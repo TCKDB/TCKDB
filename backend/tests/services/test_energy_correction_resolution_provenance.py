@@ -420,3 +420,69 @@ def test_software_ref_name_only_resolves_and_reuses_the_version_less_release(
 
         assert second.id != first.id
         assert second.software_release_id == first.software_release_id
+
+
+# ---------------------------------------------------------------------------
+# Name matched by the key the public ref uses
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("spelling", ["aec provenance test", "AEC PROVENANCE TEST", "  AEC provenance test "])
+def test_a_case_variant_of_the_name_reuses_the_stored_scheme(db_conn, spelling) -> None:
+    with Session(db_conn) as session, session.begin():
+        first = resolve_or_create_scheme(session, _aec_ref(atom_params=[{"element": "H", "value": -0.5}]))
+
+        second = resolve_or_create_scheme(session, _aec_ref(name=spelling, atom_params=[{"element": "H", "value": -0.5}]))
+
+        assert second.id == first.id
+        assert second.name == "AEC provenance test"
+
+
+def test_a_case_variant_with_a_data_revision_reuses_the_stored_scheme(db_conn) -> None:
+    with Session(db_conn) as session, session.begin():
+        first = resolve_or_create_scheme(session, _aec_ref(data_revision="r1"))
+
+        second = resolve_or_create_scheme(session, _aec_ref(name="aec provenance test", data_revision="r1"))
+
+        assert second.id == first.id
+
+
+def test_a_row_whose_ref_predates_the_canonical_form_is_still_reused(db_conn) -> None:
+    with Session(db_conn) as session, session.begin():
+        first = resolve_or_create_scheme(session, _aec_ref())
+        first.public_ref = "ecs_minted_under_an_earlier_form"
+        session.flush()
+
+        again = resolve_or_create_scheme(session, _aec_ref())
+
+        assert again.id == first.id
+
+
+def test_the_lookup_ref_is_the_ref_an_inserted_scheme_gets(db_conn) -> None:
+    from app.services.public_refs import energy_correction_scheme_public_ref
+
+    with Session(db_conn) as session, session.begin():
+        plain = resolve_or_create_scheme(
+            session,
+            _aec_ref(
+                kind="bac_petersson",
+                units="kcal_mol",
+                bond_params=[{"bond_key": "C-H", "value": 0.1}],
+                frequency_level_of_theory={"method": "wB97X-D", "basis": "def2-TZVP"},
+            ),
+        )
+        revised = resolve_or_create_scheme(
+            session, _aec_ref(data_revision="r1", workflow_tool_release={"name": "Arkane", "version": "3.3.0"})
+        )
+
+        for row in (plain, revised):
+            assert row.public_ref == energy_correction_scheme_public_ref(
+                kind=row.kind,
+                name=row.name,
+                level_of_theory_id=row.level_of_theory_id,
+                frequency_level_of_theory_id=row.frequency_level_of_theory_id,
+                source_literature_id=row.source_literature_id,
+                software_release_id=row.software_release_id,
+                workflow_tool_release_id=row.workflow_tool_release_id,
+                data_revision=row.data_revision,
+            )
