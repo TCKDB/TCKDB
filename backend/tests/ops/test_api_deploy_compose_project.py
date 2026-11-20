@@ -70,6 +70,39 @@ def test_admin_role_in_the_api_file_is_used_when_no_migration_file_names_one(dep
     assert _backup(calls) == "exec tckdbv2-db-1 pg_dump -U pgadmin -d tckdb -Fc"
 
 
+def test_a_documented_stack_backs_up_as_the_containers_admin(deploy, tmp_path: Path) -> None:
+    """The admin is in neither file: the migration file is owner-only, the API file runtime-only."""
+    (tmp_path / "env").write_text("DB_NAME=tckdb\nDB_USER=tckdb_app\nDB_PASSWORD=x\n")
+    owner = tmp_path / "owner.env"
+    owner.write_text("DB_OWNER_USER=tckdb_owner\nDB_OWNER_PASSWORD=p\n")
+    result, calls = deploy(
+        TCKDB_MIGRATION_ENV_FILE=str(owner),
+        FAKE_CONTAINER_ENV="PATH=/usr/bin POSTGRES_USER=tckdb_admin POSTGRES_DB=tckdb",
+    )
+    assert result.returncode == 0, result.stderr
+    assert _backup(calls) == "exec tckdbv2-db-1 pg_dump -U tckdb_admin -d tckdb -Fc"
+    assert "inspect --type container tckdbv2-db-1 --format {{range .Config.Env}}{{println .}}{{end}}" in calls
+
+
+def test_the_database_name_falls_back_to_the_containers(deploy, tmp_path: Path) -> None:
+    result, calls = deploy(FAKE_CONTAINER_ENV="POSTGRES_USER=pg POSTGRES_DB=labdb")
+    assert result.returncode == 0, result.stderr
+    assert _backup(calls) == "exec tckdbv2-db-1 pg_dump -U pg -d labdb -Fc"
+
+
+def test_a_container_without_postgres_env_falls_back_to_tckdb(deploy) -> None:
+    result, calls = deploy(FAKE_CONTAINER_ENV="")
+    assert result.returncode == 0, result.stderr
+    assert _backup(calls) == "exec tckdbv2-db-1 pg_dump -U tckdb -d tckdb -Fc"
+
+
+def test_env_files_win_over_the_container(deploy, tmp_path: Path) -> None:
+    (tmp_path / "env").write_text("DB_NAME=from_file\nDB_ADMIN_USER=file_admin\nDB_PASSWORD=x\n")
+    result, calls = deploy(FAKE_CONTAINER_ENV="POSTGRES_USER=pg POSTGRES_DB=labdb")
+    assert result.returncode == 0, result.stderr
+    assert _backup(calls) == "exec tckdbv2-db-1 pg_dump -U file_admin -d from_file -Fc"
+
+
 def test_compose_project_name_selects_its_db_and_network(deploy) -> None:
     result, calls = deploy(COMPOSE_PROJECT_NAME="labdb", FAKE_PS_DB="c0ffee", **_RESOLVE)
     assert result.returncode == 0, result.stderr

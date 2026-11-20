@@ -66,8 +66,18 @@ case "$1" in
     [[ "$1" == create ]] && echo "fake-container-id"
     exit 0 ;;
   inspect)
-    [[ " ${MISSING_CONTAINERS:-} " == *" $2 "* ]] && exit 1
+    # The inspected name is the first argument that is not a flag or its value.
+    args=("${@:2}"); target=""
+    for ((i = 0; i < ${#args[@]}; i++)); do
+      case "${args[i]}" in --type|--format) ((i++)) ;; *) target="${args[i]}"; break ;; esac
+    done
+    [[ " ${MISSING_CONTAINERS:-} " == *" $target "* ]] && exit 1
     if [[ "$*" == *com.docker.compose.project* ]]; then echo "${FAKE_PROJECT:-}"; exit 0; fi
+    # A db container's environment, one KEY=value per line (space-separated here).
+    if [[ "$*" == *Config.Env* ]]; then
+      for kv in ${FAKE_CONTAINER_ENV-POSTGRES_USER=tckdb POSTGRES_DB=tckdb}; do echo "$kv"; done
+      exit 0
+    fi
     echo "laxzal/tckdb-api@sha256:fake"; exit 0 ;;
   ps) [[ -n "${FAKE_PS_DB:-}" ]] && echo "$FAKE_PS_DB"; exit 0 ;;
   compose) [[ -n "${FAKE_COMPOSE_DB:-}" ]] && echo "$FAKE_COMPOSE_DB"; exit 0 ;;

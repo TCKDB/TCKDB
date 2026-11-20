@@ -30,14 +30,20 @@
 #   tckdb_deploy.sh 0.2.0                   # deploy a release
 #   tckdb_deploy.sh --check                 # report what is running vs available
 #
+#   This script is for an API container it manages itself, beside a compose
+#   `db`. A stack run with docker-compose.yml's `selfhost` profile upgrades
+#   with `TCKDB_IMAGE_TAG=<tag> docker compose ... --profile selfhost up -d`
+#   instead; running both collides on the `tckdb-api` name and port 8010.
+#
 # WHICH DATABASE
 #   TCKDB_DB_CONTAINER / TCKDB_DB_NETWORK name the compose project's `db`
 #   container and the network the API joins. Unset, they are found in order:
 #   COMPOSE_PROJECT_NAME (its `db` service and `<project>_default`); the
 #   container `tckdbv2-db-1` if it exists; `docker compose ps -q db` run here;
-#   else `tckdbv2-db-1` / `tckdbv2_default`. The backup runs pg_dump as
-#   DB_ADMIN_USER (from TCKDB_MIGRATION_ENV_FILE, else TCKDB_ENV_FILE) on
-#   DB_NAME (from TCKDB_ENV_FILE), each defaulting to `tckdb`.
+#   else `tckdbv2-db-1` / `tckdbv2_default`.
+#   The backup runs pg_dump as DB_ADMIN_USER (TCKDB_MIGRATION_ENV_FILE, else
+#   TCKDB_ENV_FILE, else the db container's POSTGRES_USER) on DB_NAME
+#   (TCKDB_ENV_FILE, else the container's POSTGRES_DB), each else `tckdb`.
 #
 # EXTRA NETWORKS
 #   TCKDB_EXTRA_NETWORKS (optional, space- or comma-separated) names Docker
@@ -86,7 +92,7 @@ running_image() {
     # `docker inspect` prints an empty line for a missing container, so test
     # the output, not only the exit code.
     local image
-    image="$(docker inspect "$CONTAINER" --format '{{.Config.Image}}' 2>/dev/null)"
+    image="$(docker inspect --type container "$CONTAINER" --format '{{.Config.Image}}' 2>/dev/null)"
     echo "${image:-(not running as a container)}"
 }
 
@@ -95,7 +101,7 @@ if [[ "${1:-}" == "--check" ]]; then
     # does not require either to be set.
     check_body="$(curl -s "$STATUS_URL" 2>/dev/null)"
     echo "container:      $(running_image)"
-    networks="$(docker inspect "$CONTAINER" --format '{{range $k, $_ := .NetworkSettings.Networks}}{{$k}} {{end}}' 2>/dev/null)"
+    networks="$(docker inspect --type container "$CONTAINER" --format '{{range $k, $_ := .NetworkSettings.Networks}}{{$k}} {{end}}' 2>/dev/null)"
     echo "networks:       ${networks:-n/a}"
     # is-active prints a state even when it exits non-zero; n/a only when it prints nothing.
     systemd_state="$(systemctl is-active tckdb-api.service 2>/dev/null)"
@@ -124,7 +130,7 @@ fi
 
 # The compose project's `db` container and default network (see WHICH DATABASE).
 compose_project_of() {
-    docker inspect "$1" --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>/dev/null
+    docker inspect --type container "$1" --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>/dev/null
 }
 if [[ -z "$DB_CONTAINER" ]]; then
     if [[ -n "${COMPOSE_PROJECT_NAME:-}" ]]; then
@@ -132,7 +138,7 @@ if [[ -z "$DB_CONTAINER" ]]; then
             --filter "label=com.docker.compose.service=db" 2>/dev/null | head -1)"
         [[ -n "$DB_CONTAINER" ]] \
             || die "no running db container in compose project '${COMPOSE_PROJECT_NAME}'; nothing has been changed"
-    elif docker inspect "$DEFAULT_DB_CONTAINER" >/dev/null 2>&1; then
+    elif docker inspect --type container "$DEFAULT_DB_CONTAINER" >/dev/null 2>&1; then
         DB_CONTAINER="$DEFAULT_DB_CONTAINER"
     else
         DB_CONTAINER="$(docker compose ps -q db 2>/dev/null | head -1)"
@@ -157,10 +163,19 @@ env_value() {
     sed -n "s/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}$2=//p" "$1" | tail -1 \
         | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/"
 }
+# container_env CONTAINER KEY: KEY from the container's configured environment.
+# The admin is usually in neither env file (the migration file is owner-only),
+# but the postgres image was created with it as POSTGRES_USER.
+container_env() {
+    docker inspect --type container "$1" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null \
+        | sed -n "s/^$2=//p" | head -1
+}
 BACKUP_DB_USER="$(env_value "$MIGRATION_ENV_FILE" DB_ADMIN_USER)"
 BACKUP_DB_USER="${BACKUP_DB_USER:-$(env_value "$ENV_FILE" DB_ADMIN_USER)}"
+BACKUP_DB_USER="${BACKUP_DB_USER:-$(container_env "$DB_CONTAINER" POSTGRES_USER)}"
 BACKUP_DB_USER="${BACKUP_DB_USER:-tckdb}"
 BACKUP_DB_NAME="$(env_value "$ENV_FILE" DB_NAME)"
+BACKUP_DB_NAME="${BACKUP_DB_NAME:-$(container_env "$DB_CONTAINER" POSTGRES_DB)}"
 BACKUP_DB_NAME="${BACKUP_DB_NAME:-tckdb}"
 
 IMAGE="${IMAGE_REPO}:${TAG}"
