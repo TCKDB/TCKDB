@@ -36,6 +36,7 @@ dataset must never require a code release.
 ## A DOI written as a `dx.doi.org` link resolves to the citation stored under the bare DOI (Unreleased)
 
 - **Behaviour:** an upload citing `https://dx.doi.org/10.1000/ABC` (or `HTTPS://DOI.ORG/10.1000/abc`) when `10.1000/abc` is already stored now reuses that literature row. It used to fail with a 409. Literature is looked up by the key its public ref uses, in the upload resolver and in the contribution-bundle dry run.
+- **Behaviour:** a new DOI is stored and looked up at Crossref as the bare DOI whatever its spelling: the `doi:` prefix and the `http(s)://(dx.)doi.org/` prefixes are removed in any case. A `dx.doi.org` link or an upper-case prefix used to be stored with the prefix, and its Crossref lookup failed, so the typed title was kept; `Doi:10.1000/abc` was stored as `doi:10.1000/abc`, a second row beside the bare DOI's. Stored rows are not rewritten.
 - **Schema and migration:** none. No new environment variable. No distributed package changed.
 
 ## The CHEMKIN adapter converts KELVINS and EVOLTS activation energies with exact constants (Unreleased)

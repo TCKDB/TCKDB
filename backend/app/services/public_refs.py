@@ -363,11 +363,15 @@ def _canonical_workflow_tool_release(obj: Any) -> str:
     )
 
 
+#: Resolver URL prefixes a DOI may be written with, lower case.
+DOI_URL_PREFIXES = ("https://dx.doi.org/", "http://dx.doi.org/", "https://doi.org/", "http://doi.org/")
+
+
 def _normalize_doi(doi: str | None) -> str:
     if not doi:
         return ""
     s = doi.strip().lower()
-    for prefix in ("https://dx.doi.org/", "http://dx.doi.org/", "https://doi.org/", "http://doi.org/"):
+    for prefix in DOI_URL_PREFIXES:
         if s.startswith(prefix):
             s = s[len(prefix):]
             break
