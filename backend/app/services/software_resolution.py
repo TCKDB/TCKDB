@@ -159,12 +159,12 @@ def resolve_software(
                 software = Software(name=normalized_name)
                 session.add(software)
                 session.flush()
-        except IntegrityError:
+        except IntegrityError as exc:
             software = find_software_by_name(session, normalized_name)
             if software is None:
                 raise RuntimeError(
                     f"software {normalized_name!r} violated a uniqueness constraint on insert but no matching row was found"
-                ) from None
+                ) from exc
 
     return software
 

@@ -313,13 +313,13 @@ def resolve_or_create_scheme(
             with session.begin_nested():
                 session.add(scheme)
                 session.flush()
-        except IntegrityError:
+        except IntegrityError as exc:
             existing = _find_existing()
             if existing is None:
                 raise RuntimeError(
                     f"energy correction scheme {ref.name!r} violated a uniqueness constraint on insert "
                     "but no matching row was found"
-                ) from None
+                ) from exc
             scheme = existing
             created = False
     _reconcile_atom_params_applied_as(scheme, ref)

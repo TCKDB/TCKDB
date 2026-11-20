@@ -427,7 +427,7 @@ def test_software_ref_name_only_resolves_and_reuses_the_version_less_release(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("spelling", ["aec provenance test", "AEC PROVENANCE TEST", "  AEC provenance test "])
+@pytest.mark.parametrize("spelling", ["aec provenance test", "AEC PROVENANCE TEST", "  aec PROVENANCE test "])
 def test_a_case_variant_of_the_name_reuses_the_stored_scheme(db_conn, spelling) -> None:
     with Session(db_conn) as session, session.begin():
         first = resolve_or_create_scheme(session, _aec_ref(atom_params=[{"element": "H", "value": -0.5}]))
