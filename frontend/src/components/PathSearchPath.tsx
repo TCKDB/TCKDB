@@ -1,4 +1,4 @@
-import { Fragment } from "react"
+import { Fragment, useState } from "react"
 import "../path-section.css"
 import type { CalculationRecord } from "../api/calculationApi"
 import { loadCalculationChildren, type CalculationChild } from "../api/calculationChildrenApi"
@@ -7,7 +7,7 @@ import { loadReactionEnergyProfile } from "../api/reactionEnergyProfileApi"
 import { calculationTitleWords } from "../domain/calculationLineage"
 import { baseLabel } from "../domain/levelLabel"
 import { OPTIMISATION_STAGE_WORDS } from "../domain/optimisationStage"
-import { pathSearchCaption, pathSearchProfile, type PathProfile } from "../domain/pathProfile"
+import { initialPointIndex, pathSearchCaption, pathSearchProfile, type PathPoint, type PathProfile } from "../domain/pathProfile"
 import {
     childFacts,
     childOrder,
@@ -27,6 +27,7 @@ import { useLoaded } from "../hooks/useLoaded"
 import { LevelLabel } from "./LevelLabel"
 import { SectionHeading } from "./PageSections"
 import { PathFigure } from "./PathFigure"
+import { PathPointStepper } from "./PathPointStepper"
 import { RecordLink } from "./RecordLink"
 
 type Lot = NonNullable<CalculationRecord["level_of_theory"]>
@@ -161,6 +162,20 @@ export function PathSearchPath({ calculation }: { calculation: CalculationRecord
     const ready = state.status === "ready" ? state.data : null
     const profile = ready && ready.points.length > 0 ? pathSearchProfile(ready) : null
     const band = ready ? partialBandNote(ready.summary) : null
+    const [picked, setPicked] = useState<number | null>(null)
+    const selected = picked ?? (profile ? initialPointIndex(profile) : null)
+    const guess = ready && profile ? guessIndex(ready.summary, profile) : null
+    const takenForward = (calculation.dependencies ?? []).find((edge) => edge.direction === "parent" && edge.role === "optimized_from")
+    const extraFacts = (point: PathPoint) => (point.index === guess && takenForward ? (
+        <div>
+            <dt>Taken forward</dt>
+            <dd>
+                The <RecordLink kind="calculation" to={`/calculations/${takenForward.child_calculation_ref}`} label={OPTIMISATION_STAGE_WORDS.fine.label}>
+                    {OPTIMISATION_STAGE_WORDS.fine.label.toLowerCase()}
+                </RecordLink> is recorded as optimised from this path search, which picked this point.
+            </dd>
+        </div>
+    ) : null)
     return (
         <section className="ledger-section path-section" aria-labelledby="path-heading">
             <SectionHeading id="path-heading" guide={{ to: "reaction-path", question: "What is a reaction path?" }}>The path</SectionHeading>
@@ -176,7 +191,15 @@ export function PathSearchPath({ calculation }: { calculation: CalculationRecord
                         profile={profile}
                         label="Energy along the path"
                         caption={band ? `${pathSearchCaption(profile)} ${band}` : pathSearchCaption(profile)}
+                        selectedIndex={selected}
+                        onSelect={setPicked}
                     />
+                    {selected !== null && (
+                        <>
+                            <SectionHeading id="path-steps-heading" subsection>{profile.points.length > 1 ? "Step through the points" : "The stored point"}</SectionHeading>
+                            <PathPointStepper profile={profile} selectedIndex={selected} onSelect={setPicked} label="path search" extraFacts={extraFacts} />
+                        </>
+                    )}
                     <Lineage calculation={calculation} summary={ready.summary} profile={profile} />
                 </>
             )}

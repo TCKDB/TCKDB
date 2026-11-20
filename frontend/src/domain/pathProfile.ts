@@ -279,3 +279,17 @@ export function pathSearchCaption(profile: PathProfile): string {
         : ""
     return `${where}${energy}${guess}${climbing}`
 }
+
+/** The point the strip and the stepper open on: the picked guess or saddle point, otherwise the first drawn. */
+export function initialPointIndex(profile: PathProfile): number | null {
+    const marked = profile.points.find((point) => point.emphasis === "guess" || point.emphasis === "guess-climbing" || point.emphasis === "saddle")
+    return (marked ?? profile.points[0])?.index ?? null
+}
+
+/** A short marker word for a strip card: "guess", "climbing image", "saddle point", or none. */
+export function markerWord(point: PathPoint): string | null {
+    if (point.emphasis === "guess" || point.emphasis === "guess-climbing") return "guess"
+    if (point.emphasis === "climbing") return "climbing image"
+    if (point.emphasis === "saddle") return "saddle point"
+    return null
+}
