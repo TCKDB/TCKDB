@@ -911,6 +911,10 @@ UNGATED_SUBJECTS: dict[str, str] = {
         "dataset releases are exempt from the record floor and the evidence rule",
     ),
     "ArtifactIntegrityDigestSummary": "an integrity digest of a stored file; not a reviewed record",
+    **dict.fromkeys(
+        ("MethodCatalogueCard", "MethodCatalogueDetailRecord", "BasisSetCatalogueCard", "BasisSetCatalogueDetailRecord"),
+        "curated catalogue entry describing a method or basis set; not a deposited record",
+    ),
 }
 
 

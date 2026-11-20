@@ -2743,6 +2743,11 @@
       "AvailableLevelOfTheorySections": {
         "description": "Boolean map describing which heavy include sections have data.",
         "properties": {
+          "has_catalogue": {
+            "default": false,
+            "title": "Has Catalogue",
+            "type": "boolean"
+          },
           "has_correction_schemes": {
             "title": "Has Correction Schemes",
             "type": "boolean"
@@ -3032,6 +3037,180 @@
         ],
         "title": "BasinScope",
         "type": "object"
+      },
+      "BasisSetCatalogueBrowseResponse": {
+        "description": "Response envelope for ``GET /scientific/basis-sets``.",
+        "properties": {
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/BasisSetCatalogueCard"
+            },
+            "title": "Records",
+            "type": "array"
+          },
+          "request": {
+            "$ref": "#/components/schemas/CatalogueRequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
+          "review_summary": {
+            "$ref": "#/components/schemas/ReviewStatusSummary"
+          }
+        },
+        "required": [
+          "request",
+          "review_summary",
+          "records"
+        ],
+        "title": "BasisSetCatalogueBrowseResponse",
+        "type": "object"
+      },
+      "BasisSetCatalogueCard": {
+        "description": "A basis set: its names, role, family, definition and references.",
+        "properties": {
+          "catalogue_ref": {
+            "title": "Catalogue Ref",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "family": {
+            "title": "Family",
+            "type": "string"
+          },
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "keys": {
+            "description": "Every identity key that names this entry, its own key included.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Keys",
+            "type": "array"
+          },
+          "references": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogueCitation"
+            },
+            "title": "References",
+            "type": "array"
+          },
+          "role": {
+            "$ref": "#/components/schemas/BasisSetRole"
+          },
+          "short_name": {
+            "title": "Short Name",
+            "type": "string"
+          },
+          "spellings_seen": {
+            "description": "The distinct stored spellings, on levels of theory counted in usage, that key to this entry.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Spellings Seen",
+            "type": "array"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/CatalogueUsage"
+          }
+        },
+        "required": [
+          "catalogue_ref",
+          "key",
+          "keys",
+          "role",
+          "family",
+          "short_name",
+          "full_name",
+          "description"
+        ],
+        "title": "BasisSetCatalogueCard",
+        "type": "object"
+      },
+      "BasisSetCatalogueDetailRecord": {
+        "properties": {
+          "basis_set": {
+            "$ref": "#/components/schemas/BasisSetCatalogueCard"
+          },
+          "levels": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogueLevelUsage"
+            },
+            "title": "Levels",
+            "type": "array"
+          }
+        },
+        "required": [
+          "basis_set"
+        ],
+        "title": "BasisSetCatalogueDetailRecord",
+        "type": "object"
+      },
+      "BasisSetCatalogueDetailResponse": {
+        "description": "Response envelope for ``GET /scientific/basis-sets/{handle}``.",
+        "properties": {
+          "record": {
+            "$ref": "#/components/schemas/BasisSetCatalogueDetailRecord"
+          },
+          "request": {
+            "$ref": "#/components/schemas/CatalogueRequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
+          "review_summary": {
+            "$ref": "#/components/schemas/ReviewStatusSummary"
+          }
+        },
+        "required": [
+          "request",
+          "review_summary",
+          "record"
+        ],
+        "title": "BasisSetCatalogueDetailResponse",
+        "type": "object"
+      },
+      "BasisSetRole": {
+        "description": "What a ``basis_set_catalogue`` entry is used for.",
+        "enum": [
+          "orbital",
+          "auxiliary_correlation",
+          "auxiliary_coulomb",
+          "cabs"
+        ],
+        "title": "BasisSetRole",
+        "type": "string"
       },
       "BathGasIn": {
         "additionalProperties": false,
@@ -10891,6 +11070,229 @@
           }
         },
         "title": "CalculationsSearchRequest",
+        "type": "object"
+      },
+      "CatalogueCitation": {
+        "description": "One article a catalogue entry cites.\n\n``title`` is served with its ``title_source``, as every literature summary is. ``doi`` is served only when the\nrow's metadata was resolved from the DOI registry (``title_source = resolved_metadata``).",
+        "properties": {
+          "authors": {
+            "description": "Recorded author names, in author order.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Authors",
+            "type": "array"
+          },
+          "doi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The DOI, only when the row's metadata was resolved from the DOI registry (title_source = resolved_metadata); null otherwise.",
+            "title": "Doi"
+          },
+          "issue": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue"
+          },
+          "journal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Journal"
+          },
+          "literature_ref": {
+            "title": "Literature Ref",
+            "type": "string"
+          },
+          "pages": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pages"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "role": {
+            "$ref": "#/components/schemas/CatalogueReferenceRole"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "title_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiteratureTitleSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "volume": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          }
+        },
+        "required": [
+          "literature_ref",
+          "role",
+          "position",
+          "title"
+        ],
+        "title": "CatalogueCitation",
+        "type": "object"
+      },
+      "CatalogueLevelUsage": {
+        "description": "One level of theory that uses a catalogue entry.",
+        "properties": {
+          "calculation_usage_count": {
+            "title": "Calculation Usage Count",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "level_of_theory_ref": {
+            "title": "Level Of Theory Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "level_of_theory_ref",
+          "label",
+          "calculation_usage_count"
+        ],
+        "title": "CatalogueLevelUsage",
+        "type": "object"
+      },
+      "CatalogueMethodKind": {
+        "description": "What a ``method_catalogue`` entry names: an electronic-structure method or a dispersion correction.",
+        "enum": [
+          "method",
+          "dispersion_correction"
+        ],
+        "title": "CatalogueMethodKind",
+        "type": "string"
+      },
+      "CatalogueReferenceRole": {
+        "description": "Why a catalogue entry cites an article.",
+        "enum": [
+          "original",
+          "component",
+          "implementation"
+        ],
+        "title": "CatalogueReferenceRole",
+        "type": "string"
+      },
+      "CatalogueRequestEcho": {
+        "description": "Echo of the parsed request.",
+        "properties": {
+          "hidden_by_default": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HiddenByDefault"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "include": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Include",
+            "type": "array"
+          },
+          "merged_refs": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Merged Refs",
+            "type": "object"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          }
+        },
+        "title": "CatalogueRequestEcho",
+        "type": "object"
+      },
+      "CatalogueUsage": {
+        "description": "How much stored data an entry names, derived at read time.\n\n``level_usage_count`` counts levels of theory with at least one calculation the read profile shows;\n``calculation_usage_count`` counts those calculations.",
+        "properties": {
+          "calculation_usage_count": {
+            "default": 0,
+            "title": "Calculation Usage Count",
+            "type": "integer"
+          },
+          "level_usage_count": {
+            "default": 0,
+            "title": "Level Usage Count",
+            "type": "integer"
+          }
+        },
+        "title": "CatalogueUsage",
         "type": "object"
       },
       "Certificate": {
@@ -29115,6 +29517,63 @@
         "title": "LevelOfTheoryCalculationUsageSummary",
         "type": "object"
       },
+      "LevelOfTheoryCatalogue": {
+        "description": "The catalogue entries a level of theory's spellings key to; ``null`` where a spelling keys to none.",
+        "properties": {
+          "aux_basis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BasisSetCatalogueCard"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "basis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BasisSetCatalogueCard"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cabs_basis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BasisSetCatalogueCard"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dispersion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MethodCatalogueCard"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "method": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MethodCatalogueCard"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "LevelOfTheoryCatalogue",
+        "type": "object"
+      },
       "LevelOfTheoryCoreBlock": {
         "description": "Direct ``level_of_theory`` row metadata.\n\n``lot_hash`` is served plainly rather than gated behind\n``include=internal_ids``: it is already a public, documented filter on\n``/scientific/calculations/search`` (``lot_hash=``), so hiding it here\nwhile accepting it there would gate nothing real. Unlike\n``level_of_theory_id`` it names no database row, so it carries none of\nthe enumeration risk internal ids exist to withhold.\n\n``aux_basis``/``cabs_basis`` are part of ``lot_hash``'s\nidentity inputs alongside the fields already served\nelsewhere; a page whose whole point is showing what distinguishes one\nlevel of theory from another should not silently drop two of them.\n\n``label`` is computed from the identity fields; there is no stored label\ncolumn.",
         "properties": {
@@ -31628,6 +32087,186 @@
         ],
         "title": "MeliusBacComponentKind",
         "type": "string"
+      },
+      "MethodCatalogueBrowseResponse": {
+        "description": "Response envelope for ``GET /scientific/methods``.",
+        "properties": {
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/MethodCatalogueCard"
+            },
+            "title": "Records",
+            "type": "array"
+          },
+          "request": {
+            "$ref": "#/components/schemas/CatalogueRequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
+          "review_summary": {
+            "$ref": "#/components/schemas/ReviewStatusSummary"
+          }
+        },
+        "required": [
+          "request",
+          "review_summary",
+          "records"
+        ],
+        "title": "MethodCatalogueBrowseResponse",
+        "type": "object"
+      },
+      "MethodCatalogueCard": {
+        "description": "A method or dispersion correction: its names, definition and references.",
+        "properties": {
+          "catalogue_ref": {
+            "title": "Catalogue Ref",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "dft_rung": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dft Rung"
+          },
+          "family": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MethodFamily"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Derived from the entry's keys by the method-family classification; null for a dispersion correction. A classification, not a measure of accuracy."
+          },
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "keys": {
+            "description": "Every identity key that names this entry, its own key included.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Keys",
+            "type": "array"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CatalogueMethodKind"
+          },
+          "references": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogueCitation"
+            },
+            "title": "References",
+            "type": "array"
+          },
+          "short_name": {
+            "title": "Short Name",
+            "type": "string"
+          },
+          "spellings_seen": {
+            "description": "The distinct stored spellings, on levels of theory counted in usage, that key to this entry.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Spellings Seen",
+            "type": "array"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/CatalogueUsage"
+          }
+        },
+        "required": [
+          "catalogue_ref",
+          "key",
+          "keys",
+          "kind",
+          "short_name",
+          "full_name",
+          "description"
+        ],
+        "title": "MethodCatalogueCard",
+        "type": "object"
+      },
+      "MethodCatalogueDetailRecord": {
+        "properties": {
+          "levels": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogueLevelUsage"
+            },
+            "title": "Levels",
+            "type": "array"
+          },
+          "method": {
+            "$ref": "#/components/schemas/MethodCatalogueCard"
+          }
+        },
+        "required": [
+          "method"
+        ],
+        "title": "MethodCatalogueDetailRecord",
+        "type": "object"
+      },
+      "MethodCatalogueDetailResponse": {
+        "description": "Response envelope for ``GET /scientific/methods/{handle}``.",
+        "properties": {
+          "record": {
+            "$ref": "#/components/schemas/MethodCatalogueDetailRecord"
+          },
+          "request": {
+            "$ref": "#/components/schemas/CatalogueRequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
+          "review_summary": {
+            "$ref": "#/components/schemas/ReviewStatusSummary"
+          }
+        },
+        "required": [
+          "request",
+          "review_summary",
+          "record"
+        ],
+        "title": "MethodCatalogueDetailResponse",
+        "type": "object"
       },
       "MethodFamily": {
         "enum": [
@@ -51457,6 +52096,17 @@
         "properties": {
           "available_sections": {
             "$ref": "#/components/schemas/AvailableLevelOfTheorySections"
+          },
+          "catalogue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheoryCatalogue"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "x-tckdb-include-gated": "catalogue"
           },
           "correction_schemes": {
             "anyOf": [
@@ -95048,6 +95698,180 @@
         ]
       }
     },
+    "/api/v1/scientific/basis-sets": {
+      "get": {
+        "description": "List the basis sets in the catalogue, in key order, with their references and usage.",
+        "operationId": "scientific_basis_sets_browse_api_v1_scientific_basis_sets_get",
+        "parameters": [
+          {
+            "description": "Only basis sets with this role.",
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/BasisSetRole"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only basis sets with this role.",
+              "title": "Role"
+            }
+          },
+          {
+            "description": "Only basis sets of this family, as written.",
+            "in": "query",
+            "name": "family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only basis sets of this family, as written.",
+              "title": "Family"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' applies the 'approved' review floor to the records a list, search, browse, select or export returns. A detail page serves any record that is not rejected or deprecated, and the linked evidence of a returned record is shown (with a badge where the response carries review_status_by_ref; a single-record read on the /api/v1 entity routes carries the record's own status in X-TCKDB-Review-Status); only rejected and deprecated records are withheld. It claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' applies the 'approved' review floor to the records a list, search, browse, select or export returns. A detail page serves any record that is not rejected or deprecated, and the linked evidence of a returned record is shown (with a badge where the response carries review_status_by_ref; a single-record read on the /api/v1 entity routes carries the record's own status in X-TCKDB-Review-Status); only rejected and deprecated records are withheld. It claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BasisSetCatalogueBrowseResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scientific Basis Sets Browse",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/basis-sets/{basis_set_handle}": {
+      "get": {
+        "description": "Return one basis set and the levels of theory that use it.",
+        "operationId": "scientific_basis_set_detail_api_v1_scientific_basis_sets__basis_set_handle__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "basis_set_handle",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "title": "Basis Set Handle",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' applies the 'approved' review floor to the records a list, search, browse, select or export returns. A detail page serves any record that is not rejected or deprecated, and the linked evidence of a returned record is shown (with a badge where the response carries review_status_by_ref; a single-record read on the /api/v1 entity routes carries the record's own status in X-TCKDB-Review-Status); only rejected and deprecated records are withheld. It claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' applies the 'approved' review floor to the records a list, search, browse, select or export returns. A detail page serves any record that is not rejected or deprecated, and the linked evidence of a returned record is shown (with a badge where the response carries review_status_by_ref; a single-record read on the /api/v1 entity routes carries the record's own status in X-TCKDB-Review-Status); only rejected and deprecated records are withheld. It claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BasisSetCatalogueDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scientific Basis Set Detail",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
     "/api/v1/scientific/calculations/search": {
       "get": {
         "description": "MVP scientific calculation search.\n\nAND-combines the supplied filters and returns calculation records\nin the same shape as the detail endpoint. At least one meaningful\nfilter is required; pure pagination/include/review knobs are not\nenough — see ``backend/docs/specs/scientific_calculation_reads.md``.",
@@ -101834,6 +102658,179 @@
           }
         },
         "summary": "Get Workflow Tools",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/methods": {
+      "get": {
+        "description": "List the methods and dispersion corrections in the catalogue, in key order, with their references and usage.",
+        "operationId": "scientific_methods_browse_api_v1_scientific_methods_get",
+        "parameters": [
+          {
+            "description": "Only methods, or only dispersion corrections.",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CatalogueMethodKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only methods, or only dispersion corrections.",
+              "title": "Kind"
+            }
+          },
+          {
+            "description": "Only entries of this method family.",
+            "in": "query",
+            "name": "method_family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MethodFamily"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only entries of this method family.",
+              "title": "Method Family"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' applies the 'approved' review floor to the records a list, search, browse, select or export returns. A detail page serves any record that is not rejected or deprecated, and the linked evidence of a returned record is shown (with a badge where the response carries review_status_by_ref; a single-record read on the /api/v1 entity routes carries the record's own status in X-TCKDB-Review-Status); only rejected and deprecated records are withheld. It claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' applies the 'approved' review floor to the records a list, search, browse, select or export returns. A detail page serves any record that is not rejected or deprecated, and the linked evidence of a returned record is shown (with a badge where the response carries review_status_by_ref; a single-record read on the /api/v1 entity routes carries the record's own status in X-TCKDB-Review-Status); only rejected and deprecated records are withheld. It claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MethodCatalogueBrowseResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scientific Methods Browse",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/methods/{method_handle}": {
+      "get": {
+        "description": "Return one method or dispersion correction and the levels of theory that use it.",
+        "operationId": "scientific_method_detail_api_v1_scientific_methods__method_handle__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "method_handle",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "title": "Method Handle",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' applies the 'approved' review floor to the records a list, search, browse, select or export returns. A detail page serves any record that is not rejected or deprecated, and the linked evidence of a returned record is shown (with a badge where the response carries review_status_by_ref; a single-record read on the /api/v1 entity routes carries the record's own status in X-TCKDB-Review-Status); only rejected and deprecated records are withheld. It claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' applies the 'approved' review floor to the records a list, search, browse, select or export returns. A detail page serves any record that is not rejected or deprecated, and the linked evidence of a returned record is shown (with a badge where the response carries review_status_by_ref; a single-record read on the /api/v1 entity routes carries the record's own status in X-TCKDB-Review-Status); only rejected and deprecated records are withheld. It claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MethodCatalogueDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scientific Method Detail",
         "tags": [
           "scientific"
         ]

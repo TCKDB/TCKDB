@@ -55,6 +55,7 @@ from app.schemas.reads.scientific_common import (
 from app.schemas.reads.scientific_energy_correction_scheme import (
     ScientificEnergyCorrectionSchemeRecord,
 )
+from app.schemas.reads.scientific_method_catalogue import LevelOfTheoryCatalogue
 
 # ---------------------------------------------------------------------------
 # Request
@@ -313,6 +314,9 @@ class AvailableLevelOfTheorySections(BaseModel):
     #: it is still correct when requested, this flag just does not
     #: promise to predict it.
     has_software: bool
+    #: True when the level's method, dispersion or a basis column keys to a catalogue entry
+    #: (``include=catalogue``).
+    has_catalogue: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -332,6 +336,7 @@ class ScientificLevelOfTheoryRecord(BaseModel):
     frequency_scale_factors: list[LevelOfTheoryFrequencyScaleFactorGroup] | None = None
     used_by: list[LevelOfTheoryCalculationUsageSummary] | None = None
     software: LevelOfTheorySoftwareBreakdown | None = None
+    catalogue: LevelOfTheoryCatalogue | None = None
 
 
 class ScientificLevelOfTheoryDetailResponse(ScientificResponse):

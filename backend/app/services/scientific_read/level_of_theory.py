@@ -34,15 +34,18 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session
 
 from app.api.errors import not_found
+from app.chemistry.basis_set_names import basis_identity_key
+from app.chemistry.dispersion_names import level_identity_keys
 from app.db.models.calculation import Calculation
 from app.db.models.common import SubmissionRecordType
 from app.db.models.energy_correction import EnergyCorrectionScheme, FrequencyScaleFactor
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
+from app.db.models.method_catalogue import BasisSetCatalogueKey, MethodCatalogueKey
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import CompositeSchemeSummary, ReviewStatusSummary
@@ -73,6 +76,7 @@ from app.services.scientific_read.handles import resolve_level_of_theory_handle
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.method_catalogue import CatalogueIndex, load_catalogue_index
 
 # LOT is not reviewable (no SubmissionRecordType entry), so ``review`` is
 # intentionally not a legal token. ``software`` (the LOT-scoped
@@ -80,13 +84,14 @@ from app.services.scientific_read.internal_ids import (
 # "which software (and workflow tool) ran calculations at this level of
 # theory, and how many" -- see ``_software_usage_rows`` /
 # ``_workflow_tool_usage_rows`` below. ``include=all`` expands to
-# ``correction_schemes,frequency_scale_factors,used_by,software`` minus
+# ``correction_schemes,frequency_scale_factors,used_by,software,catalogue`` minus
 # internal_ids per the standard policy.
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "correction_schemes",
     "frequency_scale_factors",
     "used_by",
     "software",
+    "catalogue",
     "internal_ids",
     "all",
 }
@@ -146,6 +151,7 @@ def build_level_of_theory_record(
     lot: LevelOfTheory,
     includes: set[str],
     composite_schemes: Mapping[int, CompositeSchemeSummary] | None = None,
+    catalogue_index: CatalogueIndex | None = None,
     detail: bool = False,
 ) -> ScientificLevelOfTheoryRecord:
     """Project one LevelOfTheory row into the public record shape.
@@ -154,6 +160,8 @@ def build_level_of_theory_record(
         :func:`composite_scheme_summaries` call. ``None`` looks this level up
         alone (the detail route); a search passes it so a page costs one
         statement, not one per record.
+    :param catalogue_index: The catalogue built once for a whole page (``include=catalogue``); ``None`` builds it
+        here when the token is requested.
     :param detail: True for the level's own detail read. Its usage (``used_by``, the usage count, the software rows) is then
         the calculations it rests on as linked evidence: under ``curated`` all but the withheld set, badged. A search row keeps the approved record floor, which is what its eligibility filter lists.
     """
@@ -179,6 +187,7 @@ def build_level_of_theory_record(
         has_frequency_scale_factors=has_fsf,
         has_used_by=calc_usage_count > 0,
         has_software=bool(software_rows),
+        has_catalogue=_has_catalogue(session, lot),
     )
 
     core = LevelOfTheoryCoreBlock(
@@ -221,6 +230,11 @@ def build_level_of_theory_record(
     if "software" in includes:
         software_block = _build_software(session, lot.id, software_rows=software_rows, detail=detail)
 
+    catalogue_block = None
+    if "catalogue" in includes:
+        index = catalogue_index if catalogue_index is not None else load_catalogue_index(session)
+        catalogue_block = index.level_catalogue(lot)
+
     return ScientificLevelOfTheoryRecord(
         level_of_theory=core,
         evidence_summary=evidence,
@@ -229,6 +243,7 @@ def build_level_of_theory_record(
         frequency_scale_factors=fsf_block,
         used_by=used_by_block,
         software=software_block,
+        catalogue=catalogue_block,
     )
 
 
@@ -283,6 +298,17 @@ def _has_correction_schemes(session: Session, lot_id: int) -> bool:
         )
         is not None
     )
+
+
+def _has_catalogue(session: Session, lot: LevelOfTheory) -> bool:
+    """Whether any of the level's identity keys names a catalogue entry."""
+    method_key, dispersion_key = level_identity_keys(lot.method, lot.dispersion)
+    basis_keys = {key for spelling in (lot.basis, lot.aux_basis, lot.cabs_basis) if (key := basis_identity_key(spelling))}
+    method_keys = {method_key} | ({dispersion_key} if dispersion_key else set())
+    found = select(MethodCatalogueKey.key).where(MethodCatalogueKey.key.in_(method_keys))
+    if basis_keys:
+        found = found.union_all(select(BasisSetCatalogueKey.key).where(BasisSetCatalogueKey.key.in_(basis_keys)))
+    return bool(session.scalar(select(exists(found.subquery().select()))))
 
 
 def _has_frequency_scale_factors(session: Session, lot_id: int) -> bool:

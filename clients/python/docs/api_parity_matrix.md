@@ -11,10 +11,10 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 
 | Classification | Operations |
 |---|---|
-| typed | 127 |
+| typed | 131 |
 | raw_only | 109 |
 | not_applicable | 49 |
-| **total** | **285** |
+| **total** | **289** |
 
 ## Typed coverage
 
@@ -47,6 +47,8 @@ A first-class client method exists for these operations.
 | `GET /api/v1/scientific/artifacts/search` | yes | `search_artifacts` | `iter_artifacts` | — | `tests/test_typed_parity_methods.py` |
 | `POST /api/v1/scientific/artifacts/search` | yes | `search_artifacts` | `iter_artifacts` | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/artifacts/{sha256}/download` | yes | `download_artifact` | — | — | `tests/test_typed_parity_methods.py` |
+| `GET /api/v1/scientific/basis-sets` | yes | `browse_basis_sets` | — | — | `tests/test_typed_parity_methods.py` |
+| `GET /api/v1/scientific/basis-sets/{basis_set_handle}` | yes | `get_basis_set` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/calculations/search` | yes | `search_calculations` | — | — | `tests/test_scientific_search.py` |
 | `POST /api/v1/scientific/calculations/search` | yes | `search_calculations` | — | — | `tests/test_scientific_search.py` |
 | `GET /api/v1/scientific/calculations/{calculation_ref_or_id}` | yes | `get_calculation` | — | — | `tests/test_scientific_search.py` |
@@ -84,6 +86,8 @@ A first-class client method exists for these operations.
 | `GET /api/v1/scientific/meta/software-versions` | yes | `get_meta_software_versions` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/meta/workflow-tool-versions` | yes | `get_meta_workflow_tool_versions` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/meta/workflow-tools` | yes | `get_meta_workflow_tools` | — | — | `tests/test_typed_parity_methods.py` |
+| `GET /api/v1/scientific/methods` | yes | `browse_methods` | — | — | `tests/test_typed_parity_methods.py` |
+| `GET /api/v1/scientific/methods/{method_handle}` | yes | `get_method` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/network-kinetics/search` | yes | `search_network_kinetics` | `iter_network_kinetics` | — | `tests/test_typed_scientific.py` |
 | `POST /api/v1/scientific/network-kinetics/search` | yes | `search_network_kinetics` | `iter_network_kinetics` | — | `tests/test_typed_scientific.py` |
 | `GET /api/v1/scientific/network-kinetics/{network_kinetics_ref_or_id}/evaluate` | yes | `evaluate_network_kinetics` | — | — | `tests/test_typed_parity_methods.py` |

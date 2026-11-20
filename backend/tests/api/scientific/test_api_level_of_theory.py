@@ -741,14 +741,14 @@ def test_lot_detail_include_software_statement_count_is_flat_per_package(
         event.remove(engine, "before_cursor_execute", _before)
 
     assert len(response.record.software.software) == 6
-    # Measured baseline is 6 statements (handle resolution, core row,
-    # calc-usage, has_schemes, has_fsf, and the bulk software/workflow-tool
+    # Measured baseline is 7 statements (handle resolution, core row,
+    # calc-usage, has_schemes, has_fsf, has_catalogue, and the bulk software/workflow-tool
     # aggregation). A per-package loop over 6 distinct packages adds 6 more
     # (12 with the loop in place). The ceiling sits well
     # above the real baseline for headroom, and well below what a
     # per-package loop over 6 packages would produce -- what matters is
     # that six distinct packages did not add six statements.
-    assert count <= 8, f"expected a flat statement count, got {count}"
+    assert count <= 9, f"expected a flat statement count, got {count}"
 
 
 # ===========================================================================
