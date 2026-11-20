@@ -160,7 +160,7 @@ def _make_env(out: Path, *args: str) -> subprocess.CompletedProcess:
 
 def _values(path: Path) -> dict[str, str]:
     pairs = (line.split("=", 1) for line in path.read_text().splitlines() if line and not line.startswith("#"))
-    return {key: value for key, value in pairs}
+    return dict(pairs)
 
 
 def test_make_env_fills_every_secret(tmp_path: Path) -> None:
