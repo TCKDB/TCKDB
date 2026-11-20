@@ -51,6 +51,7 @@ def test_every_python_package_declares_a_real_license():
         REPO_ROOT / "clients" / "python" / "pyproject.toml",
         REPO_ROOT / "schemas" / "python" / "tckdb-schemas" / "pyproject.toml",
         REPO_ROOT / "integrations" / "mcp" / "pyproject.toml",
+        REPO_ROOT / "clients" / "python" / "adapters" / "chemkin" / "pyproject.toml",
         REPO_ROOT / "clients" / "python" / "adapters" / "qcschema" / "pyproject.toml",
     ]
     for manifest in manifests:
@@ -231,6 +232,7 @@ def test_known_operational_boundaries_are_recorded_where_a_reader_will_look():
     [
         "clients/python",
         "schemas/python/tckdb-schemas",
+        "clients/python/adapters/chemkin",
         "clients/python/adapters/qcschema",
     ],
 )
