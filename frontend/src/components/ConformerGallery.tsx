@@ -193,7 +193,7 @@ export function ConformerGallery({
                         ) : (
                             <>
                                 <p className="note">
-                                    Electronic energy in kJ/mol, one level and one program. Only confirmed minima get a number.<GuideLink to="relative-energy" />
+                                    Electronic energy in kJ/mol, one level and one program. Only confirmed minima get a number. <GuideLink to="relative-energy">What is a relative energy?</GuideLink>
                                 </p>
                                 <div className="shape-energy-fields">
                                     <label>

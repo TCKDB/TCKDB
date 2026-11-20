@@ -1,6 +1,4 @@
-# Manual local-to-hosted contribution flow — v0
-
-Status: implemented (documentation milestone)
+# Local to hosted, step by step
 
 ## Overview
 
@@ -320,14 +318,12 @@ Choose stable, unique-per-logical-bundle keys derived from identifiers
 you already have, e.g.
 `<lab>:<run-id>:<bundle-kind>` or
 `<arc-job-id>:<bundle-export-timestamp>`. Random per-attempt keys
-defeat retry safety. The full contract lives in
-DR-0024 — Upload Idempotency Keys;
-client-side guidance in
+defeat retry safety. Client-side guidance is in
 [Generic client targeting → Retry safety with `Idempotency-Key`](../clients/generic-client-targeting.md#retry-safety-with-idempotency-key).
 
 ## Step 4: Interpret pending / unreviewed status
 
-This is the central policy of submit/import v0.
+This is the central policy of submit.
 
 | State | What it means |
 |-------|---------------|
@@ -335,7 +331,7 @@ This is the central policy of submit/import v0.
 | `imported` | Records were persisted through the normal upload workflows. |
 | **`pending`** | The submission has been created and is awaiting curator review. **Not** approved. |
 | **`unreviewed`** | No curator has yet evaluated the submission or its records. |
-| `accepted` / `approved` / `curated` | **Not** produced by this milestone. |
+| `accepted` / `approved` / `curated` | **Not** produced by submit. |
 
 Concretely:
 
@@ -348,7 +344,7 @@ Concretely:
   curator-approved.
 - Validation and successful import do **not** equal scientific
   endorsement.
-- Curator review (accept / reject / queue / UI) is a future milestone.
+- Curator review is a separate step after submit.
 
 > Imported records are visible but unreviewed. Use them with appropriate
 > caution until a curator reviews the submission.
@@ -385,10 +381,9 @@ Concretely:
 
 ### Dry-run reports `unsupported`
 
-- The bundle uses a feature outside the v0 surface (e.g. inline
+- The bundle uses a feature submit does not support (e.g. inline
   calculations on thermo, an unsupported bundle family). Submit will be
-  blocked. Either remove the unsupported content from the bundle or
-  wait for a later milestone.
+  blocked. Remove the unsupported content from the bundle.
 
 ### Dry-run reports `error`
 
@@ -436,7 +431,7 @@ Concretely:
 
 ## Non-goals
 
-This v0 manual flow does **not** include:
+This manual flow does **not** include:
 
 - frontend local-to-hosted UX,
 - local push-to-hosted automation,
@@ -449,41 +444,27 @@ This v0 manual flow does **not** include:
 - network / statmech / transport / computed-reaction bundles,
 - service accounts.
 
-If a feature is not listed in steps 1–4 above, it is not part of v0.
+If a feature is not listed in steps 1–4 above, it is not part of this flow.
 
-## Future UX path
-
-The manual command-line flow is the floor, not the ceiling. Future
-milestones on the local-offline implementation plan
-will layer on:
-
-- a frontend bundle authoring + upload page on the local instance,
-- a frontend dry-run / submit / review page on the hosted instance,
-- an optional local "push to hosted" UX for one-click contribution,
-- a curator review workflow with accept / reject / queue semantics,
-- richer record linkage across the bundle's identity/provenance closure,
-- artifact packaging and import,
-- support for additional bundle families.
-
-The bundle format and the hosted endpoints are stable contracts — both
-the manual CLI flow documented here and any future UX share the same
-files, the same endpoints, and the same authentication model.
+The bundle format and the hosted endpoints are stable contracts: any
+other tool that sends bundles uses the same files, the same endpoints and
+the same authentication model.
 
 ## Optional: helper script
 
 A minimal Python helper that reads `TCKDB_BASE_URL` and `TCKDB_API_KEY`
 from the environment, accepts a bundle path, and supports `--dry-run`
 or `--submit` modes via the HTTP API only is provided at
-[`examples/clients/submit_bundle.py`](../../examples/clients/submit_bundle.py).
+[`examples/clients/submit_bundle.py`](https://github.com/TCKDB/TCKDB/blob/main/examples/clients/submit_bundle.py).
 It contains no business logic and is functionally equivalent to the
 `curl` examples above.
 
 ## See also
 
 - [Bundle format](format.md)
-- [Local export v0](local-export.md)
-- [Hosted dry-run v0](hosted-dry-run.md)
-- [Hosted submit v0](hosted-submit.md)
+- [Export a bundle](local-export.md)
+- [Dry run on a hosted instance](hosted-dry-run.md)
+- [Submit to a hosted instance](hosted-submit.md)
 - [Generic client targeting](../clients/generic-client-targeting.md)
 - [Deployment guide overview](../deployment/README.md) — TCKDB
   deployment scenarios and client environments

@@ -1,5 +1,6 @@
 import { useMemo } from "react"
 import type { ReactNode } from "react"
+import { GuideLink, type GuideRef } from "./GuideLink"
 import { INTRO_WORD_LIMIT, introWordCount } from "../domain/introWords"
 import { SectionRegistry } from "../domain/sectionRegistry"
 import { SectionRegistryContext, useRegisteredSection } from "../hooks/usePageSections"
@@ -61,7 +62,7 @@ export function PageSectionsProvider({ children }: { children: ReactNode }) {
  * caller that still passes a redundant kicker (today or in the future)
  * renders correctly regardless.
  */
-export function SectionHeading({ id, children, label, className, kicker, intro, subsection }: {
+export function SectionHeading({ id, children, label, className, kicker, intro, subsection, guide }: {
     id: string
     children: ReactNode
     label?: string
@@ -70,6 +71,8 @@ export function SectionHeading({ id, children, label, className, kicker, intro, 
     intro?: ReactNode
     /** An `<h3>` listed under the section above it, numbered 3.1 in the contents list. */
     subsection?: boolean
+    /** A guide glyph after the heading, outside it, so the heading and any region it labels keep their own name. */
+    guide?: GuideRef
 }) {
     if (import.meta.env.MODE === "test" && intro && introWordCount(intro) > INTRO_WORD_LIMIT) {
         throw new Error(`Section intro for "${id}" is over ${INTRO_WORD_LIMIT} words; shorten it or move it to the guide.`)
@@ -80,12 +83,15 @@ export function SectionHeading({ id, children, label, className, kicker, intro, 
     const kickerIsRedundant = typeof kicker === "string" && titleText !== undefined
         && titleText.trim().toLowerCase().startsWith(kicker.trim().toLowerCase())
     const showKicker = kicker != null && kicker !== "" && !kickerIsRedundant
+    const heading = subsection
+        ? <h3 className={className ? `t-heading-2 ${className}` : "t-heading-2"} id={id}>{children}</h3>
+        : <h2 className={className ? `t-heading-1 ${className}` : "t-heading-1"} id={id}>{children}</h2>
     return (
         <>
             {showKicker && <p className="t-kicker section-kicker">{kicker}</p>}
-            {subsection
-                ? <h3 className={className ? `t-heading-2 ${className}` : "t-heading-2"} id={id}>{children}</h3>
-                : <h2 className={className ? `t-heading-1 ${className}` : "t-heading-1"} id={id}>{children}</h2>}
+            {guide
+                ? <div className={subsection ? "section-heading-row section-heading-row--sub" : "section-heading-row"}>{heading}<GuideLink to={guide.to} question={guide.question} /></div>
+                : heading}
             {intro && <p className="note section-intro">{intro}</p>}
         </>
     )

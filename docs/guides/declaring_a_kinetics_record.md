@@ -1,6 +1,6 @@
 # Declaring what a kinetics record is
 
-One page for whoever is building a kinetics deposit. A rate record can state three things about
+This page is for building a kinetics deposit. A rate record can state three things about
 itself, all optional and all attributed claims: which **determination** it belongs to, what the
 coefficient **is**, and how the rate was **produced**. TCKDB stores exactly what you state, never
 guesses, and a record that states nothing reads `null` for all three. `null` means "not stated": not

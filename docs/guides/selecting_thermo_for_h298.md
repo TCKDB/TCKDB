@@ -1,13 +1,13 @@
 # Selecting a thermo record for the 298 K formation enthalpy
 
-One page for whoever reads thermo records and needs one formation enthalpy
-at 298.15 K, and for whoever deposits them and wants to know when a deposit
+This page is for readers who need one formation enthalpy
+at 298.15 K, and for depositors who want to know when a deposit
 can take part. It describes the selection endpoint, what each answer means,
 and what the endpoint refuses to claim.
 
 In plain terms: a species entry can hold many thermo records from different
 sources. Browsing lists them in a fixed display order (review rank, then newest
-deposited; see [`browse_order.md`](../specs/browse_order.md)). Selection is a
+deposited; see [`browse_order.md`](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/browse_order.md)). Selection is a
 separate, opt-in question: "which of the records can answer this exact
 quantity, and what is the situation among them?" TCKDB carries no ranking of
 one method above another, so the answer never says one eligible record is
@@ -23,7 +23,7 @@ better than another.
 - **One quantity.** Gas-phase formation enthalpy at 298.15 K. Heat capacity
   intervals, entropy, coherent H/S/Cp sets and export are not covered.
 - **Not a recommendation.** A curator or a dataset release recommends
-  records; this endpoint applies no method preference to what is stored. See [`dataset_release_and_profiles.md`](../../backend/docs/specs/dataset_release_and_profiles.md)
+  records; this endpoint applies no method preference to what is stored. See [`dataset_release_and_profiles.md`](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/specs/dataset_release_and_profiles.md)
   for attributed recommendations.
 
 ## The request

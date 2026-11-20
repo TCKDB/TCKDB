@@ -1,6 +1,6 @@
 # Depositing a thermo record
 
-One page for whoever is building a deposit. It states what a thermo record
+This page is for building a thermo deposit. It states what a thermo record
 must contain, what belongs somewhere else, what TCKDB refuses and why, and
 what the server will never guess on your behalf. (TCKDB's own Python
 builders do default one omitted declaration, visibly; see below.)
@@ -85,21 +85,18 @@ meaning of the uncertainty separately.
 
 ## State fields, and what leaving them out means
 
-| Field | Effect if you omit it | What is true of a record that predates this rule |
-| --- | --- | --- |
-| `phase` | For a `scientific_origin: computed` record, defaults to `gas` — the ideal-gas rigid-rotor/harmonic-oscillator statistical mechanics every computed producer here uses has no other mode. For any other origin the record just does not say which phase it describes. | Same as omitting it today: null, unenforced, nothing retroactive. |
-| `reference_pressure_bar` | Never defaulted, for any origin (decided 2026-09-24, issue #529). Entropy comparisons against other records become unavailable, because the standard-state pressure convention is built into the entropy. Heat-capacity comparisons are unaffected, since reference pressure cannot change a heat capacity. | A record deposited before 2026-09-24 may carry an invented `1.0` (bar) stamped by the since-removed default. That value is not corrected retroactively — see the note below. |
-| `enthalpy_reference_kind` | Refused when the record carries an enthalpy or a Gibbs energy; required to be absent when it carries neither. | A record deposited before this rule existed, carrying an enthalpy or a Gibbs energy with no declaration, is left exactly as deposited. (Point Gibbs energies joined the rule on 2026-09-27; undeclared ones deposited before then stay as they are.) It is not rewritten and not frozen: every column other than `h298_kj_mol` and `enthalpy_reference_kind` stays writable, and an update that only *adds* the declaration is accepted. Only a write that sets `h298_kj_mol` or changes `enthalpy_reference_kind` without leaving the row in a valid combination is refused — the same rule a new record gets, applied only at the moment either of those two columns is actually written. |
+| Field | Effect if you omit it |
+| --- | --- |
+| `phase` | For a `scientific_origin: computed` record, defaults to `gas` — the ideal-gas rigid-rotor/harmonic-oscillator statistical mechanics every computed producer here uses has no other mode. For any other origin the record does not say which phase it describes. |
+| `reference_pressure_bar` | Never defaulted, for any origin. Entropy comparisons against other records become unavailable, because the standard-state pressure convention is built into the entropy. Heat-capacity comparisons are unaffected, since reference pressure cannot change a heat capacity. |
+| `enthalpy_reference_kind` | Refused when the record carries an enthalpy or a Gibbs energy; required to be absent when it carries neither. |
 
 A null in `reference_pressure_bar` or `enthalpy_reference_kind` means the
-deposit did not state it. It never means a default was assumed — until
-2026-09-24 that was not true of `reference_pressure_bar` on a computed
-record (see issue #529): every computed deposit that omitted it was silently
-stamped `1.0`, a standard state the dominant producer's own numbers
-(ARC computes entropy at 1 atm) were never computed at. That default is now
-removed. `phase` is the one field here that still defaults, and only for
-computed-origin records — see the table above for why that case is judged
-differently.
+deposit did not state it. It never means a default was assumed. A default
+reference pressure would be wrong for producers whose numbers use another
+standard state (ARC computes entropy at 1 atm). `phase` is the one field here
+that defaults, and only for computed-origin records — see the table above for
+why that case is judged differently.
 
 ## Saying what the values describe, and how they were made
 
@@ -327,10 +324,10 @@ gets a distinct refusal telling them so (`enthalpy_reference_kind_unrecognized`)
 rather than being pointed at the observation route as though they had named a
 different quantity.
 
-## Records that predate this rule
+## Records without a declaration
 
 Records deposited before the declaration existed carry no reference, and they
-are not being rewritten. A read reports the reference as not recorded.
+are not rewritten. A read reports the reference as not recorded.
 
 Three of the advisory consistency checks read the declaration, because they
 compare enthalpies and an enthalpy means nothing without its reference:

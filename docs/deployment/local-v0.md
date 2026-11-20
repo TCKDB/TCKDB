@@ -97,7 +97,7 @@ conda run -n tckdb_env alembic upgrade head
 This applies the full ordered migration chain through the current head. The
 baseline revision seeds reference data (for example, `reaction_family`), and
 later revisions upgrade the deployed schema in place. Review the
-[migration runbook](../../backend/docs/deployment/migrations.md) before
+[migration runbook](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/deployment/migrations.md) before
 upgrading a database that already contains data.
 
 ---
@@ -184,7 +184,7 @@ curl -sf -c cookies.txt \
   -d '{"username": "alice", "password": "change-me-too", "email": "alice@example.local"}'
 ```
 
-See [Single-user local vs shared lab-server](#single-user-local-vs-shared-lab-server)
+See [Single-machine private vs shared private deployment](#single-machine-private-vs-shared-private-deployment)
 for when to flip `AUTH_ALLOW_OPEN_REGISTRATION` off.
 
 ### c. Create an API key

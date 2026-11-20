@@ -376,7 +376,7 @@ There are **three** distinct things to back up:
 For the operator runbook covering `alembic upgrade head` on a real
 database — pending-revision checks, pre-upgrade `pg_dump`, public-ref
 backfill, rollback expectations, and the operator checklist — see
-[Deployed-DB migration playbook](../../backend/docs/deployment/migrations.md).
+[Deployed-DB migration playbook](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/deployment/migrations.md).
 That playbook is the source of truth for any schema upgrade against a
 lab-shared DB.
 
@@ -460,9 +460,9 @@ export TCKDB_API_KEY="tck_replace_me"
 ```
 
 A starter env file is provided at
-[`examples/deployment/lab-server.env.example`](../../examples/deployment/lab-server.env.example)
+[`examples/deployment/lab-server.env.example`](https://github.com/TCKDB/TCKDB/blob/main/examples/deployment/lab-server.env.example)
 (server-side settings) and
-[`examples/deployment/hpc-client.env.example`](../../examples/deployment/hpc-client.env.example)
+[`examples/deployment/hpc-client.env.example`](https://github.com/TCKDB/TCKDB/blob/main/examples/deployment/hpc-client.env.example)
 (client-side settings for HPC/batch jobs).
 
 Targeting model: [generic-client-targeting.md](../clients/generic-client-targeting.md).

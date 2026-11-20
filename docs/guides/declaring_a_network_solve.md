@@ -1,6 +1,6 @@
 # Declaring what a network solve is
 
-One page for whoever is building a pressure-dependent network deposit. A solve can state what its outputs
+This page is for building a pressure-dependent network deposit. A solve can state what its outputs
 are outputs *of* (`target`), the recipe it used (`protocol`) and the evidence it cites (`validation`); each fit can state which
 **determination** it is a representation of. All are optional, attributed claims. TCKDB stores what you state,
 never guesses, and anything not stated reads `null`, which means "not stated": not "valid everywhere" and not "independent".
