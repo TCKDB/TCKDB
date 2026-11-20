@@ -51,6 +51,7 @@ def test_every_python_package_declares_a_real_license():
         REPO_ROOT / "clients" / "python" / "pyproject.toml",
         REPO_ROOT / "schemas" / "python" / "tckdb-schemas" / "pyproject.toml",
         REPO_ROOT / "integrations" / "mcp" / "pyproject.toml",
+        REPO_ROOT / "clients" / "python" / "adapters" / "chemkin" / "pyproject.toml",
     ]
     for manifest in manifests:
         if not manifest.is_file():
@@ -227,7 +228,11 @@ def test_known_operational_boundaries_are_recorded_where_a_reader_will_look():
 
 @pytest.mark.parametrize(
     "package_dir",
-    ["clients/python", "schemas/python/tckdb-schemas"],
+    [
+        "clients/python",
+        "schemas/python/tckdb-schemas",
+        "clients/python/adapters/chemkin",
+    ],
 )
 def test_published_package_license_is_the_root_license(package_dir):
     """Each PyPI package ships its own copy of the root ``LICENSE`` (a build
