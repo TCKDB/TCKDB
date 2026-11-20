@@ -1,4 +1,4 @@
-"""The catalogue revision creates and fills the catalogue; downgrade removes it and keeps the literature rows."""
+"""The catalogue revision creates and fills the catalogue; downgrade removes it and keeps the literature and authors."""
 
 from __future__ import annotations
 
@@ -68,7 +68,8 @@ def _state(engine) -> dict[str, object]:
         enums = {n for (n,) in conn.execute(text("SELECT typname FROM pg_type WHERE typname = ANY(:n)"), {"n": list(ENUMS)})}
         counts = {t: conn.scalar(text(f"SELECT count(*) FROM {t}")) for t in sorted(present)}
         literature = conn.scalar(text("SELECT count(*) FROM literature WHERE title_source = 'resolved_metadata'"))
-    return {"tables": present, "enums": enums, "counts": counts, "literature": literature}
+        authors = conn.scalar(text("SELECT count(*) FROM literature_author"))
+    return {"tables": present, "enums": enums, "counts": counts, "literature": literature, "authors": authors}
 
 
 def test_the_revision_sits_on_the_previous_head():
@@ -86,6 +87,7 @@ def test_upgrade_fills_the_catalogue_and_downgrade_removes_it(scratch_db):
     assert built["counts"]["basis_set_catalogue"] == len(seed.basis_sets)
     assert built["counts"]["method_catalogue_key"] == sum(len(m.keys) for m in seed.methods)
     assert built["literature"] == len(seed.references)
+    assert built["authors"] == sum(len(ref.authors) for ref in seed.references.values())
     with engine.connect() as conn:
         assert sync_catalogue(conn, seed, apply=False) == []
 
@@ -93,6 +95,7 @@ def test_upgrade_fills_the_catalogue_and_downgrade_removes_it(scratch_db):
     removed = _state(engine)
     assert removed["tables"] == set() and removed["enums"] == set()
     assert removed["literature"] == len(seed.references)
+    assert removed["authors"] == built["authors"]
 
     _alembic("upgrade", REVISION, env)
     assert _state(engine) == built

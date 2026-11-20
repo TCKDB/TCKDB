@@ -3,10 +3,11 @@
 Creates ``method_catalogue`` and ``basis_set_catalogue``, their identity-key tables (``*_key``) and their literature
 link tables (``*_literature``), with the enums ``catalogue_method_kind``, ``basis_set_role`` and
 ``catalogue_reference_role``. Then fills them from the seed files in ``app/data/catalogue/`` through
-``app.services.method_catalogue_sync.sync_catalogue``, creating the cited ``literature`` rows that do not exist yet.
+``app.services.method_catalogue_sync.sync_catalogue``, creating the cited ``literature`` rows (and their ``author``
+rows) that do not exist yet and upgrading a cited row whose title was not registry-resolved.
 
-Downgrade drops the six tables and three enums. The literature rows stay: they are ordinary citations other records
-may cite.
+Downgrade drops the six tables and three enums. The literature and author rows stay: they are ordinary citations
+other records may cite.
 """
 
 from __future__ import annotations

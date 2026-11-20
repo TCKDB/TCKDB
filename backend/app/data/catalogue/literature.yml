@@ -1,8 +1,9 @@
 # Articles the method and basis-set catalogue cites. One entry per DOI.
 #
 # Every field is the Crossref record for the DOI (https://api.crossref.org/works/<doi>), with markup tags
-# removed and whitespace collapsed. `authors` lists the family names in Crossref order; it is the
-# verification record and is not written to the database. Where the registry's own text is damaged,
+# removed and whitespace collapsed. `authors` lists the family names in Crossref order (the recorded Crossref
+# answer carries no given names); the loader writes them as `author` / `literature_author` rows, in this order, on a
+# literature row it creates or upgrades. Where the registry's own text is damaged,
 # `registry_title` / `registry_journal` keep it verbatim beside the repaired value.
 
 references:

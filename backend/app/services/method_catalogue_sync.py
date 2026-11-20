@@ -4,9 +4,12 @@
 it also removes them. A second run is a no-op. It works on a plain SQLAlchemy ``Connection`` with Core statements
 only, so the Alembic revision that creates the tables can call it without the ORM models.
 
-Literature rows are get-or-created by the public ref a deposit citing the DOI would be given. An existing row is
-adopted as it stands and never rewritten; a created row carries the Crossref fields with
-``title_source = resolved_metadata``. Literature rows are never deleted.
+Literature rows are found by the public ref a deposit citing the DOI would be given, else by the DOI with any
+``doi:`` or resolver prefix removed, and created when neither matches. A created row carries the seed's Crossref
+fields with ``title_source = resolved_metadata``. A found row whose title was not registry-resolved is upgraded to
+those fields; a registry-resolved row is never rewritten, and no row's DOI or public ref is changed. A created or
+upgraded row gets the seed's authors, in order, when it has none; an author is identified only by ORCID, which the
+seed does not carry, so each citation's authors are their own rows. Literature and author rows are never deleted.
 """
 
 from __future__ import annotations
@@ -25,7 +28,13 @@ from app.db.models.common import (
     LiteratureKind,
     LiteratureTitleSource,
 )
-from app.services.method_catalogue_seed import CatalogueSeed, SeedBasisSet, SeedCitation, SeedMethod
+from app.services.method_catalogue_seed import (
+    CatalogueSeed,
+    SeedBasisSet,
+    SeedCitation,
+    SeedMethod,
+    SeedReference,
+)
 from app.services.public_refs import PREFIXES, literature_doi_public_ref, make_content_ref
 
 _meta = sa.MetaData()
@@ -34,6 +43,22 @@ _meta = sa.MetaData()
 def _enum(enum: type[Enum], name: str) -> postgresql.ENUM:
     return postgresql.ENUM(*(member.value for member in enum), name=name, create_type=False)
 
+
+_author = sa.Table(
+    "author",
+    _meta,
+    sa.Column("id", sa.BigInteger, primary_key=True),
+    sa.Column("given_name", sa.Text),
+    sa.Column("family_name", sa.Text),
+    sa.Column("full_name", sa.Text),
+)
+_literature_author = sa.Table(
+    "literature_author",
+    _meta,
+    sa.Column("literature_id", sa.BigInteger, primary_key=True),
+    sa.Column("author_id", sa.BigInteger, primary_key=True),
+    sa.Column("author_order", sa.Integer),
+)
 
 _literature = sa.Table(
     "literature",
@@ -108,32 +133,85 @@ def catalogue_public_ref(tables: _Tables, key: str) -> str:
     return make_content_ref(tables.prefix, f"{tables.canonical}:key={key}")
 
 
+#: The fields of a literature row the seed's Crossref record sets.
+_LITERATURE_FIELDS = ("title", "journal", "year", "volume", "issue", "pages")
+
+#: The stored DOI with a ``doi:`` or resolver-URL prefix removed, lower-cased.
+_DOI_BARE = sa.func.lower(
+    sa.func.regexp_replace(sa.func.btrim(_literature.c.doi), r"^(doi:\s*|https?://(dx\.)?doi\.org/)", "", "i")
+)
+
+
+def _seed_fields(ref: SeedReference) -> dict[str, object]:
+    return {name: getattr(ref, name) for name in _LITERATURE_FIELDS}
+
+
+def _find_literature(conn: Connection, doi: str):
+    public_ref = literature_doi_public_ref(doi)
+    columns = (_literature.c.id, _literature.c.title_source, *(_literature.c[n] for n in _LITERATURE_FIELDS))
+    row = conn.execute(sa.select(*columns).where(_literature.c.public_ref == public_ref)).first()
+    if row is None:
+        row = conn.execute(sa.select(*columns).where(_DOI_BARE == doi).order_by(_literature.c.id).limit(1)).first()
+    return row
+
+
+def _has_authors(conn: Connection, literature_id: int) -> bool:
+    return conn.execute(
+        sa.select(sa.exists().where(_literature_author.c.literature_id == literature_id))
+    ).scalar_one()
+
+
+def _add_authors(conn: Connection, literature_id: int, ref: SeedReference) -> None:
+    for order, family_name in enumerate(ref.authors, start=1):
+        author_id = conn.execute(
+            sa.insert(_author)
+            .values(given_name=None, family_name=family_name, full_name=family_name)
+            .returning(_author.c.id)
+        ).scalar_one()
+        conn.execute(
+            sa.insert(_literature_author).values(literature_id=literature_id, author_id=author_id, author_order=order)
+        )
+
+
 def _literature_ids(conn: Connection, seed: CatalogueSeed, *, apply: bool, changes: list[str]) -> dict[str, int]:
     ids: dict[str, int] = {}
     for doi, ref in seed.references.items():
-        public_ref = literature_doi_public_ref(doi)
-        row = conn.execute(sa.select(_literature.c.id).where(_literature.c.public_ref == public_ref)).first()
-        if row is not None:
-            ids[doi] = row.id
+        row = _find_literature(conn, doi)
+        if row is None:
+            changes.append(f"literature: create {doi}")
+            if apply:
+                ids[doi] = conn.execute(
+                    sa.insert(_literature)
+                    .values(
+                        public_ref=literature_doi_public_ref(doi),
+                        kind="article",
+                        title_source="resolved_metadata",
+                        doi=doi,
+                        **_seed_fields(ref),
+                    )
+                    .returning(_literature.c.id)
+                ).scalar_one()
+                _add_authors(conn, ids[doi], ref)
             continue
-        changes.append(f"literature: create {doi}")
-        if apply:
-            ids[doi] = conn.execute(
-                sa.insert(_literature)
-                .values(
-                    public_ref=public_ref,
-                    kind="article",
-                    title=ref.title,
-                    title_source="resolved_metadata",
-                    journal=ref.journal,
-                    year=ref.year,
-                    volume=ref.volume,
-                    issue=ref.issue,
-                    pages=ref.pages,
-                    doi=doi,
+        ids[doi] = row.id
+        if _plain(row.title_source) != LiteratureTitleSource.resolved_metadata.value:
+            changes.append(f"literature: upgrade {doi}")
+            if apply:
+                conn.execute(
+                    sa.update(_literature)
+                    .where(_literature.c.id == row.id)
+                    .values(title_source="resolved_metadata", **_seed_fields(ref))
                 )
-                .returning(_literature.c.id)
-            ).scalar_one()
+                if not _has_authors(conn, row.id):
+                    _add_authors(conn, row.id, ref)
+            continue
+        # A registry-resolved row is never rewritten. It is the seed's own row when it holds exactly the seed's
+        # fields, and then it carries the seed's authors.
+        own = all(getattr(row, n) == v for n, v in _seed_fields(ref).items())
+        if own and not _has_authors(conn, row.id):
+            changes.append(f"literature_author: add {doi} ({len(ref.authors)} authors)")
+            if apply:
+                _add_authors(conn, row.id, ref)
     return ids
 
 
