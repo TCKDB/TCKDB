@@ -29,6 +29,14 @@ dataset must never require a code release.
 - **Behaviour:** an archive restore treats the catalogue rows, their literature and its authors as migration seeds, like `reaction_family`.
 - **Schema and migration:** new revision `a6fc04f5667e` on top of `a7c3e1f5b942`: six tables (`method_catalogue`, `method_catalogue_key`, `method_catalogue_literature`, `basis_set_catalogue`, `basis_set_catalogue_key`, `basis_set_catalogue_literature`) and three enums (`catalogue_method_kind`, `basis_set_role`, `catalogue_reference_role`). The upgrade fills them from the seed. The downgrade drops them and keeps the literature and author rows. New public-ref prefixes `mcat_` and `bcat_` (content-derived from the key). No new environment variable. No distributed package changed.
 
+## tckdb-chemkin installs and imports from its own wheel (Unreleased)
+
+- **Behaviour:** `tckdb-chemkin` declares `rdkit>=2024.3`, so `pip install tckdb-chemkin` followed by `import tckdb_chemkin` works in a clean environment. Without it the import failed with `ModuleNotFoundError: rdkit`. An environment with conda's RDKit already satisfies the requirement.
+- **Behaviour:** the `tckdb-client` requirement is the window `>=0.208,<0.209`; it was unbounded.
+- **Packaging:** the distribution carries a README (its PyPI description), the MIT `LICENSE` (`license = "MIT"` with `license-files`), authors, classifiers, project URLs and `py.typed`, and the sdist leaves out the tests. The build needs setuptools 77 or later.
+- **Schema and migration:** none. No new environment variable.
+- **Versions:** `tckdb-chemkin` 0.7.5.
+
 ## tckdb_deploy.sh deploys onto any compose project (Unreleased)
 
 - **Behaviour:** the pre-deploy backup runs `pg_dump` as `DB_ADMIN_USER` (from `TCKDB_MIGRATION_ENV_FILE`, else `TCKDB_ENV_FILE`, else the db container's `POSTGRES_USER`) on `DB_NAME` (from `TCKDB_ENV_FILE`, else the container's `POSTGRES_DB`), each defaulting to `tckdb` as before. A stack built from the templates, whose administrator is `tckdb_admin` and appears only in the operator file, no longer fails the backup with `role "tckdb" does not exist`.
