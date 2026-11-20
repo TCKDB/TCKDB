@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Read filters match software, workflow-tool and scheme names in any case, and DOIs in any link form (Unreleased)
+
+- **Behaviour:** a `software` or `workflow_tool` filter on the scientific searches, analytics, select endpoints and `/scientific/meta/*-versions`, and the `name` filter on `GET /software` and `software_name` on `GET /calculations`, now find the row stored as `Psi4` when asked for `PSI4` or ` psi4 `: names are compared by the key their public ref uses. They used to return nothing.
+- **Behaviour:** the energy-correction-scheme `name` filter (scientific search and `GET /energy-correction-schemes`) compares trimmed and case-folded, and the `doi` filter on `GET /literature` finds the row stored under the bare DOI when given a `dx.doi.org` link.
+- **Schema and migration:** none. No new environment variable. No distributed package changed.
+
 ## Energy-correction scheme names that differ only in case resolve to one scheme (Unreleased)
 
 - **Behaviour:** an upload naming a correction scheme `cbs-qb3 aec` when `CBS-QB3 AEC` is stored with the same identity now reuses that scheme and its stored spelling. It used to fail with a 409 that aborted the whole upload. The scheme is looked up by its public ref, then by its identity columns; the insert runs in a savepoint, so losing a concurrent-insert race adopts the winner's row.

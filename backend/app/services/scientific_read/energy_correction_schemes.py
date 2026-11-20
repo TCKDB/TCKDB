@@ -239,6 +239,11 @@ def _count_component_params(session: Session, ecs_id: int) -> int:
     )
 
 
+def scheme_name_matches(name: str):
+    """Condition on ``EnergyCorrectionScheme``: its name equals *name*, both trimmed and case-folded as the ref folds it."""
+    return func.lower(func.btrim(EnergyCorrectionScheme.name)) == func.lower(name.strip())
+
+
 def applied_target_visible(*, detail: bool = False):
     """Condition on ``AppliedEnergyCorrection``: its target is not a transition-state entry the profile hides.
 
