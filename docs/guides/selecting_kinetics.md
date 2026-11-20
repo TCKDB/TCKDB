@@ -1,12 +1,12 @@
 # Selecting a kinetics record for a stated rate-coefficient question
 
-One page for whoever reads kinetics records and needs one rate coefficient for one stated gas-phase question, and for
-whoever deposits them and wants to know when a deposit can take part. It describes the selection endpoint, what each
+This page is for readers who need one rate coefficient for one stated gas-phase question, and for
+depositors who want to know when a deposit can take part. It describes the selection endpoint, what each
 answer means, and what the endpoint refuses to claim.
 
 In plain terms: a reaction entry can hold many kinetics records from different sources, fitted in different forms,
 valid over different temperatures and pressures. Browsing lists them in a fixed display order (review rank, then newest
-deposited; see [`browse_order.md`](../specs/browse_order.md)). Selection is a separate, opt-in question: "which of the
+deposited; see [`browse_order.md`](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/browse_order.md)). Selection is a separate, opt-in question: "which of the
 records can answer this exact question, and what is the situation among them?" TCKDB carries no ranking of one method
 above another, so the honest answer is "these records answer your question, and none is preferred".
 
@@ -19,7 +19,7 @@ above another, so the honest answer is "these records answer your question, and 
   and whole mechanisms are not covered.
 - **Not a recommendation.** A curator or a dataset release recommends records; this endpoint applies no method
   preference to what is stored. See
-  [`dataset_release_and_profiles.md`](../../backend/docs/specs/dataset_release_and_profiles.md).
+  [`dataset_release_and_profiles.md`](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/specs/dataset_release_and_profiles.md).
 
 ## The request
 

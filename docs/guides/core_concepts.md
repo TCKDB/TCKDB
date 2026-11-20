@@ -6,7 +6,7 @@ The schema separates **identity** (what something is), **structure**
 **scientific product** (the resulting quantity), and **provenance and
 trust** (who/what/when, and review state).
 
-For full field-level detail see [`backend/schema_spec.md`](../../backend/schema_spec.md).
+For full field-level detail see [`backend/schema_spec.md`](https://github.com/TCKDB/TCKDB/blob/main/backend/schema_spec.md).
 For the design rationale behind splitting identity from results, see
 the design docs under `backend/docs/`.
 
@@ -24,7 +24,7 @@ scientific form of that thing.
   `(canonical_smiles, charge, multiplicity)`. InChIKey is derived and
   stored for cross-notation search but is not part of the dedup key —
   standard InChI can't represent spin state and over-merges some
-  tautomers (DR-0031). Two equally valid Gaussian and Orca
+  tautomers. Two equally valid Gaussian and Orca
   optimizations of ethanol refer to the same `species`.
 - **`species_entry`** is a resolved scientific form of a species: a
   particular stereochemistry, electronic state, isotopologue label, or
@@ -43,7 +43,7 @@ scientific form of that thing.
   (chirality, electronic state, …), with attached kinetics, transport,
   and review state.
 
-Two consequences of the species key being the constitution (DR-0038):
+Two consequences of the species key being the constitution:
 
 - **A stereo isomerisation is a reaction between two entries of one species.**
   `Z-2-butene -> E-2-butene` has the same species on both sides, which the
@@ -119,17 +119,16 @@ TCKDB recomputes the total from them to check yours and never stores its own. A 
 composite energy has been checked (`composite_energy_verification`: recomputed from its inputs on every
 read, or confirmed against an output log at upload, or neither) and writes a record's energy and
 geometry levels as `notation`, e.g. `CCSD(T)-F12/cc-pVTZ-F12//wB97X-D/def2-TZVP`. A named composite
-deposited as an `sp` or `opt` still stores, with a warning. The decided model
-is in [ADR 0021](../adr/0021-composite-levels-of-theory-are-a-recipe-bound-to-a-level-not-a-weighted-level.md).
+deposited as an `sp` or `opt` still stores, with a warning.
 
 ### Calculation dependencies
 
 Calculations are linked into a small **DAG** so a downstream result
 can point back at the upstream calculations it consumed. A frequency
 calculation cites the optimization that produced its geometry; a
-single-point cites the optimization whose geometry it ran on. (Once the
-planned `composite` type lands, a composite cites the single points it was
-assembled from; see ADR 0021.)
+single-point cites the optimization whose geometry it ran on. An
+`assembled` composite cites the single points that fill its slots
+(`composite_input` edges).
 Dependencies are opportunistic enrichment — they are not required for
 a calculation to be valid, but they are what makes a result
 **reproducible from inside the database**.
@@ -192,16 +191,16 @@ from.
 ### Public refs vs internal IDs
 
 Every read-API response uses **public refs** as the addressable
-handle for a record — `species_…`, `species_entry_…`, `geom_…`,
-`reaction_…`, `reaction_entry_…`, `lot_…`, … Public refs are stable
+handle for a record — `spc_…`, `spe_…`, `geom_…`,
+`rxn_…`, `rxe_…`, `lot_…`, … Public refs are stable
 across reseeds, safe to log, and the only form clients should depend
 on. Integer primary keys (`id` columns) are an internal database
 concern and are hidden from responses by default; they can only be
 surfaced under an explicit `include=internal_ids` request on
 deployments that permit it.
 
-See [`docs/specs/public_identifier_policy.md`](../specs/public_identifier_policy.md)
-and [`docs/specs/internal_ids_visibility_policy.md`](../specs/internal_ids_visibility_policy.md).
+Every prefix, and whether it is content-derived or opaque, is listed in
+[How a record is named](api_vocabulary.md#how-a-record-is-named).
 
 ### Levels of theory, software, workflow tools
 
@@ -292,4 +291,4 @@ echoed in the response's `request` block.
 A release publishes its selections *and* the full candidate set and
 review history behind them, so a reader can disagree with a TCKDB
 recommendation without privileged access. See
-[`dataset_release_and_profiles.md`](../../backend/docs/specs/dataset_release_and_profiles.md).
+[`dataset_release_and_profiles.md`](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/specs/dataset_release_and_profiles.md).

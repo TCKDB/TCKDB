@@ -199,7 +199,7 @@ TCKDB instance it is configured against.
 | Secrets management | `.env` on local disk | `.env.selfhosted` outside repo, restricted perms | Operator-managed (vault/secret store) |
 
 The full hosted-mode abuse controls are documented in
-[public_read_abuse_controls.md](../specs/public_read_abuse_controls.md).
+[public_read_abuse_controls.md](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/public_read_abuse_controls.md).
 
 ## Data movement between modes
 
@@ -224,7 +224,7 @@ Bundle export and import:
 
 The full design and phased rollout are tracked internally. The
 bundle format work in progress is tracked under
-[`docs/contribution-bundles/`](../contribution-bundles/) and the
+[contribution bundle pages](../contribution-bundles/format.md) and the
 related roadmap specs (`local-bundle-export-v0-spec.md`,
 `hosted-bundle-dry-run-import-spec.md`,
 `hosted-bundle-submit-v0-spec.md`,

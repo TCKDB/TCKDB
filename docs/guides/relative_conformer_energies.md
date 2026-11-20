@@ -1,6 +1,6 @@
 # Relative conformer energies
 
-One page for whoever wants to know how far above or below a chosen conformer the other conformers of one molecule lie,
+This page explains how to find how far above or below a chosen conformer the other conformers of one molecule lie,
 using what TCKDB has stored. The contract is `backend/docs/specs/relative_conformer_energy.md`.
 
 In plain terms: a molecule can sit in several shapes ("conformers"; TCKDB stores each shape as a conformer group, a
