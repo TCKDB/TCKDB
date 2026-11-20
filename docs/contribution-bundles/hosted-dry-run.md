@@ -1,14 +1,12 @@
-# Hosted bundle dry-run v0
+# Dry-running a bundle on a hosted instance
 
 The hosted dry-run endpoint lets an authenticated user POST a
 `ContributionBundle` and receive a structured **preview** of what a
 real import would do — without creating any scientific records,
 submissions, upload jobs, audit events, or record links.
 
-This was milestone 6 of the local-offline-and-hosted-submission
-implementation plan. The submit route it anticipated now exists
-([`hosted-submit.md`](hosted-submit.md)), and since #577 a dry run
-rehearses it.
+A dry run also rehearses [submit](hosted-submit.md), so it reports
+every refusal submit would give.
 
 ## Endpoint
 
@@ -33,7 +31,7 @@ POST /api/v1/bundles/dry-run
 
 ## Supported bundle kinds
 
-Hosted dry-run v0 supports the same families as the bundle format:
+The dry run supports the same families as the bundle format:
 
 - `thermo`
 - `kinetics`
@@ -42,7 +40,7 @@ Other families (`network`, `statmech`, `transport`, `computed_reaction`,
 mixed) are rejected by `ContributionBundle` validation before they
 reach this endpoint.
 
-## Will submit accept it? (#577)
+## Will submit accept it?
 
 A dry run answers two things: the per-record preview below, and whether
 `POST /bundles/submit` would accept the same bundle.
@@ -67,14 +65,13 @@ the refusal is rendered by the same exception handler. `bundle_valid` is
 then `false`, and `summary.errors` counts it. A refusal that would be a
 server error on submit (5xx) is a server error here too.
 
-Until #577 the dry run ran only the preview, which is submit's *gate* but
-not everything submit checks. Every check inside the thermo and kinetics
-upload workflows -- the enthalpy-reference rule, `existing_*_id` and
-public-ref resolution, ownership, role/type compatibility, reaction
-anchoring, SP resolution for `energy_level_of_theory`, database
-constraints -- ran on submit and never on a dry run. Copying those checks
-into the preview would give the two routes a second place to disagree, so
-the dry run calls submit instead. `backend/tests/api/test_api_bundle_dry_run_submit_parity.py`
+The preview alone is submit's *gate*, not everything submit checks. The
+checks inside the thermo and kinetics upload workflows -- the
+enthalpy-reference rule, `existing_*_id` and public-ref resolution,
+ownership, role/type compatibility, reaction anchoring, SP resolution for
+`energy_level_of_theory`, database constraints -- live in submit. Copying
+them into the preview would give the two routes a second place to
+disagree, so the dry run calls submit instead. `backend/tests/api/test_api_bundle_dry_run_submit_parity.py`
 holds both routes to identical refusals and requires the dry run to run
 every backend function submit runs.
 
@@ -103,7 +100,7 @@ Nothing a dry run does is kept:
   writes to the next request.
 - `commit()` on the driver connection object under SQLAlchemy's connection
   is refused too: while the rehearsal runs, that one object's `commit` is
-  replaced by a refusal, and restored afterwards (#592).
+  replaced by a refusal, and restored afterwards.
 - SQL that would publish the rehearsal (`COMMIT`, `END`, `PREPARE
   TRANSACTION`, or releasing its own savepoint) is refused when sent through
   the session's connection. It is read as code: comments and the contents of
@@ -138,7 +135,7 @@ is not timed, and no other request or user can see it.
 
 ## Limits on one bundle and on dry runs
 
-A dry run does a full submit's work, so it is bounded (#586):
+A dry run does a full submit's work, so it is bounded:
 
 - **Body size**: a request body over `BUNDLE_MAX_BODY_BYTES` (default 5 MiB)
   is refused `413 bundle_too_large` before it is parsed, on both
@@ -196,11 +193,9 @@ the API key's row locked for the whole rehearsal and queue a second dry
 run on the same key behind the first. A dry-run session never commits, so
 that value was never saved.
 
-This reverses the v0 milestone's rule that the dry run "never relies on
-transaction-rollback safety". That rule was written before submit
-existed, and a preview that refuses to run submit's checks cannot predict
-submit; the savepoint plus the guards above are what now carry the
-guarantee.
+The dry run relies on transaction rollback: a preview that refuses to
+run submit's checks cannot predict submit. The savepoint plus the guards
+above carry the guarantee that nothing is written.
 
 Tests assert that row counts in the following tables are unchanged
 across a dry-run, accepted or refused: `species`, `species_entry`,
@@ -226,8 +221,7 @@ Provenance items only describe whether the referenced identity already
 exists on hosted. They do **not** imply moderation acceptance, curation
 status, or that the bundle has been imported.
 
-What is **not** previewed item by item in v0 (deferred to later
-milestones) -- though every check submit applies to them is applied by the
+What is **not** previewed item by item -- though every check submit applies to them is applied by the
 rehearsal above:
 
 - inline calculations and source-calculation links

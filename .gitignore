@@ -269,11 +269,11 @@ node_modules
 # docs/ (including ad-hoc *.md files at the root) is internal.
 docs/*.md
 !docs/README.md
+!docs/index.md
 docs/audits/
 docs/decisions/
 docs/roadmaps/
 docs/paper/
-docs/clients/
 
 # Internal design/prompt specs kept local but not published. The user-facing
 # contract specs under docs/specs/ (referenced by mkdocs nav or shipped as

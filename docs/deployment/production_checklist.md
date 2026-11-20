@@ -4,7 +4,7 @@ The single source of truth for environment settings required before a TCKDB inst
 
 The settings here apply to any **hosted / shared / public** deployment — lab-shared, self-hosted single-node, and the future hosted community instance. Local single-developer deployments may relax the defaults; everything else should not.
 
-The reference template that already encodes every safe value is [`.env.selfhosted.example`](../../.env.selfhosted.example). Use that as your starting point for any hosted setup, not [`.env.example`](../../.env.example) (which targets local development).
+The reference template that already encodes every safe value is [`.env.selfhosted.example`](https://github.com/TCKDB/TCKDB/blob/main/.env.selfhosted.example). Use that as your starting point for any hosted setup, not [`.env.example`](https://github.com/TCKDB/TCKDB/blob/main/.env.example) (which targets local development).
 
 ---
 
@@ -18,7 +18,7 @@ Set `DEPLOYMENT_MODE` to one of:
 | `shared_private` | Lab/internal deployment behind a private network. All Required hosted settings below are enforced at startup. |
 | `hosted_public` | Public, internet-facing deployment. Same enforced settings as `shared_private`, plus `CORS_ALLOW_ORIGINS` may not contain `*`. |
 
-In `shared_private` and `hosted_public`, the API refuses to boot if any required setting is at an unsafe value. The error message lists every violation in one pass, so a misconfigured deploy fails fast instead of running with quiet production gaps. Implementation: [`backend/app/api/startup_checks.py`](../../backend/app/api/startup_checks.py).
+In `shared_private` and `hosted_public`, the API refuses to boot if any required setting is at an unsafe value. The error message lists every violation in one pass, so a misconfigured deploy fails fast instead of running with quiet production gaps. Implementation: [`backend/app/api/startup_checks.py`](https://github.com/TCKDB/TCKDB/blob/main/backend/app/api/startup_checks.py).
 
 Examples:
 
@@ -146,7 +146,7 @@ Settings alone are not enough. Before opening the deployment to traffic:
 - [ ] The DB is reachable: `PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c '\conninfo'`.
 - [ ] `python scripts/configure_database_roles.py check` passes: the API role is a non-owner, non-superuser with no DDL, temporary-table, or `TRUNCATE` capability.
 - [ ] The API/worker environment contains no `DB_ADMIN_*` or `DB_OWNER_*` credentials.
-- [ ] Migrations are at head: `alembic current` matches `alembic heads`. See [Deployed-DB migration playbook](../../backend/docs/deployment/migrations.md).
+- [ ] Migrations are at head: `alembic current` matches `alembic heads`. See [Deployed-DB migration playbook](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/deployment/migrations.md).
 - [ ] At least one admin account has been seeded via `backend/scripts/bootstrap_admin.py`.
 - [ ] `AUTH_ALLOW_OPEN_REGISTRATION=false` is verified by sending `POST /api/v1/auth/register` and confirming the response is `403` or equivalent.
 - [ ] `EXPOSE_API_DOCS=false` is verified by `curl -o /dev/null -sw '%{http_code}\n' https://your-host/docs` returning `404`. (With `EXPOSE_API_REFERENCE=true`, `/openapi.json` and `/redoc` return `200` by design; `/docs` must still be `404`.)
@@ -172,7 +172,7 @@ A deploy that ticks every row in both tables and the pre-flight checklist is saf
 
 The default rate-limit backend is **in-process**. Every Uvicorn worker keeps its own counters in local memory and they are never reconciled. Running `uvicorn ... --workers N` therefore multiplies the *effective* bucket budget by `N` — a 60/min anonymous-read limit with `--workers 4` is actually 240/min from a single source IP.
 
-For the self-hosted / single-node / Pi deployment: keep `--workers 1`. The shipped systemd unit at [`examples/deployment/systemd/tckdb-api.service`](../../examples/deployment/systemd/tckdb-api.service) is configured this way.
+For the self-hosted / single-node / Pi deployment: keep `--workers 1`. The shipped systemd unit at [`examples/deployment/systemd/tckdb-api.service`](https://github.com/TCKDB/TCKDB/blob/main/examples/deployment/systemd/tckdb-api.service) is configured this way.
 
 If a single worker is not enough throughput, scale out *after* moving the limiter to a shared backend (e.g. Redis). Do not raise `--workers` while the in-process limiter is still in use — the rate-limit smoke test (the `/auth/login` flood from the pre-flight) will still trip 429, masking the bucket inflation.
 
@@ -233,9 +233,9 @@ inside the API container with the API's own `DB_*` settings, so it needs no API 
 
 ## See also
 
-- [`.env.selfhosted.example`](../../.env.selfhosted.example) — template that encodes every safe value above.
+- [`.env.selfhosted.example`](https://github.com/TCKDB/TCKDB/blob/main/.env.selfhosted.example) — template that encodes every safe value above.
 - [README](README.md) — deployment scenarios overview.
 - [`shared-private-deployment.md`](shared-private-deployment.md) — lab/group operational guide.
 - [`self_hosted_single_node.md`](self_hosted_single_node.md) — single-node operator guide.
-- [Deployed-DB migration playbook](../../backend/docs/deployment/migrations.md) — `alembic upgrade head` on a real database.
-- [Backend deployment readiness audit](../../backend/docs/specs/backend_deployment_readiness_audit.md) — the audit that produced this checklist.
+- [Deployed-DB migration playbook](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/deployment/migrations.md) — `alembic upgrade head` on a real database.
+- [Backend deployment readiness audit](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/specs/backend_deployment_readiness_audit.md) — the audit that produced this checklist.
