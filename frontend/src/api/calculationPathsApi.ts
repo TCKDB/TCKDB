@@ -103,3 +103,116 @@ export async function loadPathSearchPoints(
     )
     return { summary: first.path_search, points }
 }
+
+// `GET /scientific/calculations/{ref}/irc`: the same envelope with the IRC summary and its points.
+
+export const ircSummarySchema = z.object({
+    direction: z.string().nullable().optional(),
+    has_forward: z.boolean().nullable().optional(),
+    has_reverse: z.boolean().nullable().optional(),
+    ts_point_index: z.number().nullable().optional(),
+    point_count: z.number().nullable().optional(),
+    zero_energy_reference_hartree: z.number().nullable().optional(),
+    forward_point_count: z.number(),
+    reverse_point_count: z.number(),
+    ts_point_count: z.number(),
+}).passthrough()
+
+const ircPointSchema = z.object({
+    point_index: z.number(),
+    direction: z.string().nullable().optional(),
+    is_ts: z.boolean(),
+    reaction_coordinate: z.number().nullable().optional(),
+    electronic_energy_hartree: z.number().nullable().optional(),
+    relative_energy_kj_mol: z.number().nullable().optional(),
+    max_gradient: z.number().nullable().optional(),
+    rms_gradient: z.number().nullable().optional(),
+    geometry_ref: z.string().nullable().optional(),
+    geometry_link: pointGeometryLinkSchema.nullable().optional(),
+}).passthrough()
+
+const ircPageSchema = z.object({
+    irc: ircSummarySchema,
+    points: z.array(ircPointSchema),
+    pagination: paginationSchema,
+    next_cursor: z.string().nullable().optional(),
+}).passthrough()
+
+export type IrcSummary = z.infer<typeof ircSummarySchema>
+export type IrcPoint = z.infer<typeof ircPointSchema>
+export type IrcPoints = { summary: IrcSummary; points: IrcPoint[] }
+
+export async function loadIrcPoints(
+    ref: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<IrcPoints> {
+    const { first, points } = await readAllPages<IrcPoint, z.infer<typeof ircPageSchema>>(
+        (query) => `/api/v1/scientific/calculations/${encodeURIComponent(ref)}/irc?${query}`,
+        (payload) => parseScientificResponse(ircPageSchema, payload, "IRC"),
+        signal,
+        onRateLimited,
+    )
+    return { summary: first.irc, points }
+}
+
+// `GET /scientific/calculations/{ref}/scan`: the scan summary, its coordinates in full, and its points.
+
+const scanCoordinateSchema = z.object({
+    coordinate_index: z.number(),
+    coordinate_kind: z.string(),
+    atom_indices: z.array(z.number()),
+    step_count: z.number().nullable().optional(),
+    step_size: z.number().nullable().optional(),
+    start_value: z.number().nullable().optional(),
+    end_value: z.number().nullable().optional(),
+    value_unit: z.string().nullable().optional(),
+}).passthrough()
+
+export const scanSummarySchema = z.object({
+    dimension: z.number(),
+    is_relaxed: z.boolean().nullable().optional(),
+    zero_energy_reference_hartree: z.number().nullable().optional(),
+    coordinate_count: z.number(),
+    point_count: z.number(),
+}).passthrough()
+
+const scanPointSchema = z.object({
+    point_index: z.number(),
+    electronic_energy_hartree: z.number().nullable().optional(),
+    relative_energy_kj_mol: z.number().nullable().optional(),
+    geometry_ref: z.string().nullable().optional(),
+    geometry_link: pointGeometryLinkSchema.nullable().optional(),
+    coordinate_values: z.array(z.object({
+        coordinate_index: z.number(),
+        coordinate_value: z.number(),
+        value_unit: z.string().nullable().optional(),
+    }).passthrough()).default([]),
+}).passthrough()
+
+const scanPageSchema = z.object({
+    scan: scanSummarySchema,
+    coordinates: z.array(scanCoordinateSchema).default([]),
+    points: z.array(scanPointSchema),
+    pagination: paginationSchema,
+    next_cursor: z.string().nullable().optional(),
+}).passthrough()
+
+export type ScanSummary = z.infer<typeof scanSummarySchema>
+export type ScanCoordinate = z.infer<typeof scanCoordinateSchema>
+export type ScanPoint = z.infer<typeof scanPointSchema>
+export type ScanPoints = { summary: ScanSummary; coordinates: ScanCoordinate[]; points: ScanPoint[] }
+
+export async function loadScanPoints(
+    ref: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<ScanPoints> {
+    const { first, points } = await readAllPages<ScanPoint, z.infer<typeof scanPageSchema>>(
+        (query) => `/api/v1/scientific/calculations/${encodeURIComponent(ref)}/scan?${query}`,
+        (payload) => parseScientificResponse(scanPageSchema, payload, "scan"),
+        signal,
+        onRateLimited,
+    )
+    return { summary: first.scan, coordinates: first.coordinates, points }
+}

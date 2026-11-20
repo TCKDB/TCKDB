@@ -11,15 +11,14 @@ import { ShapeCardHead } from "./ShapePicture"
 import { ViewerStage } from "./ViewerStage"
 
 function SelectedFacts({ profile, point, extra }: { profile: PathProfile; point: PathPoint; extra?: ReactNode }) {
-    const first = profile.points[0]?.index
-    const last = profile.points[profile.points.length - 1]?.index
+    const position = profile.points.indexOf(point) + 1
     const marker = markerWord(point)
     return (
         <dl className="kv-list path-steps-facts">
             <div>
                 <dt>Point</dt>
                 <dd>
-                    {profile.points.length > 1 ? `${point.index} of ${first}–${last}` : `${point.index}, the only stored point`}
+                    {profile.points.length > 1 ? `${point.index} · ${position} of ${profile.points.length} in path order` : `${point.index}, the only stored point`}
                     {point.leg && <> · {point.leg}</>}
                     {marker && <> <span className="value-pill">{marker === "guess" ? "picked guess" : marker}</span></>}
                 </dd>
@@ -32,7 +31,7 @@ function SelectedFacts({ profile, point, extra }: { profile: PathProfile; point:
                     {point.hartree !== null && <> · {hartreeText(point.hartree)} hartree</>}
                 </dd>
             </div>
-            <div><dt>RMS gradient</dt><dd>{point.rmsGradient === null ? NOT_DEPOSITED : point.rmsGradient}</dd></div>
+            {profile.hasGradients && <div><dt>RMS gradient</dt><dd>{point.rmsGradient === null ? NOT_DEPOSITED : point.rmsGradient}</dd></div>}
             <div>
                 <dt>Geometry</dt>
                 <dd>
@@ -67,13 +66,14 @@ function PointViewer({ point, label }: { point: PathPoint; label: string }) {
  * Step through the stored points of a path: a strip of small pictures, a slider with previous and next, the selected
  * point in the shared 3D viewer, and that point's own values.
  */
-export function PathPointStepper({ profile, selectedIndex, onSelect, label, extraFacts }: {
+export function PathPointStepper({ profile, selectedIndex, onSelect, label, extraFacts, sliderLabel = "Point along the path" }: {
     profile: PathProfile
     selectedIndex: number
     onSelect: (index: number) => void
     /** What the path is of, for the pictures' accessible names. */
     label: string
     extraFacts?: (point: PathPoint) => ReactNode
+    sliderLabel?: string
 }) {
     const sliderId = useId()
     const position = Math.max(0, profile.points.findIndex((point) => point.index === selectedIndex))
@@ -123,7 +123,7 @@ export function PathPointStepper({ profile, selectedIndex, onSelect, label, extr
                             ‹ {previous ? `Point ${previous.index}` : "First point"}
                         </button>
                         <label className="path-stepper-slider" htmlFor={sliderId}>
-                            <span className="path-stepper-label">Point along the path</span>
+                            <span className="path-stepper-label">{sliderLabel}</span>
                             <input
                                 id={sliderId}
                                 type="range"

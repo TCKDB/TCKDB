@@ -29,6 +29,7 @@ const INSET = 18
 const PLOT_W = W - LEFT - RIGHT
 const MARKER_R = 5
 const LABEL_CHAR_W = 7.6
+const DENSE_POINTS = 40
 
 type Placed = { point: PathPoint; sx: number; sy: number }
 
@@ -47,7 +48,10 @@ function linePaths(placed: Placed[]): string[] {
     return paths
 }
 
-/** Direct labels above their markers, moved below when they would overlap a label already placed. */
+/**
+ * Direct labels above their markers; moved below when the line rises through the space above the label, or when it
+ * would overlap a label already placed.
+ */
 function placeLabels(profile: PathProfile, placed: Placed[]) {
     const boxes: { x0: number; x1: number; y: number }[] = []
     return placed.filter(({ point }) => point.labels.length > 0).map(({ point, sx, sy }) => {
@@ -59,13 +63,15 @@ function placeLabels(profile: PathProfile, placed: Placed[]) {
         const above = sy - 14
         const below = sy + 26
         const clashes = (y: number) => boxes.some((other) => other.y === y && box.x0 < other.x1 + 8 && other.x0 < box.x1 + 8)
-        const y = clashes(above) || above < TOP - 6 ? below : above
+        const lineAbove = point.kj !== null && placed.some((other) => other.point.kj !== null && other.sx >= box.x0 && other.sx <= box.x1 && other.sy < sy - 6)
+        const lineBelow = point.kj !== null && placed.some((other) => other.point.kj !== null && other.sx >= box.x0 && other.sx <= box.x1 && other.sy > sy + 6)
+        const y = (lineAbove && !lineBelow) || clashes(above) || above < TOP - 6 ? below : above
         boxes.push({ ...box, y })
         return { key: point.index, text, x: anchor === "start" ? sx - 6 : anchor === "end" ? sx + 6 : sx, y, anchor, strong: point.emphasis !== null }
     })
 }
 
-function Marker({ point, sx, sy }: Placed) {
+function Marker({ point, sx, sy, quiet }: Placed & { quiet: boolean }) {
     const emphasis = point.emphasis
     if (emphasis === "climbing" || emphasis === "guess-climbing") {
         const r = MARKER_R + 2
@@ -78,9 +84,10 @@ function Marker({ point, sx, sy }: Placed) {
         )
     }
     const filled = emphasis === "guess" || emphasis === "saddle"
+    const plain = quiet && point.labels.length === 0 ? "path-figure-marker path-figure-marker--quiet" : "path-figure-marker"
     return (
         <circle
-            className={filled ? "path-figure-marker path-figure-marker--filled" : "path-figure-marker"}
+            className={filled ? "path-figure-marker path-figure-marker--filled" : plain}
             cx={sx}
             cy={sy}
             r={filled ? MARKER_R + 1 : MARKER_R}
@@ -156,6 +163,8 @@ function Picture({ profile, captionId, label, selectedIndex, onSelect }: {
     }
 
     const labels = placeLabels(profile, shown)
+    // A long path keeps its line and its marked points; the others stay reachable by pointer and keyboard.
+    const dense = shown.length > DENSE_POINTS
     return (
         <div className="path-figure-stage">
             <svg className="path-figure-svg" viewBox={`0 0 ${W} ${H}`} role="group" aria-label={label} aria-describedby={captionId}>
@@ -212,7 +221,7 @@ function Picture({ profile, captionId, label, selectedIndex, onSelect }: {
                         onClick={onSelect ? () => onSelect(item.point.index) : undefined}
                     >
                         {item.point.index === selectedIndex && <circle className="path-figure-ring" cx={item.sx} cy={item.sy} r={MARKER_R + 6} />}
-                        <Marker {...item} />
+                        <Marker {...item} quiet={dense} />
                     </g>
                 ))}
             </svg>
@@ -236,7 +245,7 @@ function PathTable({ profile, label }: { profile: PathProfile; label: string }) 
                         <th scope="col">{profile.xColumn}</th>
                         <th scope="col">Electronic energy (hartree)</th>
                         <th scope="col" className="t-preserve-case">Relative (kJ/mol)</th>
-                        <th scope="col">RMS gradient</th>
+                        {profile.hasGradients && <th scope="col">RMS gradient</th>}
                         <th scope="col">Marker</th>
                         <th scope="col">Geometry</th>
                     </tr>
@@ -248,7 +257,7 @@ function PathTable({ profile, label }: { profile: PathProfile; label: string }) 
                             <td data-label={profile.xColumn} className="num">{coordinateText(profile, point.coordinate)}</td>
                             <td data-label="Electronic energy (hartree)" className="num">{point.hartree === null ? NOT_DEPOSITED : hartreeText(point.hartree)}</td>
                             <td data-label="Relative (kJ/mol)" className="num">{point.kj === null ? NOT_DEPOSITED : relativeKjText(point.kj)}</td>
-                            <td data-label="RMS gradient" className="num">{point.rmsGradient === null ? NOT_DEPOSITED : point.rmsGradient}</td>
+                            {profile.hasGradients && <td data-label="RMS gradient" className="num">{point.rmsGradient === null ? NOT_DEPOSITED : point.rmsGradient}</td>}
                             <td data-label="Marker">{markerWords(point)}</td>
                             <td data-label="Geometry">
                                 {point.geometryRef

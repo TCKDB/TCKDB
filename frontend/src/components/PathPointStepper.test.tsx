@@ -54,7 +54,7 @@ describe("PathPointStepper", () => {
         expect(selected()).toBe("2")
         expect(screen.getByRole("slider")).toHaveValue("2")
         expect(screen.getByRole("slider")).toHaveAttribute("aria-valuetext", "Point 2 (picked guess): 3.000 along the path, energy not deposited")
-        expect(screen.getByText("2 of 0–3")).toBeInTheDocument()
+        expect(screen.getByText("2 · 3 of 4 in path order")).toBeInTheDocument()
         expect(await screen.findByRole("img", { name: "Ball-and-stick picture of path search, point 2" })).toBeInTheDocument()
     })
 
@@ -74,7 +74,7 @@ describe("PathPointStepper", () => {
         render(<Harness />)
         fireEvent.change(screen.getByRole("slider"), { target: { value: "1" } })
         expect(selected()).toBe("1")
-        expect(screen.getByText("1 of 0–3")).toBeInTheDocument()
+        expect(screen.getByText("1 · 2 of 4 in path order")).toBeInTheDocument()
     })
 
     it("shows a lone point without a strip or a stepper", () => {

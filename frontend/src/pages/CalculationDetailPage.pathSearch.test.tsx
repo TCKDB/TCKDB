@@ -125,7 +125,7 @@ describe("a path-search calculation", () => {
         expect(screen.queryByText("Path-search trajectory")).toBeNull()
         const geometries = screen.getByRole("heading", { name: "Geometries" }).closest("section") as HTMLElement
         expect(within(geometries).queryAllByRole("link", { name: /Geometry/ })).toHaveLength(0)
-        expect(within(geometries).getByText(/The 3 output geometries are the points of/)).toBeInTheDocument()
+        expect(within(geometries).getByText(/The 3 output geometries are the points listed/)).toBeInTheDocument()
     })
 
     it("states the facts of the search, with the picked guess and where it sits", async () => {

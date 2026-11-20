@@ -1199,7 +1199,7 @@ describe("CalculationDetailPage", () => {
 
         const note = screen.getByText(/^Not recorded on this calculation:/)
         expect(note.className).toBe("empty-projection")
-        for (const missing of ["Scan trajectory", "IRC trajectory", "Execution environment"]) {
+        for (const missing of ["Execution environment"]) {
             expect(note.textContent).toContain(missing)
         }
         // Lives inside the Further evidence section, not a separate
@@ -1435,24 +1435,6 @@ describe("CalculationDetailPage", () => {
         // The number itself only appears once now -- as the headline.
         const headline = document.querySelector(".calc-headline-energy") as HTMLElement
         expect(within(headline).getByTestId("energy-display-value")).toHaveTextContent("-76.123457")
-    })
-
-    it("binds a scan's min and max electronic energy to their own labelled row — never swapped", async () => {
-        server.use(http.get(ENDPOINT, () => HttpResponse.json({
-            record: mockRecord({
-                available_sections: { ...mockRecord().available_sections, has_scan: true },
-                scan: {
-                    dimension: 1, is_relaxed: true, coordinate_count: 1, point_count: 5,
-                    min_electronic_energy_hartree: -76.123456, max_electronic_energy_hartree: -75.987654,
-                },
-            }),
-        })))
-        page()
-        await findLoaded("Frequency")
-        fireEvent.click(screen.getByText("Scan trajectory"))
-        const section = (await screen.findByText("Points")).closest("details") as HTMLElement
-        expect(ddFor(section, "Min electronic energy (hartree)")).toBe("-76.123456")
-        expect(ddFor(section, "Max electronic energy (hartree)")).toBe("-75.987654")
     })
 
     it("renders review history eagerly, without a disclosure", async () => {

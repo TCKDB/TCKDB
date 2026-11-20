@@ -96,6 +96,11 @@
     stroke-width: 2;
 }
 
+.path-figure-marker--quiet {
+    fill: transparent;
+    stroke: transparent;
+}
+
 .path-figure-marker--filled {
     fill: var(--accent);
     stroke: var(--accent);
