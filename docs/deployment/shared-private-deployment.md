@@ -1,256 +1,89 @@
-# Shared private deployment
+# Lab server
 
-A **shared private deployment** is the same TCKDB backend deployed on a
-shared machine — typically a lab service node — for use by a research
-group. It runs the same schema, the same API, and the same auth model
-as a [single-machine private deployment](local-v0.md) and as the hosted
-community instance. The differences are **operational policy**: closed
-registration, per-user API keys, backups, reverse proxy, access
-control.
+A lab or group shares one TCKDB on a machine its members, notebooks and
+cluster jobs can reach. The install is the [Self-host](README.md) one. What
+changes is who can connect and how accounts are handed out.
 
-> **Not a separate mode.** This scenario is sometimes called a
-> "lab-server" deployment in older docs and code. It is not a fork, a
-> lite schema, or a separate codebase. It is the same TCKDB
-> application with different operational policy. See
-> [the deployment guide overview](README.md).
+Use a lab server when several people need the same records, when cluster jobs
+need a fixed upload target, or when the data should stay private until it is
+ready to submit to a public instance. One person on one machine does not need
+one.
 
-This is a deployment-guidance document. It does **not** ship new
-runtime code, container images, or installer automation. See
-[Non-goals](#non-goals).
+Before anyone else can reach it, tick every row of the
+[Production checklist](production_checklist.md).
 
-> **Before you expose the deployment:** confirm every row of the
-> [Production checklist](production_checklist.md) is satisfied. That
-> page is the canonical list of env vars and pre-flight checks for
-> hosted / shared / public deployments.
+## Install
 
----
+Follow [Self-host](README.md) and answer the env script's questions like
+this:
 
-## Where this scenario fits
+- **Deployment mode:** `shared_private`, the default.
+- **Public URL:** the address the lab will use, for example
+  `https://tckdb.lab.example.org`.
+- **Trusted proxy header:** the header your proxy sets, for example
+  `X-Real-IP`, or none.
 
-| Scenario | Audience | Reachability | Registration |
-|---|---|---|---|
-| [Single-machine private](local-v0.md) | One user, laptop/dev | `127.0.0.1` | Open registration acceptable |
-| **Shared private (this doc)** | A lab/group | Lab/internal URL | **Closed** registration, seeded accounts |
-| Hosted community | Public | Public URL | Operator-managed |
+`shared_private` makes the API refuse to start while a safety setting is
+unsafe: open registration, `/docs`, unauthenticated legacy routes, internal
+IDs, insecure cookies or rate limiting off. The error lists every problem at
+once.
 
-It is the same application in all three rows. Only operational policy
-changes.
+If the lab network is trusted and you will not set up HTTPS, give an
+`http://` public URL. The script then sets `SESSION_COOKIE_SECURE=false` and
+`SESSION_COOKIE_ALLOW_PLAIN_HTTP=true`, so browser login works, and session
+cookies cross the network unencrypted.
 
----
+## Accounts
 
-## Overview
-
-A shared private deployment lets a research group:
-
-- run a single shared PostgreSQL+RDKit database for the whole lab,
-- run a single backend API and (optionally) upload worker,
-- expose the API on a lab/internal URL,
-- require authenticated writes,
-- issue **per-user** API keys for scripts, notebooks, HPC jobs, and
-  workflow tools,
-- keep data private to the lab while preserving the option to
-  contribute selected records upstream via the
-  [manual local-to-hosted flow](../contribution-bundles/manual-local-to-hosted.md).
-
-The reference **infrastructure strategy** is Docker Compose on the
-service node — the same stack as
-[local-v0.md §Start the local stack](local-v0.md#1-start-the-local-stack).
-Other strategies (managed PostgreSQL+RDKit, [native install](native-advanced.md))
-are valid; the deployment scenario does not change.
-
----
-
-## Recommended architecture
-
-```text
-              ┌────────────────────────────────────────────┐
-              │           Lab service node                 │
-              │                                            │
-  HTTPS  ┌────┼─►  Reverse proxy (nginx / Caddy / Traefik) │
-  443    │    │     │  forwards X-API-Key + cookies        │
-         │    │     ▼                                      │
-         │    │   TCKDB API (uvicorn, host conda env)      │
-         │    │     │                                      │
-  HTTP   │    │     ├─► PostgreSQL + RDKit (Docker)        │
-  client │    │     └─► S3 store (SeaweedFS or external)   │
-  jobs   │    │                                            │
-         └────┼─►  Upload worker (inline or separate proc) │
-              └────────────────────────────────────────────┘
-
-              ▲
-              │  HTTP API (X-API-Key)
-              │
-   Lab users / scripts / notebooks / HPC compute jobs
-```
-
-Key properties:
-
-- **One** PostgreSQL+RDKit database; one API; optionally one worker.
-- Clients (lab scripts, HPC jobs, notebooks, future CLIs) use the
-  generic `base_url` + `api_key` model documented in
-  [generic-client-targeting.md](../clients/generic-client-targeting.md).
-  HPC jobs are a [client environment](client-access-from-hpc.md), not
-  a separate deployment — they call this deployment's API.
-- A reverse proxy is recommended for TLS termination, hostname
-  routing, and access control. The backend itself binds plain HTTP.
-
----
-
-## When this scenario applies
-
-Choose a shared private deployment when:
-
-- Multiple users in a group need to share scientific records.
-- HPC or batch jobs need a stable upload target reachable from compute
-  nodes (see [client-access-from-hpc.md](client-access-from-hpc.md)).
-- The lab wants to keep raw records private but still mint contribution
-  bundles for hosted/community TCKDB on demand.
-- A single-machine private deployment is no longer sufficient.
-
-Stay on a [single-machine private deployment](local-v0.md) if one user
-on one host is sufficient. Use the hosted community instance for
-records that are ready for public contribution (via the
-[manual local-to-hosted flow](../contribution-bundles/manual-local-to-hosted.md)).
-
----
-
-## Services involved
-
-The same services as a single-machine deployment, deployed on a shared
-host:
-
-| Service       | Role                                                  | Where it runs                       |
-|---------------|-------------------------------------------------------|-------------------------------------|
-| PostgreSQL+RDKit | Identity, results, provenance, moderation          | Docker (`docker-compose.yml`) — or a managed PostgreSQL+RDKit service, or a [native install](native-advanced.md) |
-| S3 store      | Artifact / object storage                              | SeaweedFS in Docker, or any S3-compatible service (lab-managed S3, AWS S3, GCS via HMAC keys) |
-| Backend API   | FastAPI, schema, auth, upload routes                   | Host conda env (`tckdb_env`)        |
-| Upload worker | Async ingestion (optional; can run inline in the API) | Host conda env, or separate proc    |
-| Reverse proxy | TLS, routing, header forwarding, access control       | Host or separate appliance          |
-
-The backend and worker run on the host because the repo has not yet
-standardized a Python dependency manifest.
-
----
-
-## Authentication and registration policy
-
-Auth is the model from DR-0022 — Auth and Roles v1:
-
-- **Sessions** for humans (login, mint API keys).
-- **API keys** for clients (`X-API-Key` header), per-user.
-
-For any deployment reachable beyond `127.0.0.1`, set:
-
-```env
-DEPLOYMENT_MODE=shared_private
-AUTH_ALLOW_OPEN_REGISTRATION=false
-```
-
-`DEPLOYMENT_MODE=shared_private` switches on the startup safety guard
-(see [Production checklist](production_checklist.md#deployment-mode-and-startup-guard)).
-The app refuses to boot if `AUTH_ALLOW_OPEN_REGISTRATION`,
-`EXPOSE_API_DOCS`, `LEGACY_READS_REQUIRE_AUTH`, `SESSION_COOKIE_SECURE`,
-`ALLOW_PUBLIC_INTERNAL_IDS`, or `RATE_LIMIT_ENABLED` are at their
-local-dev values. Settings documentation alone is no longer the only
-gate — the process exits with a clear error listing every unsafe
-setting at once.
-
-Reasoning: with the API reachable on the lab network, open
-registration is a soft account-creation backdoor. Disable it and seed
-every account explicitly. Single-machine private deployments may keep
-open registration on because the API is bound to `127.0.0.1` and
-unreachable from outside (and run with `DEPLOYMENT_MODE=local`).
-
-A starter set of policies for shared deployments:
-
-- Disable public registration (above).
-- Use bootstrap admin to create the first account; have that admin
-  create the rest, or extend the bootstrap script per user.
-- Issue **one API key per user**. Do not share a lab-wide key.
-- Treat keys as bearer credentials — see
-  [API keys for users and scripts](#api-keys-for-users-and-scripts) and
-  [generic-client-targeting.md §API-key safety](../clients/generic-client-targeting.md#api-key-safety).
-
----
-
-## Bootstrap admin
-
-The first account on a closed instance is created with the same
-`backend/scripts/bootstrap_admin.py` used everywhere else. The script
-is idempotent — running it again with the same username promotes (and
-reactivates) the existing account. Run it from `backend/`:
+Registration is closed. `init` creates the first administrator. Create
+everyone else with `bootstrap_admin.py` in the API container:
 
 ```bash
-cd backend
-TCKDB_BOOTSTRAP_PASSWORD='change-me' \
-  conda run -n tckdb_env python scripts/bootstrap_admin.py \
-    --username admin \
-    --email admin@lab.example.org \
-    --full-name "Lab Admin"
+read -rsp "New user's password: " PW; echo
+docker compose --env-file .env.selfhosted --env-file .env.db-admin --profile selfhost \
+    exec -e TCKDB_BOOTSTRAP_PASSWORD="$PW" tckdb-api \
+    /opt/conda/bin/python scripts/bootstrap_admin.py \
+    --username alice --email alice@lab.example.org --role user
+unset PW
 ```
 
-Subsequent users can be seeded the same way (the script accepts any
-username; promote them to admin or curator after the fact via the
-admin endpoints):
+`--role` is `user`, `curator` or `admin`, and it defaults to `admin`, so pass
+it. Running the command again for an existing user reactivates the account.
+It changes the role only with `--force-role-change`. An administrator can also
+change roles through the admin API.
 
-```bash
-conda run -n tckdb_env python scripts/bootstrap_admin.py \
-  --username alice --email alice@lab.example.org
-```
+## API keys
 
-A regular admin "create user" flow is future work; until it exists, the
-bootstrap script is the supported seeding path on a closed instance.
-
----
-
-## API keys for users and scripts
-
-Once an account exists, the user logs in once (browser or curl with
-`-c cookies.txt`) and mints API keys for their scripts/notebooks/HPC
+Each person logs in once and mints keys for their scripts, notebooks and
 jobs:
 
 ```bash
-curl -sf -c cookies.txt -H "Content-Type: application/json" \
-  -X POST "https://tckdb.lab.example.org/api/v1/auth/login" \
-  -d '{"username": "alice", "password": "..."}'
-
-curl -sf -b cookies.txt -H "Content-Type: application/json" \
-  -X POST "https://tckdb.lab.example.org/api/v1/auth/api-keys" \
-  -d '{"label": "alice-hpc-arc"}'
+TCKDB_BASE_URL=https://tckdb.lab.example.org/api/v1 backend/scripts/tckdb_auth.sh login-create-key --name alice-hpc
 ```
 
-Policy guidance for shared deployments:
+- Give each person their own keys. A key shared by the whole lab loses who
+  uploaded what, and revoking it stops everyone.
+- Use one key per place (`alice-laptop`, `alice-hpc`), so one can be revoked
+  alone.
+- A key has its owner's role. Mint keys from the account with the least
+  privilege that does the job.
+- To rotate a key, mint the new one, switch to it, then revoke the old one. A
+  user can hold several keys at once, so nothing stops.
 
-- **Per user**, not per lab. A shared lab-wide key destroys
-  attribution, makes revocation all-or-nothing, and turns one leak into
-  a lab-wide credential incident.
-- Use **distinct labels** per environment (`alice-laptop`,
-  `alice-hpc`, `alice-notebook`) so revoking a single environment is
-  straightforward.
-- Keys inherit the owning user's role. Mint keys from the
-  lowest-privilege account that satisfies the use case.
-- Rotate proactively: mint new key, deploy, then revoke the old one.
-  The API supports multiple concurrent keys per user precisely so that
-  rotation has no downtime.
+More in [Admin accounts and API keys](admin_auth_quickstart.md) and
+[Configuring a client](../clients/generic-client-targeting.md#api-key-safety).
 
-Full API-key surface and safety notes:
-[generic-client-targeting.md §API keys](../clients/generic-client-targeting.md#api-keys).
+## Reverse proxy
 
----
+Put a proxy in front for TLS and a lab hostname. It must:
 
-## Reverse proxy basics
+1. terminate TLS with a lab or institutional certificate;
+2. pass the `X-API-Key` header through unchanged;
+3. pass `Set-Cookie` through unchanged, so browser login works;
+4. set the client's address in a header the API can trust (`X-Real-IP`).
 
-The TCKDB API is plain HTTP and does not terminate TLS. For a shared
-deployment, sit it behind a reverse proxy that:
-
-1. Terminates TLS using a lab-issued or institutional certificate.
-2. Forwards the **`X-API-Key`** header to the backend untouched.
-3. Preserves the **session cookie** issued by `/auth/login` so users
-   can mint API keys from the browser.
-4. Sets `X-Forwarded-For` / `X-Forwarded-Proto` so logs and any future
-   rate-limit logic see real client info.
-
-Illustrative nginx snippet (not a production-complete config):
+A starting point for nginx, in front of the web UI, which passes `/api/` on
+to the API:
 
 ```nginx
 server {
@@ -260,260 +93,101 @@ server {
     ssl_certificate     /etc/ssl/lab/tckdb.crt;
     ssl_certificate_key /etc/ssl/lab/tckdb.key;
 
-    location /api/ {
-        # nginx refuses bodies over 1 MiB by default, before TCKDB sees them.
-        # Sit above the caps the API enforces itself (5 MiB bundles,
-        # BUNDLE_MAX_BODY_BYTES; 9 MiB network export manifests). Upload and
-        # job routes, which can carry ESS logs, need a larger limit in a
-        # second location, e.g. `location ~ ^/api/v1/(uploads|jobs)/ {
-        # client_max_body_size 100m; proxy_pass http://127.0.0.1:8010; ... }`.
-        # A regex location's proxy_pass may not carry a URI part; the request
-        # path already starts with /api/. See frontend/nginx.conf.
-        client_max_body_size 10m;
+    # Uploads can carry ESS logs. The web UI accepts up to 100 MB on upload
+    # routes and 10 MB elsewhere; nginx refuses anything over 1 MB by default.
+    client_max_body_size 100m;
 
-        proxy_pass http://127.0.0.1:8010/api/;
+    location / {
+        proxy_pass http://127.0.0.1:8011;
         proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-
-        # Critical: forward the API-key header and preserve cookies.
-        proxy_set_header X-API-Key         $http_x_api_key;
-        proxy_pass_request_headers         on;
     }
 }
 ```
 
-Caddy and Traefik handle header/cookie passthrough by default; the
-explicit `proxy_set_header X-API-Key …` line above is a safety belt
-for nginx setups that strip unknown headers.
+Set `TRUSTED_PROXY_HEADER=X-Real-IP` to match. To serve the API alone, proxy
+to `127.0.0.1:8010` instead.
 
-Things to avoid:
+The proxy must overwrite `X-Real-IP` with the client's address, as the
+`$remote_addr` line does. The web UI passes on whatever `X-Real-IP` arrives,
+so behind a proxy that leaves it alone, a client could pick its own
+rate-limit key. Caddy and Traefik pass cookies and `X-API-Key` through by
+default, but don't set `X-Real-IP`: add a header rule that sets it, or leave
+`TRUSTED_PROXY_HEADER` unset.
 
-- Stripping or rewriting `X-API-Key` in the proxy.
-- Buffering / rewriting `Set-Cookie` so session login appears to "work"
-  but no cookie reaches the browser.
-- Exposing internal admin/debug surfaces (e.g. the object store's
-  admin UI or MinIO console, DB admin tooling) on the public proxy.
+Route only the web UI and the API through the proxy. The database, the
+object store and the MinIO console stay private.
 
----
+## Network and firewall
 
-## Firewall, VPN, and access control
+- Keep the server on the lab network or behind the institution's VPN, under
+  an internal DNS name. A lab server rarely needs to be on the public
+  internet.
+- If the proxy must be public, allow only the source ranges that need it,
+  such as cluster login nodes and lab subnets.
+- Postgres (5432) and the object store (9000) bind to 127.0.0.1 already.
+  Keep them there.
+- Revoke a person's keys when they leave.
 
-A shared private deployment is private. Treat it like one:
-
-- Prefer placing the deployment behind the lab/institutional VPN or on
-  an internal-only DNS name. A public-internet-reachable shared private
-  deployment is almost never necessary.
-- If the proxy must be public-facing, restrict source IPs to the
-  ranges that actually need access (HPC login nodes, lab subnets).
-- Block direct access to PostgreSQL (5432) and the object store (9000;
-  also 9001 on MinIO) at
-  the host firewall — only the proxy needs to reach the API, and only
-  the API needs to reach the DB and object store.
-- Do not put the bootstrap admin password in shared shell history;
-  use the `TCKDB_BOOTSTRAP_PASSWORD` env var.
-- Separate keys per user; revoke on personnel changes.
-
----
-
-## Observability and operator probes
-
-Two HTTP probes are exposed for operators and load balancers:
+## Health checks
 
 ```bash
-# Liveness — confirms the process is up and can run SELECT 1.
-curl -i https://tckdb.lab.example.org/api/v1/health
-
-# Readiness — confirms DB connectivity AND that the schema is migrated.
-# The body includes the currently-installed Alembic revision so a
-# half-migrated deploy is visible without shelling into the host.
-curl -i https://tckdb.lab.example.org/api/v1/readyz
+curl -i https://tckdb.lab.example.org/api/v1/health   # the process is up and reaches the database
+curl -i https://tckdb.lab.example.org/api/v1/readyz   # also checks the schema is migrated
 ```
 
-A healthy `/readyz` returns `200` with:
+A healthy `/readyz` returns `200` with
+`{"status":"ready","database":"ok","alembic_revision":"<rev>"}`. A failing
+one returns `503` with a `code` (`database_unavailable`,
+`schema_not_initialized`) and never the database URL or a stack trace.
 
-```json
-{"status":"ready","database":"ok","alembic_revision":"<rev>"}
-```
-
-A degraded deploy returns `503` with a stable `code` field
-(`database_unavailable`, `schema_not_initialized`). The body never
-contains driver text, the DB URL, or stack traces.
-
-Every response carries an `X-Request-ID` header. Clients may set their
-own value on inbound requests for correlation; the server echoes it
-when it matches a safe pattern, otherwise it generates a fresh
-UUID-style id. Lab/HPC scripts that log this header can be correlated
-end-to-end with the API access log.
-
-For structured log collection set `LOG_FORMAT=json` on the API process.
-Log records then arrive as one JSON object per line with at least
-`timestamp`, `level`, `logger`, `message`, and `request_id`.
-
-The API process should run with a single Uvicorn worker (`--workers 1`)
-while the in-process rate limiter is in use. Adding more workers
-silently multiplies every per-IP bucket budget by the worker count; move
-the limiter to a shared backend (e.g. Redis) before scaling out. See
-[Rate limiter and Uvicorn workers](production_checklist.md#rate-limiter-and-uvicorn-workers).
-
----
+Every response carries an `X-Request-ID` header. Scripts that log it can be
+matched to the API's log. Set `LOG_FORMAT=json` to get one JSON object per log
+line.
 
 ## Backup and restore basics
 
-A shared deployment is the system of record for data the lab cares
-about. Back it up. This section covers the minimum viable approach;
-full SRE hardening is out of scope.
+A lab server holds records the lab cares about. Back up three things:
 
-There are **three** distinct things to back up:
+1. **The database:** identity, results, provenance, submissions.
+2. **The object store:** logs and other files kept outside the database. A
+   database backup alone loses them.
+3. **The configuration:** both env files and the proxy config. Keep them in
+   a private place, never in a public repository.
 
-1. **The database** — identity, results, provenance, submission state.
-2. **The artifact / object store** — log files, geometries, anything
-   stored outside the DB. **Database backup alone is insufficient if
-   artifacts are stored outside the DB.**
-3. **Configuration** — `.env`, reverse-proxy config, and any
-   institution-specific overrides.
+The commands are on [Self-host](README.md#back-up), and the scheduled
+version and the restore steps are on
+[Public server](self_hosted_single_node.md#backups-and-restore). On a managed
+S3 store, use its versioning, and still check it.
 
-For the operator runbook covering `alembic upgrade head` on a real
-database — pending-revision checks, pre-upgrade `pg_dump`, public-ref
-backfill, rollback expectations, and the operator checklist — see
-[Deployed-DB migration playbook](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/deployment/migrations.md).
-That playbook is the source of truth for any schema upgrade against a
-lab-shared DB.
+Restore in this order: configuration, an empty database, the dump, the
+files, then start the API and check `GET /auth/me` with a key. Try a restore
+once before you need one.
 
-### Database
+Upgrading a database that holds data: read the
+[migration runbook](../../backend/docs/deployment/migrations.md) first.
 
-Use `pg_dump`. The output is plain SQL and survives major Postgres
-upgrades better than a binary dump:
+## Clients
 
-```bash
-# From the service host, with $DATABASE_URL pointing at the lab DB.
-pg_dump "$DATABASE_URL" > tckdb-backup-$(date +%F).sql
-```
-
-Schedule it via cron / systemd timer; rotate older copies; verify the
-output is non-empty.
-
-**When you restore**, create the target database explicitly —
-`createdb -E UTF8 -T template0 <name>`, or
-`CREATE DATABASE <name> ENCODING 'UTF8' TEMPLATE template0;`. A bare
-`createdb` copies `template1`, which is `SQL_ASCII` on many clusters, and a
-`SQL_ASCII` database accepts a `UTF8` dump without error while silently
-mis-counting every non-ASCII character. See
-[troubleshooting.md](troubleshooting.md#the-cluster-template-disagrees-with-the-production-database).
-
-### Artifacts / object store
-
-Copy the bucket out through the S3 API, which works for the bundled
-SeaweedFS container and for any other S3-compatible store. With
-`rclone`, given remotes for the store and the backup target:
-
-```bash
-rclone sync tckdb:tckdb-artifacts s3-backup:tckdb-artifacts
-```
-
-On a MinIO deployment, `mc` (MinIO client) does the same:
-
-```bash
-mc mirror --overwrite local/tckdb-artifacts s3-backup/tckdb-artifacts
-```
-
-If your lab uses a managed S3 (institutional or AWS), rely on its
-versioning/lifecycle features, but still verify periodically.
-
-### Configuration
-
-Treat `.env`, reverse-proxy config, and any operational scripts as
-config-as-code. Keep them in a private git repo; never commit secrets
-in plaintext.
-
-### Restore order
-
-When restoring from cold backup:
-
-1. Restore configuration (`.env`, proxy config).
-2. Bring up an empty PostgreSQL+RDKit container.
-3. `psql … < tckdb-backup-YYYY-MM-DD.sql` to load the DB dump.
-4. Restore the artifact/object store contents.
-5. Start the API and worker; smoke-test with `GET /auth/me`.
-
-Test a restore at least once before you need it. A backup you have
-never restored is a hypothesis.
-
----
-
-## Client configuration
-
-Clients (lab scripts, notebooks, HPC jobs, workflow tools) target the
-deployment using the generic two-value model:
-
-```yaml
-tckdb:
-  base_url: "https://tckdb.lab.example.org/api/v1"
-  api_key: "tck_replace_me"
-```
-
-Or via environment variables:
+Clients need two values:
 
 ```bash
 export TCKDB_BASE_URL="https://tckdb.lab.example.org/api/v1"
-export TCKDB_API_KEY="tck_replace_me"
+export TCKDB_API_KEY="tck_..."
 ```
 
-A starter env file is provided at
-[`examples/deployment/lab-server.env.example`](https://github.com/TCKDB/TCKDB/blob/main/examples/deployment/lab-server.env.example)
-(server-side settings) and
-[`examples/deployment/hpc-client.env.example`](https://github.com/TCKDB/TCKDB/blob/main/examples/deployment/hpc-client.env.example)
-(client-side settings for HPC/batch jobs).
+Cluster jobs are clients too; see [Clients on HPC](client-access-from-hpc.md).
+Starter env files:
+[`lab-server.env.example`](../../examples/deployment/lab-server.env.example)
+(server) and [`hpc-client.env.example`](../../examples/deployment/hpc-client.env.example)
+(jobs).
 
-Targeting model: [generic-client-targeting.md](../clients/generic-client-targeting.md).
+## Lab server and public instance
 
----
-
-## Relationship to hosted/community TCKDB
-
-A shared private deployment is independent of the hosted community
-instance. They run the same backend but they are separate deployments
-with separate users, separate API keys, and separate data.
-
-- Pointing a client at a different `base_url` does **not** sync, copy,
-  or migrate data between deployments. See
-  [generic-client-targeting.md §Targeting is not syncing](../clients/generic-client-targeting.md#targeting-is-not-syncing).
-- The supported way to push selected records from a shared private
-  deployment to hosted is the
-  [manual local-to-hosted contribution flow](../contribution-bundles/manual-local-to-hosted.md).
-  A shared deployment qualifies as a "local instance" for that flow;
-  bundle export reads from the shared DB, and submit/dry-run uses
-  *hosted* API keys.
-
----
-
-## Non-goals
-
-This document deliberately does **not** include:
-
-- a backend Dockerfile or container image (tracked as a separate
-  milestone);
-- production-grade SRE (HA, failover, observability, secrets
-  management, cookie hardening, full TLS playbooks);
-- Kubernetes deployment;
-- Apptainer/Singularity images (deferred packaging — see
-  [client-access-from-hpc.md §Apptainer/Singularity (deferred packaging)](client-access-from-hpc.md#apptainersingularity-deferred-packaging));
-- a native installer (advanced manual path documented in
-  [native-advanced.md](native-advanced.md));
-- service accounts;
-- raw database synchronization;
-- frontend deployment;
-- a curator review UI for shared deployments.
-
----
-
-## See also
-
-- [Deployment guide overview](README.md)
-- [Single-machine private deployment](local-v0.md)
-- [Client access from HPC](client-access-from-hpc.md)
-- [Native advanced install](native-advanced.md)
-- [Generic client targeting](../clients/generic-client-targeting.md)
-- [Manual local-to-hosted contribution flow](../contribution-bundles/manual-local-to-hosted.md)
-- DR-0022 — Auth and Roles v1
-- DR-0023 — Local/Offline and Hosted Submission Model
+A lab server is separate from any public instance: its own users, keys and
+data. Pointing a client at another base URL copies nothing. To publish
+selected records, export them as a bundle and submit it with a key from the
+public instance; see
+[Local to hosted, step by step](../contribution-bundles/manual-local-to-hosted.md).
