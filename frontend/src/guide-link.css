@@ -65,6 +65,11 @@
     margin: 0;
 }
 
+/* Entry pages set their section h2 margins to zero; the row follows. */
+.entry-page .ledger-section .section-heading-row {
+    margin: 0;
+}
+
 /* Centred on the heading's first line, however many lines it wraps to. */
 .section-heading-row > .guide-link--icon {
     margin-top: calc((1lh - 1.5rem) / 2);

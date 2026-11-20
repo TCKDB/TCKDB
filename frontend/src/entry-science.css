@@ -167,7 +167,6 @@
 .entry-page .ledger-section { margin-top: 3.5rem; }
 .entry-page .ledger-heading { max-width: 44rem; }
 
-.entry-page .ledger-section .section-heading-row,
 .entry-page .ledger-section h2 {
     margin: 0;
     font: var(--type-heading-1-font);
