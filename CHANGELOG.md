@@ -22,6 +22,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## tckdb_deploy.sh deploys onto any compose project (Unreleased)
+
+- **Behaviour:** the pre-deploy backup runs `pg_dump` as `DB_ADMIN_USER` (from `TCKDB_MIGRATION_ENV_FILE`, else `TCKDB_ENV_FILE`, else the db container's `POSTGRES_USER`) on `DB_NAME` (from `TCKDB_ENV_FILE`, else the container's `POSTGRES_DB`), each defaulting to `tckdb` as before. A stack built from the templates, whose administrator is `tckdb_admin` and appears only in the operator file, no longer fails the backup with `role "tckdb" does not exist`.
+- **Behaviour:** unless `TCKDB_DB_CONTAINER` / `TCKDB_DB_NETWORK` are set, the database container and network come from `COMPOSE_PROJECT_NAME`, else `tckdbv2-db-1` / `tckdbv2_default` when that container exists, else `docker compose ps -q db` and its project's `_default` network.
+- **Behaviour:** `--check` prints one value per line; it printed both a value and its fallback (`inactive` and `n/a`) for the systemd unit, the container and its networks. Usage text names the tags CI publishes (`0.2.0`, `sha-<commit>`) and says that a `selfhost`-profile stack upgrades through compose instead.
+- **Schema and migration:** none. No new environment variable (`COMPOSE_PROJECT_NAME` is Docker Compose's own). No distributed package changed.
+
 ## TCKDB self-hosts with one compose command from the published images (Unreleased)
 
 - **Behaviour:** `docker compose --env-file .env.selfhosted --env-file .env.db-admin --profile selfhost up -d` (or `make selfhost`) runs the published `laxzal/tckdb-api` and `laxzal/tckdb-frontend` images: a one-shot `init` service provisions the database roles, migrates, checks the roles and creates the first administrator, then `tckdb-api` and `frontend` start on loopback ports. Without the profile, compose still starts only `db` and `seaweedfs`.
