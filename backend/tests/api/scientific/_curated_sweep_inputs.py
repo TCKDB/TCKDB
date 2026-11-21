@@ -42,6 +42,9 @@ PATH_PARAM_PROVIDERS: dict[str, Callable[[SweepWorld], list[str]]] = {
         w.extra["geometry_ambiguous_owners"].public_ref,
     ],
     "level_of_theory_ref_or_id": lambda w: [w.extra["lot"].public_ref, w.extra["lot_hidden_only"].public_ref],
+    # A catalogue entry by the spelling of the world's level of theory, so its usage and levels list are populated.
+    "method_handle": lambda w: [w.extra["lot"].method],
+    "basis_set_handle": lambda w: [w.extra["lot"].basis],
     "literature_ref_or_id": lambda w: [w.extra["literature"].public_ref, w.extra["literature_hidden_only"].public_ref],
     "network_kinetics_ref_or_id": lambda w: _refs(w, "nkin_v", "nkin_v_under_hidden_net"),
     # The selection routes (select, manifest, export-selected) take the dedicated network of the selection world.
