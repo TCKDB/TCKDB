@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## GFN2, ωB97X-D3 and MRCI+Davidson have a method family (Unreleased)
+
+- **Behaviour:** `method_family_classification` is at version 2. `gfn2` is `semiempirical`, `wb97xd3` is `dft` rung 4 and `mrci+davidson` is `multireference`, so level-of-theory reads, the method-family and DFT-rung filters and the catalogue cards for GFN2-xTB, ωB97X-D3 and MRCI+Q carry those families instead of `unclassified`. Every read names the classification version it used (`method_classification`). No other method name moves.
+- **Schema and migration:** none. The family is derived at read time, so no catalogue row changes. No new environment variable.
+- **Versions:** `tckdb-schemas` 0.177.0, `tckdb-client` 0.209.3 (its `tckdb-schemas` window is `>=0.158,<0.178`).
+
 ## Release 0.3.0 is the self-hosting default (Unreleased)
 
 - **Behaviour:** the `selfhost` compose profile and `tckdb_deploy.sh` examples default to the 0.3.0 images (`TCKDB_IMAGE_TAG`). 0.3.0 carries the plain-HTTP lab-network login opt-in and the web UI's `X-Real-IP` handling, so `--access lan` and `--access https` work on the default tag; the env script warns only when `TCKDB_IMAGE_TAG` is set to 0.2.0.

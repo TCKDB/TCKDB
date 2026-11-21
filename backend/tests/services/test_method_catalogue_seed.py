@@ -30,10 +30,6 @@ BASIS_SPELLINGS = (
     "cc-pVQZ", "def2-svp", "def2-universal-jkfit", "aug-cc-pVTZ-F12", "aug-cc-pvtz/c", "cc-pvtz-f12-cabs",
 )
 
-#: Seeded keys that ``method_families`` does not classify yet. Each is a spelling of a classified method; widening
-#: the classification is a new classification version. This list may only shrink.
-KNOWN_UNCLASSIFIED = frozenset({"gfn2", "wb97xd3", "mrci+davidson"})
-
 #: Words that rank or judge a method. A description says what a method is, never how good it is.
 EVALUATIVE = (
     "accurate", "accuracy", "best", "better", "gold standard", "reliable", "reliability", "recommended",
@@ -92,17 +88,9 @@ def test_seed_families_agree_with_the_method_family_classification(seed):
             continue
         for k in m.keys:
             derived = classify_method(k)
-            if derived == UNCLASSIFIED and k in KNOWN_UNCLASSIFIED:
-                continue
-            if derived.family != m.family:
+            if derived == UNCLASSIFIED or derived.family != m.family:
                 disagreements.append((k, m.family, derived.family))
     assert disagreements == []
-
-
-def test_the_known_unclassified_keys_are_still_seeded_and_unclassified(seed):
-    seeded = {k for m in seed.methods for k in m.keys}
-    assert KNOWN_UNCLASSIFIED <= seeded
-    assert all(classify_method(k) == UNCLASSIFIED for k in KNOWN_UNCLASSIFIED)
 
 
 def test_descriptions_and_names_carry_no_evaluative_words(seed):

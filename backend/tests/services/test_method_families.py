@@ -137,6 +137,10 @@ NAMED = [
     ("CASPT2", F.multireference, None),
     ("PM6", F.semiempirical, None),
     ("GFN2-xTB", F.semiempirical, None),
+    ("GFN2", F.semiempirical, None),
+    ("wB97XD3", F.dft, 4),
+    ("wB97X-D3", F.dft, 4),
+    ("MRCI+Davidson", F.multireference, None),
     ("MMFF94", F.force_field, None),
     ("UFF", F.force_field, None),
 ]
@@ -255,12 +259,12 @@ def test_a_dft_rung_belongs_to_dft_alone():
 
 def test_the_classification_is_a_named_version_in_a_registry():
     """Kills: a version in the identifier, or a classification that is not looked up through the registry."""
-    assert (CLASSIFICATION_REF.name, CLASSIFICATION_REF.version) == (CLASSIFICATION_NAME, 1)
+    assert (CLASSIFICATION_REF.name, CLASSIFICATION_REF.version) == (CLASSIFICATION_NAME, 2)
     assert CLASSIFICATION_NAME == "method_family_classification"
     assert CLASSIFICATIONS.is_current(CLASSIFICATION_REF)
     assert CLASSIFICATIONS.get(CLASSIFICATION_NAME) is CLASSIFICATION
     with pytest.raises(UnknownVersion):
-        classify_method("b3lyp", version=2)
+        classify_method("b3lyp", version=1)
 
 
 @pytest.mark.parametrize(

@@ -63,6 +63,7 @@ REGISTRIES: dict[str, Callable[[], VersionRegistry]] = {
 #: calculation and the filter set grew, so a decision recorded under the earlier reading is refused on replay.
 #: The structure and relative-energy formats moved to 5: a basin determination records its conformer
 #: group's and observation's review statuses apart, so a replay judges the group as a record and the observation as evidence.
+#: The method-family classification is at 2: ``gfn2``, ``wb97xd3`` and ``mrci+davidson`` gained a family.
 EXPECTED: dict[str, int] = {
     "thermo_formats": 5,
     "thermo_semantics": 2,
@@ -73,6 +74,7 @@ EXPECTED: dict[str, int] = {
     "structure_formats": 5,
     "network_formats": 4,
     "relative_energy_formats": 5,
+    "method_family_classifications": 2,
 }
 
 #: Names above the baseline inside a registry whose other names are at it. The transition-state badge lists its

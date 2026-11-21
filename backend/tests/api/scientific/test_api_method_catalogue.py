@@ -51,6 +51,10 @@ def test_browse_filters_by_kind_and_family(client):
     assert all(r["family"] is None for r in dispersion)
     dft = client.get(f"{BASE}/methods", params={"method_family": "dft"}).json()["records"]
     assert {r["key"] for r in dft} == {"b2plyp", "b2plypd3", "b3lyp", "m062x", "wb97x-d3", "wb97xd"}
+    multireference = client.get(f"{BASE}/methods", params={"method_family": "multireference"}).json()["records"]
+    assert {r["key"] for r in multireference} == {"casscf", "mrci", "mrci+davidson", "nevpt2"}
+    unclassified = client.get(f"{BASE}/methods", params={"method_family": "unclassified"}).json()["records"]
+    assert unclassified == []
     aux = client.get(f"{BASE}/basis-sets", params={"role": "auxiliary_correlation"}).json()["records"]
     assert [r["key"] for r in aux] == ["aug-cc-pvtz/c"]
 
