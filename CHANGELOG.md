@@ -22,6 +22,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## The API reads backend/.env, and the example units start where the docs install them (Unreleased)
+
+- **Behaviour:** `Settings` reads `backend/.env` when it exists, resolved from the backend directory, not the working directory; a variable set in the environment wins, and keys that are not settings are ignored. `uvicorn main:app` (`make api`, the example `tckdb-api.service`) also loads the file into the process environment without overriding it, so `S3_*` and `TCKDB_INLINE_WORKER` come from it too. The API image contains no `.env` (`.dockerignore`) and its entry point is `app.api.app:create_app`, so containers are unchanged.
+- **Behaviour:** `check_selfhosted_deployment.sh` checks secrets only when the env file's `DEPLOYMENT_MODE` is not `local` (unset is `local`), as the API's startup checks do, and says so in its output.
+- **Ops:** `examples/deployment/systemd/tckdb-backup.service` creates `/var/backups/tckdb` as root before the dump (`ExecStartPre=+`); `tckdb-api.service` uses `Wants=docker.service` instead of `Requires=`, so it starts on a host without Docker.
+- No schema or migration change. No new environment variable. No distributed package changed.
+
 ## A method and basis-set catalogue names what a level of theory's spellings are (Unreleased)
 
 - **Behaviour:** new curated reference tables say what a stored method, dispersion or basis-set spelling names: `method_catalogue` (22 entries: 20 methods, 2 dispersion corrections) and `basis_set_catalogue` (15 entries), each with a short name, full name, one definitional sentence, and the articles that define it (45 `literature` rows, Crossref-resolved, `title_source = resolved_metadata`, with their authors in order). An existing citation of a seeded DOI is reused, also when its DOI carries a `doi:` prefix; one whose title was not registry-resolved takes the seed's Crossref fields and authors, and a registry-resolved one is left as it stands. `GET /literature` on a fresh database lists these 45 rows. Entries are keyed by the existing identity keys; `*_catalogue_key` lets several keys name one entry, so `gfn2` and `gfn2-xtb` both reach GFN2-xTB. `level_of_theory` and `lot_hash` are unchanged. No read route serves the catalogue yet.

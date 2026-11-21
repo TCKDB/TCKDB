@@ -13,9 +13,10 @@
 
 [Unit]
 Description=TCKDB FastAPI backend (uvicorn)
+# Starts with or without Docker. On a host running Postgres natively, add its
+# unit to After= (for example postgresql.service).
 After=network-online.target docker.service
-Wants=network-online.target
-Requires=docker.service
+Wants=network-online.target docker.service
 
 [Service]
 Type=simple

@@ -108,7 +108,8 @@ backend/scripts/check_selfhosted_deployment.sh
 Run it from the repository root. The defaults fit a self-hosted stack
 (`docker-compose.yml`, `.env.selfhosted`, `.env.db-admin`). It checks:
 
-1. no secret is empty or a `change-me` placeholder;
+1. no secret is empty or a `change-me` placeholder, unless `DEPLOYMENT_MODE`
+   is `local` or unset (the API skips this check in local mode too);
 2. `db` and `seaweedfs` are running and healthy, and `tckdb-api` and
    `frontend` too when they run (`STORAGE_SERVICE=minio` on a MinIO stack);
 3. the `rdkit` extension is installed in `DB_NAME`;
@@ -119,8 +120,8 @@ Run it from the repository root. The defaults fit a self-hosted stack
 
 It exits non-zero if any check fails and explains on stderr. For a compose
 project with another name, pass `-p NAME`. `--help` lists the other inputs.
-On a stack started from source, use `make doctor` instead: the developer
-`.env` has no `PAGING_CURSOR_KEY`, so the secret check fails there.
+On a stack started from source, point it at the developer file with
+`COMPOSE_ENV_FILE=.env`.
 
 ## If a key leaks
 
