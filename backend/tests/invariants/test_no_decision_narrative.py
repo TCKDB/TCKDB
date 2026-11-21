@@ -148,6 +148,7 @@ ALLOWLIST: tuple[tuple[str, str, int, str], ...] = (
     ("schemas/python/tckdb-schemas/LICENSE", "Calvin", 1, _LICENCE_REASON),
     ("clients/python/LICENSE", "Calvin", 1, _LICENCE_REASON),
     ("clients/python/adapters/chemkin/LICENSE", "Calvin", 1, _LICENCE_REASON),
+    ("clients/python/adapters/qcschema/LICENSE", "Calvin", 1, _LICENCE_REASON),
     (
         "backend/tests/scripts/test_aggregate_pr_gates.py", "paper/", 6,
         "sample changed-file paths for the path-filter logic under test",
