@@ -91,9 +91,10 @@ codes: [`docs/errors.md`](https://github.com/TCKDB/TCKDB/blob/main/clients/pytho
 Producer adapters read a tool's own output and build the payloads, so a run reaches TCKDB without hand-written
 mapping code. They sit above this client and are not part of it.
 
-- **ARC**: the [`tckdb-adapters`](https://github.com/calvinp0/tckdb-adapters) repository holds `tckdb_arc`,
+- **ARC**: the [`tckdb-adapters`](https://github.com/TCKDB/tckdb-adapters) repository holds `tckdb_arc`,
   which reads ARC's `output.yml` and uploads through this client (`tckdb-arc-upload`).
-- **Chemkin** and **QCSchema**: [`adapters/`](https://github.com/TCKDB/TCKDB/tree/main/clients/python/adapters/) in this repository.
+- **Chemkin** and **QCSchema**: `tckdb_chemkin` (`tckdb-chemkin-import`) and `tckdb_qcschema` (`tckdb-qcschema`), in the
+  same repository.
 - Writing your own: [`docs/adapter_authoring_quickstart.md`](https://github.com/TCKDB/TCKDB/blob/main/clients/python/docs/adapter_authoring_quickstart.md).
 
 ## More

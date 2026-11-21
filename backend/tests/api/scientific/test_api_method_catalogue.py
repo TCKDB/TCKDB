@@ -5,11 +5,16 @@ from __future__ import annotations
 import json
 import uuid
 
-from app.db.models.common import LiteratureKind, LiteratureTitleSource
+from app.db.models.common import LiteratureKind, LiteratureTitleSource, RecordReviewStatus, SubmissionRecordType
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
 from app.db.models.method_catalogue import MethodCatalogue, MethodCatalogueLiterature
-from tests.services.scientific_read._factories import make_calculation, make_species, make_species_entry
+from tests.services.scientific_read._factories import (
+    make_calculation,
+    make_species,
+    make_species_entry,
+    set_review,
+)
 
 BASE = "/api/v1/scientific"
 
@@ -21,11 +26,15 @@ def _lot(db_session, **fields) -> LevelOfTheory:
     return lot
 
 
+def _calculation(db_session, lot: LevelOfTheory):
+    entry = make_species_entry(db_session, make_species(db_session))
+    return make_calculation(db_session, species_entry_id=entry.id, lot_id=lot.id)
+
+
 def _level(db_session, **fields) -> LevelOfTheory:
     lot = _lot(db_session, **fields)
-    entry = make_species_entry(db_session, make_species(db_session))
-    make_calculation(db_session, species_entry_id=entry.id, lot_id=lot.id)
-    make_calculation(db_session, species_entry_id=entry.id, lot_id=lot.id)
+    _calculation(db_session, lot)
+    _calculation(db_session, lot)
     return lot
 
 
@@ -51,6 +60,10 @@ def test_browse_filters_by_kind_and_family(client):
     assert all(r["family"] is None for r in dispersion)
     dft = client.get(f"{BASE}/methods", params={"method_family": "dft"}).json()["records"]
     assert {r["key"] for r in dft} == {"b2plyp", "b2plypd3", "b3lyp", "m062x", "wb97x-d3", "wb97xd"}
+    multireference = client.get(f"{BASE}/methods", params={"method_family": "multireference"}).json()["records"]
+    assert {r["key"] for r in multireference} == {"casscf", "mrci", "mrci+davidson", "nevpt2"}
+    unclassified = client.get(f"{BASE}/methods", params={"method_family": "unclassified"}).json()["records"]
+    assert unclassified == []
     aux = client.get(f"{BASE}/basis-sets", params={"role": "auxiliary_correlation"}).json()["records"]
     assert [r["key"] for r in aux] == ["aug-cc-pvtz/c"]
 
@@ -151,3 +164,73 @@ def test_no_catalogue_response_carries_an_internal_id(client):
     for path in (f"{BASE}/methods", f"{BASE}/basis-sets", f"{BASE}/methods/b3lyp", f"{BASE}/basis-sets/def2-svp"):
         text = client.get(path).text
         assert '_id"' not in text and '"id"' not in text, path
+
+
+def test_keys_in_use_that_no_entry_names_are_listed_with_their_usage(client, db_session):
+    _level(db_session, method="PM7", basis="aug-cc-pVTZ-F12")
+    _level(db_session, method="pm7", basis="def2-TZVP", dispersion="D2")
+    _lot(db_session, method="xyg3", basis="sto-3g")  # no calculation: not listed
+
+    assert client.get(f"{BASE}/methods").json()["uncatalogued"] == [
+        {
+            "key": "d2",
+            "kind": "dispersion_correction",
+            "family": None,
+            "dft_rung": None,
+            "spellings_seen": ["D2"],
+            "usage": {"level_usage_count": 1, "calculation_usage_count": 2},
+        },
+        {
+            "key": "pm7",
+            "kind": "method",
+            "family": "semiempirical",
+            "dft_rung": None,
+            "spellings_seen": ["PM7", "pm7"],
+            "usage": {"level_usage_count": 2, "calculation_usage_count": 4},
+        },
+    ]
+    assert client.get(f"{BASE}/basis-sets").json()["uncatalogued"] == [
+        {
+            "key": "aug-cc-pvtz-f12",
+            "spellings_seen": ["aug-cc-pVTZ-F12"],
+            "usage": {"level_usage_count": 1, "calculation_usage_count": 2},
+        }
+    ]
+
+
+def test_uncatalogued_usage_counts_only_the_calculations_a_list_read_shows(client, db_session):
+    def level_reviewed(status, **fields):
+        lot = _lot(db_session, **fields)
+        for calculation in (_calculation(db_session, lot), _calculation(db_session, lot)):
+            if status is not None:
+                set_review(
+                    db_session, record_type=SubmissionRecordType.calculation, record_id=calculation.id, status=status
+                )
+
+    level_reviewed(RecordReviewStatus.approved, method="pm7", basis="aug-cc-pVTZ-F12")
+    level_reviewed(None, method="am1", basis="sto-3g")
+    level_reviewed(RecordReviewStatus.rejected, method="mndo", basis="3-21g")
+
+    def listed(path, **params):
+        body = client.get(f"{BASE}/{path}", params=params).json()["uncatalogued"]
+        return {r["key"]: r["usage"]["calculation_usage_count"] for r in body}
+
+    assert listed("methods") == {"pm7": 2, "am1": 2, "mndo": 2}
+    assert listed("basis-sets") == {"aug-cc-pvtz-f12": 2, "sto-3g": 2, "3-21g": 2}
+    assert listed("methods", profile="curated") == {"pm7": 2}
+    assert listed("basis-sets", profile="curated") == {"aug-cc-pvtz-f12": 2}
+
+
+def test_the_browse_filters_apply_to_the_uncatalogued_keys(client, db_session):
+    _level(db_session, method="pm7", basis="aug-cc-pVTZ-F12", dispersion="D2")
+
+    def keys(path, **params):
+        return [r["key"] for r in client.get(f"{BASE}/{path}", params=params).json()["uncatalogued"]]
+
+    assert keys("methods", kind="method") == ["pm7"]
+    assert keys("methods", kind="dispersion_correction") == ["d2"]
+    assert keys("methods", method_family="semiempirical") == ["pm7"]
+    assert keys("methods", method_family="dft") == []
+    assert keys("basis-sets") == ["aug-cc-pvtz-f12"]
+    assert keys("basis-sets", role="orbital") == []
+    assert keys("basis-sets", family="Pople") == []

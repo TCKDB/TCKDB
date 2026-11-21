@@ -7,8 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## Two things are versioned, and they are not the same
 
 **The software** (`tckdb-backend`, `tckdb-client`, `tckdb-schemas`,
-`tckdb-mcp`, `tckdb-chemkin`, `tckdb-qcschema`) is versioned per package and
-described in this file.
+`tckdb-mcp`) is versioned per package and described in this file.
+`tckdb-chemkin` and `tckdb-qcschema` were released from here up to 0.7.5 and
+0.9.7; their later releases are in
+[tckdb-adapters](https://github.com/TCKDB/tckdb-adapters), with their own
+changelogs.
 
 **A curated scientific dataset** is versioned independently as a *dataset
 release* — a tag such as `2026.07.0`, an immutable SHA-256-checksummed
@@ -26,7 +29,27 @@ dataset must never require a code release.
 
 - **Behaviour:** none. Internal maintainer documents under `docs/` (decision records, plans, research, reviews, internal specs and validation write-ups) are no longer tracked; `.gitignore` and `mkdocs.yml` list their paths. They remain in git history. Published pages, code comments and API descriptions that cited them now state the fact they cited or drop the citation.
 - **Schema and migration:** none. No new environment variable.
-- **Versions:** `tckdb-schemas` 0.176.1, `tckdb-client` 0.209.3, `tckdb-mcp` 0.16.2.
+- **Versions:** `tckdb-schemas` 0.177.1, `tckdb-client` 0.210.1, `tckdb-mcp` 0.16.2.
+
+## The catalogue lists the spellings in use that it has no entry for (Unreleased)
+
+- **Behaviour:** `GET /scientific/methods` and `GET /scientific/basis-sets` gain `uncatalogued`: the identity keys that levels of theory with at least one shown calculation use and no catalogue entry names, in key order, each with the stored spellings and its level and calculation usage counts (the same visibility as the entries' usage, so a calculation a list read hides is not counted). A method key also states its kind (`method` or `dispersion_correction`), family and DFT rung, and the `kind` and `method_family` filters apply to it; a basis-set key has no role or family, so a `role` or `family` filter leaves the list empty.
+- **Behaviour:** the `/methods` page lists them under each catalogue table as "In use, not in the catalogue", with their usage, and shows nothing when there are none.
+- **Schema and migration:** none. No new environment variable.
+- **Versions:** `tckdb-client` 0.210.0 (`CatalogueBrowseResponse.uncatalogued`, new type `UncataloguedKey`).
+
+## GFN2, ωB97X-D3 and MRCI+Davidson have a method family (Unreleased)
+
+- **Behaviour:** `method_family_classification` is at version 2. `gfn2` is `semiempirical`, `wb97xd3` is `dft` rung 4 and `mrci+davidson` is `multireference`, so a level of theory stored with one of those spellings, the method-family and DFT-rung filters over it, and the MRCI+Q catalogue card carry that family instead of `unclassified`. Every read names the classification version it used (`method_classification`). No other method name moves.
+- **Schema and migration:** none. The family is derived at read time, so no catalogue row changes. No new environment variable.
+- **Versions:** `tckdb-schemas` 0.177.0, `tckdb-client` 0.209.3 (its `tckdb-schemas` window is `>=0.158,<0.178`).
+
+## The CHEMKIN and QCSchema adapters live in tckdb-adapters (Unreleased)
+
+- **Behaviour:** `clients/python/adapters/chemkin` (`tckdb-chemkin`) and `clients/python/adapters/qcschema` (`tckdb-qcschema`) are removed; both packages, with their history, tests and fixtures, are in the tckdb-adapters repository. TCKDB no longer builds, tests or publishes them: they are gone from the version guard's `PACKAGES`, the publish workflow's choices, Python Client CI, the release-metadata tests and the non-ASCII check's targets.
+- **Tests:** the CHEMKIN round trip (`tests/integration/test_chemkin_*`, `test_chemkin_serialize_stereo.py`) and the QCSchema interchange report import the packages installed from `backend/requirements-adapters.txt`, which pins both to one tckdb-adapters commit. Backend CI installs it with `pip install --no-deps -r`, so the tests run against this checkout's `tckdb-client` and `tckdb-schemas`; the tests use `require_module`, so they skip without it locally and fail on CI. `test_gate_coverage.py` checks that each backend workflow installs a requirements file a test cites.
+- **Tests:** the interchange report imports the installed `tckdb_qcschema` with this checkout's `tckdb_client`. The water Hessian fixture directory holds the Psi4 environment lockfile the run used (`ENVIRONMENT.lock.txt`, the sha256 its `meta.json` records), and the report hashes that copy.
+- **Schema and migration:** none. No new environment variable. No distributed package changed.
 
 ## Release 0.3.0 is the self-hosting default (Unreleased)
 

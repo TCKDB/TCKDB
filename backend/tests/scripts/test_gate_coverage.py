@@ -771,8 +771,11 @@ def _required_modules() -> set[tuple[str, str]]:
     return found
 
 
-def _editable_installs(workflow_rel: str) -> set[str]:
-    """Every ``pip install -e <path>`` target in a workflow's run steps."""
+def _pip_installs(workflow_rel: str, flag: str) -> set[str]:
+    """Every ``pip install ... <flag> <target>`` target in a workflow's run steps.
+
+    ``flag`` is ``-e`` (an editable path) or ``-r`` (a requirements file).
+    """
     targets: set[str] = set()
     for job in _workflow(workflow_rel)["jobs"].values():
         for step in job.get("steps", []):
@@ -781,9 +784,14 @@ def _editable_installs(workflow_rel: str) -> set[str]:
                     continue
                 tokens = shlex.split(line)
                 for index, token in enumerate(tokens[:-1]):
-                    if token == "-e" and "install" in tokens[:index]:
+                    if token == flag and "install" in tokens[:index]:
                         targets.add(tokens[index + 1].split("[", 1)[0])
     return targets
+
+
+#: The install commands ``require_module`` may cite, and the pip flag whose
+#: target the workflow has to install.
+_INSTALL_FORMS = (("pip install -e ", "-e"), ("pip install --no-deps -r ", "-r"))
 
 
 @pytest.mark.parametrize(
@@ -804,11 +812,12 @@ def test_backend_workflows_install_what_require_module_needs(workflow_rel: str) 
     assert any(rel.startswith("backend/tests/client_builder_contract/") for rel, _ in required), (
         "found no require_module call in tests/client_builder_contract/; the scan is not seeing them"
     )
-    installed = _editable_installs(workflow_rel)
+    installed = {flag: _pip_installs(workflow_rel, flag) for _, flag in _INSTALL_FORMS}
     missing = sorted(
         (rel, install)
         for rel, install in required
-        if install.startswith("pip install -e ") and install.removeprefix("pip install -e ").strip() not in installed
+        for prefix, flag in _INSTALL_FORMS
+        if install.startswith(prefix) and install.removeprefix(prefix).strip() not in installed[flag]
     )
     assert not missing, (
         f"{workflow_rel} does not install what these tests require (installs: {sorted(installed)}):\n  "
@@ -1193,9 +1202,8 @@ def test_prefix_matching_is_segment_wise() -> None:
 
 
 def test_bare_pytest_resolves_testpaths_rather_than_the_whole_directory() -> None:
-    """The bug that hid the CHEMKIN adapter, pinned as behaviour."""
+    """Bare ``pytest`` in clients/python sees testpaths, not every test under the directory."""
     assert _testpaths("clients/python") == ["clients/python/tests"]
-    assert "clients/python/adapters/chemkin/tests" not in _testpaths("clients/python")
 
 
 def test_positional_paths_are_taken_only_after_the_pytest_token() -> None:
@@ -1220,9 +1228,9 @@ def test_launcher_flags_do_not_swallow_the_pytest_token() -> None:
     _absorb_args(selection, shlex.split("python -m pytest --noconftest -q backend/tests/scripts"), ".")
     assert selection.paths == {"backend/tests/scripts"}
 
-    adapter = Selection("probe")
-    _absorb_args(adapter, shlex.split("python -m pytest adapters/chemkin/tests"), "clients/python")
-    assert adapter.paths == {"clients/python/adapters/chemkin/tests"}
+    client = Selection("probe")
+    _absorb_args(client, shlex.split("python -m pytest tests"), "clients/python")
+    assert client.paths == {"clients/python/tests"}
 
 
 def test_gate_script_arguments_are_pytest_arguments() -> None:
@@ -1263,7 +1271,6 @@ def test_the_walk_reaches_beyond_the_backend() -> None:
     for expected in (
         "backend/tests/scripts/test_gate_coverage.py",
         "clients/python/tests/test_openapi_parity.py",
-        "clients/python/adapters/chemkin/tests/test_parser.py",
         "integrations/mcp/tests/test_config.py",
         "schemas/python/tckdb-schemas/tests/test_import_boundaries.py",
     ):

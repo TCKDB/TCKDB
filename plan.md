@@ -375,7 +375,7 @@ Parts B & C — **deferred follow-ons** (designed in DR-0032):
   CHEMKIN-high→`a` and the exporter emitted `a`→CHEMKIN-high — both
   backwards, and *mutually consistent*, so a naive round-trip would have
   passed with silently wrong thermochemistry. Fixed: importer
-  (`clients/python/adapters/chemkin/tckdb_chemkin/payloads.py` `_nasa_payload`,
+  (`tckdb_chemkin/tckdb_chemkin/payloads.py` in tckdb-adapters, `_nasa_payload`,
   CHEMKIN-high→`b`, low→`a`) and exporter
   (`backend/app/services/scientific_read/chemkin_serialize.py` `_nasa_card`,
   CHEMKIN high←`b`, low←`a`), plus the two affected tests. Round-trip now

@@ -123,11 +123,11 @@ dev = [
     "jsonschema>=4.22",
     # The QCSchema interchange demonstration
     # (scripts/validation/qcschema_interchange_report.py, usable by a
-    # deposit generator through build_report(..., include_commit=False)) runs the client-side adapter under
-    # clients/python/adapters/qcschema, which validates documents with
-    # qcelemental. Same exact pin as that adapter. Test/dev only: the deployed
-    # image installs with --no-deps from environment.yml, so nothing here
-    # reaches it.
+    # deposit generator through build_report(..., include_commit=False)) runs
+    # tckdb-qcschema (backend/requirements-adapters.txt, installed with
+    # --no-deps), which validates documents with qcelemental. Same exact pin
+    # as that adapter. Test/dev only: the deployed image installs with
+    # --no-deps from environment.yml, so nothing here reaches it.
     "qcelemental==0.51.2",
     "ruff>=0.4",
     "mypy>=1.10",

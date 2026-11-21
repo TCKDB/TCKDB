@@ -1,8 +1,12 @@
 # Changelog
 
-## 0.176.1 - 2026-11-21
+## 0.177.1 - 2026-11-21
 
 No schema changed. The producer contract points at `clients/python/docs/uploads_and_idempotency.md` for idempotency keys, in place of a maintainer document that is not in the repository.
+
+## 0.177.0 - 2026-11-21
+
+`method_family_classification` is at version 2 (`CLASSIFICATION_VERSION = 2`). Three method names gain a family: `gfn2` is `semiempirical` (GFN2-xTB), `wb97xd3` is `dft` rung 4 (ωB97X-D3, a range-separated hybrid) and `mrci+davidson` is `multireference` (MRCI with the Davidson correction, MRCI+Q). Every other name classifies as before. No refusal, warning, field or payload shape changed.
 
 ## 0.176.0 - 2026-11-21
 

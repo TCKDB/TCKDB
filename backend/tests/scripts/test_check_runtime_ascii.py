@@ -523,9 +523,8 @@ def test_ci_prints_the_coverage_account():
 # The trees that ship to a contributor
 #
 # Same defect as the wire package, one layer further out: the Python a
-# contributor installs -- ``tckdb_client``, the CHEMKIN adapter, the MCP
-# integration -- was never on the target list, and the client builders and the
-# adapter had ten violations between them the day they were first scanned.
+# contributor installs -- ``tckdb_client`` and the MCP integration -- was never
+# on the target list.
 #
 # Every path below is written out as a literal on purpose. Asserting
 # ``checker.CLIENT_PACKAGE_TARGET in checker.DEFAULT_TARGETS`` would pass
@@ -540,13 +539,11 @@ REQUIRED_TREES = (
     "backend/scripts",
     "schemas/python/tckdb-schemas/tckdb_schemas",
     "clients/python/src/tckdb_client",
-    "clients/python/adapters/chemkin/tckdb_chemkin",
     "integrations/mcp/src/tckdb_mcp",
     "frontend/scripts",
 )
 
 CLIENT_PACKAGE = checker.REPO_ROOT / "clients/python/src/tckdb_client"
-CHEMKIN_ADAPTER = checker.REPO_ROOT / "clients/python/adapters/chemkin/tckdb_chemkin"
 MCP_INTEGRATION = checker.REPO_ROOT / "integrations/mcp/src/tckdb_mcp"
 FRONTEND_SCRIPTS = checker.REPO_ROOT / "frontend/scripts"
 
@@ -564,7 +561,6 @@ def test_every_required_tree_is_a_default_target():
         CLIENT_PACKAGE / "builders" / "uploads.py",
         CLIENT_PACKAGE / "builders" / "calculation.py",
         CLIENT_PACKAGE / "builders" / "sources.py",
-        CHEMKIN_ADAPTER / "normalizer.py",
         MCP_INTEGRATION / "config.py",
         MCP_INTEGRATION / "tools" / "reaction_kinetics.py",
         FRONTEND_SCRIPTS / "ops" / "smoke_api.py",
@@ -590,7 +586,6 @@ def test_the_new_targets_reach_the_modules_that_emit(module: Path):
     "tests_dir",
     [
         checker.REPO_ROOT / "clients/python/tests",
-        checker.REPO_ROOT / "clients/python/adapters/chemkin/tests",
         checker.REPO_ROOT / "integrations/mcp/tests",
     ],
 )
@@ -604,7 +599,7 @@ def test_the_new_trees_own_tests_stay_out_of_scope(tests_dir: Path):
 
 
 @pytest.mark.parametrize(
-    "tree", [CLIENT_PACKAGE, CHEMKIN_ADAPTER, MCP_INTEGRATION]
+    "tree", [CLIENT_PACKAGE, MCP_INTEGRATION]
 )
 def test_the_shipped_client_trees_are_clean(tree: Path):
     assert checker.check_path(tree) == []
@@ -644,26 +639,6 @@ def test_a_reintroduced_em_dash_in_a_client_diagnostic_is_caught():
     found = checker.check_source(mutated, path)
     assert len(found) == 1
     assert found[0].characters == "—"
-
-
-def test_a_reintroduced_section_sign_in_a_chemkin_warning_is_caught():
-    """The adapter's accumulated warnings, which reach a user another way.
-
-    ``out.warnings.append(...)`` is an accumulator, not a raise and not a
-    ``message=`` keyword, so this also pins that the accumulator rule
-    covers the adapter and not only the backend's cccbdb builders.
-    """
-    path = CHEMKIN_ADAPTER / "normalizer.py"
-    source = path.read_text(encoding="utf-8")
-    clean = "(spec section 6.7)."
-    assert clean in source, "the warning this mutation targets has moved"
-    assert checker.check_source(source, path) == []
-
-    mutated = source.replace(clean, "(spec §6.7).")
-    found = checker.check_source(mutated, path)
-    assert len(found) == 1
-    assert found[0].kind == "accumulated warning"
-    assert found[0].characters == "§"
 
 
 def test_a_reintroduced_em_dash_in_the_mcp_integration_is_caught():

@@ -10,13 +10,13 @@ WHY
     rely on it.
 
 WHAT IS IN SCOPE, AND WHY IT IS DRAWN THIS NARROWLY
-    Six trees; see ``DEFAULT_TARGETS``. Three of them are backend-side
+    The trees in ``DEFAULT_TARGETS``. Three of them are backend-side
     (``backend/app``, ``backend/scripts``, and the wire package
-    ``schemas/python/tckdb-schemas/tckdb_schemas``); three are the
-    shipped Python that runs on a *contributor's* machine
-    (``clients/python/src/tckdb_client``, the CHEMKIN adapter
-    ``clients/python/adapters/chemkin/tckdb_chemkin``, and the MCP
-    integration ``integrations/mcp/src/tckdb_mcp``).
+    ``schemas/python/tckdb-schemas/tckdb_schemas``); two are the shipped
+    Python that runs on a *contributor's* machine
+    (``clients/python/src/tckdb_client`` and the MCP integration
+    ``integrations/mcp/src/tckdb_mcp``); and ``frontend/scripts`` runs in
+    CI or on the deployment host.
 
     ``tckdb_mcp`` has no violations: it is here for coverage, so the
     next string written into it is checked by the pull request that
@@ -121,12 +121,6 @@ WIRE_PACKAGE_TARGET = "../schemas/python/tckdb-schemas/tckdb_schemas"
 #: The Python client a contributor installs, relative to ``BACKEND_ROOT``.
 CLIENT_PACKAGE_TARGET = "../clients/python/src/tckdb_client"
 
-#: The CHEMKIN importer adapter, which ships and versions separately from
-#: the client (``clients/python/adapters/chemkin/pyproject.toml``).
-CHEMKIN_ADAPTER_TARGET = "../clients/python/adapters/chemkin/tckdb_chemkin"
-#: The QCSchema importer adapter, a sibling of the CHEMKIN one.
-QCSCHEMA_ADAPTER_TARGET = "../clients/python/adapters/qcschema/tckdb_qcschema"
-
 #: The MCP integration. Added at zero violations -- coverage, not repair.
 MCP_INTEGRATION_TARGET = "../integrations/mcp/src/tckdb_mcp"
 
@@ -156,10 +150,8 @@ FRONTEND_SCRIPTS_TARGET = "../frontend/scripts"
 #: own ``tests/``, which is why the target is the package directory and not
 #: the distribution directory above it.
 #:
-#: ``tckdb_client`` and ``tckdb_chemkin`` for the same reason as the wire
-#: package, one layer further out: their strings are the ones a
-#: contributor reads in a terminal, and the adapter's are accumulated into
-#: ``NormalizedReaction.warnings`` and carried up through an import run.
+#: ``tckdb_client`` for the same reason as the wire package, one layer
+#: further out: its strings are the ones a contributor reads in a terminal.
 #:
 #: ``tckdb_mcp`` is on the list so that the *next* string written there is
 #: checked.
@@ -168,8 +160,6 @@ DEFAULT_TARGETS = (
     "scripts",
     WIRE_PACKAGE_TARGET,
     CLIENT_PACKAGE_TARGET,
-    CHEMKIN_ADAPTER_TARGET,
-    QCSCHEMA_ADAPTER_TARGET,
     MCP_INTEGRATION_TARGET,
     FRONTEND_SCRIPTS_TARGET,
 )
@@ -224,12 +214,6 @@ UNSCANNED_BY_DESIGN: tuple[tuple[str, str], ...] = (
         "clients/python/scripts",
         "one generator that rewrites a checked-in Markdown document; its "
         "output is prose in a document, not an emitted string",
-    ),
-    (
-        "clients/python/adapters/qcschema/scripts",
-        "one generator that writes the checked-in QCSchema backend corpus "
-        "(JSON fixtures) from the adapter's own fixtures; its output is test "
-        "data, not an emitted string",
     ),
     (
         "docs/hooks",

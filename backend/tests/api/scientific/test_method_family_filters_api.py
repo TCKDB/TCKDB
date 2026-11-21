@@ -172,6 +172,9 @@ def test_a_dispersion_suffix_and_a_basis_never_change_the_class_in_sql(db_sessio
         "b3lyp-d",
         "mrcic",
         "u",
+        "GFN2",
+        "wB97XD3",
+        "MRCI+Davidson",
     ]
     lots = {s: make_lot(db_session, method=s, basis="def2tzvp") for s in spellings}
     filters = [

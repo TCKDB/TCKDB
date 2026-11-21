@@ -24,7 +24,7 @@
   "qcengine": "0.51.0",
   "qcelemental": "0.51.2",
   "conda_environment": "tckdb_qcschema_psi4",
-  "environment_lockfile": "clients/python/adapters/qcschema/tests/fixtures/ENVIRONMENT.lock.txt",
+  "environment_lockfile": "ENVIRONMENT.lock.txt",
   "environment_lockfile_sha256": "b4cd94c6ec0d91594f17df47931db7715e38890677aebe9ffe56e2c820eaed57",
   "run_script": "run_psi4_water_hessian.py",
   "run_date": "2026-09-29",
