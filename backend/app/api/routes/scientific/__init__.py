@@ -54,6 +54,10 @@ Sub-routers:
     networks_browse.router  → /scientific/networks/browse
     level_of_theory_browse.router
                             → /scientific/level-of-theories/browse
+    method_catalogue.methods_router
+                            → /scientific/methods (+ /{handle})
+    method_catalogue.basis_sets_router
+                            → /scientific/basis-sets (+ /{handle})
     releases.router         → /scientific/releases (+ /{handle}/manifest,
                               /selections, /artifacts/{path})
     analytics.router        → /scientific/analytics/{kinetics,thermo,
@@ -82,6 +86,7 @@ from app.api.routes.scientific import (
     level_of_theory_browse,
     literature,
     meta,
+    method_catalogue,
     network_export,
     network_selection,
     networks,
@@ -219,6 +224,8 @@ scientific_router.include_router(composite_schemes.router)
 # (same mechanism as transition_states_browse.py).
 scientific_router.include_router(level_of_theory_browse.router)
 scientific_router.include_router(level_of_theory.router)
+scientific_router.include_router(method_catalogue.methods_router)
+scientific_router.include_router(method_catalogue.basis_sets_router)
 scientific_router.include_router(artifacts.router)
 scientific_router.include_router(export.router)
 # Quantitative analytics reads. Their ``/analytics`` prefix collides with

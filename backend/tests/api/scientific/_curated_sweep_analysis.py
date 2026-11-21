@@ -70,6 +70,8 @@ POPULATION_KEYS = frozenset(
         "solve_pressure_min_bar",
         "solve_pressure_max_bar",
         "calculation_usage_count",
+        # A catalogue card's usage counts the levels of theory with a shown calculation, so it follows the floor too.
+        "level_usage_count",
         "applied_usage_count",
         "has_applied_usage",
         "statmech_usage_count",
