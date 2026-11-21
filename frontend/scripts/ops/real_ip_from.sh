@@ -6,7 +6,7 @@
 # anywhere else, such as a machine on the lab network, is not, so nginx sets
 # X-Real-IP to that client's own address whatever it sent.
 #
-# Usage: 15-tckdb-real-ip-from.sh [ROUTE_FILE] [OUTPUT]
+# Usage: real_ip_from.sh [ROUTE_FILE] [OUTPUT]
 # Never fails: if the list cannot be written, the empty one in the image
 # stays, and nginx then believes X-Real-IP from nobody.
 set -u

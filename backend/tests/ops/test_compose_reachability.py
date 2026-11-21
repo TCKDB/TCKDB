@@ -35,7 +35,7 @@ SERVICES = COMPOSE["services"]
 MAKE_ENV = REPO_ROOT / "backend/scripts/ops/tckdb_make_env.sh"
 CADDYFILE = REPO_ROOT / "deploy/caddy/Caddyfile"
 FRONTEND = REPO_ROOT / "frontend"
-REAL_IP_SCRIPT = FRONTEND / "docker-entrypoint.d/15-tckdb-real-ip-from.sh"
+REAL_IP_SCRIPT = FRONTEND / "scripts/ops/real_ip_from.sh"
 
 WEB_PORT = "${TCKDB_WEB_BIND:-127.0.0.1}:${TCKDB_WEB_PORT:-8011}:8080"
 CADDY_PORTS = [
@@ -375,7 +375,7 @@ def test_nginx_replaces_x_real_ip_unless_the_peer_is_trusted() -> None:
     assert "real_ip_recursive on" not in conf
     dockerfile = (FRONTEND / "Dockerfile").read_text()
     assert "COPY --chown=101:0 real_ip_from.conf /etc/nginx/tckdb/real_ip_from.conf" in dockerfile
-    assert "COPY --chmod=755 docker-entrypoint.d/15-tckdb-real-ip-from.sh /docker-entrypoint.d/" in dockerfile
+    assert "COPY --chmod=755 scripts/ops/real_ip_from.sh /docker-entrypoint.d/15-tckdb-real-ip-from.sh" in dockerfile
     placeholder = (FRONTEND / "real_ip_from.conf").read_text().splitlines()
     assert [line for line in placeholder if line.strip() and not line.startswith("#")] == []
     assert REAL_IP_SCRIPT.stat().st_mode & stat.S_IXUSR
