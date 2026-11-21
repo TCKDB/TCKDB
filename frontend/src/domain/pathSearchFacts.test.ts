@@ -53,6 +53,11 @@ describe("path-search facts", () => {
         expect(guessWords({ ...SUMMARY, selected_ts_point_index: 3 }, profile)).toBe("point 3 (not among the stored points)")
     })
 
+    it("places the picked guess in angstrom when the unit is recorded", () => {
+        const inAngstrom = pathSearchProfile({ summary: { ...SUMMARY, path_coordinate_unit: "angstrom" }, points: profile.points.map((p) => ({ point_index: p.index, path_coordinate: p.coordinate, is_ts_guess: p.index === 8 })) })
+        expect(guessWords(SUMMARY, inAngstrom)).toBe("point 8 · 3.76 Å along the path")
+    })
+
     it("tells a non-NEB from a NEB whose climbing image was not recorded", () => {
         expect(climbingWords(SUMMARY, profile)).toBe("none (not a NEB)")
         expect(climbingWords({ ...SUMMARY, method: "neb" }, profile)).toBe("not recorded")

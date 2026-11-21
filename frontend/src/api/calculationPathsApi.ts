@@ -28,6 +28,8 @@ export const pathSearchSummarySchema = z.object({
     climbing_image_index: z.number().nullable().optional(),
     source_endpoint_count: z.number().nullable().optional(),
     zero_energy_reference_hartree: z.number().nullable().optional(),
+    /** Unit of every point's `path_coordinate`; null when not recorded. */
+    path_coordinate_unit: z.string().nullable().optional(),
     stored_point_count: z.number(),
     ts_guess_count: z.number(),
     climbing_image_count: z.number(),
@@ -113,6 +115,8 @@ export const ircSummarySchema = z.object({
     ts_point_index: z.number().nullable().optional(),
     point_count: z.number().nullable().optional(),
     zero_energy_reference_hartree: z.number().nullable().optional(),
+    /** Unit of every point's `reaction_coordinate`; null when not recorded. */
+    reaction_coordinate_unit: z.string().nullable().optional(),
     forward_point_count: z.number(),
     reverse_point_count: z.number(),
     ts_point_count: z.number(),
