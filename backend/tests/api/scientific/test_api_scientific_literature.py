@@ -8,10 +8,15 @@ Covers:
 
 from __future__ import annotations
 
+import json
+
+import pytest
+
 from app.db.models.author import Author
 from app.db.models.common import (
     CalculationType,
     LiteratureKind,
+    LiteratureTitleSource,
     NetworkSolveKind,
     RecordReviewStatus,
     SubmissionRecordType,
@@ -51,6 +56,7 @@ def _make_literature(
     doi: str | None = None,
     isbn: str | None = None,
     journal: str | None = "J. Test",
+    title_source: LiteratureTitleSource | None = None,
 ) -> Literature:
     global _LIT_COUNTER
     _LIT_COUNTER += 1
@@ -62,6 +68,7 @@ def _make_literature(
         journal=journal,
         doi=doi if doi is not None else f"10.1234/test.{suffix}",
         isbn=isbn,
+        title_source=title_source,
     )
     db_session.add(lit)
     db_session.flush()
@@ -257,14 +264,36 @@ def test_detail_review_summary_is_empty(client, db_session):
     assert rs["approved"] == 0
 
 
-def test_detail_identifiers_block(client, db_session):
+def test_detail_identifiers_block_carries_a_registry_resolved_doi(client, db_session):
     lit = _make_literature(
-        db_session, doi="10.9999/identifiers.test", isbn=None
+        db_session,
+        doi="10.9999/identifiers.test",
+        isbn=None,
+        title_source=LiteratureTitleSource.resolved_metadata,
     )
     body = client.get(_detail_url(lit.public_ref)).json()
     ids = body["record"]["identifiers"]
     assert ids["doi"] == "10.9999/identifiers.test"
     assert ids["isbn"] is None
+    assert body["record"]["available_sections"]["has_identifiers"] is True
+
+
+@pytest.mark.parametrize(
+    "title_source", [LiteratureTitleSource.depositor_supplied, None]
+)
+def test_detail_identifiers_block_withholds_an_unverified_doi(
+    client, db_session, title_source
+):
+    lit = _make_literature(
+        db_session,
+        doi="10.9999/identifiers.unverified",
+        isbn=None,
+        title_source=title_source,
+    )
+    body = client.get(_detail_url(lit.public_ref)).json()
+    assert body["record"]["identifiers"]["doi"] is None
+    assert "10.9999/identifiers.unverified" not in json.dumps(body)
+    assert body["record"]["available_sections"]["has_identifiers"] is False
 
 
 # ===========================================================================
