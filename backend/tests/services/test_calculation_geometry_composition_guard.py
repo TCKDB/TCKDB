@@ -57,7 +57,7 @@ def test_every_geometry_link_construction_is_preceded_by_the_composition_check()
         "link, a Hessian, a scan, IRC or path-search point) with no preceding "
         f"{_CHECKER} on the same geometry_id: {unchecked}. A geometry linked to "
         "a calculation must be made of the atoms of the subject that calculation "
-        "is filed under; see backend/docs/specs/calculation_geometry_composition.md."
+        "is filed under."
     )
 
 

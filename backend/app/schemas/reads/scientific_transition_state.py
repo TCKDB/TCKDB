@@ -10,8 +10,6 @@ The TS concept (``transition_state``) groups one or more candidate
 interpretation. Both detail surfaces share the same per-record
 ``ScientificTransitionStateEntryRecord`` shape so callers can reuse one
 parser across detail, the parent-TS view, and the search surface.
-
-See ``backend/docs/specs/scientific_transition_state_reads.md``.
 """
 
 from __future__ import annotations

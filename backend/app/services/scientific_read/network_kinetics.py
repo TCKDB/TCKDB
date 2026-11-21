@@ -11,8 +11,6 @@ matrix, PLOG rows, point-tabulated triples) are surfaced under
 explicit include tokens. Point arrays are capped via the public-limit
 setting; the payload exposes ``points_truncated`` + ``point_count_total``
 so callers can detect when the cap kicked in.
-
-See ``backend/docs/specs/scientific_network_reads.md``.
 """
 
 from __future__ import annotations

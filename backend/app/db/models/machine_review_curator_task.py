@@ -1,11 +1,9 @@
 """Machine-review curator task queue ORM model.
 
 ``machine_review_curator_task`` persists **human triage state** over exact,
-mapped, record-level machine-review findings. It is the implementation of the
-"curator task table" design in
-``backend/docs/specs/machine_review_curator_task_queue.md``.
+mapped, record-level machine-review findings.
 
-This table owns exactly one of four orthogonal review axes (spec §2):
+This table owns exactly one of four orthogonal review axes:
 
 * machine-review finding  — advisory signal (what the screener said)
 * ``MachineReviewCuratorTaskState`` — *this table*: has a human handled it?

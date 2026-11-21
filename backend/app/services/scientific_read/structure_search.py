@@ -30,9 +30,6 @@ substructure query (e.g. ``[#6]`` matching nearly every row) returns at
 most ``limit`` rows to Python. The exact post-filter ``total`` is
 computed by a separate aggregate query that derives both the total and
 the per-status review summary in one scan.
-
-See ``backend/docs/specs/scientific_structure_search.md`` for the full
-contract.
 """
 
 from __future__ import annotations

@@ -1,7 +1,6 @@
 """Pure current/stale/historical classifier for record-level machine review.
 
-This module implements the currency model from
-``backend/docs/specs/record_machine_review_policy.md`` §2/§3.5/§4: given the
+This module implements the currency model: given the
 machine-review passes recorded for one record, decide which (if any) is the
 **current** one for the record's present deterministic evidence context, which
 is merely the latest but **stale**, and which are **historical**.

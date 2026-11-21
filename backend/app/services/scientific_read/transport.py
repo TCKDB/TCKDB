@@ -10,8 +10,6 @@ epsilon_over_k_k / dipole_debye / polarizability_angstrom3 /
 rotational_relaxation). Source-calculation support is linked via
 ``transport_source_calculation`` by role (``full_transport`` /
 ``dipole`` / ``polarizability`` / ``supporting_geometry``).
-
-See ``backend/docs/specs/scientific_transport_reads.md``.
 """
 
 from __future__ import annotations

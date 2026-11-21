@@ -11,8 +11,6 @@ fields target the **source-calculation** level-of-theory join, same
 as the network search surface. This matches the convention used by
 the network search (where ``method`` is the LoT method) and keeps
 the public API ergonomically aligned.
-
-See ``backend/docs/specs/scientific_network_reads.md``.
 """
 
 from __future__ import annotations

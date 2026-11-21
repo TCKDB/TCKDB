@@ -42,8 +42,7 @@ requires-python = ">=3.13"
 # The repository ships an MIT LICENSE at its root; this metadata states the
 # same thing so a wheel built from here is not silently unlicensed. Note that
 # the *code* license (MIT) and a curated *dataset release*'s data license are
-# separate fields and may differ — see CHANGELOG.md and
-# backend/docs/specs/dataset_release_and_profiles.md.
+# separate fields and may differ — see CHANGELOG.md.
 license = "MIT"
 keywords = [
     "tckdb",
@@ -317,7 +316,7 @@ ignore = [
 # unused even though removing them breaks importers (verified: F401
 # --fix here strips `SchemaBase` and breaks the app). Converting these
 # to explicit `__all__` / `import X as X` re-exports and re-enabling
-# F401 is tracked follow-up work (plan.md, Phase 1 notes). F401 stays
+# F401 is follow-up work. F401 stays
 # active everywhere else.
 "app/schemas/common.py" = ["F401"]
 "app/schemas/utils.py" = ["F401"]

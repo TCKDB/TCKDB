@@ -19,8 +19,8 @@ citable datasets. On a deployment that has not applied this split and runs the
 application as an owning role, those triggers stop application bugs and
 ordinary SQL clients but not a deliberate operator. Run `db-roles check` rather
 than assuming the posture holds; the trade-off is recorded in
-[`../specs/dataset_release_and_profiles.md`](../specs/dataset_release_and_profiles.md)
-§7a.
+[`cutting_a_dataset_release.md`](cutting_a_dataset_release.md)
+§10.
 
 ## Secret files
 

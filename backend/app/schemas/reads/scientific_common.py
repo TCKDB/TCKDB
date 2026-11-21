@@ -91,8 +91,7 @@ class ProfiledRequestEcho(BaseModel):
                                 through. Only the release routes set it; it
                                 is always null on the general read surface.
 
-    All three are machine tokens. The prose explanation lives in
-    ``backend/docs/specs/dataset_release_and_profiles.md``, never in the value.
+    All three are machine tokens; prose never goes in the value.
     """
 
     profile: ReadProfile = ReadProfile.exploratory
@@ -120,8 +119,7 @@ class SelectionPolicy(str, Enum):
     Policies that would require a stored choice (``benchmark_reference``,
     ``curator_pick``) are intentionally absent: they need the deferred
     product-selection persistence layer, not a read knob, and cannot be
-    honestly evaluated from the record data alone. See
-    ``backend/docs/specs/scientific_product_candidacy.md``.
+    honestly evaluated from the record data alone.
 
     ``default``        the browse display order (review rank, newest deposition, id).
     ``latest``         most recently deposited first.

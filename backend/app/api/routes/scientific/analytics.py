@@ -2,8 +2,7 @@
 
 Four endpoints, deliberately. The alternative — adding numeric filters to the
 ~40 transactional searches — would have produced a surface with no bounded set
-of query shapes to index or document. See
-``backend/docs/specs/scientific_analytics_surface.md``.
+of query shapes to index or document.
 
 GET only. The POST twin the chemistry-first searches carry exists because
 reactant/product SMILES lists are awkward in a query string; analytics filters

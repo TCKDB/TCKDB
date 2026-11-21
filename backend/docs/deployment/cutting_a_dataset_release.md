@@ -3,8 +3,6 @@
 Audience: a TCKDB curator or operator publishing a curated scientific dataset,
 typically alongside a paper.
 
-Design rationale is in
-[`../specs/dataset_release_and_profiles.md`](../specs/dataset_release_and_profiles.md).
 This file is the procedure.
 
 > **A dataset release is not a backup.** It ships selected values plus the
@@ -468,3 +466,36 @@ under. Then fetch `selected_records.ndjson` for the values, and
 `candidate_records.ndjson` + `review_history.ndjson` to see everything that was
 *not* selected and why the selected record was trusted. Disagreeing with a
 TCKDB recommendation should require no privileged access.
+
+## 10. Known operational boundaries
+
+Two limits a reader would otherwise rediscover. Neither is a defect.
+
+### Frozen release bytes are inlined in the recovery archive
+
+`release_artifact.content` is archived inline as base64 in `rows.ndjson`
+(`app/services/archive/core.py`, `$bytes` codec), not through the `blobs/`
+sidecar the archive uses for calculation artifacts. It is lossless: an export,
+wipe and restore returns byte-exact artifact content, and the restored database
+still passes `verify_release`. Base64 inflates the payload by about 4/3 and
+puts a whole release on a single NDJSON line.
+
+**Revisit when** a single line in `rows.ndjson` becomes uncomfortable to
+stream, diff or hold in memory: in practice, artifacts in the tens of MB, or
+archive write/restore memory becoming a concern. The fix is to move release
+bytes to the existing `blobs/` sidecar, which already has the streaming and
+per-blob integrity machinery.
+
+### `ALTER TABLE … DISABLE TRIGGER` and table ownership
+
+The append-only guarantees on `release_selection`, `release_manifest` and
+`release_artifact` (and on the review, reproducibility and accepted-science
+tables) are enforced by database triggers. A table owner or superuser can
+disable a trigger; an ordinary DML role cannot. Under the three-role split in
+[`database_roles.md`](database_roles.md) the API and worker run as a role that
+owns nothing, so the triggers hold against the application account. On a
+deployment that runs the application as an owning role (the local-development
+default), the triggers stop application bugs and ordinary SQL clients,
+including `TRUNCATE`, but not a deliberate operator holding owner rights.
+Closing that is a roles change that affects every guarded table, not a release
+change. Verify the posture with `db-roles check` rather than assuming it.

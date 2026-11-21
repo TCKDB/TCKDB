@@ -6,8 +6,7 @@ latest-selection policy (``reviewed_at`` DESC, ``source_audit_event_id`` DESC
 NULLS LAST, ``id`` DESC NULLS LAST), ``limit`` after ordering, currency
 classification over persisted rows, and read-only non-interference.
 
-This is a private surface (``backend/docs/specs/record_machine_review_policy.md``
-§4/§8); no public exposure is involved.
+This is a private surface; no public exposure is involved.
 """
 
 from __future__ import annotations

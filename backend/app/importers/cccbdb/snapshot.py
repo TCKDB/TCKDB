@@ -93,9 +93,8 @@ class Fetcher(Protocol):
 class HttpFetcher:
     """Polite real-network fetcher used by the CLI by default.
 
-    Configuration follows the crawler constraints in
-    ``backend/docs/specs/cccbdb_importer.md``: identifying User-Agent,
-    short timeout, at most one conservative retry.
+    Crawler constraints: identifying User-Agent, short timeout, at most
+    one conservative retry.
     """
 
     def __init__(

@@ -9,8 +9,6 @@ Review state is inherited from the parent solve (``NetworkKinetics``
 is not in ``SubmissionRecordType``); the search applies trust filters
 against the parent solve's badge in the same way the detail surface
 applies it to a single record.
-
-See ``backend/docs/specs/scientific_network_reads.md``.
 """
 
 from __future__ import annotations

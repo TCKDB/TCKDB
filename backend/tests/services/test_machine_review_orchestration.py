@@ -1,7 +1,6 @@
 """Tests for the private fake/supplied-review machine-review orchestration driver.
 
-Prove the full private loop for one record (policy
-``record_machine_review_policy.md`` §5): live trust → context → digest → plan →
+Prove the full private loop for one record: live trust → context → digest → plan →
 fake review → executor → appended row / skipped_current. The driver appends only
 through the executor, uses no real provider, is idempotent for an unchanged
 recipe, re-appends when evidence changes (stale), and mutates nothing outside

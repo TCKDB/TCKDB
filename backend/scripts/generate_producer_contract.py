@@ -1474,8 +1474,7 @@ to your write:
 | 429 | Rate limited. | Wait and retry the identical request. |
 | 5xx | The server or a store failed; your request may be fine. | Retry with backoff unless the code is marked as never succeeding on replay. |
 
-Further reading: `backend/docs/specs/ingestion_submission_model.md`
-(submissions), `docs/contribution-bundles/format.md` (bundles),
+Further reading: `docs/contribution-bundles/format.md` (bundles),
 `docs/guides/scientific_check_register.md`
 (which checks refuse and which only warn, and the chemistry positions TCKDB
 enforces), `docs/guides/api_vocabulary.md` (every code and token).

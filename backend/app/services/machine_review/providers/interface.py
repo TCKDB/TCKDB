@@ -6,9 +6,7 @@ side — adapter, mapping, inspection, curator tasks — already exists). It hol
 * :class:`MachineReviewContext` — a minimal internal context a provider reviews
   over. In this foundation slice it simply wraps/references the existing
   :class:`~app.services.llm_precheck.schemas.LLMPrecheckContext`; the richer
-  context builder described in
-  ``backend/docs/specs/machine_review_real_provider_plumbing.md`` §7 is a later
-  slice and is deliberately *not* built here.
+  context builder is a later slice and is deliberately *not* built here.
 * :class:`MachineReviewProvider` — the provider protocol. Every provider returns
   a validated :class:`~app.services.machine_review.schemas.MachineReviewProviderResult`.
 * :class:`MachineReviewProviderConfigurationError` — raised when a configured

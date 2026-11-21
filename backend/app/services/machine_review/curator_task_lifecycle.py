@@ -5,8 +5,7 @@ builds/upserts tasks from an inspection projection. This module owns the
 human-workflow transitions over an existing task: assignment, picking a task
 up for review, resolving it, and (explicitly) reopening it.
 
-Authority boundary (spec
-``backend/docs/specs/machine_review_curator_task_queue.md`` §8/§9):
+Authority boundary:
 
 * These functions mutate **only** the workflow columns of one
   ``machine_review_curator_task`` row — ``workflow_state``, ``assigned_to``,

@@ -5,8 +5,7 @@ This module answers one internal/admin question:
     Given a record identity, what machine-review summaries can be derived from
     the existing submission audit events that reference it?
 
-It is a **read-only inspection/debugging aid** (spec
-``backend/docs/specs/provisional_machine_review.md`` §5/§6) for maintainers to
+It is a **read-only inspection/debugging aid** for maintainers to
 verify machine-review behavior *before* deciding whether to expose
 ``trust.machine_review`` publicly. It deliberately does **not** imply machine
 review is part of public trust yet: nothing here is wired into a public

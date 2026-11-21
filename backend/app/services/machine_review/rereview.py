@@ -3,8 +3,7 @@
 Given a record's identity, its current deterministic-evidence context, and the
 active reviewer recipe, this service decides **whether a fresh machine review is
 needed** — without calling a provider, running a background job, or appending a
-row. It turns the currency model (policy
-``backend/docs/specs/record_machine_review_policy.md`` §2/§5) into a testable,
+row. It turns the currency model into a testable,
 read-only **plan**, so the trigger policy is provable before any execution slice
 wires it to the fake provider / admin trigger.
 

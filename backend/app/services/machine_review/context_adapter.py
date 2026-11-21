@@ -1,8 +1,7 @@
 """Pure adapter: deterministic trust output -> machine-review currency inputs.
 
 This module closes the private machine-review currency loop without any
-persistence or public exposure (policy
-``backend/docs/specs/record_machine_review_policy.md``)::
+persistence or public exposure::
 
     deterministic evidence / trust output
       -> MachineReviewEvidenceContext      (build_machine_review_evidence_context_from_trust)

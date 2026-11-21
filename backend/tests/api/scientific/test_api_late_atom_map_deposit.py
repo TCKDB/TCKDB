@@ -15,9 +15,8 @@ is a deliberate rule working as designed:
   ``transition_state`` and the subject identity for a
   ``transition_state_entry`` is ``(transition_state_id,)``.
 
-That last one is the load-bearing fact behind
-``backend/docs/specs/late_atom_maps.md``. It is asserted here rather than
-described there, because the neighbouring proof --
+That last one is the load-bearing fact for a late atom map. It is asserted
+here because the neighbouring proof --
 ``tests/db/test_atom_map_immutability.py::
 test_a_wrong_map_is_corrected_by_superseding_its_transition_state_entry`` --
 builds its replacement entry *directly in the session* under the same

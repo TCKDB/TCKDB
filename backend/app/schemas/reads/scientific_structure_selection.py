@@ -5,8 +5,7 @@
 
 Which stored energies, conformer basins or saddles can answer one stated question about one entry, and which of
 them, if any, the evidence orders. A read: nothing is stored, no curator endorsement is created or changed, and the
-ordinary browse order is untouched. See ``backend/docs/specs/structure_selection_decision.md`` for what a decision
-is and is not, and ``docs/guides/selecting_structures.md`` for how to read one.
+ordinary browse order is untouched. See ``docs/guides/selecting_structures.md`` for how to read a decision.
 
 The requests are strict: unknown fields are refused, references are public refs (never a database id), there is no
 sort expression and no pagination (a selection is over the *complete* authorized

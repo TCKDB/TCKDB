@@ -8,8 +8,6 @@ Two public endpoints:
 The records endpoint is the literature-centered *inverse* query: a
 caller starts from a literature row and pages through every
 scientific record citing it.
-
-See ``backend/docs/specs/scientific_literature_reads.md``.
 """
 
 from __future__ import annotations

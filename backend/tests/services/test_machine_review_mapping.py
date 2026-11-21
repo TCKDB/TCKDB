@@ -1,7 +1,6 @@
 """Unit tests for the submission -> record machine-review mapping policy.
 
-These prove the safety policy in
-``backend/docs/specs/provisional_machine_review.md`` §6/§13: a
+These prove the safety policy: a
 submission-scoped advisory result must never automatically become a
 record-level result, and a record-addressed finding maps **only** to the
 exact linked record it names — never fanning out to every record in the

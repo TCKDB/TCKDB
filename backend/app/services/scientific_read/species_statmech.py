@@ -14,9 +14,6 @@ and on both it is internal-tokenized, so ``include=all`` never expands to
 it. The reason not to delegate is the ordering and pagination contract,
 not the include vocabulary: this read is pinned to one species entry and
 sorts as the thermo subresource does.
-
-See ``backend/docs/specs/scientific_statmech_reads.md`` and
-``backend/docs/specs/trust_read_api_current.md``.
 """
 
 from __future__ import annotations

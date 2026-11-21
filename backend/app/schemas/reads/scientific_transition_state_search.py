@@ -5,8 +5,6 @@ Search returns records at the transition-state-entry grain because
 entries are the concrete objects carrying charge/multiplicity/status
 and the actual calculation evidence; the parent TS-concept context
 travels along on each record.
-
-See ``backend/docs/specs/scientific_transition_state_reads.md``.
 """
 
 from __future__ import annotations

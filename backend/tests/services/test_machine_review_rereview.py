@@ -1,7 +1,6 @@
 """Tests for the private machine-review re-review decision/planning service.
 
-Prove the trigger policy (policy ``record_machine_review_policy.md`` §5) is
-detected correctly from persisted rows: no review -> run_not_reviewed, a
+Prove the trigger policy is detected correctly from persisted rows: no review -> run_not_reviewed, a
 current review -> skip_current, a stale review -> run_stale (with the right
 stale reasons), always derived from the *latest* row. Planning is read-only and
 appends nothing (the execution slice is separate).

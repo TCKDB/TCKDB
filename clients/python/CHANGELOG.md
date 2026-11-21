@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.210.2 - 2026-11-21
+
+No client behaviour changed. Two docstrings no longer cite a maintainer document that is not in the repository.
+
 ## 0.210.1 - 2026-11-21
 
 No client behaviour changed. A source comment no longer cites a maintainer document that is not in the repository.

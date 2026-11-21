@@ -4,8 +4,6 @@ Records reuse :class:`ScientificNetworkSolveRecord` from the
 network-solve detail endpoint via the shared
 :func:`build_network_solve_record` helper, so search and detail
 return byte-identical per-record payloads for the same include set.
-
-See ``backend/docs/specs/scientific_network_reads.md``.
 """
 
 from __future__ import annotations

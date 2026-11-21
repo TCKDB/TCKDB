@@ -19,8 +19,6 @@ rows, point-table triplets) are deliberately **not** inlined under
 (`chebyshev_shape`, `plog_entry_count`, `point_count`) only. The live
 ``/scientific/network-kinetics/{ref}`` standalone surface exposes full
 coefficient arrays under explicit, bounded include tokens.
-
-See ``backend/docs/specs/scientific_network_reads.md``.
 """
 
 from __future__ import annotations

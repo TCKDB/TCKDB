@@ -3,8 +3,7 @@
 Four endpoints — ``/api/v1/scientific/analytics/{kinetics,thermo,statmech,
 calculations}`` — exist so that quantitative dataset construction has a small,
 documented, indexed place to happen, instead of dozens of optional numeric
-filters accreting onto every transactional search. See
-``backend/docs/specs/scientific_analytics_surface.md``.
+filters accreting onto every transactional search.
 
 Three shape rules:
 

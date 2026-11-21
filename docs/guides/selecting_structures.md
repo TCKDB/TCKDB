@@ -111,5 +111,3 @@ Python client: `client.select_species_calculations(ref, ...)`, `select_conformer
 
 - The transition-state route is entry-based (`/transition-state-entries/{ref}/evidence/select`).
 - A browse "scientific include" for selection is deferred; the select endpoints serve that need.
-
-See `backend/docs/specs/structure_selection_decision.md` for the decision, manifest and replay rules.

@@ -6,8 +6,7 @@ Two detail surfaces and one search surface:
 - ``GET /scientific/transition-state-entries/{transition_state_entry_ref_or_id}``
 - ``GET/POST /scientific/transition-states/search``
 
-The search surface returns records at the TS-entry grain. See
-``backend/docs/specs/scientific_transition_state_reads.md``.
+The search surface returns records at the TS-entry grain.
 """
 
 from __future__ import annotations
@@ -136,8 +135,7 @@ def scientific_transition_states_search_get(
     AND-combines the supplied filters and returns
     transition-state-entry records in the same shape as the TS-entry
     detail endpoint. At least one meaningful filter is required; pure
-    pagination / include / review knobs are not enough — see
-    ``backend/docs/specs/scientific_transition_state_reads.md``.
+    pagination / include / review knobs are not enough.
     """
     request_obj = caller_input(
         TransitionStatesSearchRequest,

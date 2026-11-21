@@ -4,8 +4,6 @@ Request + response envelope for the calculation-search endpoint. The
 per-record shape is the same ``ScientificCalculationRecord`` used by
 the detail endpoint, so callers can parse search and detail results
 with one set of code.
-
-See ``backend/docs/specs/scientific_calculation_reads.md``.
 """
 
 from __future__ import annotations

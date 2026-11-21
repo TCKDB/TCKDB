@@ -1,7 +1,6 @@
 """Pure submission -> record mapping policy for machine-review findings.
 
-This module encodes the **safety policy** from
-``backend/docs/specs/provisional_machine_review.md`` §6/§13 that gates the
+This module encodes the **safety policy** that gates the
 future record-level ``machine_review`` layer: a submission-scoped advisory
 result must **never** automatically become a record-level result, and a
 record-addressed finding must map only to the *exact* linked record it
@@ -25,8 +24,7 @@ algorithm with the key field swapped; the structures carry ``record_id``
 through as passthrough metadata so a future persistence layer does not have
 to re-resolve it.
 
-Matching precedence (most specific first; the full policy is documented in
-``provisional_machine_review.md`` "Submission-to-record mapping policy"):
+Matching precedence (most specific first):
 
 1. exact ``(record_type, record_ref)`` of a linked record (in the audit path
    ``record_ref`` is the stringified internal ``record_id``, so the spec's

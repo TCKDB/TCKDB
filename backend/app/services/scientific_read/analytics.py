@@ -13,8 +13,7 @@ combination would be a new query plan, and the ones with no supporting index
 would be indistinguishable from the ones with.
 
 So the numeric axes live here instead, on four endpoints whose query shapes are
-finite, written down in ``backend/docs/specs/scientific_analytics_surface.md``,
-and backed by measured index evidence.
+finite and backed by measured index evidence.
 
 Everything happens in SQL
 -------------------------

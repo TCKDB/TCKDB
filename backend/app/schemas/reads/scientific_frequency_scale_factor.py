@@ -13,8 +13,6 @@ the same ``public_ref``
 no per-row review history; the response envelope still carries a
 ``review_summary`` block (always empty) to stay shape-compatible with
 the other scientific detail endpoints.
-
-See ``backend/docs/specs/scientific_correction_reads.md``.
 """
 
 from __future__ import annotations

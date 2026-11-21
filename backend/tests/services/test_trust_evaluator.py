@@ -5,8 +5,7 @@ These tests pin the contract of
 per-test rollback transaction in ``conftest.py`` and direct ORM
 inserts; no upload pipeline is exercised.
 
-Each test focuses on one promise from the spec
-(``backend/docs/specs/automated_trust_layer.md``):
+Each test focuses on one promise of the trust layer:
 
 * deterministic label-threshold mapping,
 * hard-fail behaviour for the three structural signals,

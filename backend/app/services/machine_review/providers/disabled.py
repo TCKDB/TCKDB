@@ -5,7 +5,7 @@ API key, base URL, or extra service, and returns a valid native result with
 ``status=not_run``. The service layer
 (:func:`~app.services.machine_review.run.run_machine_review_for_submission`)
 writes nothing when it gets this provider — absence of an audit event already
-means ``not_run`` (``optional_llm_precheck.md`` §13), so a row saying "nothing
+means ``not_run``, so a row saying "nothing
 happened" would only be noise a curator reads past. This provider exists so the
 type contract holds in every mode and so off mode has a deterministic,
 dependency-free result.

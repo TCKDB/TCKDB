@@ -3,8 +3,6 @@
 Records reuse :class:`ScientificTransportRecord` from the detail
 endpoint so search and detail callers parse responses with one set
 of code.
-
-See ``backend/docs/specs/scientific_transport_reads.md``.
 """
 
 from __future__ import annotations

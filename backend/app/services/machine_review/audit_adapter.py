@@ -7,8 +7,7 @@ This module is the bridge from **current persistence** —
 (:class:`~app.services.machine_review.read_model.RecordMachineReview`,
 :class:`~app.services.machine_review.read_model.MachineReviewRecordSummary`).
 
-It is **private plumbing only** (spec
-``backend/docs/specs/provisional_machine_review.md`` §5/§6). It performs no
+It is **private plumbing only**. It performs no
 persistence, runs no provider, exposes nothing through any public scientific
 read API, and never mutates submission status, scientific records, the
 deterministic evidence/trust layer, or the human-review layer. Its output is a

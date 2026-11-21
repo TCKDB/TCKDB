@@ -5,8 +5,7 @@ Covers the detail endpoints:
 - ``GET /api/v1/scientific/conformer-groups/{conformer_group_ref_or_id}``
 - ``GET /api/v1/scientific/conformer-observations/{conformer_observation_ref_or_id}``
 
-Conformer concepts split three ways (per
-``backend/docs/specs/scientific_conformer_reads.md``):
+Conformer concepts split three ways:
 
 - ``conformer_group`` — basin identity; reviewable; carries ``cg_…`` ref.
 - ``conformer_observation`` — provenance / upload row; reviewable;

@@ -10,7 +10,7 @@ import { z } from "zod"
  *
  * This is a PRIVATE/diagnostic shape. It is intentionally NOT the public
  * scientific ``TrustFragment`` and carries no approval/rejection/certification
- * semantics. See ``backend/docs/specs/machine_review_admin_ui_mock.md``.
+ * semantics.
  */
 
 export const MACHINE_REVIEW_STATUSES = [

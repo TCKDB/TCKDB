@@ -119,9 +119,7 @@ class ReleaseManifestSummary(BaseModel):
 class ReleaseSelectionRecord(BaseModel):
     """One attributed selection row, standing or superseded.
 
-    Two unrelated supersessions meet on this row and must not be confused;
-    ``backend/docs/specs/dataset_release_and_profiles.md`` §"two supersessions"
-    holds them apart:
+    Two unrelated supersessions meet on this row and must not be confused:
 
     ``supersedes_selection_ref``  a *curator's opinion* was revised. Both
                                   records remain equally valid science.

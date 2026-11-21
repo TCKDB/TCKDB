@@ -7,8 +7,6 @@ helpers, and return the shared review-badged envelope. Unlike thermo /
 statmech / transport, this record type carries no candidacy/selection
 semantics — there is no ``collapse`` or ``selection_policy`` knob (see the
 read schema's module docstring).
-
-See ``backend/docs/specs/trust_read_api_current.md``.
 """
 
 from __future__ import annotations

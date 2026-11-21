@@ -14,8 +14,6 @@ nested mode/JSON payload to project. The ORM also has no
 ``model_kind`` column; ``scientific_origin`` (computed / experimental
 / estimated) is the closest model-class signal and is surfaced
 verbatim.
-
-See ``backend/docs/specs/scientific_transport_reads.md``.
 """
 
 from __future__ import annotations

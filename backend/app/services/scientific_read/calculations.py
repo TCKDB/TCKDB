@@ -5,7 +5,7 @@ dependencies, parameters, constraints, artifacts, geometries, validation,
 scf_stability, scan, irc, path_search) are validated as legal include
 tokens but not yet expanded — non-empty heavy includes are rejected with
 422 ``include_not_implemented_yet`` to avoid silently advertising tokens
-that do nothing. See ``backend/docs/specs/scientific_calculation_reads.md``.
+that do nothing.
 """
 
 from __future__ import annotations
@@ -314,7 +314,7 @@ def get_calculation(
             "default-shape detail endpoint does not support them. "
             "Drop the token(s) and re-issue, or fetch the "
             "/api/v1/calculations/{id}/... routes for the same "
-            "data. See backend/docs/specs/scientific_calculation_reads.md."
+            "data."
         )
 
     calculation_id = resolve_calculation_handle(session, calculation_handle)

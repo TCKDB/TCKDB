@@ -3,8 +3,7 @@
 Default-shape detail response only — heavy include payloads (results,
 dependencies, parameters, constraints, artifacts, geometries,
 geometry_validation, scf_stability, scan, irc, path_search) are wired
-through include validation but not yet expanded; see
-``backend/docs/specs/scientific_calculation_reads.md``.
+through include validation but not yet expanded.
 """
 
 from __future__ import annotations

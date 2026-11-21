@@ -1,8 +1,7 @@
 """The request schema of the statmech selection operation (``POST /scientific/statmech/select``).
 
 Which supplied statistical model supports a declared use, and, among the models that do, in what display order?
-TCKDB ranks no model above another. A read: nothing is stored, no endorsement is created, browse order is untouched. See
-``backend/docs/specs/statmech_selection_contract.md``.
+TCKDB ranks no model above another. A read: nothing is stored, no endorsement is created, browse order is untouched.
 
 The request is strict. Unknown fields are refused; references are typed public refs (never a database id); there
 is no pagination and no sort expression; and the engineering bounds are the server's:

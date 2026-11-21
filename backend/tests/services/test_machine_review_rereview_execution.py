@@ -1,6 +1,6 @@
 """Tests for the private machine-review re-review execution path.
 
-Prove the execution half (policy ``record_machine_review_policy.md`` §5):
+Prove the execution half:
 ``skip_current`` appends nothing; ``run_not_reviewed`` / ``run_stale`` append
 exactly one row through the existing helper, stamped with the plan's currency
 key; an idempotency guard re-checks currency and skips when the record is

@@ -2,7 +2,7 @@
 
 This module performs the **full private machine-review loop for one record**,
 explicitly invoked, using only a fake or caller-supplied review — never a real
-provider (policy ``backend/docs/specs/record_machine_review_policy.md`` §5)::
+provider::
 
     live deterministic trust/evidence (TrustFragment)
       -> MachineReviewEvidenceContext        (context adapter)

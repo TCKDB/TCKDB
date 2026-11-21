@@ -9,8 +9,6 @@ Three public endpoints:
 The router uses a single ``/transport`` prefix; ``/search`` is
 registered before ``/{handle}`` so FastAPI doesn't route the search
 path through the catch-all detail handler.
-
-See ``backend/docs/specs/scientific_transport_reads.md``.
 """
 
 from __future__ import annotations
@@ -90,8 +88,7 @@ def scientific_transport_search_get(
 
     AND-combines the supplied filters; at least one meaningful
     filter required. Explicit ``False`` bool filter values count as
-    meaningful — see
-    ``backend/docs/specs/scientific_transport_reads.md``.
+    meaningful.
     """
     request_obj = caller_input(
         TransportSearchRequest,

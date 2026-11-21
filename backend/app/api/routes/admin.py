@@ -387,9 +387,8 @@ def inspect_submission_machine_review(
 # Admin-only, explicitly invoked: run **fake** machine review for one record and
 # append a ``record_machine_review`` row only when the active recipe says one is
 # needed (``run_not_reviewed`` / ``run_stale``); an already-current record is
-# skipped. This is the maintainer/debug seam for the private re-review loop
-# (policy ``record_machine_review_policy.md`` §5.3) — it is **not** public
-# scientific trust exposure. It uses only the :class:`FakeMachineReviewProducer`
+# skipped. This is the maintainer/debug seam for the private re-review loop —
+# it is **not** public scientific trust exposure. It uses only the :class:`FakeMachineReviewProducer`
 # (no real provider, no RAG, no background worker), is not wired into uploads or
 # any public read, and emits no ``trust.machine_review``.
 #
@@ -473,9 +472,8 @@ def run_fake_machine_review_for_record(
 #
 # Admin-only CRUD-ish workflow over ``machine_review_curator_task``: list,
 # inspect, explicitly build from the inspection projection, assign, start
-# review, resolve, and reopen. This is the *human workflow* axis (spec
-# ``machine_review_curator_task_queue.md`` §2/§5) — it never approves, rejects,
-# certifies, or mutates a scientific record, ``submission.status``,
+# review, resolve, and reopen. This is the *human workflow* axis — it never
+# approves, rejects, certifies, or mutates a scientific record, ``submission.status``,
 # ``RecordReviewStatus``, deterministic evidence, or any public ``trust.*``
 # fragment. Responses are admin-only schemas; the public scientific
 # ``TrustFragment`` is untouched and ``trust.machine_review`` is not exposed.

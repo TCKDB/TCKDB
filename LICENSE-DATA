@@ -142,11 +142,6 @@ Therefore:
     is why nothing is backfilled: a record with no attestation stays
     unreleasable until someone with the standing to do so attests.
 
-The same constraint is recorded, from the ingestion side, in
-`backend/docs/specs/ingestion_submission_model.md`, and from the
-release side in
-`backend/docs/specs/dataset_release_and_profiles.md`.
-
 
 Copyright (c) 2026 Calvin Pieters, Alon Grinberg Dana, and
 Technion — Israel Institute of Technology, and the contributors who

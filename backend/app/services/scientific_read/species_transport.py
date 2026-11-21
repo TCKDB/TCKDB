@@ -11,9 +11,6 @@ token here (so ``include=all`` never expands to it) — matching the
 transport detail endpoint, the per-entry thermo contract, and
 ``search_transport``, which accepts the token too now that its
 materializer loads the evidence graph once per page.
-
-See ``backend/docs/specs/scientific_transport_reads.md`` and
-``backend/docs/specs/trust_read_api_current.md``.
 """
 
 from __future__ import annotations

@@ -568,8 +568,7 @@ class TestSubmissionWiring:
         assert {r.id for r in rows} == {link.record_id for link in links}
 
     def test_submission_stands_on_depositor_agreement(self, db_session, curator):
-        """No CCCBDB terms/citation text exists anywhere in this repo (see
-        ``backend/docs/specs/cccbdb_importer.md``) -- unlike ThermoML, this importer does not record
+        """No CCCBDB terms/citation text exists anywhere in this repo -- unlike ThermoML, this importer does not record
         a second, explicit ``source_terms`` attestation. The automatic
         ``depositor_agreement`` row ``open_upload_submission`` always
         records from the deposit's own ``rights`` fragment is left

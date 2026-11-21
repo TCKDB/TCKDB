@@ -1,7 +1,6 @@
 """Unit tests for the pure machine-review currency classifier.
 
-These prove the current/stale/historical/not_run model from
-``backend/docs/specs/record_machine_review_policy.md`` §2/§3.5/§4: the latest
+These prove the current/stale/historical/not_run model: the latest
 review (by the policy ordering) is current only when all four currency
 dimensions match the active recipe, otherwise stale (with reasons); every
 non-latest review is historical; no reviews means not_run.

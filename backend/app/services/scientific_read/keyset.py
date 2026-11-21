@@ -36,8 +36,7 @@ this path.
 
 Callers that need a genuinely immutable, citable set should not use this at
 all — they should read a published release's frozen ``selected_records``
-artifact, which is already guaranteed byte-stable
-(``backend/docs/specs/dataset_release_and_profiles.md``). This module makes
+artifact, which is already guaranteed byte-stable. This module makes
 *live* traversal far more reproducible than offset paging; it does not make it
 immutable, and it must not be described as if it did.
 

@@ -4,8 +4,7 @@
 over one scientific record, so machine-review results become queryable and
 classifiable (``not_run`` / ``current`` / ``stale`` / ``historical``) by the
 pure currency classifier
-(:func:`app.services.machine_review.currency.classify_machine_review_currency`),
-per ``backend/docs/specs/record_machine_review_policy.md`` §8.
+(:func:`app.services.machine_review.currency.classify_machine_review_currency`).
 
 **Append-only.** A re-review inserts a *new* row; rows are never updated in
 place. There is therefore intentionally **no** uniqueness constraint over

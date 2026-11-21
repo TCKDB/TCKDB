@@ -11,8 +11,6 @@ model-specific payloads (Chebyshev coefficient matrix, PLOG rows,
 point-tabulated triples) can be surfaced explicitly on their own
 endpoint — the network and solve surfaces still keep these out of
 their embedded summaries (shape metadata only).
-
-See ``backend/docs/specs/scientific_network_reads.md``.
 """
 
 from __future__ import annotations

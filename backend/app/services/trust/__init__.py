@@ -1,7 +1,6 @@
 """Deterministic trust / evidence evaluator.
 
-Implements the read-time, code-defined rubrics specified in
-``backend/docs/specs/automated_trust_layer.md``. The evaluator answers
+Implements the read-time, code-defined rubrics. The evaluator answers
 "how much supporting provenance is attached to this record?", **not**
 "is this record scientifically correct?". The metric is therefore named
 ``evidence_completeness`` (never ``quality_score`` or

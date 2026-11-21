@@ -1,7 +1,6 @@
 """Pydantic models and constants used by the deterministic trust layer.
 
-The model layer here mirrors the concepts defined in
-``backend/docs/specs/automated_trust_layer.md`` §5:
+The model layer here defines these concepts:
 
 * :class:`EvidenceCheckSpec` is the *declaration* of a single check
   (name, kind, weight, explanation) inside a rubric.

@@ -9,8 +9,6 @@ EnergyCorrectionScheme is a content-derived reference table (prefix
 ``ecs_``). It is not in ``SubmissionRecordType``, so it has no per-row
 review history; the envelope still carries an empty ``review_summary``
 for shape parity.
-
-See ``backend/docs/specs/scientific_correction_reads.md``.
 """
 
 from __future__ import annotations

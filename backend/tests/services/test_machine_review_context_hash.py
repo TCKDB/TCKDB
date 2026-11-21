@@ -1,7 +1,6 @@
 """Unit tests for the pure machine-review ``context_hash`` builder.
 
-These prove the policy in
-``backend/docs/specs/record_machine_review_policy.md`` §3: the digest is stable
+These prove the ``context_hash`` policy: the digest is stable
 and deterministic, order-insensitive for set-like inputs, sensitive to every
 material evidence change, and structurally incapable of including the excluded
 provenance/volatile inputs (they are rejected at the typed-context boundary, not

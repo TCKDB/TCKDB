@@ -12,8 +12,6 @@ plus an ``ArtifactCalculationContext`` block carrying the owning
 calculation's identity, level-of-theory, software, workflow-tool, and
 review badge. Owner (species/TS entry) and review history are heavy
 optional includes.
-
-See ``backend/docs/specs/scientific_artifact_reads.md``.
 """
 
 from __future__ import annotations

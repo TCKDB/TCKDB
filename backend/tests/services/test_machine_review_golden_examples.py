@@ -19,9 +19,6 @@ premature — without a real provider.
 Stable-output policy: timestamps (`reviewed_at`/`created_at`) are not asserted
 for exact wall-clock values; the assertions are on statuses, counts, mapping/
 parse diagnostics, task workflow state, and fingerprint stability.
-
-See `backend/docs/specs/machine_review_golden_examples.md` for the per-case
-narrative.
 """
 
 from __future__ import annotations
@@ -74,7 +71,7 @@ _CASES = (
     "malformed_payload_parse_warning_only",
 )
 
-# Provider-contract golden cases (machine_review_provider_contract.md). They
+# Provider-contract golden cases. They
 # run through the SAME pipeline helpers; the adapter requires the schema_version
 # marker in the payload.
 _V2_CASES = (

@@ -16,8 +16,6 @@ Frequencies are not stored on ``statmech`` rows — they live on
 ``include=frequencies`` token therefore surfaces the source freq
 calculation summary; full mode arrays remain available behind the
 calculation detail endpoint.
-
-See ``backend/docs/specs/scientific_statmech_reads.md``.
 """
 
 from __future__ import annotations

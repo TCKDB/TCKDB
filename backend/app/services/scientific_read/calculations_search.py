@@ -31,8 +31,6 @@ protocol caps a statement at 65,535 parameters, so
 database_unavailable`` rather than a page. See
 :mod:`app.services.scientific_read.sql_review`, whose helpers this module
 uses, and ``backend/docs/benchmarks/README.md`` for the measurement.
-
-See ``backend/docs/specs/scientific_calculation_reads.md``.
 """
 
 from __future__ import annotations
@@ -200,8 +198,7 @@ def search_calculations(
             f"{sorted(requested_unimplemented)!r} are reserved for "
             "/scientific/calculations/search but the search "
             "endpoint does not support them. Drop the "
-            "token(s) and re-issue. See "
-            "backend/docs/specs/scientific_calculation_reads.md."
+            "token(s) and re-issue."
         )
 
     _enforce_parameter_value_pairs(request)

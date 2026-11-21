@@ -25,16 +25,14 @@ reports counts by class and expected outcome.
 - **Isotopes** are atom-resolved and derived, never uploaded: the entry's
   `isotope_key` is the canonical SMILES of the isotope-labelled molecule and
   NULL for the all-standard species (`app.chemistry.species.canonical_isotope_key`;
-  the contract is stated in `backend/docs/specs/pdep_upload_contract.md`
-  and in `backend/tests/services/test_species_isotope_identity.py`; no
-  decision record exists for it). Isotopologues share one species; isotopomers
-  are distinct entries. A deposited geometry's isotope *multiset* (how many
+  the contract is pinned in
+  `backend/tests/services/test_species_isotope_identity.py`). Isotopologues
+  share one species; isotopomers are distinct entries. A deposited geometry's isotope *multiset* (how many
   atoms of each element carry which mass number) must agree with the
   identity's labels; per-atom *placement* is not checked, so an identity of
   `[2H]OC` accepts a geometry that deuterates a methyl hydrogen instead
-  (`assert_geometry_isotopes_match_identity`, documented as a known false
-  acceptance in `backend/docs/specs/pdep_upload_contract.md`). That gap is
-  pinned as a fixture case, not hidden.
+  (`assert_geometry_isotopes_match_identity`, a known false acceptance).
+  That gap is pinned as a fixture case, not hidden.
 
 ## File format
 

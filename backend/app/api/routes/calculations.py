@@ -804,7 +804,7 @@ def upload_calculation_artifacts(
 
     # Evidence added after the fact still joins the deposit's submission, so
     # it has the same submission trail as artifacts uploaded with the
-    # calculation (ingestion_submission_model.md, "Artifact links").
+    # calculation.
     deposit_submission = link_artifacts_to_deposit_submission(
         session,
         calculation_id=calc_pk,

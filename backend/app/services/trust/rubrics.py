@@ -1783,8 +1783,7 @@ def _check_transport_not_rejected_or_deprecated_if_applicable(
 # transition-state rubric at 5) was discarded with the readers of those versions. Contract of the baseline: an automated
 # geometry-validation ``fail`` is advisory (a ``warning`` outcome on the geometry checks), no longer a hard fail, and
 # the "non hard failed evidence" checks mirror the narrowed hard fail (rejected quality only). A machine review stamped
-# under a different version of a rubric reads stale and is re-planned, never rewritten; see
-# ``backend/docs/specs/automated_trust_layer.md``.
+# under a different version of a rubric reads stale and is re-planned, never rewritten.
 COMPUTED_CALCULATION: EvidenceRubric = EvidenceRubric(
     name="computed_calculation",
     version=1,

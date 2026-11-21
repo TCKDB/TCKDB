@@ -2,8 +2,6 @@
 
 Records reuse :class:`ScientificEnergyCorrectionSchemeRecord` from the
 detail endpoint via :func:`build_energy_correction_scheme_record`.
-
-See ``backend/docs/specs/scientific_correction_reads.md``.
 """
 
 from __future__ import annotations

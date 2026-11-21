@@ -5,8 +5,6 @@ per `conformer_group` row that matches the filter set. Per-record shape
 is the same `ScientificConformerGroupRecord` used by the group detail
 endpoint, so a generic client can parse search and detail responses
 with one set of code.
-
-See ``backend/docs/specs/scientific_conformer_reads.md``.
 """
 
 from __future__ import annotations

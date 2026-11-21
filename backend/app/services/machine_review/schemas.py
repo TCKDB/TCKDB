@@ -1,8 +1,7 @@
 """Internal contract schemas for the provisional machine-review layer.
 
 These are **types/contracts only**. They define the vocabulary and output
-shape of the future machine-review layer described in
-``backend/docs/specs/provisional_machine_review.md`` so the direction is
+shape of the future machine-review layer so the direction is
 type-safe and testable before any provider, persistence, or public exposure
 exists.
 
@@ -135,14 +134,13 @@ class MachineReviewResult(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# provider output contract (machine_review_provider_contract.md)
+# provider output contract
 # ---------------------------------------------------------------------------
 #
 # The provider payload speaks the machine-review vocabulary natively: a
 # ``status``, a ``curator_priority``, ``recommended_action`` and the full
 # category set. It is identified by a single root marker (``format``: a name and a
-# separate integer version), which the audit adapter requires. See
-# ``machine_review_provider_contract.md`` §3/§4/§7.
+# separate integer version), which the audit adapter requires.
 
 #: Root marker value identifying a machine-review provider payload: the format's
 #: name beside its integer version.

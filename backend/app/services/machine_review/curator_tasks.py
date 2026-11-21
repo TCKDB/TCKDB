@@ -4,10 +4,9 @@ This is the *write* counterpart to the read-only inspection projection
 (:mod:`app.services.machine_review.inspection`). Given a submission's
 machine-review inspection, it creates or reuses
 :class:`~app.db.models.machine_review_curator_task.MachineReviewCuratorTask`
-rows — the persisted human triage queue designed in
-``backend/docs/specs/machine_review_curator_task_queue.md``.
+rows — the persisted human triage queue.
 
-Boundaries (spec §6/§9, and this slice's non-goals):
+Boundaries:
 
 * **Explicit call only.** Nothing here runs on upload, precheck, or human
   review. A caller (a future admin endpoint or batch job) invokes

@@ -58,9 +58,8 @@ Format                               Contract                        Lossless?
 ===================================  ==============================  =========
 
 Conflating them is the exact problem this stage was opened to fix, so the
-distinction is stated in naming, in this table, in every manifest's
-``contract`` block, and in
-``backend/docs/specs/dataset_release_and_profiles.md``.
+distinction is stated in naming, in this table, and in every manifest's
+``contract`` block.
 """
 
 from __future__ import annotations

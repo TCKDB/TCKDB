@@ -1,10 +1,9 @@
 """Pure, deterministic ``context_hash`` builder for machine-review currency.
 
-This module implements the ``context_hash`` policy from
-``backend/docs/specs/record_machine_review_policy.md`` §3: a stable digest of
+This module implements the ``context_hash`` policy: a stable digest of
 the **compact deterministic evidence context** a machine review saw, used to
 decide whether a stored review is still *current* for the record's present
-evidence (current/stale/historical, that spec §2/§3.5).
+evidence (current/stale/historical).
 
 It is **pure**: it performs no database access, no persistence, no provider
 call, and no public exposure. It mutates nothing — not scientific records, the

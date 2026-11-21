@@ -117,7 +117,7 @@ def _projection_contract() -> dict:
         "archive_schema": None,
         # Neither a citable release nor a recovery archive. Stated here so the
         # three formats can never be confused by a consumer holding only one
-        # of them (see backend/docs/specs/dataset_release_and_profiles.md).
+        # of them.
         "citable_release": False,
         "distinct_from": {
             "citable_release": current_header(DATASET_RELEASE),

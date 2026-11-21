@@ -31820,7 +31820,7 @@
         "type": "object"
       },
       "MachineReviewCuratorTaskState": {
-        "description": "Human triage state over an exact, mapped machine-review finding.\n\nThis is the *fourth* review axis and is intentionally distinct from\n:class:`MachineReviewStatus` (advisory machine output),\n:class:`RecordReviewStatus` (authoritative human review), and\n:class:`SubmissionStatus` (submission lifecycle / moderation). A curator\ntask tracks *whether a human has handled a machine finding* — it never\napproves, rejects, certifies, or otherwise mutates a record. See\n``backend/docs/specs/machine_review_curator_task_queue.md`` §2/§5.\n\nThe first three are **open** states (work outstanding); the last three\nare **terminal/resolved** states (see :meth:`is_terminal`).",
+        "description": "Human triage state over an exact, mapped machine-review finding.\n\nThis is the *fourth* review axis and is intentionally distinct from\n:class:`MachineReviewStatus` (advisory machine output),\n:class:`RecordReviewStatus` (authoritative human review), and\n:class:`SubmissionStatus` (submission lifecycle / moderation). A curator\ntask tracks *whether a human has handled a machine finding* — it never\napproves, rejects, certifies, or otherwise mutates a record.\n\nThe first three are **open** states (work outstanding); the last three\nare **terminal/resolved** states (see :meth:`is_terminal`).",
         "enum": [
           "untriaged",
           "needs_curator_review",
@@ -47881,7 +47881,7 @@
         "type": "string"
       },
       "ReleaseSelectionRecord": {
-        "description": "One attributed selection row, standing or superseded.\n\nTwo unrelated supersessions meet on this row and must not be confused;\n``backend/docs/specs/dataset_release_and_profiles.md`` §\"two supersessions\"\nholds them apart:\n\n``supersedes_selection_ref``  a *curator's opinion* was revised. Both\n                              records remain equally valid science.\n``record_supersession``       the *science* was corrected. The selected\n                              record has been replaced by a better\n                              measurement of the same thing.\n\nA standing selection whose selected record has since been superseded is the\nsingle most misleading state this API can serve: it is what a citable,\nDOI-bearing release points a reader outside the project at. It is reported\nhere rather than folded into ``live_divergence``, which is a per-file byte\ndigest — \"the database has moved\", advisory and routinely true — and cannot\nname a record.",
+        "description": "One attributed selection row, standing or superseded.\n\nTwo unrelated supersessions meet on this row and must not be confused:\n\n``supersedes_selection_ref``  a *curator's opinion* was revised. Both\n                              records remain equally valid science.\n``record_supersession``       the *science* was corrected. The selected\n                              record has been replaced by a better\n                              measurement of the same thing.\n\nA standing selection whose selected record has since been superseded is the\nsingle most misleading state this API can serve: it is what a citable,\nDOI-bearing release points a reader outside the project at. It is reported\nhere rather than folded into ``live_divergence``, which is a per-file byte\ndigest — \"the database has moved\", advisory and routinely true — and cannot\nname a record.",
         "properties": {
           "action": {
             "$ref": "#/components/schemas/ReleaseSelectionAction"
@@ -56143,7 +56143,7 @@
         "type": "object"
       },
       "SelectionPolicy": {
-        "description": "Named, read-time *administrative* order a ``.../select`` request states (``policy``).\n\nA selection policy makes \"show me one product for this species form\" an\n*explicit, named* choice rather than an implicit one. Every policy is an\nadministrative order over review status and deposition time. None is a\nclaim about which method or result is scientifically better, and none\npersists a curator decision.\n\nPolicies that would require a stored choice (``benchmark_reference``,\n``curator_pick``) are intentionally absent: they need the deferred\nproduct-selection persistence layer, not a read knob, and cannot be\nhonestly evaluated from the record data alone. See\n``backend/docs/specs/scientific_product_candidacy.md``.\n\n``default``        the browse display order (review rank, newest deposition, id).\n``latest``         most recently deposited first.\n``most_reviewed``  review status first, then most recently deposited.",
+        "description": "Named, read-time *administrative* order a ``.../select`` request states (``policy``).\n\nA selection policy makes \"show me one product for this species form\" an\n*explicit, named* choice rather than an implicit one. Every policy is an\nadministrative order over review status and deposition time. None is a\nclaim about which method or result is scientifically better, and none\npersists a curator decision.\n\nPolicies that would require a stored choice (``benchmark_reference``,\n``curator_pick``) are intentionally absent: they need the deferred\nproduct-selection persistence layer, not a read knob, and cannot be\nhonestly evaluated from the record data alone.\n\n``default``        the browse display order (review rank, newest deposition, id).\n``latest``         most recently deposited first.\n``most_reviewed``  review status first, then most recently deposited.",
         "enum": [
           "default",
           "latest",
@@ -96061,7 +96061,7 @@
     },
     "/api/v1/scientific/calculations/search": {
       "get": {
-        "description": "MVP scientific calculation search.\n\nAND-combines the supplied filters and returns calculation records\nin the same shape as the detail endpoint. At least one meaningful\nfilter is required; pure pagination/include/review knobs are not\nenough — see ``backend/docs/specs/scientific_calculation_reads.md``.",
+        "description": "MVP scientific calculation search.\n\nAND-combines the supplied filters and returns calculation records\nin the same shape as the detail endpoint. At least one meaningful\nfilter is required; pure pagination/include/review knobs are not\nenough.",
         "operationId": "scientific_calculations_search_get_api_v1_scientific_calculations_search_get",
         "parameters": [
           {
@@ -97828,7 +97828,7 @@
     },
     "/api/v1/scientific/conformers/search": {
       "get": {
-        "description": "MVP scientific conformer-group search.\n\nAND-combines the supplied filters and returns conformer-group\nrecords in the same shape as the group detail endpoint. At least\none meaningful filter is required; pure pagination / include /\nreview knobs are not enough — see\n``backend/docs/specs/scientific_conformer_reads.md``.",
+        "description": "MVP scientific conformer-group search.\n\nAND-combines the supplied filters and returns conformer-group\nrecords in the same shape as the group detail endpoint. At least\none meaningful filter is required; pure pagination / include /\nreview knobs are not enough.",
         "operationId": "scientific_conformers_search_get_api_v1_scientific_conformers_search_get",
         "parameters": [
           {
@@ -99706,7 +99706,7 @@
     },
     "/api/v1/scientific/frequency-scale-factors/search": {
       "get": {
-        "description": "Frequency-scale-factor search.\n\nAND-combines the supplied filters; at least one meaningful filter\nis required. Explicit ``False`` bool filter values count as\nmeaningful — see\n``backend/docs/specs/scientific_correction_reads.md``.",
+        "description": "Frequency-scale-factor search.\n\nAND-combines the supplied filters; at least one meaningful filter\nis required. Explicit ``False`` bool filter values count as\nmeaningful.",
         "operationId": "scientific_frequency_scale_factor_search_get_api_v1_scientific_frequency_scale_factors_search_get",
         "parameters": [
           {
@@ -109194,7 +109194,7 @@
     },
     "/api/v1/scientific/species-entries/{species_entry_id}/statmech": {
       "get": {
-        "description": "Return statmech records for a species entry.\n\nPath handle is the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\nwrong-prefix ref returns 422; an unknown entry returns 404.\n``sort=`` is rejected (v0). ``include=assessments`` adds compact\ndeterministic-trust and reproducibility freshness summaries, while\n``include=trust`` adds the\nrecord's computed statmech rubric fragment per record; ``include=all`` does\nnot include trust.\n\nEvery statmech record for the entry is returned in display order (review\nstatus, then newest deposition, then id). The read never picks one:\n``collapse`` and ``selection_policy`` are refused (422), and\n``POST /statmech/select`` answers \"give me one\". See\n``backend/docs/specs/scientific_product_candidacy.md``.",
+        "description": "Return statmech records for a species entry.\n\nPath handle is the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\nwrong-prefix ref returns 422; an unknown entry returns 404.\n``sort=`` is rejected (v0). ``include=assessments`` adds compact\ndeterministic-trust and reproducibility freshness summaries, while\n``include=trust`` adds the\nrecord's computed statmech rubric fragment per record; ``include=all`` does\nnot include trust.\n\nEvery statmech record for the entry is returned in display order (review\nstatus, then newest deposition, then id). The read never picks one:\n``collapse`` and ``selection_policy`` are refused (422), and\n``POST /statmech/select`` answers \"give me one\".",
         "operationId": "species_statmech_api_v1_scientific_species_entries__species_entry_id__statmech_get",
         "parameters": [
           {
@@ -109863,7 +109863,7 @@
     },
     "/api/v1/scientific/species-entries/{species_entry_id}/transport": {
       "get": {
-        "description": "Return transport records for a species entry.\n\nPath handle is the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\nwrong-prefix ref returns 422; an unknown entry returns 404.\n``sort=`` is rejected (v0). ``include=assessments`` adds compact\ndeterministic-trust and reproducibility freshness summaries, while\n``include=trust`` adds the\n``computed_transport`` fragment per record; ``include=all`` does\nnot include trust.\n\nEvery transport record for the entry is returned in display order (review\nstatus, then newest deposition, then id). The read never picks one:\n``collapse`` and ``selection_policy`` are refused (422). There is no\ntransport select endpoint yet. See\n``backend/docs/specs/scientific_product_candidacy.md``.",
+        "description": "Return transport records for a species entry.\n\nPath handle is the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\nwrong-prefix ref returns 422; an unknown entry returns 404.\n``sort=`` is rejected (v0). ``include=assessments`` adds compact\ndeterministic-trust and reproducibility freshness summaries, while\n``include=trust`` adds the\n``computed_transport`` fragment per record; ``include=all`` does\nnot include trust.\n\nEvery transport record for the entry is returned in display order (review\nstatus, then newest deposition, then id). The read never picks one:\n``collapse`` and ``selection_policy`` are refused (422). There is no\ntransport select endpoint yet.",
         "operationId": "species_transport_api_v1_scientific_species_entries__species_entry_id__transport_get",
         "parameters": [
           {
@@ -112342,7 +112342,7 @@
     },
     "/api/v1/scientific/statmech/search": {
       "get": {
-        "description": "MVP scientific statmech search.\n\nAND-combines the supplied filters and returns statmech records in\nthe same shape as the detail endpoint. At least one meaningful\nfilter is required; explicit ``False`` bool filter values count\nas meaningful — see\n``backend/docs/specs/scientific_statmech_reads.md``.",
+        "description": "MVP scientific statmech search.\n\nAND-combines the supplied filters and returns statmech records in\nthe same shape as the detail endpoint. At least one meaningful\nfilter is required; explicit ``False`` bool filter values count\nas meaningful.",
         "operationId": "scientific_statmech_search_get_api_v1_scientific_statmech_search_get",
         "parameters": [
           {
@@ -114663,7 +114663,7 @@
     },
     "/api/v1/scientific/transition-states/search": {
       "get": {
-        "description": "MVP scientific transition-state search.\n\nAND-combines the supplied filters and returns\ntransition-state-entry records in the same shape as the TS-entry\ndetail endpoint. At least one meaningful filter is required; pure\npagination / include / review knobs are not enough — see\n``backend/docs/specs/scientific_transition_state_reads.md``.",
+        "description": "MVP scientific transition-state search.\n\nAND-combines the supplied filters and returns\ntransition-state-entry records in the same shape as the TS-entry\ndetail endpoint. At least one meaningful filter is required; pure\npagination / include / review knobs are not enough.",
         "operationId": "scientific_transition_states_search_get_api_v1_scientific_transition_states_search_get",
         "parameters": [
           {
@@ -115471,7 +115471,7 @@
     },
     "/api/v1/scientific/transport/search": {
       "get": {
-        "description": "MVP scientific transport search.\n\nAND-combines the supplied filters; at least one meaningful\nfilter required. Explicit ``False`` bool filter values count as\nmeaningful — see\n``backend/docs/specs/scientific_transport_reads.md``.",
+        "description": "MVP scientific transport search.\n\nAND-combines the supplied filters; at least one meaningful\nfilter required. Explicit ``False`` bool filter values count as\nmeaningful.",
         "operationId": "scientific_transport_search_get_api_v1_scientific_transport_search_get",
         "parameters": [
           {

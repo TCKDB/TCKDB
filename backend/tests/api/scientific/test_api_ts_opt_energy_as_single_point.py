@@ -17,8 +17,6 @@ Covers the read-time derivation surfaced on
 (``calculations[].energy.single_point_equivalent``), and its deliberate
 non-effect on the TS-entry evidence summary (``has_sp`` /
 ``calculation_count``) on the same TS-entry detail endpoint.
-
-See ``backend/docs/specs/scientific_transition_state_reads.md``.
 """
 
 from __future__ import annotations

@@ -5,8 +5,7 @@ record needs a fresh machine review; this module **executes** that decision by
 appending one persisted row — and nothing more. It does not produce the review
 (provider / fake-provider orchestration is a separate concern); it only persists
 an already-built :class:`~app.services.machine_review.read_model.RecordMachineReview`
-through the existing append helper (policy
-``backend/docs/specs/record_machine_review_policy.md`` §5 execution half).
+through the existing append helper.
 
 Boundaries:
 

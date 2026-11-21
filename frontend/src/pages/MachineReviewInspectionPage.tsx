@@ -35,7 +35,7 @@ import {
  * This is a PRIVATE diagnostic view, not public trust / human review /
  * certification / moderation. Access is enforced by the backend
  * (``require_admin``); this page is expected to be mounted behind the admin
- * shell. See ``backend/docs/specs/machine_review_admin_ui_mock.md``.
+ * shell.
  *
  * Future joins (submission status, uploader, human-review status, evidence
  * label/completeness, curator workflow_state) are intentionally NOT shown:

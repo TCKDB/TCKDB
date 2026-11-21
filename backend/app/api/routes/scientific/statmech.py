@@ -9,8 +9,6 @@ Three public endpoints:
 The router uses a single ``/statmech`` prefix; ``/search`` is
 registered before ``/{handle}`` so FastAPI doesn't swallow the search
 path with the catch-all detail handler.
-
-See ``backend/docs/specs/scientific_statmech_reads.md``.
 """
 
 from __future__ import annotations
@@ -104,8 +102,7 @@ def scientific_statmech_search_get(
     AND-combines the supplied filters and returns statmech records in
     the same shape as the detail endpoint. At least one meaningful
     filter is required; explicit ``False`` bool filter values count
-    as meaningful — see
-    ``backend/docs/specs/scientific_statmech_reads.md``.
+    as meaningful.
     """
     unknown = set(request.query_params.keys()) - _GET_ALLOWED_QS_KEYS
     if unknown:

@@ -9,8 +9,6 @@ Two detail surfaces:
 ``conformer_observation`` is the provenance-bearing row anchored to a
 group; ``conformer_selection`` is curation metadata keyed by
 ``selection_kind``.
-
-See ``backend/docs/specs/scientific_conformer_reads.md``.
 """
 
 from __future__ import annotations

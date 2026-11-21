@@ -394,8 +394,7 @@ def assert_geometry_composition_matches_identity(
     record". That is true of connectivity and false of composition: every
     calculation type is a map over a fixed set of nuclei, so a dissociated
     optimisation has exactly the atoms it started with. The sibling rule
-    therefore covers both directions; see
-    ``backend/docs/specs/calculation_geometry_composition.md``.
+    therefore covers both directions.
 
     What is compared, and what deliberately is not
     ----------------------------------------------

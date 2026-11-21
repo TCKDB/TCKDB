@@ -25,8 +25,7 @@ review-badge, pagination and disclosure-envelope machinery (see
 
 The path parameter accepts either the integer ``species_entry.id`` or
 a public ref of the form ``spe_…`` (the template name stays
-``{species_entry_id}``). See
-``backend/docs/specs/trust_read_api_current.md``.
+``{species_entry_id}``).
 """
 
 from __future__ import annotations
@@ -108,8 +107,7 @@ def species_statmech(
     Every statmech record for the entry is returned in display order (review
     status, then newest deposition, then id). The read never picks one:
     ``collapse`` and ``selection_policy`` are refused (422), and
-    ``POST /statmech/select`` answers "give me one". See
-    ``backend/docs/specs/scientific_product_candidacy.md``.
+    ``POST /statmech/select`` answers "give me one".
     """
     reject_removed_query_params(http_request, _STATMECH_REMOVED)
     resolved_species_entry_id = resolve_species_entry_handle(
@@ -171,8 +169,7 @@ def species_transport(
     Every transport record for the entry is returned in display order (review
     status, then newest deposition, then id). The read never picks one:
     ``collapse`` and ``selection_policy`` are refused (422). There is no
-    transport select endpoint yet. See
-    ``backend/docs/specs/scientific_product_candidacy.md``.
+    transport select endpoint yet.
     """
     reject_removed_query_params(http_request, _TRANSPORT_REMOVED)
     resolved_species_entry_id = resolve_species_entry_handle(

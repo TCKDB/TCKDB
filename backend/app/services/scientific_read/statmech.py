@@ -10,8 +10,6 @@ the source freq calculation(s), not on the statmech row itself —
 ``include=frequencies`` therefore surfaces a list of source freq
 calculation refs plus the resolved scaling factor; full mode arrays
 remain behind ``GET /scientific/calculations/{ref}``.
-
-See ``backend/docs/specs/scientific_statmech_reads.md``.
 """
 
 from __future__ import annotations

@@ -29,9 +29,6 @@ Plus the case the rule's shape turns on, which the two blocking neighbours
 had already settled and which is easy to get wrong here: composition is
 conserved by every calculation type, so an *output* geometry is checked
 exactly like an input one.
-
-The full argument, including the cases considered and rejected, is in
-``backend/docs/specs/calculation_geometry_composition.md``.
 """
 
 from __future__ import annotations

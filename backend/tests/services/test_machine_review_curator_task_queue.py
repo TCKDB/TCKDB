@@ -2,8 +2,7 @@
 
 Covers the persisted curator task queue and the ORM model in
 ``app/db/models/machine_review_curator_task.py``. This is the *fourth* review
-axis (human triage state over machine findings); see
-``backend/docs/specs/machine_review_curator_task_queue.md``.
+axis (human triage state over machine findings).
 
 These tests assert the schema shape (table,
 identity unique constraint, queue indexes, foreign-key targets) and the model
