@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Release 0.3.0 is the self-hosting default (Unreleased)
+
+- **Behaviour:** the `selfhost` compose profile and `tckdb_deploy.sh` examples default to the 0.3.0 images (`TCKDB_IMAGE_TAG`). 0.3.0 carries the plain-HTTP lab-network login opt-in and the web UI's `X-Real-IP` handling, so `--access lan` and `--access https` work on the default tag; the env script warns only when `TCKDB_IMAGE_TAG` is set to 0.2.0.
+- **Schema and migration:** none in this change; 0.3.0 includes revisions `a6fc04f5667e` (method and basis-set catalogue) and `e3b7c1a9d452` (path and IRC coordinate units). No new environment variable.
+- **Versions:** `tckdb-backend` 0.3.0.
+
 ## Self-hosted TCKDB can be reached from a lab network or the internet (Unreleased)
 
 - **Behaviour:** `tckdb_make_env.sh` asks who should reach TCKDB (`--access local|lan|https|cloudflare`, with `--lan-address`, `--domain` and `--acme-email`) and sets the web UI's bind address, the public URL, the deployment mode, the cookie settings, `TRUSTED_PROXY_HEADER` and `COMPOSE_PROFILES` together, then prints the start command. `make selfhost` starts the profiles the env file names. A new `caddy` compose profile serves `TCKDB_DOMAIN` over HTTPS on ports 80 and 443 with a Let's Encrypt certificate (`deploy/caddy/Caddyfile`). The database, object store and API ports stay on 127.0.0.1 in every option.

@@ -259,8 +259,8 @@ def test_make_env_rejects_bad_access_settings(tmp_path: Path, args: list[str], m
 @pytest.mark.parametrize(
     ("args", "warned"),
     [
-        (["--access", "lan", "--lan-address", "192.168.50.10"], True),
-        (["--access", "https", "--domain", "tckdb.example.org"], True),
+        (["--access", "lan", "--lan-address", "192.168.50.10"], False),
+        (["--access", "https", "--domain", "tckdb.example.org"], False),
         (["--access", "https", "--domain", "tckdb.example.org", "--set", "TCKDB_IMAGE_TAG=0.2.0"], True),
         (["--access", "lan", "--lan-address", "192.168.50.10", "--set", "TCKDB_IMAGE_TAG=0.3.0"], False),
         (["--access", "cloudflare", "--domain", "tckdb.example.org"], False),
