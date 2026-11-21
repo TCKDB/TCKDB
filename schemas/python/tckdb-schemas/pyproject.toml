@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tckdb-schemas"
-version = "0.175.2"
+version = "0.175.3"
 description = "Pure Pydantic wire-contract schemas for TCKDB upload payloads."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -48,7 +48,7 @@ test = [
 Homepage = "https://github.com/TCKDB/TCKDB"
 Repository = "https://github.com/TCKDB/TCKDB"
 Issues = "https://github.com/TCKDB/TCKDB/issues"
-Documentation = "https://github.com/TCKDB/TCKDB/tree/main/schemas/python/tckdb-schemas"
+Documentation = "https://tckdb.github.io/TCKDB/"
 Changelog = "https://github.com/TCKDB/TCKDB/blob/main/schemas/python/tckdb-schemas/CHANGELOG.md"
 
 [tool.setuptools.packages.find]

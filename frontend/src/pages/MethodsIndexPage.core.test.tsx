@@ -5,12 +5,13 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import MethodsIndexPage from "./MethodsIndexPage"
+import { emptyCatalogueHandlers } from "../test/catalogueFixtures"
 import { LevelLabelScope } from "../components/LevelLabel"
 
 // The core-treatment filter is the API's own `core_treatment` parameter: choosing a value must
 // re-query the server, not only narrow what is already on the page.
 
-const server = setupServer()
+const server = setupServer(...emptyCatalogueHandlers())
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
 afterEach(() => { server.resetHandlers(); cleanup() })
 afterAll(() => server.close())

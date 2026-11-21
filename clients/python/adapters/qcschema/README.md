@@ -4,8 +4,12 @@ Moves MolSSI QCSchema documents (the JSON that QCEngine, Psi4 and QCArchive
 write) into TCKDB, and TCKDB calculations back out as QCSchema.
 
 ```
-pip install -e clients/python/adapters/qcschema   # pins qcelemental==0.51.2
+pip install tckdb-qcschema
 ```
+
+It pins `qcelemental==0.51.2` and installs `tckdb-client` and `tckdb-schemas`
+with it. From a checkout of [TCKDB](https://github.com/TCKDB/TCKDB),
+`pip install -e clients/python/adapters/qcschema`.
 
 ## Commands
 
@@ -78,3 +82,10 @@ import: it is TCKDB's own numbers, not a new calculation.
 
 qcelemental 0.51.2 has no IRC, NEB or reaction-path model in either family,
 so IRC calculations are neither imported nor exported.
+
+## Links
+
+- Documentation: https://tckdb.github.io/TCKDB/
+- Source: https://github.com/TCKDB/TCKDB/tree/main/clients/python/adapters/qcschema
+- Changelog: https://github.com/TCKDB/TCKDB/blob/main/CHANGELOG.md
+- License: MIT

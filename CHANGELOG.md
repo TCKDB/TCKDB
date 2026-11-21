@@ -7,8 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## Two things are versioned, and they are not the same
 
 **The software** (`tckdb-backend`, `tckdb-client`, `tckdb-schemas`,
-`tckdb-mcp`, `tckdb-chemkin`) is versioned per package and described in this
-file.
+`tckdb-mcp`, `tckdb-chemkin`, `tckdb-qcschema`) is versioned per package and
+described in this file.
 
 **A curated scientific dataset** is versioned independently as a *dataset
 release* — a tag such as `2026.07.0`, an immutable SHA-256-checksummed
@@ -29,6 +29,34 @@ dataset must never require a code release.
 - **Behaviour:** Python Client CI gains a job that builds all five distributions and runs `twine check --strict` on them, and runs on changes under `integrations/mcp/`.
 - **Docs:** the maintainer runbook is `backend/docs/deployment/publishing_python_packages.md` (trusted-publisher values, tag scheme, release order, TestPyPI dry run).
 - **Schema and migration:** none. No new environment variable. No distributed package changed.
+
+## tckdb-client declares pydantic; client and schemas link the documentation site (Unreleased)
+
+- **Packaging:** `tckdb-client` declares `pydantic>=2.6`, which its builders import directly; it used to arrive only through `tckdb-schemas`. The `Documentation` URL of both packages is https://tckdb.github.io/TCKDB/, and the schemas README links its changelog by its full address, so the link works on PyPI.
+- **Schema and migration:** none. No new environment variable. No behaviour changed.
+- **Versions:** `tckdb-client` 0.209.1, `tckdb-schemas` 0.175.3 (metadata and text only; the client's `tckdb-schemas` window `>=0.158,<0.176` is unchanged and contains 0.175.3).
+
+## tckdb-mcp carries a licence file and working project links (Unreleased)
+
+- **Packaging:** `tckdb-mcp` declares `license = "MIT"` with `license-files` and ships the MIT `LICENSE` in its wheel and sdist (it used the deprecated `license = { text = "MIT" }` table and shipped no licence text). Its `project.urls` point at `https://github.com/TCKDB/TCKDB` and `https://tckdb.github.io/TCKDB/`; they named `github.com/tckdb` and `github.com/tckdb/tckdb_v2`, which do not exist. Python 3.13 is listed in the classifiers, the sdist leaves out the tests, and the build needs setuptools 77 or later.
+- **Docs:** the package README's links are absolute, so they work on its PyPI page, and it gives `pip install tckdb-mcp` alongside the editable install.
+- **Schema and migration:** none. No new environment variable. No tool or behaviour changed.
+- **Versions:** `tckdb-mcp` 0.16.1.
+
+## tckdb-qcschema carries the metadata a PyPI release needs (Unreleased)
+
+- **Behaviour:** `tckdb-qcschema` requires `tckdb-client>=0.208,<0.209` and `tckdb-schemas>=0.175,<0.176`; they were floors without a ceiling (`>=0.160.0`, `>=0.131.0`). It declares `numpy>=1.26` and `pydantic>=2.6`, which it imports directly and used to get only through `qcelemental`.
+- **Packaging:** the distribution declares its README (its PyPI description) and carries the MIT `LICENSE` (`license = "MIT"` with `license-files`), authors, classifiers, project URLs and `py.typed`; the sdist leaves out the tests and fixture scripts. The build needs setuptools 77 or later. The README's install line is `pip install tckdb-qcschema`.
+- **Tests:** `tests/test_package_version.py` fails when `__version__` and the pyproject version disagree.
+- **Schema and migration:** none. No new environment variable.
+- **Versions:** `tckdb-qcschema` 0.9.7.
+
+## The API reads backend/.env, and the example units start where the docs install them (Unreleased)
+
+- **Behaviour:** `Settings` reads `backend/.env` when it exists, resolved from the backend directory, not the working directory; a variable set in the environment wins, and keys that are not settings are ignored. `uvicorn main:app` (`make api`, the example `tckdb-api.service`) also loads the file into the process environment without overriding it, so `S3_*` and `TCKDB_INLINE_WORKER` come from it too. The API image contains no `.env` (`.dockerignore`) and its entry point is `app.api.app:create_app`, so containers are unchanged.
+- **Behaviour:** `check_selfhosted_deployment.sh` checks secrets only when the env file's `DEPLOYMENT_MODE` is not `local` (unset is `local`), as the API's startup checks do, and says so in its output.
+- **Ops:** `examples/deployment/systemd/tckdb-backup.service` creates `/var/backups/tckdb` as root before the dump (`ExecStartPre=+`); `tckdb-api.service` uses `Wants=docker.service` instead of `Requires=`, so it starts on a host without Docker.
+- No schema or migration change. No new environment variable. No distributed package changed.
 
 ## The method and basis-set catalogue is readable (Unreleased)
 
@@ -2543,6 +2571,7 @@ Per-package maturity classifiers:
 | `tckdb-schemas` | Alpha | Upload wire contracts; version bumped on every change — **enforced in CI since 2026-08-17; five earlier versions are not unique, listed under Unreleased** |
 | `tckdb-mcp` | Alpha | Agent integration surface |
 | `tckdb-chemkin` | Alpha | Mechanism-export adapter |
+| `tckdb-qcschema` | Alpha | QCSchema import and export adapter |
 
 The client is deliberately ahead of the backend: it is a thin, well-tested
 wrapper over a contract that is itself still moving.
