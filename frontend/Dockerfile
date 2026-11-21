@@ -20,6 +20,10 @@ RUN npm run build
 FROM nginxinc/nginx-unprivileged:1.29-alpine
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+# The networks X-Real-IP is accepted from, rewritten at every start by the
+# entrypoint script; the empty copy here accepts it from nobody.
+COPY --chown=101:0 real_ip_from.conf /etc/nginx/tckdb/real_ip_from.conf
+COPY --chmod=755 scripts/ops/real_ip_from.sh /docker-entrypoint.d/15-tckdb-real-ip-from.sh
 COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 8080

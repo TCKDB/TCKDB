@@ -32,6 +32,21 @@ dataset must never require a code release.
 - **Tests:** the interchange report imports the installed `tckdb_qcschema` with this checkout's `tckdb_client`. The water Hessian fixture directory holds the Psi4 environment lockfile the run used (`ENVIRONMENT.lock.txt`, the sha256 its `meta.json` records), and the report hashes that copy.
 - **Schema and migration:** none. No new environment variable. No distributed package changed.
 
+## Release 0.3.0 is the self-hosting default (Unreleased)
+
+- **Behaviour:** the `selfhost` compose profile and `tckdb_deploy.sh` examples default to the 0.3.0 images (`TCKDB_IMAGE_TAG`). 0.3.0 carries the plain-HTTP lab-network login opt-in and the web UI's `X-Real-IP` handling, so `--access lan` and `--access https` work on the default tag; the env script warns only when `TCKDB_IMAGE_TAG` is set to 0.2.0.
+- **Schema and migration:** none in this change; 0.3.0 includes revisions `a6fc04f5667e` (method and basis-set catalogue) and `e3b7c1a9d452` (path and IRC coordinate units). No new environment variable.
+- **Versions:** `tckdb-backend` 0.3.0.
+
+## Self-hosted TCKDB can be reached from a lab network or the internet (Unreleased)
+
+- **Behaviour:** `tckdb_make_env.sh` asks who should reach TCKDB (`--access local|lan|https|cloudflare`, with `--lan-address`, `--domain` and `--acme-email`) and sets the web UI's bind address, the public URL, the deployment mode, the cookie settings, `TRUSTED_PROXY_HEADER` and `COMPOSE_PROFILES` together, then prints the start command. `make selfhost` starts the profiles the env file names. A new `caddy` compose profile serves `TCKDB_DOMAIN` over HTTPS on ports 80 and 443 with a Let's Encrypt certificate (`deploy/caddy/Caddyfile`). The database, object store and API ports stay on 127.0.0.1 in every option.
+- **Frontend image:** nginx believes `X-Real-IP` only from the container's own networks (a proxy on the host or beside it) and replaces it with the client's address otherwise. Before, it passed any client-sent value on, so with `TRUSTED_PROXY_HEADER=X-Real-IP` and the web UI as the edge a client could choose its own rate-limit key.
+- **Images:** lab-network and Caddy access need images newer than 0.2.0 (the plain-HTTP cookie opt-in and the `X-Real-IP` handling above); the script and the Self-host page say so. The compose default tag is unchanged.
+- **New environment variables:** `TCKDB_WEB_BIND`, `TCKDB_DOMAIN`, `TCKDB_ACME_EMAIL`, `TCKDB_TLS`, `TCKDB_HTTP_PORT`, `TCKDB_HTTPS_PORT`; `COMPOSE_PROFILES` is now written to `.env.selfhosted`.
+- **Schema and migration:** none.
+- **Docs:** the Self-host page's "Make it reachable" section has a recipe per option; the production checklist, Lab server and Public server pages follow it.
+
 ## Path-search and IRC coordinates carry a unit (Unreleased)
 
 - **Behaviour:** a path-search result states the unit of its points' `path_coordinate` (`path_coordinate_unit`) and an IRC result the unit of its points' `reaction_coordinate` (`reaction_coordinate_unit`), from `angstrom`, `bohr`, `amu_half_bohr`, `amu_half_angstrom`, `fraction` and `step`. Both are optional on upload and null on read when not recorded; existing rows are null. A `fraction` coordinate outside [0, 1] or a non-whole `step` coordinate is refused (422).

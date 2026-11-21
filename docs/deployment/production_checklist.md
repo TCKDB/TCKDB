@@ -50,7 +50,7 @@ interface.
 | `PAGING_CURSOR_KEY` | a random secret, 32+ characters | **enforced** Seals paging cursors so they hold no readable record ID. Generate one with `openssl rand -hex 32`. Every API process must share it. Changing it breaks cursors in flight (clients get 422 `invalid_cursor` and start their traversal again); nothing stored depends on it. |
 | `RATE_LIMIT_ENABLED` | `true` | **enforced** The test suite turns it off; nothing else should. |
 | `CORS_ALLOW_ORIGINS` | an explicit list, or unset | **enforced: no `*`** Unset means no CORS middleware, which is right for an API used with keys. List trusted browser origins (for example `https://app.tckdb.example.org`) only if a browser app on another origin calls the API. |
-| `TRUSTED_PROXY_HEADER` | the header your ingress sets, or unset | Unset by default. Tells the rate limiter where to read the client's IP. Set it only behind a proxy that always overwrites the header: Cloudflare → `CF-Connecting-IP`; nginx with `proxy_set_header X-Real-IP` → `X-Real-IP`. |
+| `TRUSTED_PROXY_HEADER` | the header your ingress sets, or unset | Unset by default. Tells the rate limiter where to read the client's IP. Set it only behind a proxy that always overwrites the header: Cloudflare → `CF-Connecting-IP`; the `caddy` profile, the web UI published on a lab address, or nginx with `proxy_set_header X-Real-IP` → `X-Real-IP`. `tckdb_make_env.sh --access` sets it. |
 | `DB_STATEMENT_TIMEOUT_MS` | `30000`, or your budget | Caps how long one query may hold a pool slot. The role setup also sets it on the runtime role. |
 | `DB_CONNECT_TIMEOUT_SECONDS` | `10` (the default) | Caps how long opening one connection may take. `DB_STATEMENT_TIMEOUT_MS` cannot help until a server answers, so this is what bounds a database host that is unreachable rather than down (a firewall drop, a removed container, a stale DNS answer), which otherwise waits out the kernel's SYN retries, about 130 s. Raise it only for a distant database; `0` restores the OS default. |
 | `DB_PASSWORD` | strong and random | **enforced: not empty, not `change-me`** Compose refuses to start without one. |
@@ -196,8 +196,15 @@ Settings alone are not enough. Before any traffic:
   Clients may send their own and the server echoes it when it is safe.
 - [ ] `LOG_FORMAT=json`, so logs carry `request_id`, `level`, `logger` and
   `message`.
-- [ ] TLS terminates at the proxy or tunnel, and the API listens only on
-  `127.0.0.1`.
+- [ ] TLS terminates at the proxy or tunnel. On a lab network served over
+  plain HTTP, the plain-HTTP cookie opt-in is a choice you made.
+- [ ] Only the ports of your [access option](README.md#make-it-reachable)
+  are open: `ss -ltn` shows the database, the object store and the API on
+  `127.0.0.1` only, the web UI on `127.0.0.1` or the lab address, and
+  80/443 only with the `caddy` profile.
+- [ ] A spoofed client address is ignored: with `TRUSTED_PROXY_HEADER` set,
+  eleven failed logins from another machine, each with a different
+  `X-Real-IP` header, still end in `429`.
 - [ ] On a Linux host running the bundled `seaweedfs` service, the
   [object store firewall](storage-firewall.md) is installed and
   `sudo /usr/local/sbin/tckdb_storage_hostfw.sh --check` exits 0.

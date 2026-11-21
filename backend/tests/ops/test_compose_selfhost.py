@@ -57,7 +57,7 @@ def test_the_api_gets_runtime_settings_only_and_container_addresses() -> None:
     }
     assert api["depends_on"]["init"] == {"condition": "service_completed_successfully"}
     assert api["ports"] == ["127.0.0.1:${TCKDB_API_PORT:-8010}:8010"]
-    assert SERVICES["frontend"]["ports"] == ["127.0.0.1:${TCKDB_WEB_PORT:-8011}:8080"]
+    assert SERVICES["frontend"]["ports"] == ["${TCKDB_WEB_BIND:-127.0.0.1}:${TCKDB_WEB_PORT:-8011}:8080"]
     assert SERVICES["init"]["env_file"] == [".env.selfhosted", ".env.db-admin"]
 
 
@@ -71,8 +71,8 @@ def test_the_worker_reaches_the_bundled_store_by_service_name() -> None:
 
 def test_published_images_share_one_tag() -> None:
     for name in ("init", "tckdb-api", "worker"):
-        assert SERVICES[name]["image"] == "laxzal/tckdb-api:${TCKDB_IMAGE_TAG:-0.2.0}", name
-    assert SERVICES["frontend"]["image"] == "laxzal/tckdb-frontend:${TCKDB_IMAGE_TAG:-0.2.0}"
+        assert SERVICES[name]["image"] == "laxzal/tckdb-api:${TCKDB_IMAGE_TAG:-0.3.0}", name
+    assert SERVICES["frontend"]["image"] == "laxzal/tckdb-frontend:${TCKDB_IMAGE_TAG:-0.3.0}"
 
 
 # ---------------------------------------------------------------------------
