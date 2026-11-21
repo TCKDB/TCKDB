@@ -855,10 +855,14 @@ class TestSoftwareReleaseReads:
 
 
 class TestLiteratureReads:
-    def test_list_empty(self, client):
-        resp = client.get("/api/v1/literature")
+    def test_a_fresh_database_lists_only_the_catalogue_references(self, client):
+        from app.services.method_catalogue_seed import load_seed
+
+        resp = client.get("/api/v1/literature", params={"limit": 100})
         assert resp.status_code == 200
-        assert resp.json()["total"] == 0
+        seeded = set(load_seed().references)
+        assert resp.json()["total"] == len(seeded)
+        assert {item["doi"] for item in resp.json()["items"]} == seeded
 
     def test_list_and_get_with_authors(self, client, db_session):
         author = Author(given_name="Jane", family_name="Doe", full_name="Jane Doe")

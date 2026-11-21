@@ -74,10 +74,17 @@ class LiteratureIdentifiers(BaseModel):
 
     The fields surface as-stored in the DB. Normalized lookups (against
     ``ix_literature_doi_normalized`` etc.) are handled by the upload
-    service; this surface returns the verbatim string.
+    service; this surface returns the verbatim string. ``doi`` is served
+    only when the registry resolved the row's metadata.
     """
 
-    doi: str | None = None
+    doi: str | None = Field(
+        default=None,
+        description=(
+            "The DOI, only when the row's metadata was resolved from the DOI "
+            "registry (title_source = resolved_metadata); null otherwise."
+        ),
+    )
     isbn: str | None = None
     url: str | None = None
 

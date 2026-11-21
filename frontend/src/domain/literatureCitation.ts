@@ -1,17 +1,16 @@
-// What a public page may print of a literature record's title.
+// What a public page may print of a literature record's title and DOI.
 //
-// A title is TCKDB's to show only when it came from
-// the DOI/ISBN registry (`title_source == "resolved_metadata"`). A title the
-// depositor typed -- or one whose origin was never recorded (`null`, every row
-// older than the column) -- is depositor text and stays off public pages. The
-// citation is then the identifier, with a TCKDB phrase saying why there is no
-// title.
+// Both are TCKDB's to show only when they came from the DOI/ISBN registry
+// (`title_source == "resolved_metadata"`). A title or DOI the depositor typed --
+// or one whose origin was never recorded (`null`, every row older than the
+// column) -- is depositor text and stays off public pages. The citation is then
+// the identifier, with a TCKDB phrase saying why there is no title.
 
 export type CitationLiterature = {
     literature_ref?: string | null
     title?: string | null
     title_source?: string | null
-    doi?: string | null // accepted so callers can pass a whole record; deliberately never printed
+    doi?: string | null
     isbn?: string | null
 }
 
@@ -22,17 +21,29 @@ export interface PublicCitation {
     title: string | null
     /** What to print instead: ISBN (validated server-side), else the TCKDB public ref. Never the DOI. */
     identifier: string | null
+    /** The registry-resolved DOI, or `null` when it may not be shown. */
+    doi: string | null
 }
 
-// A DOI is deliberately not an option here: the server only trims and lower-cases it, so it is depositor-typed
-// text (`10.1/ visit spam.example`) and, like a typed title, must not reach a public page unverified.
+// A DOI's shape: `10.<registrant>/<suffix>` with no whitespace or markup characters.
+const DOI_SHAPE = /^10\.\d{4,9}\/[^\s"<>]+$/
+
+// The server serves `doi` only for a registry-resolved row; the page checks the same condition and the DOI's
+// shape again, so a depositor-typed DOI (`10.1/ visit spam.example`) never reaches a public page.
 export function publicCitation(lit: CitationLiterature): PublicCitation {
-    const verified = lit.title_source === "resolved_metadata" && !!lit.title
+    const resolved = lit.title_source === "resolved_metadata"
     const isbn = lit.isbn?.trim() || null
+    const doi = lit.doi?.trim() || null
     return {
-        title: verified ? (lit.title as string) : null,
+        title: resolved && lit.title ? lit.title : null,
         identifier: isbn ? `ISBN ${isbn}` : (lit.literature_ref ?? null),
+        doi: resolved && doi !== null && DOI_SHAPE.test(doi) ? doi : null,
     }
+}
+
+/** The resolver link for a DOI that `publicCitation` returned. */
+export function doiHref(doi: string): string {
+    return `https://doi.org/${doi}`
 }
 
 /** Plain-string form for places that cannot hold markup (select options). */
