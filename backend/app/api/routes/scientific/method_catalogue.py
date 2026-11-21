@@ -8,7 +8,8 @@
 A handle is a catalogue ref (``mcat_...`` / ``bcat_...``) or any spelling that keys to an entry (``gfn2``,
 ``def2tzvp``). A name that contains ``/`` (``aug-cc-pVTZ/C``) cannot be one path segment: reach it by its ref, which
 every card carries. Unknown handle: 404 ``handle_not_found``.
-Lists are the whole catalogue in key order, unpaged, and carry no ranking.
+Lists are the whole catalogue in key order, unpaged, and carry no ranking. A list also names the keys shown levels
+of theory use that no entry names (``uncatalogued``), with their usage.
 """
 
 from __future__ import annotations
@@ -44,7 +45,8 @@ def scientific_methods_browse(
     kind: CatalogueMethodKind | None = Query(None, description="Only methods, or only dispersion corrections."),
     method_family: MethodFamily | None = Query(None, description="Only entries of this method family."),
 ):
-    """List the methods and dispersion corrections in the catalogue, in key order, with their references and usage."""
+    """List the methods and dispersion corrections in the catalogue, in key order, with their references and usage,
+    and the method and dispersion keys in use that no entry names."""
     return apply_internal_ids_visibility(browse_methods(session, kind=kind, family=method_family))
 
 
@@ -63,7 +65,8 @@ def scientific_basis_sets_browse(
     role: BasisSetRole | None = Query(None, description="Only basis sets with this role."),
     family: str | None = Query(None, max_length=128, description="Only basis sets of this family, as written."),
 ):
-    """List the basis sets in the catalogue, in key order, with their references and usage."""
+    """List the basis sets in the catalogue, in key order, with their references and usage, and the basis-set keys in
+    use that no entry names."""
     return apply_internal_ids_visibility(browse_basis_sets(session, role=role, family=family))
 
 

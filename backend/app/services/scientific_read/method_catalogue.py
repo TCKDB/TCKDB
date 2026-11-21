@@ -8,7 +8,8 @@ An entry is matched to a level of theory by identity key: a level's method and d
 (:func:`~app.chemistry.dispersion_names.level_identity_keys`) and the key of each of its basis columns
 (:func:`~app.chemistry.basis_set_names.basis_identity_key`) are looked up in the ``*_catalogue_key`` tables. Usage
 is derived at read time from the calculations a list read shows (the record floor), the same predicate the
-level-of-theory usage count uses. Entries and levels are listed in key and label order; nothing is ranked.
+level-of-theory usage count uses. A key such a level uses that no entry names is listed as uncatalogued, counted the
+same way. Entries and levels are listed in key and label order; nothing is ranked.
 """
 
 from __future__ import annotations
@@ -57,6 +58,8 @@ from app.schemas.reads.scientific_method_catalogue import (
     MethodCatalogueCard,
     MethodCatalogueDetailRecord,
     MethodCatalogueDetailResponse,
+    UncataloguedBasisSet,
+    UncataloguedMethod,
 )
 from app.services.scientific_read.common import shown_predicate, where_visible
 
@@ -96,7 +99,9 @@ class _Usage:
 
     def level_rows(self) -> list[CatalogueLevelUsage]:
         return [
-            CatalogueLevelUsage(level_of_theory_ref=level.ref, label=level.label, calculation_usage_count=level.calculations)
+            CatalogueLevelUsage(
+                level_of_theory_ref=level.ref, label=level.label, calculation_usage_count=level.calculations
+            )
             for level in sorted(self.levels, key=lambda level: (level.label, level.ref))
         ]
 
@@ -213,6 +218,8 @@ class CatalogueIndex:
     method_by_key: dict[str, str]
     dispersion_by_key: dict[str, str]
     basis_set_by_key: dict[str, str]
+    uncatalogued_methods: dict[tuple[str, CatalogueMethodKind], _Usage] = field(default_factory=dict)
+    uncatalogued_basis_sets: dict[str, _Usage] = field(default_factory=dict)
 
     def level_catalogue(self, lot: LevelOfTheory) -> LevelOfTheoryCatalogue:
         """The cards a level of theory's spellings key to."""
@@ -252,9 +259,7 @@ def load_catalogue_index(session: Session) -> CatalogueIndex:
         )
         .order_by(BasisSetCatalogue.key)
     ).all()
-    authors = _authors(
-        session, {link.literature_id for row in (*method_rows, *basis_rows) for link in row.references}
-    )
+    authors = _authors(session, {link.literature_id for row in (*method_rows, *basis_rows) for link in row.references})
 
     method_by_key: dict[str, str] = {}
     dispersion_by_key: dict[str, str] = {}
@@ -266,20 +271,31 @@ def load_catalogue_index(session: Session) -> CatalogueIndex:
 
     method_usage: dict[str, _Usage] = {row.key: _Usage() for row in method_rows}
     basis_set_usage: dict[str, _Usage] = {row.key: _Usage() for row in basis_rows}
+    uncatalogued_methods: dict[tuple[str, CatalogueMethodKind], _Usage] = defaultdict(_Usage)
+    uncatalogued_basis_sets: dict[str, _Usage] = defaultdict(_Usage)
     for level in _used_levels(session):
         if (entry := method_by_key.get(level.method_key)) is not None:
             method_usage[entry].add(level, level.method)
-        if level.dispersion_key is not None and (entry := dispersion_by_key.get(level.dispersion_key)) is not None:
-            method_usage[entry].add(level, level.dispersion or level.method)
+        elif level.method_key:
+            uncatalogued_methods[(level.method_key, CatalogueMethodKind.method)].add(level, level.method)
+        if level.dispersion_key is not None:
+            spelling = level.dispersion or level.method
+            if (entry := dispersion_by_key.get(level.dispersion_key)) is not None:
+                method_usage[entry].add(level, spelling)
+            else:
+                uncatalogued = (level.dispersion_key, CatalogueMethodKind.dispersion_correction)
+                uncatalogued_methods[uncatalogued].add(level, spelling)
         for spelling, key in level.basis_columns:
             if (entry := basis_set_by_key.get(key)) is not None:
                 basis_set_usage[entry].add(level, spelling)
+            else:
+                uncatalogued_basis_sets[key].add(level, spelling)
 
     methods: dict[str, MethodCatalogueCard] = {}
     for row in method_rows:
         keys = sorted(k.key for k in row.keys)
-        family, rung = (None, None) if row.kind is CatalogueMethodKind.dispersion_correction else _classification(
-            [row.key, *keys]
+        family, rung = (
+            (None, None) if row.kind is CatalogueMethodKind.dispersion_correction else _classification([row.key, *keys])
         )
         methods[row.key] = MethodCatalogueCard(
             catalogue_ref=row.public_ref,
@@ -319,6 +335,20 @@ def load_catalogue_index(session: Session) -> CatalogueIndex:
         method_by_key=method_by_key,
         dispersion_by_key=dispersion_by_key,
         basis_set_by_key=basis_set_by_key,
+        uncatalogued_methods=dict(uncatalogued_methods),
+        uncatalogued_basis_sets=dict(uncatalogued_basis_sets),
+    )
+
+
+def _uncatalogued_method(key: str, kind: CatalogueMethodKind, usage: _Usage) -> UncataloguedMethod:
+    family, rung = (None, None) if kind is CatalogueMethodKind.dispersion_correction else _classification([key])
+    return UncataloguedMethod(
+        key=key,
+        kind=kind,
+        family=family,
+        dft_rung=rung,
+        spellings_seen=sorted(usage.spellings),
+        usage=usage.summary(),
     )
 
 
@@ -328,14 +358,28 @@ def browse_methods(
     kind: CatalogueMethodKind | None = None,
     family: MethodFamily | None = None,
 ) -> MethodCatalogueBrowseResponse:
-    """Every method and dispersion correction in the catalogue, in key order."""
+    """Every method and dispersion correction in the catalogue, in key order, and the keys in use that none names."""
+    index = load_catalogue_index(session)
     cards = [
         card
-        for card in load_catalogue_index(session).methods.values()
+        for card in index.methods.values()
         if (kind is None or card.kind == kind) and (family is None or card.family == family)
     ]
+    uncatalogued = [
+        _uncatalogued_method(key, item_kind, usage)
+        for (key, item_kind), usage in sorted(
+            index.uncatalogued_methods.items(), key=lambda kv: (kv[0][0], kv[0][1].value)
+        )
+    ]
     return MethodCatalogueBrowseResponse(
-        request=CatalogueRequestEcho(), review_summary=ReviewStatusSummary(), records=cards
+        request=CatalogueRequestEcho(),
+        review_summary=ReviewStatusSummary(),
+        records=cards,
+        uncatalogued=[
+            item
+            for item in uncatalogued
+            if (kind is None or item.kind == kind) and (family is None or item.family == family)
+        ],
     )
 
 
@@ -345,14 +389,23 @@ def browse_basis_sets(
     role: BasisSetRole | None = None,
     family: str | None = None,
 ) -> BasisSetCatalogueBrowseResponse:
-    """Every basis set in the catalogue, in key order."""
+    """Every basis set in the catalogue, in key order, and the keys in use that none names."""
+    index = load_catalogue_index(session)
     cards = [
         card
-        for card in load_catalogue_index(session).basis_sets.values()
+        for card in index.basis_sets.values()
         if (role is None or card.role == role) and (family is None or card.family == family)
     ]
+    uncatalogued = (
+        [
+            UncataloguedBasisSet(key=key, spellings_seen=sorted(usage.spellings), usage=usage.summary())
+            for key, usage in sorted(index.uncatalogued_basis_sets.items())
+        ]
+        if role is None and family is None
+        else []
+    )
     return BasisSetCatalogueBrowseResponse(
-        request=CatalogueRequestEcho(), review_summary=ReviewStatusSummary(), records=cards
+        request=CatalogueRequestEcho(), review_summary=ReviewStatusSummary(), records=cards, uncatalogued=uncatalogued
     )
 
 
@@ -382,9 +435,7 @@ def get_method(session: Session, *, handle: str) -> MethodCatalogueDetailRespons
     return MethodCatalogueDetailResponse(
         request=CatalogueRequestEcho(),
         review_summary=ReviewStatusSummary(),
-        record=MethodCatalogueDetailRecord(
-            method=index.methods[entry], levels=index.method_usage[entry].level_rows()
-        ),
+        record=MethodCatalogueDetailRecord(method=index.methods[entry], levels=index.method_usage[entry].level_rows()),
     )
 
 

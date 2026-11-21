@@ -10,6 +10,8 @@ A catalogue entry is curated reference data: what a stored spelling names, in TC
 define it. Family and DFT rung are derived from :mod:`app.chemistry.method_families`, never stored. Usage counts are
 derived at read time from the calculations the read profile shows. Nothing here orders, ranks or recommends an entry:
 lists are in key order. A browse returns the whole catalogue, a curated list of tens of entries, so it is not paged.
+A browse also lists the identity keys that shown levels of theory use and no entry names (``uncatalogued``), with the
+same usage counts.
 """
 
 from __future__ import annotations
@@ -117,6 +119,32 @@ class BasisSetCatalogueCard(BaseModel):
     usage: CatalogueUsage = Field(default_factory=CatalogueUsage)
 
 
+class UncataloguedMethod(BaseModel):
+    """A method or dispersion identity key that levels of theory use and no catalogue entry names."""
+
+    key: str = Field(description="The identity key the stored spellings share.")
+    kind: CatalogueMethodKind
+    family: MethodFamily | None = Field(
+        default=None,
+        description="Derived from the key by the method-family classification; null for a dispersion correction.",
+    )
+    dft_rung: int | None = None
+    spellings_seen: list[str] = Field(
+        default_factory=list, description="The distinct stored spellings, on levels of theory counted in usage."
+    )
+    usage: CatalogueUsage = Field(default_factory=CatalogueUsage)
+
+
+class UncataloguedBasisSet(BaseModel):
+    """A basis-set identity key that levels of theory use (as basis, auxiliary or CABS basis) and no entry names."""
+
+    key: str = Field(description="The identity key the stored spellings share.")
+    spellings_seen: list[str] = Field(
+        default_factory=list, description="The distinct stored spellings, on levels of theory counted in usage."
+    )
+    usage: CatalogueUsage = Field(default_factory=CatalogueUsage)
+
+
 class LevelOfTheoryCatalogue(BaseModel):
     """The catalogue entries a level of theory's spellings key to; ``null`` where a spelling keys to none."""
 
@@ -151,6 +179,11 @@ class MethodCatalogueBrowseResponse(ScientificResponse):
     request: CatalogueRequestEcho
     review_summary: ReviewStatusSummary
     records: list[MethodCatalogueCard]
+    uncatalogued: list[UncataloguedMethod] = Field(
+        default_factory=list,
+        description="Keys used by at least one level of theory counted in usage that no entry names, in key order. "
+        "The kind and family filters apply to them as to the entries.",
+    )
 
 
 class MethodCatalogueDetailResponse(ScientificResponse):
@@ -167,6 +200,11 @@ class BasisSetCatalogueBrowseResponse(ScientificResponse):
     request: CatalogueRequestEcho
     review_summary: ReviewStatusSummary
     records: list[BasisSetCatalogueCard]
+    uncatalogued: list[UncataloguedBasisSet] = Field(
+        default_factory=list,
+        description="Keys used by at least one level of theory counted in usage that no entry names, in key order. "
+        "They have no role or family, so a role or family filter leaves this list empty.",
+    )
 
 
 class BasisSetCatalogueDetailResponse(ScientificResponse):
@@ -191,4 +229,6 @@ __all__ = [
     "MethodCatalogueCard",
     "MethodCatalogueDetailRecord",
     "MethodCatalogueDetailResponse",
+    "UncataloguedBasisSet",
+    "UncataloguedMethod",
 ]

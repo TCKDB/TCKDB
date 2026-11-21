@@ -5,9 +5,9 @@ import "../conformer-group.css"
 import "../methods.css"
 import { loadLevelOfTheoryBrowse, type CoreTreatmentValue, type LevelOfTheoryRecord } from "../api/methodsApi"
 import { loadSoftwareNames, loadWorkflowToolNames, type VocabEntry } from "../api/vocabApi"
-import { loadBasisSetCatalogue, loadMethodCatalogue, type CatalogueCard } from "../api/catalogueApi"
+import { loadBasisSetCatalogue, loadMethodCatalogue, type CatalogueList, type UncataloguedKey } from "../api/catalogueApi"
 import { OrderNote } from "../components/OrderNote"
-import { cardFamilyText, cataloguePath } from "../domain/methodCatalogue"
+import { cardFamilyText, cataloguePath, usageText } from "../domain/methodCatalogue"
 import { CompositeSchemeLink } from "../components/CompositeSchemeLink"
 import { LevelLabel } from "../components/LevelLabel"
 import { ListPager } from "../components/ListPager"
@@ -62,8 +62,8 @@ export default function MethodsIndexPage() {
     )
     const softwareState = useLoad((signal) => loadSoftwareNames(undefined, signal))
     const workflowToolState = useLoad((signal) => loadWorkflowToolNames(undefined, signal))
-    const methodCatalogueState = useLoad<CatalogueCard[]>((signal) => loadMethodCatalogue(signal))
-    const basisCatalogueState = useLoad<CatalogueCard[]>((signal) => loadBasisSetCatalogue(signal))
+    const methodCatalogueState = useLoad<CatalogueList>((signal) => loadMethodCatalogue(signal))
+    const basisCatalogueState = useLoad<CatalogueList>((signal) => loadBasisSetCatalogue(signal))
 
     return (
         <section className="conformer-page methods-page">
@@ -76,11 +76,13 @@ export default function MethodsIndexPage() {
                 <section className="ledger-section" aria-labelledby="methods-catalogue-heading">
                     <SectionHeading id="methods-catalogue-heading" guide={{ to: "method-catalogue", question: "What is the method and basis-set catalogue?" }}>Method catalogue</SectionHeading>
                     <CatalogueTable state={methodCatalogueState} label="Method catalogue" familyHeading="Family" emptyText="The method catalogue has no entries." />
+                    <UncataloguedList state={methodCatalogueState} id="methods-uncatalogued-heading" />
                 </section>
 
                 <section className="ledger-section" aria-labelledby="basis-catalogue-heading">
                     <SectionHeading id="basis-catalogue-heading">Basis-set catalogue</SectionHeading>
                     <CatalogueTable state={basisCatalogueState} label="Basis-set catalogue" familyHeading="Family and role" emptyText="The basis-set catalogue has no entries." />
+                    <UncataloguedList state={basisCatalogueState} id="basis-uncatalogued-heading" />
                 </section>
 
                 <section className="ledger-section" aria-labelledby="methods-lot-heading">
@@ -232,14 +234,14 @@ function LevelOfTheoryTable({ state, filter }: { state: LoadState<{ records: Lev
 
 /** A catalogue list in the server's key order: name (linking to the entry's page), full name, family, usage. */
 function CatalogueTable({ state, label, familyHeading, emptyText }: {
-    state: LoadState<CatalogueCard[]>
+    state: LoadState<CatalogueList>
     label: string
     familyHeading: string
     emptyText: string
 }) {
     if (state.status === "loading") return <p className="note" role="status">Loading…</p>
     if (state.status === "error") return <p className="empty-projection" role="alert">The archive service could not load this list. Try again later.</p>
-    const rows = state.data
+    const rows = state.data.records
     if (rows.length === 0) return <p className="empty-projection">{emptyText}</p>
     return (
         <>
@@ -270,6 +272,29 @@ function CatalogueTable({ state, label, familyHeading, emptyText }: {
             </div>
         </>
     )
+}
+
+/** The spellings listed levels of theory use that no catalogue entry names, in the server's key order. */
+function UncataloguedList({ state, id }: { state: LoadState<CatalogueList>; id: string }) {
+    if (state.status !== "ready" || state.data.uncatalogued.length === 0) return null
+    return (
+        <section className="catalogue-uncatalogued" aria-labelledby={id}>
+            <h3 id={id} className="t-heading-3 catalogue-uncatalogued-heading">In use, not in the catalogue</h3>
+            <ul className="catalogue-uncatalogued-list">
+                {state.data.uncatalogued.map((item) => (
+                    <li key={`${item.kind ?? ""}:${item.key}`}>
+                        <span className="catalogue-uncatalogued-name">{uncataloguedName(item)}</span>
+                        <span className="catalogue-card-usage">{usageText(item.usage)}</span>
+                    </li>
+                ))}
+            </ul>
+        </section>
+    )
+}
+
+function uncataloguedName(item: UncataloguedKey): string {
+    const name = item.spellings_seen.length > 0 ? item.spellings_seen.join(", ") : item.key
+    return item.kind === "dispersion_correction" ? `${name} (dispersion correction)` : name
 }
 
 function VocabTable({ state, nameLabel, emptyText }: { state: LoadState<VocabEntry[]>; nameLabel: string; emptyText: string }) {

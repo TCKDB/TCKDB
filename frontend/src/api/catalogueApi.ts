@@ -3,7 +3,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
 
 // The method and basis-set catalogue: what a stored spelling names, and the articles that define it.
 //
-// - GET /scientific/methods                 (whole catalogue, key order, unpaged)
+// - GET /scientific/methods                 (whole catalogue, key order, unpaged; and the keys in use with no entry)
 // - GET /scientific/methods/{handle}        (one entry and the levels of theory that use it)
 // - GET /scientific/basis-sets
 // - GET /scientific/basis-sets/{handle}
@@ -86,8 +86,29 @@ export type CatalogueEntryRecord =
     | { kind: "method"; card: MethodCatalogueCard; levels: CatalogueLevelUsage[] }
     | { kind: "basis"; card: BasisSetCatalogueCard; levels: CatalogueLevelUsage[] }
 
-const methodBrowseResponseSchema = z.object({ records: z.array(methodCatalogueCardSchema) }).passthrough()
-const basisBrowseResponseSchema = z.object({ records: z.array(basisSetCatalogueCardSchema) }).passthrough()
+/** A key that shown levels of theory use and no entry names. A method key carries `kind`, `family` and `dft_rung`. */
+const uncataloguedKeySchema = z.object({
+    key: z.string(),
+    kind: z.string().nullable().optional(),
+    family: z.string().nullable().optional(),
+    dft_rung: z.number().nullable().optional(),
+    spellings_seen: z.array(z.string()).default([]),
+    usage: catalogueUsageSchema.default({ level_usage_count: 0, calculation_usage_count: 0 }),
+}).passthrough()
+
+export type UncataloguedKey = z.infer<typeof uncataloguedKeySchema>
+
+/** One catalogue list: its entries, and the keys in use that none names, each in key order. */
+export type CatalogueList = { records: CatalogueCard[]; uncatalogued: UncataloguedKey[] }
+
+const methodBrowseResponseSchema = z.object({
+    records: z.array(methodCatalogueCardSchema),
+    uncatalogued: z.array(uncataloguedKeySchema).default([]),
+}).passthrough()
+const basisBrowseResponseSchema = z.object({
+    records: z.array(basisSetCatalogueCardSchema),
+    uncatalogued: z.array(uncataloguedKeySchema).default([]),
+}).passthrough()
 
 const methodDetailResponseSchema = z.object({
     record: z.object({
@@ -103,16 +124,18 @@ const basisDetailResponseSchema = z.object({
     }).passthrough(),
 }).passthrough()
 
-/** Every method and dispersion correction in the catalogue, in key order. */
-export async function loadMethodCatalogue(signal?: AbortSignal): Promise<MethodCatalogueCard[]> {
+/** Every method and dispersion correction in the catalogue, and the method and dispersion keys in use that none names. */
+export async function loadMethodCatalogue(signal?: AbortSignal): Promise<CatalogueList> {
     const payload = await requestScientificJson("/api/v1/scientific/methods", signal)
-    return parseScientificResponse(methodBrowseResponseSchema, payload, "method catalogue").records
+    const { records, uncatalogued } = parseScientificResponse(methodBrowseResponseSchema, payload, "method catalogue")
+    return { records, uncatalogued }
 }
 
-/** Every basis set in the catalogue, in key order. */
-export async function loadBasisSetCatalogue(signal?: AbortSignal): Promise<BasisSetCatalogueCard[]> {
+/** Every basis set in the catalogue, and the basis-set keys in use that none names. */
+export async function loadBasisSetCatalogue(signal?: AbortSignal): Promise<CatalogueList> {
     const payload = await requestScientificJson("/api/v1/scientific/basis-sets", signal)
-    return parseScientificResponse(basisBrowseResponseSchema, payload, "basis-set catalogue").records
+    const { records, uncatalogued } = parseScientificResponse(basisBrowseResponseSchema, payload, "basis-set catalogue")
+    return { records, uncatalogued }
 }
 
 /** `/methods/method/:key`: a catalogue ref (`mcat_...`) or any spelling that keys to the entry. */

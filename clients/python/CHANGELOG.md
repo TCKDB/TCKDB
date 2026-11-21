@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.210.0 - 2026-11-21
+
+`CatalogueBrowseResponse` gains `uncatalogued`, a list of the new `UncataloguedKey`: the identity keys that shown levels of theory use and no catalogue entry names, each with the stored spellings, usage and, for a method key, its kind, family and DFT rung. `browse_methods()` and `browse_basis_sets()` return it; their signatures are unchanged.
+
 ## 0.209.3 - 2026-11-21
 
 The `tckdb-schemas` requirement is widened to `>=0.158,<0.178`, which admits the schemas release whose method-family classification is at version 2. No client behaviour changed.
