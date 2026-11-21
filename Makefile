@@ -158,10 +158,14 @@ doctor check:
 	bash backend/scripts/tckdb_doctor.sh
 
 # Self-host from the published images: write the env files if they are
-# missing, start the `selfhost` profile, wait until it is healthy.
-SELFHOST_COMPOSE = docker compose --env-file .env.selfhosted --env-file .env.db-admin --profile selfhost
+# missing, start the profiles they name, wait until it is healthy.
+# Compose reads COMPOSE_PROFILES (selfhost, plus caddy or cloudflare) from
+# .env.selfhosted; a file without it gets the selfhost profile.
+SELFHOST_COMPOSE = docker compose --env-file .env.selfhosted --env-file .env.db-admin
 selfhost:
 	@if [ ! -f .env.selfhosted ] || [ ! -f .env.db-admin ]; then bash backend/scripts/ops/tckdb_make_env.sh; fi
-	$(SELFHOST_COMPOSE) up -d --wait
-	@web=$$(sed -n 's/^TCKDB_WEB_PORT=//p' .env.selfhosted); api=$$(sed -n 's/^TCKDB_API_PORT=//p' .env.selfhosted); \
-	    echo "web: http://127.0.0.1:$${web:-8011}"; echo "api: http://127.0.0.1:$${api:-8010}/api/v1"
+	@profile=$$(grep -q '^COMPOSE_PROFILES=' .env.selfhosted || echo '--profile selfhost'); \
+	    echo "$(SELFHOST_COMPOSE) $$profile up -d --wait"; \
+	    $(SELFHOST_COMPOSE) $$profile up -d --wait
+	@url=$$(sed -n 's/^TCKDB_PUBLIC_BASE_URL=//p' .env.selfhosted); \
+	    echo "web: $${url%/api/v1}"; echo "api: $$url"
