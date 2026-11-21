@@ -22,6 +22,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## The API reads backend/.env, and the example units start where the docs install them (Unreleased)
+
+- **Behaviour:** `Settings` reads `backend/.env` when it exists, resolved from the backend directory, not the working directory; a variable set in the environment wins, and keys that are not settings are ignored. `uvicorn main:app` (`make api`, the example `tckdb-api.service`) also loads the file into the process environment without overriding it, so `S3_*` and `TCKDB_INLINE_WORKER` come from it too. The API image contains no `.env` (`.dockerignore`) and its entry point is `app.api.app:create_app`, so containers are unchanged.
+- **Behaviour:** `check_selfhosted_deployment.sh` checks secrets only when the env file's `DEPLOYMENT_MODE` is not `local` (unset is `local`), as the API's startup checks do, and says so in its output.
+- **Ops:** `examples/deployment/systemd/tckdb-backup.service` creates `/var/backups/tckdb` as root before the dump (`ExecStartPre=+`); `tckdb-api.service` uses `Wants=docker.service` instead of `Requires=`, so it starts on a host without Docker.
+- No schema or migration change. No new environment variable. No distributed package changed.
+
 ## The method and basis-set catalogue is readable (Unreleased)
 
 - **Behaviour:** `GET /scientific/methods` and `GET /scientific/basis-sets` list the whole catalogue in key order, unpaged (filters: `kind` and `method_family`; `role` and `family`). `GET /scientific/methods/{handle}` and `GET /scientific/basis-sets/{handle}` return one entry and the levels of theory that use it. The handle is the `mcat_`/`bcat_` ref or any spelling that keys to the entry (`gfn2`, `def2tzvp`, `aug-cc-pVTZ/C`), and an unknown handle is a 404 `handle_not_found`. A card carries the entry's key and every key that names it, its short and full name, description, kind or role, family (a method's family and DFT rung are derived from the method-family classification), its references (DOI only when the registry resolved the citation), the stored spellings that key to it, and usage (levels of theory and calculations the read profile shows, derived at read time). Public refs only; nothing is ranked.

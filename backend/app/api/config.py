@@ -1,21 +1,29 @@
 """Application configuration via environment variables.
 
 Reuses the same ``DB_*`` variables consumed by ``alembic/env.py`` and
-``tests/conftest.py``.
+``tests/conftest.py``. ``backend/.env`` is read when it exists; a variable set in
+the environment wins over the same key in the file.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DeploymentMode = Literal["local", "shared_private", "hosted_public"]
 AIReviewAssistantMode = Literal["off", "cloud", "local", "test"]
 
+#: ``backend/.env``, resolved from this file so the working directory does not matter.
+ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+
 
 class Settings(BaseSettings):
+    # The file also holds keys for other tools (``TCKDB_API_HOST``, ``TCKDB_INLINE_WORKER``), hence ``extra="ignore"``.
+    model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", extra="ignore")
+
     # Deployment posture. Drives the startup safety guard in
     # :mod:`app.api.startup_checks` — ``local`` permits developer-friendly
     # defaults (open registration, exposed docs, no TLS cookie), while
