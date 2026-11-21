@@ -15,12 +15,14 @@ User=tckdb
 Group=tckdb
 EnvironmentFile=/opt/tckdb/.env.selfhosted
 
+# Creates the backup directory as root (the `+` prefix), owned by tckdb.
+ExecStartPre=+/usr/bin/install -d -m 0700 -o tckdb -g tckdb /var/backups/tckdb
+
 # pg_dump runs inside the running `db` container so we don't have to
 # install postgres client tooling on the host. The backup is written
 # into /var/backups/tckdb on the host with a date-stamped filename.
 ExecStart=/bin/bash -c '\
     set -euo pipefail; \
-    mkdir -p /var/backups/tckdb; \
     out=/var/backups/tckdb/tckdb-$$(date +%%Y-%%m-%%d).sql.gz; \
     /usr/bin/docker compose -f /opt/tckdb/docker-compose.yml \
         --env-file /opt/tckdb/.env.selfhosted \

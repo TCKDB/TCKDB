@@ -5,7 +5,9 @@
 # Verifies the invariants typically debugged when something looks off
 # on a single-node compose deployment: no placeholder secrets, docker
 # compose health, RDKit extension, Alembic head, and a couple of
-# public-facing read endpoints. Defaults target the self-hosted recipe (canonical
+# public-facing read endpoints. Secrets are checked only when the env file's
+# DEPLOYMENT_MODE is not local (unset means local), as the API's startup checks
+# do. Defaults target the self-hosted recipe (canonical
 # docker-compose.yml + .env.selfhosted), but every input is overridable
 # so the same script works for local-compose deployments, lab servers,
 # or any other compose-based topology — a Raspberry Pi is one valid host.
@@ -133,22 +135,32 @@ check_secret() {
     fi
 }
 
-if [[ -f "$COMPOSE_ENV_FILE" ]]; then
-    for key in DB_PASSWORD S3_ACCESS_KEY S3_SECRET_KEY PAGING_CURSOR_KEY; do
-        check_secret "$COMPOSE_ENV_FILE" "$key"
-    done
-    if [[ "$STORAGE_SERVICE" == seaweedfs ]]; then
-        check_secret "$COMPOSE_ENV_FILE" SEAWEEDFS_JWT_KEY
+# Same rule as the API's startup checks: secrets are required only outside
+# local mode, and an unset DEPLOYMENT_MODE is local.
+deployment_mode="$(env_value "$COMPOSE_ENV_FILE" DEPLOYMENT_MODE)"
+deployment_mode="${deployment_mode:-local}"
+
+if [[ -f "$COMPOSE_ENV_FILE" && "$deployment_mode" == local ]]; then
+    ok "secrets not checked: DEPLOYMENT_MODE is local in $COMPOSE_ENV_FILE (the API requires them only in shared_private and hosted_public)"
+else
+    if [[ -f "$COMPOSE_ENV_FILE" ]]; then
+        ok "DEPLOYMENT_MODE=$deployment_mode: checking secrets"
+        for key in DB_PASSWORD S3_ACCESS_KEY S3_SECRET_KEY PAGING_CURSOR_KEY; do
+            check_secret "$COMPOSE_ENV_FILE" "$key"
+        done
+        if [[ "$STORAGE_SERVICE" == seaweedfs ]]; then
+            check_secret "$COMPOSE_ENV_FILE" SEAWEEDFS_JWT_KEY
+        fi
+    else
+        warn "runtime secrets not checked: no $COMPOSE_ENV_FILE"
     fi
-else
-    warn "runtime secrets not checked: no $COMPOSE_ENV_FILE"
-fi
-if [[ -f "$COMPOSE_ADMIN_ENV_FILE" ]]; then
-    for key in DB_ADMIN_PASSWORD DB_OWNER_PASSWORD; do
-        check_secret "$COMPOSE_ADMIN_ENV_FILE" "$key"
-    done
-else
-    warn "operator secrets not checked: no $COMPOSE_ADMIN_ENV_FILE (set COMPOSE_ADMIN_ENV_FILE)"
+    if [[ -f "$COMPOSE_ADMIN_ENV_FILE" ]]; then
+        for key in DB_ADMIN_PASSWORD DB_OWNER_PASSWORD; do
+            check_secret "$COMPOSE_ADMIN_ENV_FILE" "$key"
+        done
+    else
+        warn "operator secrets not checked: no $COMPOSE_ADMIN_ENV_FILE (set COMPOSE_ADMIN_ENV_FILE)"
+    fi
 fi
 
 # --- docker compose ps ------------------------------------------------------

@@ -93,6 +93,7 @@ export const GUIDE_TOPICS: GuideTopic[] = [
     { id: "lot-identity", term: "Level-of-theory identity", text: "Two levels can share a method and basis set but differ in dispersion, solvent or spin treatment, so each distinct combination is its own level." },
     { id: "level-carries", term: "What a level carries", text: "Its identity fields, the software seen running it, its energy-correction parameters and its frequency scale factors." },
     { id: "correction-scheme", term: "Correction scheme", text: "Energy corrections deposited against a level of theory, such as per-element or per-bond parameters." },
+    { id: "method-catalogue", term: "Method and basis-set catalogue", text: "TCKDB's own list of what a method or basis-set spelling names, with the articles that define it. A family is a classification, not a measure of accuracy, and the catalogue ranks nothing." },
     { id: "composite-recipe", term: "Composite recipe", text: "The recipe behind a composite energy: a named method such as CBS-QB3, or an extrapolation or sum of single-point energies." },
     { id: "staged-optimisation", term: "Staged optimisation", text: "A coarse optimisation runs first and a finer one refines it from there." },
     { id: "picture", term: "How a molecule is drawn", text: "Bonds are inferred from atom distances; the record stores only atoms and positions. On a conformer's page the picture shows the first final geometry deposited, and other observations may differ slightly." },

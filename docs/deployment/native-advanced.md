@@ -143,10 +143,9 @@ conda run -n tckdb_env python -m app.workers.upload_worker
 ```
 
 [`examples/deployment/systemd/tckdb-api.service`](../../examples/deployment/systemd/tckdb-api.service)
-is a unit for the API on the host. It expects Docker for the database, so on
-a host without Docker remove its `Requires=docker.service` and
-`After=docker.service` lines and order it after your Postgres service
-instead. Adapt the paths, the user and the env file. A worker unit is the
+is a unit for the API on the host. It starts with or without Docker; add
+your Postgres service to its `After=` line. Adapt the paths, the user and the
+env file. A worker unit is the
 same with the worker module in `ExecStart`.
 
 ## Things that go wrong

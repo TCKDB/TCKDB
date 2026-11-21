@@ -200,11 +200,10 @@ queries.
 The example [backup unit and timer](../../examples/deployment/systemd/) run
 `pg_dump` in the `db` container every night at 03:15. They write
 `/var/backups/tckdb/tckdb-YYYY-MM-DD.sql.gz` and delete dumps older than 30
-days. They expect the repository at `/opt/tckdb` and run as `tckdb`, so
-create the backup directory for that user first.
+days. They expect the repository at `/opt/tckdb` and run as `tckdb`; the
+service creates the backup directory for that user.
 
 ```bash
-sudo install -d -o tckdb -g tckdb -m 700 /var/backups/tckdb
 sudo cp examples/deployment/systemd/tckdb-backup.service /etc/systemd/system/
 sudo cp examples/deployment/systemd/tckdb-backup.timer /etc/systemd/system/
 sudo systemctl daemon-reload

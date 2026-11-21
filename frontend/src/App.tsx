@@ -16,6 +16,7 @@ const ConformerGroupPage = lazy(() => import("./pages/ConformerGroupPage"))
 const ConformerObservationPage = lazy(() => import("./pages/ConformerObservationPage"))
 const CorrectionSchemePage = lazy(() => import("./pages/CorrectionSchemePage"))
 const CompositeSchemePage = lazy(() => import("./pages/CompositeSchemePage"))
+const MethodCataloguePage = lazy(() => import("./pages/MethodCataloguePage"))
 const CuratorQueuePage = lazy(() => import("./pages/CuratorQueuePage"))
 const GuidePage = lazy(() => import("./pages/GuidePage"))
 const FrequencyScaleFactorPage = lazy(() => import("./pages/FrequencyScaleFactorPage"))
@@ -143,6 +144,8 @@ function App() {
             {/* The composite recipe a level of theory is bound to. */}
             <Route path="/methods/composite-schemes/:schemeRef" element={<CompositeSchemePage />} />
             <Route path="/methods/frequency-scale-factors/:fsfRef" element={<FrequencyScaleFactorPage />} />
+            <Route path="/methods/method/:key" element={<MethodCataloguePage kind="method" />} />
+            <Route path="/methods/basis/:key" element={<MethodCataloguePage kind="basis" />} />
             <Route path="/methods/:lotRef" element={<LevelOfTheoryPage />} />
             {/* Both render inside the same `AppShell` every public page
                 does -- signing in/managing keys is an ordinary part of

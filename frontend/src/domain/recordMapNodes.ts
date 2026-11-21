@@ -355,6 +355,12 @@ export function levelOfTheoryNodes(input: {
     return nodes
 }
 
+/** Method or basis-set catalogue page: the levels of theory that use the entry. */
+export function catalogueEntryNodes(input: { levelCount: number }): NeighbourNode[] {
+    if (input.levelCount === 0) return []
+    return [countNode("levels", "level-of-theory", ["Level of theory", "Levels of theory"], "Uses this entry", input.levelCount, "#catalogue-levels-heading")]
+}
+
 /** Network page: the molecule versions and reaction versions it names, and its solves, from the record the page loaded. */
 export function networkNodes(input: {
     speciesEntryRefs: readonly string[]
