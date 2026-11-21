@@ -233,6 +233,7 @@ def test_known_operational_boundaries_are_recorded_where_a_reader_will_look():
         "clients/python",
         "schemas/python/tckdb-schemas",
         "clients/python/adapters/chemkin",
+        "integrations/mcp",
         "clients/python/adapters/qcschema",
     ],
 )

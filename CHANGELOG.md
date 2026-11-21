@@ -22,6 +22,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## tckdb-mcp carries a licence file and working project links (Unreleased)
+
+- **Packaging:** `tckdb-mcp` declares `license = "MIT"` with `license-files` and ships the MIT `LICENSE` in its wheel and sdist (it used the deprecated `license = { text = "MIT" }` table and shipped no licence text). Its `project.urls` point at `https://github.com/TCKDB/TCKDB` and `https://tckdb.github.io/TCKDB/`; they named `github.com/tckdb` and `github.com/tckdb/tckdb_v2`, which do not exist. Python 3.13 is listed in the classifiers, the sdist leaves out the tests, and the build needs setuptools 77 or later.
+- **Docs:** the package README's links are absolute, so they work on its PyPI page, and it gives `pip install tckdb-mcp` alongside the editable install.
+- **Schema and migration:** none. No new environment variable. No tool or behaviour changed.
+- **Versions:** `tckdb-mcp` 0.16.1.
+
 ## tckdb-qcschema carries the metadata a PyPI release needs (Unreleased)
 
 - **Behaviour:** `tckdb-qcschema` requires `tckdb-client>=0.208,<0.209` and `tckdb-schemas>=0.175,<0.176`; they were floors without a ceiling (`>=0.160.0`, `>=0.131.0`). It declares `numpy>=1.26` and `pydantic>=2.6`, which it imports directly and used to get only through `qcelemental`.
