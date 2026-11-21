@@ -64,14 +64,14 @@ should carry the heavy point payloads.
 
 | Table | Rows-per-calc | Cardinality |
 |---|---|---|
-| `calc_irc_result` | 1 | `direction`, `has_forward`, `has_reverse`, `ts_point_index`, `point_count`, `zero_energy_reference_hartree`, `note` |
+| `calc_irc_result` | 1 | `direction`, `has_forward`, `has_reverse`, `ts_point_index`, `point_count`, `zero_energy_reference_hartree`, `reaction_coordinate_unit`, `note` |
 | `calc_irc_point` | many (typically 20–200) | `point_index`, `direction` (per-point), `is_ts`, `reaction_coordinate`, `electronic_energy_hartree`, `relative_energy_kj_mol`, `max_gradient`, `rms_gradient`, `geometry_id`, `note` |
 
 **Path-search** (`app/db/models/calculation.py:868-978`)
 
 | Table | Rows-per-calc | Cardinality |
 |---|---|---|
-| `calc_path_search_result` | 1 | `method`, `is_double_ended`, `converged`, `n_points`, `selected_ts_point_index`, `climbing_image_index`, `source_endpoint_count`, `zero_energy_reference_hartree`, `note` |
+| `calc_path_search_result` | 1 | `method`, `is_double_ended`, `converged`, `n_points`, `selected_ts_point_index`, `climbing_image_index`, `source_endpoint_count`, `zero_energy_reference_hartree`, `path_coordinate_unit`, `note` |
 | `calc_path_search_point` | many (typically 5–30 NEB images) | `point_index`, `electronic_energy_hartree`, `relative_energy_kj_mol`, `path_coordinate`, `max_force`, `rms_force`, `max_gradient`, `rms_gradient`, `is_ts_guess`, `is_climbing_image`, `geometry_id`, `note` |
 
 ### 2.2 Legacy routes that already expose this data
@@ -220,6 +220,7 @@ class CalculationIRCIncludeSummary(BaseModel):
     ts_point_index: int | None = None
     point_count: int | None = None              # from result row
     zero_energy_reference_hartree: float | None = None
+    reaction_coordinate_unit: PathCoordinateUnit | None = None
     note: str | None = None
     # Cheap aggregates from calc_irc_point:
     forward_point_count: int | None = None
@@ -249,6 +250,7 @@ class CalculationPathSearchIncludeSummary(BaseModel):
     climbing_image_index: int | None = None
     source_endpoint_count: int | None = None
     zero_energy_reference_hartree: float | None = None
+    path_coordinate_unit: PathCoordinateUnit | None = None
     note: str | None = None
     # Cheap aggregates from calc_path_search_point:
     point_count: int | None = None              # actual COUNT(*)

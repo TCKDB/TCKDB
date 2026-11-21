@@ -19,6 +19,7 @@ from tckdb_schemas.enums import (
     HessianSource,
     ImaginaryModeDisposition,
     IRCDirection,
+    PathCoordinateUnit,
     PathSearchMethod,
     SCFStabilityStatus,
     StationaryPointKind,
@@ -1106,6 +1107,34 @@ class SpinDiagnosticPayload(SchemaBase):
     note: str | None = None
 
 
+def _check_path_coordinate_values(
+    unit: PathCoordinateUnit | None,
+    values: list[tuple[int, float | None]],
+    *,
+    unit_field: str,
+    value_field: str,
+) -> None:
+    """Refuse coordinate values that the stated unit cannot hold.
+
+    ``fraction`` values lie in [0, 1]; ``step`` values are whole numbers.
+    The other units carry any real value, and an unstated unit checks nothing.
+    """
+    if unit is PathCoordinateUnit.fraction:
+        bad = [index for index, value in values if value is not None and not 0.0 <= value <= 1.0]
+        if bad:
+            raise ValueError(
+                f"{unit_field}='fraction' needs every {value_field} in [0, 1]; "
+                f"point_index {', '.join(str(i) for i in bad)} lies outside it."
+            )
+    elif unit is PathCoordinateUnit.step:
+        bad = [index for index, value in values if value is not None and not float(value).is_integer()]
+        if bad:
+            raise ValueError(
+                f"{unit_field}='step' needs every {value_field} to be a whole number; "
+                f"point_index {', '.join(str(i) for i in bad)} is not."
+            )
+
+
 class IRCPointPayload(SchemaBase):
     """Upload-facing inline payload for one IRC-path sampled point.
 
@@ -1115,7 +1144,8 @@ class IRCPointPayload(SchemaBase):
     :param point_index: Zero-based index preserving the source step number.
     :param direction: Per-point direction (nullable for the TS marker point).
     :param is_ts: Whether this point marks the transition state.
-    :param reaction_coordinate: Reaction-coordinate value at this point.
+    :param reaction_coordinate: Reaction-coordinate value at this point, in
+        the result's ``reaction_coordinate_unit``.
     :param electronic_energy_hartree: Electronic energy in hartree.
     :param relative_energy_kj_mol: Relative energy vs the zero-energy reference.
     :param max_gradient: Max gradient component at this point.
@@ -1157,6 +1187,11 @@ class IRCResultPayload(SchemaBase):
     :param ts_point_index: Optional index of the point marked as TS.
     :param point_count: Optional total sampled-point count (consistency check).
     :param zero_energy_reference_hartree: Optional energy used as relative zero.
+    :param reaction_coordinate_unit: Unit of every point's
+        ``reaction_coordinate``. Gaussian reports a mass-weighted arc length
+        (``amu_half_bohr``); a program that numbers its steps instead gives
+        ``step``. Omit when the unit is not known; it is stored as NULL and
+        never inferred.
     :param note: Optional free-text note.
     :param points: Sampled IRC-path points attached to the result.
     """
@@ -1167,12 +1202,13 @@ class IRCResultPayload(SchemaBase):
     ts_point_index: int | None = Field(default=None, ge=0)
     point_count: int | None = Field(default=None, ge=0)
     zero_energy_reference_hartree: float | None = None
+    reaction_coordinate_unit: PathCoordinateUnit | None = None
     note: str | None = None
     points: list[IRCPointPayload] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_points(self) -> Self:
-        """Enforce unique indices, TS index consistency, and direction flags.
+        """Enforce unique indices, TS index consistency, direction flags and the coordinate unit.
 
         A flag that is *stated false* contradicts a point in that direction; a
         flag that is not stated contradicts nothing, and is left unstated
@@ -1185,6 +1221,13 @@ class IRCResultPayload(SchemaBase):
         indices = [point.point_index for point in self.points]
         if len(set(indices)) != len(indices):
             raise ValueError("IRC point_index values must be unique.")
+
+        _check_path_coordinate_values(
+            self.reaction_coordinate_unit,
+            [(point.point_index, point.reaction_coordinate) for point in self.points],
+            unit_field="reaction_coordinate_unit",
+            value_field="reaction_coordinate",
+        )
 
         if (
             self.ts_point_index is not None
@@ -1220,7 +1263,8 @@ class PathSearchPointPayload(SchemaBase):
     :param electronic_energy_hartree: Electronic energy at this point.
     :param relative_energy_kj_mol: Energy relative to the zero-energy reference.
     :param path_coordinate: Optional path-coordinate value (e.g. cumulative
-        path distance for NEB, reaction-coordinate for GSM/string methods).
+        path distance for NEB, reaction-coordinate for GSM/string methods),
+        in the result's ``path_coordinate_unit``.
     :param max_force: Max force component at this point.
     :param rms_force: RMS force at this point.
     :param max_gradient: Max gradient component at this point.
@@ -1289,6 +1333,11 @@ class PathSearchResultPayload(SchemaBase):
         consumed by the algorithm (typically 2 for double-ended runs).
     :param zero_energy_reference_hartree: Energy used as relative zero
         for ``relative_energy_kj_mol`` on each point.
+    :param path_coordinate_unit: Unit of every point's ``path_coordinate``.
+        A cumulative Cartesian distance, as ORCA's NEB ``Dist.(Ang.)`` column
+        or a GSM node displacement, is ``angstrom``; a string method's
+        normalised arc length is ``fraction``. Omit when the unit is not
+        known; it is stored as NULL and never inferred.
     :param note: Optional free-text note.
     :param points: Path samples (images / nodes / path points), unique on
         ``point_index``.
@@ -1302,18 +1351,27 @@ class PathSearchResultPayload(SchemaBase):
     climbing_image_index: int | None = Field(default=None, ge=0)
     source_endpoint_count: int | None = Field(default=None, ge=1)
     zero_energy_reference_hartree: float | None = None
+    path_coordinate_unit: PathCoordinateUnit | None = None
     note: str | None = None
     points: list[PathSearchPointPayload] = Field(min_length=1)
 
     @model_validator(mode="after")
     def validate_points(self) -> Self:
         """Enforce unique ``point_index``, TS-index / climbing-index
-        consistency, and ``n_points`` agreement with the point list."""
+        consistency, ``n_points`` agreement with the point list, and the
+        coordinate unit."""
 
         indices = [p.point_index for p in self.points]
         if len(set(indices)) != len(indices):
             raise ValueError("Path-search point_index values must be unique.")
         index_set = set(indices)
+
+        _check_path_coordinate_values(
+            self.path_coordinate_unit,
+            [(p.point_index, p.path_coordinate) for p in self.points],
+            unit_field="path_coordinate_unit",
+            value_field="path_coordinate",
+        )
 
         if (
             self.selected_ts_point_index is not None

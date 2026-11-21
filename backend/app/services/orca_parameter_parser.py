@@ -922,6 +922,9 @@ def parse_neb_path_summary(text: str) -> dict | None:
         "method": "neb",
         "is_double_ended": True,
         "n_points": len(images),
+        # Dist.(Ang.) is a cumulative distance in angstrom; the NEB-TS table
+        # has no distance column, so it states no unit.
+        "path_coordinate_unit": "angstrom" if has_dist else None,
         "points": images,
     }
 

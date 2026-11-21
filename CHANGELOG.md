@@ -32,6 +32,15 @@ dataset must never require a code release.
 - **Tests:** the interchange report imports the installed `tckdb_qcschema` with this checkout's `tckdb_client`. The water Hessian fixture directory holds the Psi4 environment lockfile the run used (`ENVIRONMENT.lock.txt`, the sha256 its `meta.json` records), and the report hashes that copy.
 - **Schema and migration:** none. No new environment variable. No distributed package changed.
 
+## Path-search and IRC coordinates carry a unit (Unreleased)
+
+- **Behaviour:** a path-search result states the unit of its points' `path_coordinate` (`path_coordinate_unit`) and an IRC result the unit of its points' `reaction_coordinate` (`reaction_coordinate_unit`), from `angstrom`, `bohr`, `amu_half_bohr`, `amu_half_angstrom`, `fraction` and `step`. Both are optional on upload and null on read when not recorded; existing rows are null. A `fraction` coordinate outside [0, 1] or a non-whole `step` coordinate is refused (422).
+- **Behaviour:** `GET /scientific/calculations/{ref}/path-search` and `/irc`, `include=path_search` / `include=irc` on calculation reads, and `GET /calculations/{id}/path-search-result` / `irc-result` return the unit.
+- **Behaviour:** TCKDB's ORCA log parser states `angstrom` for an NEB path summary with a `Dist.(Ang.)` column and no unit for the NEB-TS table, which has no distance column. ORCA's IRC summary has no coordinate column, so it states none.
+- **Behaviour:** the site labels the path-search and IRC axes and the path facts with the unit when one is recorded ("distance along the path, Å", "3.76 Å along the path") and keeps the "as deposited" wording when none is.
+- **Schema and migration:** new revision `e3b7c1a9d452` on top of `a6fc04f5667e`: enum `path_coordinate_unit` and nullable columns `calc_path_search_result.path_coordinate_unit` and `calc_irc_result.reaction_coordinate_unit`, no default and no backfill. No new environment variable.
+- **Versions:** `tckdb-schemas` 0.176.0, `tckdb-client` 0.209.2.
+
 ## Python packages publish to PyPI from a release tag (Unreleased)
 
 - **Behaviour:** `.github/workflows/publish-python.yml` publishes one distribution per tag `<dist-name>-v<version>` (`tckdb-schemas`, `tckdb-client`, `tckdb-chemkin`, `tckdb-qcschema`, `tckdb-mcp`). It refuses a tag whose version differs from the package's `pyproject.toml` or whose commit is not on `main`; builds the sdist and wheel; runs `twine check --strict`; installs the wheel into a clean environment with the first-party packages it requires, built from the same commit, and imports it; publishes to TestPyPI; and, for a pushed tag only, publishes to PyPI. Uploads use trusted publishing in the GitHub environments `testpypi` and `pypi`; no secret is stored. A manual run builds the chosen package and publishes to TestPyPI only.

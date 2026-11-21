@@ -526,3 +526,32 @@ def test_irc_summary_with_a_ts_marker_still_derives_both_branches():
     result = parse_irc_path_summary(_IRC_ROWS_WITH_TS)
     assert result is not None
     assert (result["has_forward"], result["has_reverse"], result["direction"]) == (True, True, "both")
+
+
+# ---------------------------------------------------------------------------
+# NEB path summary: the distance column is in angstrom
+# ---------------------------------------------------------------------------
+
+
+def test_neb_ci_path_summary_states_its_distance_in_angstrom():
+    from app.schemas.fragments.calculation import PathSearchResultPayload
+    from app.services.orca_parameter_parser import parse_neb_path_summary
+
+    with open(os.path.join(ORCA_DIR, "neb_ci_orca.out")) as f:
+        result = parse_neb_path_summary(f.read())
+
+    assert result is not None
+    assert result["path_coordinate_unit"] == "angstrom"
+    assert all(point["path_coordinate"] is not None for point in result["points"])
+    assert PathSearchResultPayload.model_validate(result).path_coordinate_unit.value == "angstrom"
+
+
+def test_neb_ts_path_summary_without_a_distance_column_states_no_unit():
+    from app.services.orca_parameter_parser import parse_neb_path_summary
+
+    with open(os.path.join(ORCA_DIR, "neb_ts_orca.out")) as f:
+        result = parse_neb_path_summary(f.read())
+
+    assert result is not None
+    assert result["path_coordinate_unit"] is None
+    assert all(point["path_coordinate"] is None for point in result["points"])

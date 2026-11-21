@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.db.models.common import CalculationType, IRCDirection, PathSearchMethod
+from app.db.models.common import CalculationType, IRCDirection, PathCoordinateUnit, PathSearchMethod
 from app.schemas.fragments.calculation import (
     CalculationWithResultsPayload,
     IRCPointPayload,
@@ -37,6 +37,34 @@ def test_irc_result_accepts_valid_payload():
     )
     assert payload.direction == IRCDirection.both
     assert len(payload.points) == 3
+
+
+def test_irc_reaction_coordinate_unit_is_accepted_and_optional():
+    stated = IRCResultPayload(
+        reaction_coordinate_unit="amu_half_bohr",
+        points=[
+            IRCPointPayload(point_index=0, is_ts=True, reaction_coordinate=0.0),
+            IRCPointPayload(point_index=1, direction=IRCDirection.forward, reaction_coordinate=0.1),
+        ],
+    )
+    assert stated.reaction_coordinate_unit.value == PathCoordinateUnit.amu_half_bohr.value
+    assert IRCResultPayload(points=[IRCPointPayload(point_index=0)]).reaction_coordinate_unit is None
+
+
+def test_irc_unknown_reaction_coordinate_unit_rejected():
+    with pytest.raises(ValidationError, match="reaction_coordinate_unit"):
+        IRCResultPayload(reaction_coordinate_unit="amu_bohr")
+
+
+def test_irc_step_unit_refuses_a_fractional_value():
+    with pytest.raises(ValueError, match=r"reaction_coordinate_unit='step'.*point_index 2"):
+        IRCResultPayload(
+            reaction_coordinate_unit="step",
+            points=[
+                IRCPointPayload(point_index=1, reaction_coordinate=1.0),
+                IRCPointPayload(point_index=2, reaction_coordinate=2.5),
+            ],
+        )
 
 
 def test_irc_point_index_must_be_non_negative():
@@ -151,6 +179,53 @@ def test_path_search_duplicate_point_indices_rejected():
                 PathSearchPointPayload(point_index=0),
             ],
         )
+
+
+def test_path_search_coordinate_unit_is_accepted_and_optional():
+    stated = PathSearchResultPayload(
+        method=PathSearchMethod.neb,
+        path_coordinate_unit="angstrom",
+        points=[
+            PathSearchPointPayload(point_index=0, path_coordinate=0.0),
+            PathSearchPointPayload(point_index=1, path_coordinate=3.759),
+        ],
+    )
+    assert stated.path_coordinate_unit.value == PathCoordinateUnit.angstrom.value
+
+    unstated = PathSearchResultPayload(
+        method=PathSearchMethod.neb,
+        points=[PathSearchPointPayload(point_index=0, path_coordinate=1.2)],
+    )
+    assert unstated.path_coordinate_unit is None
+
+
+def test_path_search_unknown_coordinate_unit_rejected():
+    with pytest.raises(ValidationError, match="path_coordinate_unit"):
+        PathSearchResultPayload(
+            method=PathSearchMethod.neb,
+            path_coordinate_unit="nanometre",
+            points=[PathSearchPointPayload(point_index=0, path_coordinate=1.0)],
+        )
+
+
+def test_path_search_fraction_unit_refuses_a_value_outside_zero_to_one():
+    with pytest.raises(ValueError, match=r"path_coordinate_unit='fraction'.*point_index 1"):
+        PathSearchResultPayload(
+            method=PathSearchMethod.gsm,
+            path_coordinate_unit="fraction",
+            points=[
+                PathSearchPointPayload(point_index=0, path_coordinate=0.0),
+                PathSearchPointPayload(point_index=1, path_coordinate=1.5),
+            ],
+        )
+    PathSearchResultPayload(
+        method=PathSearchMethod.gsm,
+        path_coordinate_unit="fraction",
+        points=[
+            PathSearchPointPayload(point_index=0, path_coordinate=0.0),
+            PathSearchPointPayload(point_index=1, path_coordinate=1.0),
+        ],
+    )
 
 
 def test_path_search_selected_ts_point_index_must_match():

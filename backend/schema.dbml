@@ -549,6 +549,15 @@ enum ParameterStatementKind {
   reported
 }
 
+enum PathCoordinateUnit {
+  angstrom
+  bohr
+  amu_half_bohr
+  amu_half_angstrom
+  fraction
+  step
+}
+
 enum PathSearchMethod {
   neb
   gsm
@@ -1489,6 +1498,7 @@ Table calc_irc_result {
   ts_point_index int
   point_count int
   zero_energy_reference_hartree double
+  reaction_coordinate_unit PathCoordinateUnit
   note text
 
   checks {
@@ -1545,6 +1555,7 @@ Table calc_path_search_result {
   climbing_image_index int
   source_endpoint_count int
   zero_energy_reference_hartree double
+  path_coordinate_unit PathCoordinateUnit
   note text
 
   checks {
