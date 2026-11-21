@@ -15,14 +15,11 @@ import {
     type CalculationFreqMode,
     type CalculationGeometryLink,
     type CalculationGeometryValidation,
-    type CalculationIRC,
     type CalculationImaginaryModeProjection,
     type CalculationParameter,
     type CalculationParametersSection,
-    type CalculationPathSearch,
     type CalculationRecord,
     type CalculationSCFStability,
-    type CalculationScan,
     type CalculationSpinDiagnostic,
     type CalculationWavefunctionDiagnostic,
     type OnDemandSectionToken,
@@ -71,6 +68,8 @@ import { calculationLede, calculationTitleWords, dependsOn, usedBy, type Lineage
 import { equationNeedsStructure } from "../domain/reactionEquation"
 import { useCalculationSection, type CalculationSectionState } from "../hooks/useCalculationSection"
 import { LiteratureCitation } from "../components/LiteratureCitation"
+import { PathSearchPath } from "../components/PathSearchPath"
+import { IrcPath, ScanPath } from "../components/PathCalculationSection"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
 
 // ---------------------------------------------------------------------------
@@ -333,6 +332,9 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
     const inputGeometries = calculation.input_geometries ?? []
     const outputGeometries = calculation.output_geometries ?? []
     const reviewHistory = calculation.review_history ?? []
+    // A path-shaped calculation's results and output geometries are its points; its own section shows them in order.
+    const isPathSearch = core.type === "path_search"
+    const isPathShaped = isPathSearch || core.type === "irc" || core.type === "scan"
 
     const ownerSpecies = owner.kind === "species_entry" ? (owner.species_entry ?? null) : null
     const ownerTS = owner.kind === "transition_state_entry" ? (owner.transition_state_entry ?? null) : null
@@ -544,6 +546,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 ownRef={core.calculation_ref}
                 results={calculation.results ?? null}
                 outputGeometries={outputGeometries}
+                anchors={isPathShaped ? { result: "path-heading", geometries: "path-heading" } : undefined}
             />
 
             {usedBySteps.length > 0 && <UsedBySection steps={usedBySteps} />}
@@ -576,7 +579,10 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 />
             </section>
 
-            <ResultsSection
+            {isPathSearch ? <PathSearchPath calculation={calculation} />
+                : core.type === "irc" ? <IrcPath calculation={calculation} />
+                : core.type === "scan" ? <ScanPath calculation={calculation} />
+                : <ResultsSection
                 verification={calculation.composite_energy_verification ?? null}
                 legacyShape={calculation.legacy_composite_shape ?? null}
                 compositeScheme={lot?.composite_scheme ?? null}
@@ -584,7 +590,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 type={core.type}
                 availability={resultsAvailability}
                 contradicted={resultsAvailability === "empty" && available.has_results}
-            />
+            />}
 
             <GeometriesSection
                 input={inputGeometries}
@@ -594,6 +600,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 outputAvailability={outputGeometriesAvailability}
                 outputContradicted={outputGeometriesAvailability === "empty" && available.has_output_geometries}
                 geometryValidation={geometryValidationState}
+                outputInPath={core.type === "scan" ? "scan" : isPathShaped ? "path" : null}
             />
 
             <OnDemandSections
@@ -887,10 +894,11 @@ function DependsOnSection({ steps, ownWords, availability, contradicted }: {
 }
 
 /** The results and records this calculation produced, each linked to its evidence. */
-function ProducedSection({ ownRef, results, outputGeometries }: {
+function ProducedSection({ ownRef, results, outputGeometries, anchors = { result: "results-heading", geometries: "geometries-heading" } }: {
     ownRef: string
     results: CalculationRecord["results"]
     outputGeometries: CalculationGeometryLink[]
+    anchors?: { result: string; geometries: string }
 }) {
     const here = `/calculations/${ownRef}`
     const resultWords = results ? (Object.hasOwn(RESULT_WORDS, results.kind) ? RESULT_WORDS[results.kind] : "A result") : null
@@ -899,9 +907,9 @@ function ProducedSection({ ownRef, results, outputGeometries }: {
             <SectionHeading id="produced-heading">What this produced</SectionHeading>
             {resultWords !== null || outputGeometries.length > 0 ? (
                 <ul className="produced-list link-list">
-                    {resultWords && <ProducedItem to={`${here}#results-heading`}>{resultWords}</ProducedItem>}
+                    {resultWords && <ProducedItem to={`${here}#${anchors.result}`}>{resultWords}</ProducedItem>}
                     {outputGeometries.length > 0 && (
-                        <ProducedItem to={`${here}#geometries-heading`}>
+                        <ProducedItem to={`${here}#${anchors.geometries}`}>
                             {outputGeometries.length} output {outputGeometries.length === 1 ? "geometry" : "geometries"}
                         </ProducedItem>
                     )}
@@ -924,7 +932,7 @@ function UsedBySection({ steps }: { steps: LineageStep[] }) {
 }
 
 function GeometriesSection({
-    input, output, inputAvailability, inputContradicted, outputAvailability, outputContradicted, geometryValidation,
+    input, output, inputAvailability, inputContradicted, outputAvailability, outputContradicted, geometryValidation, outputInPath = null,
 }: {
     input: CalculationGeometryLink[]
     output: CalculationGeometryLink[]
@@ -933,6 +941,8 @@ function GeometriesSection({
     outputAvailability: SectionAvailability
     outputContradicted: boolean
     geometryValidation: CalculationSectionState<CalculationGeometryValidation[] | null>
+    /** The output geometries are the points of a path, listed in order under "The path" instead of here. */
+    outputInPath?: "path" | "scan" | null
 }) {
     // A coarse optimisation stage stores its input and output as the SAME
     // geometry row (measured: every coarse stage on the live archive) --
@@ -988,10 +998,20 @@ function GeometriesSection({
                         title="Input" links={input} emptyText="No input geometries are recorded."
                         availability={inputAvailability} contradicted={inputContradicted}
                     />
-                    <GeometryLinkList
-                        title="Output" links={output} emptyText="No output geometries are recorded."
-                        availability={outputAvailability} contradicted={outputContradicted}
-                    />
+                    {outputInPath && outputAvailability === "populated" ? (
+                        <div>
+                            <h3 className="t-heading-2">Output</h3>
+                            <p className="note">
+                                The {output.length} output {output.length === 1 ? "geometry is the point" : "geometries are the points"} listed
+                                in order under <a href="#path-heading">{outputInPath === "scan" ? "The scan" : "The path"}</a>.
+                            </p>
+                        </div>
+                    ) : (
+                        <GeometryLinkList
+                            title="Output" links={output} emptyText="No output geometries are recorded."
+                            availability={outputAvailability} contradicted={outputContradicted}
+                        />
+                    )}
                     {/* Shown once the Further evidence -> Geometry validation
                         disclosure has been opened -- this section does not fetch
                         it independently (see the state lifted in
@@ -1201,9 +1221,6 @@ const ON_DEMAND_SECTION_SPECS: {
     // calculation type that cannot have frequency modes in the first
     // place).
     { heading: "Imaginary-mode projections", applicable: (a) => a.freq_modes_applicable, available: (a) => a.has_hessian },
-    { heading: "Scan trajectory", applicable: (a) => a.scan_applicable, available: (a) => a.has_scan },
-    { heading: "IRC trajectory", applicable: (a) => a.irc_applicable, available: (a) => a.has_irc },
-    { heading: "Path-search trajectory", applicable: (a) => a.path_search_applicable, available: (a) => a.has_path_search },
     { heading: "Artifacts", applicable: () => true, available: (a) => a.has_artifacts },
     { heading: "Execution environment", applicable: () => true, available: (a) => a.has_execution_environment },
 ]
@@ -1244,9 +1261,6 @@ function OnDemandSections({ calculation, available, geometryValidationState, ope
                 <ConstraintsSection calculationRef={ref} available={available.has_constraints} applicable={available.constraints_applicable} />
                 <FreqModesSection calculationRef={ref} available={available.has_freq_modes} applicable={available.freq_modes_applicable} />
                 <ImaginaryModeProjectionsSection calculationRef={ref} hessianAvailable={available.has_hessian} applicable={available.freq_modes_applicable} />
-                <ScanSection calculationRef={ref} available={available.has_scan} applicable={available.scan_applicable} />
-                <IRCSection calculationRef={ref} available={available.has_irc} applicable={available.irc_applicable} />
-                <PathSearchSection calculationRef={ref} available={available.has_path_search} applicable={available.path_search_applicable} />
                 <ArtifactsSection calculationRef={ref} available={available.has_artifacts} />
                 <ExecutionEnvironmentSection calculationRef={ref} available={available.has_execution_environment} />
             </div>
@@ -1573,59 +1587,6 @@ function ImaginaryModeProjectionsSection({ calculationRef, hessianAvailable, app
                     </>
                 )
             }}
-        </LazySection>
-    )
-}
-
-function ScanSection({ calculationRef, available, applicable }: { calculationRef: string; available: boolean; applicable: boolean }) {
-    const [state, open] = useSection<CalculationScan | null>(calculationRef, "scan")
-    return (
-        <LazySection id="section-scan-trajectory" heading="Scan trajectory" available={available} applicable={applicable} state={state} onOpen={open}>
-            {(scan) => (!scan ? <p className="empty-projection">The archive returned no scan summary.</p> : (
-                <KVList pairs={[
-                    ["Dimension", scan.dimension],
-                    ["Relaxed", boolLabel(scan.is_relaxed)],
-                    ["Coordinates", scan.coordinate_count],
-                    ["Points", scan.point_count],
-                    ["Min electronic energy (hartree)", formatQuantity("calculation_electronic_energy_hartree", scan.min_electronic_energy_hartree, null)?.value],
-                    ["Max electronic energy (hartree)", formatQuantity("calculation_electronic_energy_hartree", scan.max_electronic_energy_hartree, null)?.value],
-                ]} />
-            ))}
-        </LazySection>
-    )
-}
-
-function IRCSection({ calculationRef, available, applicable }: { calculationRef: string; available: boolean; applicable: boolean }) {
-    const [state, open] = useSection<CalculationIRC | null>(calculationRef, "irc")
-    return (
-        <LazySection id="section-irc-trajectory" heading="IRC trajectory" available={available} applicable={applicable} state={state} onOpen={open}>
-            {(irc) => (!irc ? <p className="empty-projection">The archive returned no IRC summary.</p> : (
-                <KVList pairs={[
-                    ["Direction", irc.direction ? statusLabel(irc.direction) : "not recorded"],
-                    ["Has forward leg", boolLabel(irc.has_forward)],
-                    ["Has reverse leg", boolLabel(irc.has_reverse)],
-                    ["Forward points", irc.forward_point_count],
-                    ["Reverse points", irc.reverse_point_count],
-                    ["TS points", irc.ts_point_count],
-                ]} />
-            ))}
-        </LazySection>
-    )
-}
-
-function PathSearchSection({ calculationRef, available, applicable }: { calculationRef: string; available: boolean; applicable: boolean }) {
-    const [state, open] = useSection<CalculationPathSearch | null>(calculationRef, "path_search")
-    return (
-        <LazySection id="section-path-search-trajectory" heading="Path-search trajectory" available={available} applicable={applicable} state={state} onOpen={open}>
-            {(pathSearch) => (!pathSearch ? <p className="empty-projection">The archive returned no path-search summary.</p> : (
-                <KVList pairs={[
-                    ["Method", statusLabel(pathSearch.method)],
-                    ["Converged", boolLabel(pathSearch.converged)],
-                    ["Stored points", pathSearch.stored_point_count],
-                    ["TS guesses", pathSearch.ts_guess_count],
-                    ["Climbing images", pathSearch.climbing_image_count],
-                ]} />
-            ))}
         </LazySection>
     )
 }
