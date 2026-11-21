@@ -30,8 +30,6 @@ on:
         options:
           - tckdb-client
           - tckdb-schemas
-          - tckdb-chemkin
-          - tckdb-qcschema
           - tckdb-mcp
 
 permissions:

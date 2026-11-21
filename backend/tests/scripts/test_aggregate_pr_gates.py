@@ -308,7 +308,7 @@ def test_a_client_change_outside_its_source_expects_only_the_client_gate():
     for changed in (
         ["clients/python/tests/test_client.py"],
         ["clients/python/README.md"],
-        ["clients/python/adapters/chemkin/tckdb_chemkin/normalizer.py"],
+        ["clients/python/docs/development.md"],
     ):
         assert gates.workflow_is_expected(_real(CLIENT_CI), changed), changed
         assert not gates.workflow_is_expected(_real(BACKEND_CI), changed), changed

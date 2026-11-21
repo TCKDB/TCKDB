@@ -66,7 +66,7 @@ def _version(package) -> str:
 
 def test_the_resolver_reads_the_version_guards_packages():
     assert release.package_names() == NAMES
-    assert len(NAMES) == 5, NAMES
+    assert len(NAMES) == 3, NAMES
 
 
 def test_manual_run_choices_are_the_guarded_packages():
@@ -105,12 +105,10 @@ def test_a_tag_outside_the_scheme_or_the_packages_is_refused(tag):
 
 
 def test_first_party_dependencies_come_before_their_dependents():
-    schemas, client = "schemas/python/tckdb-schemas", "clients/python"
+    schemas = "schemas/python/tckdb-schemas"
     assert release.resolve(package="tckdb-schemas")["deps"] == ""
     assert release.resolve(package="tckdb-mcp")["deps"] == ""
     assert release.resolve(package="tckdb-client")["deps"] == schemas
-    for name in ("tckdb-chemkin", "tckdb-qcschema"):
-        assert release.resolve(package=name)["deps"] == f"{schemas} {client}", name
 
 
 def test_the_build_job_resolves_builds_checks_and_smoke_tests():
