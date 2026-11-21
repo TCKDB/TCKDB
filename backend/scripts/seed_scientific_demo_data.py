@@ -26,8 +26,7 @@ After loading, verify the data via ``tckdb-client``::
     python clients/python/examples/scientific_reads.py \\
         --base-url http://127.0.0.1:8010/api/v1 --smiles "CH4"
 
-Removing the demo data is a manual SQL cleanup; see
-``docs/guides/scientific_read_demo_data.md``.
+Removing the demo data is a manual SQL cleanup.
 """
 
 from __future__ import annotations

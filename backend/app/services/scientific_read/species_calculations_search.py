@@ -220,7 +220,6 @@ def search_species_calculations(
 
     Returns calculations for species matching the request identity, with
     full per-record context (energy/conformer/geometry/validation/review).
-    See ``docs/specs/species_calculation_search_api.md`` for the contract.
 
     :param session: SQLAlchemy session.
     :param request: Parsed request model.

@@ -10,8 +10,7 @@ one of the TCKDB playground species that already hold computed thermo. The outpu
 article the ThermoML importer (C2/C3) is built and demonstrated against.
 
 Nothing here writes to a database, touches the Pi, or fetches anything beyond the two URLs
-verified once, by hand, before this script is invoked (see
-``docs/validation/thermoml_cp_pilot_scan.md``). The archive itself is a local file this script
+verified once, by hand, before this script is invoked. The archive itself is a local file this script
 only reads; it never downloads it.
 
 How it reads the archive

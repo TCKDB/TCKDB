@@ -17,8 +17,7 @@ read surface. These methods are **generic** TCKDB reads — they serialize
 parameters, call the backend, and return parsed JSON. They contain no
 ARC- or RMG-specific selection or reuse policy, no client-side ranking,
 and no notion of a "best" record. Trust posture, sort order, evidence
-completeness, and provenance shape are all decided by the backend per
-`docs/specs/browse_order.md`.
+completeness, and provenance shape are all decided by the backend.
 
 ### Curated vs exploratory results: `profile=`
 

@@ -17,9 +17,7 @@ This is the record the methods-surface plan describes: "what does a
 computational chemist look up before trusting a number computed at this
 level" -- the recipe (identity + observed software), the correction
 parameters actually deposited against it, its frequency scale factor(s),
-and how many calculations use it. See ``docs/plans/methods-surface.md``
-sections 5.1-5.2 (fetched from ``plan-methods-surface-v2`` at
-implementation time; not committed to this repo).
+and how many calculations use it.
 
 See ``app/schemas/reads/scientific_energy_correction_scheme.py`` and
 ``scientific_frequency_scale_factor.py`` -- this module is deliberately

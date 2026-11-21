@@ -15,9 +15,7 @@ same convention as ``corrections.py``.
 carries an empty ``review_summary`` for shape parity with the rest of
 the scientific surface.
 
-See ``docs/plans/methods-surface.md`` §5.1-5.2 (``plan-methods-surface-v2``,
-not committed to this repo) and
-``backend/app/services/scientific_read/level_of_theory.py``.
+See ``backend/app/services/scientific_read/level_of_theory.py``.
 """
 
 from __future__ import annotations

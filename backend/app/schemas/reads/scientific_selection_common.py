@@ -1,6 +1,6 @@
 """The request and response fragments every ``.../select`` endpoint shares.
 
-A select call is these steps, in this order (``docs/specs/browse_order.md``):
+A select call is these steps, in this order:
 
 1. **User filters.** The caller narrows the candidates by facts, with the vocabulary the matching browse or search
    endpoint offers. A filter never ranks and never excludes on a judgement.

@@ -2,7 +2,7 @@
 
 Inputs to the QCSchema interchange demonstration.
 `backend/scripts/validation/qcschema_interchange_report.py` reads them, and
-nothing else. The write-up is `docs/validation/qcschema_interchange.md`.
+nothing else.
 
 This directory has no `payload.json`, so the QCSchema backend corpus test
 (`backend/tests/api/test_api_qcschema_fixtures.py`) does not pick it up as a

@@ -1,5 +1,5 @@
 """Service-layer tests for the bulk-export selection/closure core and the
-CHEMKIN serializer (docs/specs/bulk_export_design.md §4, §5, §8)."""
+CHEMKIN serializer."""
 
 from __future__ import annotations
 

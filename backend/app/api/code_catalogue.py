@@ -444,11 +444,9 @@ class Shape(str, Enum):
 
     A configured cap is a fact about TCKDB, and one a client must have to
     retry. A measured count is a fact about **how much data exists** —
-    precisely the enumeration exposure
-    ``docs/specs/public_identifier_policy.md`` argues against when it
-    rejects sequential integer primary keys (§"Why this matters now",
-    item 3: they "leak the total count of objects (and roughly the upload
-    schedule) of every table"). A refusal that reports an exact match
+    precisely the enumeration exposure that rules out sequential integer
+    primary keys as public identifiers: they leak the total count of
+    objects (and roughly the upload schedule) of every table. A refusal that reports an exact match
     count turns any filter into a free census endpoint, which is worse
     than a primary key: a key leaks the count once, a countable refusal
     leaks it per query, forever, and cheaply.
@@ -1570,9 +1568,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "IdempotencyConflict.in_progress defaults to False and the "
                 "one construction site never passes it, so no response can "
                 "carry this code. Not a milestone that has not arrived: "
-                "docs/specs/upload-idempotency-key-spec.md lists it under "
-                "*Optional* -- 'Only implement idempotency_in_progress if "
-                "needed by the chosen approach' -- and the approach chosen, a "
+                "the code is optional, and the approach chosen, a "
                 "unique constraint plus the integrity handler, does not need "
                 "it. It is a contingency, and app/api/idempotency.py names "
                 "the change that would make it live."

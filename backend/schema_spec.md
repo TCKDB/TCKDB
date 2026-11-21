@@ -28,7 +28,7 @@ The main structural choices are:
 
 ## 2. Units and Enum Conventions
 
-Unit handling follows `docs/unit_policy.md`:
+Unit handling:
 
 - fixed-unit columns use the unit in the column name, for example `electronic_energy_hartree`, `ea_kj_mol`, `temperature_k`
 - enum-backed unit columns are used where the scientific representation varies, such as `ArrheniusAUnits`, `PressureUnit`, `TemperatureUnit`, `CoordinateUnit`, and `EnergyUnit`
@@ -245,7 +245,7 @@ Notes:
 - workflow-tool release dedupe is enforced on `(workflow_tool_id, version, git_commit)`
 - `lot_hash` is unique
 - `lot_hash` hashes each basis name (`basis`, `aux_basis`, `cabs_basis`) by its identity key, not verbatim: lower case, with the family hyphen in `def2-` and `cc-p` restored (`app/chemistry/basis_set_names.py`, #574). `def2tzvp` and `def2-TZVP` are one level of theory; `6-31G*` and `6-31G**` stay two. The row stores the first spelling it was uploaded with.
-- `core_treatment` (ADR 0021) joins the `lot_hash` payload **only when it is set**. A NULL adds no key, so every level that did not state it keeps the hash it had before the column existed; no row was re-keyed. `frozen_core` and `all_electron` are two levels, and "not stated" is a third that is neither. A partial core treatment (an energy window, a Gaussian `Window=(m,n)`) is the value `window`; which window stays on the calculation's `core.frozen` parameter rows. The three method qualifiers (`relativistic_hamiltonian`, `pno_truncation`, `ri_approximation`) follow the same rule (docs/adr/0024), and `level_of_theory` has no free-text `keywords` column since. The column is in `snapshot_defaults.UNCHANGED_DEFAULTS` so a whole-row digest of a level does not go stale for a NULL. `scripts/ops/merge_duplicate_levels_of_theory.py` regroups by the recomputed hash and lists the column, so it never folds one treatment into the other.
+- `core_treatment` (ADR 0021) joins the `lot_hash` payload **only when it is set**. A NULL adds no key, so every level that did not state it keeps the hash it had before the column existed; no row was re-keyed. `frozen_core` and `all_electron` are two levels, and "not stated" is a third that is neither. A partial core treatment (an energy window, a Gaussian `Window=(m,n)`) is the value `window`; which window stays on the calculation's `core.frozen` parameter rows. The three method qualifiers (`relativistic_hamiltonian`, `pno_truncation`, `ri_approximation`) follow the same rule, and `level_of_theory` has no free-text `keywords` column since. The column is in `snapshot_defaults.UNCHANGED_DEFAULTS` so a whole-row digest of a level does not go stale for a NULL. `scripts/ops/merge_duplicate_levels_of_theory.py` regroups by the recomputed hash and lists the column, so it never folds one treatment into the other.
 - A level of theory's `public_ref` is minted from `lot_hash` **once, at insert**, and never recomputed. A LOT ref identifies a row; it is not re-derivable from content once the hash formula has changed, because re-keying a row in place leaves its `public_ref` alone.
 - A `lot_hash` that changes when the formula changes no longer matches a value held elsewhere (a `lot_hash=` query, an ML export row, a stored consistency-check snapshot).
 
@@ -261,7 +261,7 @@ Notes:
 - No calculation points at a merged row, and `into_lot_id` is never itself merged (one hop).
 - A table rather than a column on `level_of_theory`, so whole-row snapshots of a level of theory (consistency-check inputs, reproducibility context hashes) do not change for every row.
 
-Composite schemes ([ADR 0021](../docs/adr/0021-composite-levels-of-theory-are-a-recipe-bound-to-a-level-not-a-weighted-level.md)). A composite energy is a recipe; the recipe is identity, and a side table binds a level of theory to it.
+Composite schemes. A composite energy is a recipe; the recipe is identity, and a side table binds a level of theory to it.
 
 `composite_scheme` fields (identity; deduplicated by `definition_hash`, never updated in place):
 
@@ -529,7 +529,7 @@ Notes:
 upload event that produced (or attempted to produce) scientific records. The
 planes share the same scientific schema and all attribute records via
 `created_by`; they differ by payload shape and review default, not by whether
-they are auditable. See `docs/specs/ingestion_submission_model.md` for the full
+they are auditable. See `backend/docs/specs/ingestion_submission_model.md` for the full
 model.
 
 | Plane | Routes | Submission / review on success | Notes |
@@ -881,8 +881,7 @@ the first and last points of a full sweep are one geometry deposited twice.
 
 A producer whose program prints a relative sweep converts before depositing. It
 necessarily holds the anchor, having computed the sweep from it. TCKDB does not
-adopt a producer's internal representation; see
-`docs/adr/0020-a-scan-coordinate-value-is-the-coordinate-itself.md` for why the
+adopt a producer's internal representation: the
 relative form does not generalise (a bond angle reflects at 180° rather than
 wrapping, a bond length has no branch cut, and an improper dihedral has no
 convention shared across codes).
@@ -1825,8 +1824,7 @@ Notes:
 ## 11. Curated Release Layer
 
 Five tables that answer "what is *the* TCKDB value?" without writing to the
-science. See `docs/specs/dataset_release_and_profiles.md` and
-`docs/adr/0007-curated-selections-are-a-release-overlay-not-a-column.md`.
+science. See `backend/docs/specs/dataset_release_and_profiles.md`.
 
 ### 11.1 `curation_policy`
 

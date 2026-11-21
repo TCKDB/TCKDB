@@ -213,10 +213,8 @@ def collect_bounded_pages(
       halving a page size anyway.
     * ``expected_total`` is **how many records in the corpus matched the
       query**. That is a measurement of TCKDB's holdings, not of the
-      request, and it is exactly the enumeration signal
-      ``docs/specs/public_identifier_policy.md`` (§"Why this matters
-      now", item 3) rejects sequential integer primary keys for: it
-      leaks the total count of objects and roughly the upload schedule.
+      request, and it is exactly the enumeration signal that rules out
+      sequential integer primary keys as public identifiers: it leaks the total count of objects and roughly the upload schedule.
       A caller who can turn any filter into an exact row count has a
       free census endpoint that no route offers.
 

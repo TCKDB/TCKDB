@@ -1,4 +1,4 @@
-"""Bulk-export selection + closure core (docs/specs/bulk_export_design.md).
+"""Bulk-export selection + closure core.
 
 This module is the shared engine behind both export targets (native
 NDJSON and CHEMKIN). It is deliberately HTTP-free so it can be unit
@@ -678,10 +678,9 @@ def resolve_seed(
             #
             # ``len(all_ids)`` is an unfiltered ``SELECT`` over
             # ``reaction_entry``: it is the total number of reaction
-            # entries TCKDB holds. That is the enumeration signal
-            # ``docs/specs/public_identifier_policy.md`` (§"Why this
-            # matters now", item 3) rejects sequential integer primary
-            # keys for -- the total count of objects, and, polled over
+            # entries TCKDB holds. That is the enumeration signal that
+            # rules out sequential integer primary keys as public
+            # identifiers -- the total count of objects, and, polled over
             # time, roughly the upload schedule. ``all=true`` is by
             # construction the one request whose size the caller did not
             # state, so echoing the count back is not echoing their own

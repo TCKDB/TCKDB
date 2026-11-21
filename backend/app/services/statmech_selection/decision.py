@@ -13,7 +13,7 @@ What is specific to statmech and lives here, and not in the shared kernel:
   subset.
 * **Nothing ranks one model above another.** TCKDB carries no ranking between methods or whole models: one qualified
   model is a sole eligible candidate, several are incomparable alternatives listed in administrative order
-  (``docs/specs/browse_order.md``). A model is never assembled from favourable pieces.
+  (review rank, deposition time, id). A model is never assembled from favourable pieces.
 * **The ordering is the shared kernel's.** The qualified models go to :func:`decide_alternatives`, which yields the
   outcome and the administrative order.
 * **Two mutually exclusive references.** ``sole_eligible_ref`` for a lone eligible model (noncomparative),

@@ -36,6 +36,3 @@ these; services never call routes. ~39 top-level modules + 4 subpackages.
 | `machine_review/` | Optional AI re-review; append-only verdicts, never mutates science |
 | `llm_precheck/` | Optional submission-level advisory feedback |
 | `scientific_read/` | Read-side query + **product selection sort** (e.g. `thermo.py` chooses which record to return) |
-
-See [`docs/guides/system_flow.md`](../../../docs/guides/system_flow.md)
-for how these fit into the upload→read lifecycle.

@@ -6,8 +6,7 @@ name: build-api-image
 # DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (a Docker Hub access token, never a
 # password). This is the "build + publish" half of CI/CD; the "deploy" half
 # (a host pulling the new image, restarting, and running migrations) is
-# described in docs/deployment/self_hosting.md and is intentionally NOT
-# automated here — it needs a per-deployment decision (webhook / Watchtower /
+# intentionally NOT automated here — it needs a per-deployment decision (webhook / Watchtower /
 # scheduled pull) and DB-migration handling.
 
 on:

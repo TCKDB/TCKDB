@@ -58,8 +58,7 @@ def reaction_full(
     apply per joined sub-array. Non-TS-backed kinetics surface
     in ``kinetics`` with null TS-chain provenance fields.
     Sub-arrays sort deterministically; client-supplied ``sort=`` is
-    rejected. See ``docs/specs/browse_order.md`` §Endpoint 5 and
-    ``docs/specs/public_identifier_policy.md``.
+    rejected.
     """
     resolved_reaction_entry_id = resolve_reaction_entry_handle(
         session, reaction_entry_id

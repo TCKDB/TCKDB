@@ -8,8 +8,7 @@ scans and energies stored in TCKDB are enough to rebuild an Arkane
 ``thermo('NASA')`` deck and recompute the entropy and heat capacity the
 database already stores for that species -- without the original ESS
 output files. Paper validation exhibit paralleling the Cantera/CHEMKIN
-round-trip; findings are written up in
-``docs/validation/arkane_statmech_roundtrip.md``.
+round-trip.
 
 How it reads
 ------------

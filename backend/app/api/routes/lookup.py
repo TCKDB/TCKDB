@@ -21,7 +21,7 @@ Internal match taxonomy (grounded in three axes):
 - result_existence: yes / no
 - lot: exact / partial / none (per-field: method, basis, dispersion, solvent, ...)
 
-Visibility, order and selection (docs/specs/browse_order.md):
+Visibility, order and selection:
 - Every read applies the scientific reads' default visibility (rejected and deprecated records are hidden unless
   ``include_rejected`` / ``include_deprecated`` is set) and their read profile (``?profile=curated`` lists only
   records at ``approved``, with no count of the ones below it; a record's own detail page and the evidence it links

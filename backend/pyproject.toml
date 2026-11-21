@@ -29,9 +29,6 @@
 # The `tckdb-schemas` step is not optional: 34 modules under app/ import
 # it at module level. Omitting it was why both documented paths produced
 # an install that could not import the app.
-#
-# See docs/deployment/api_containerization_notes.md for the full
-# discussion.
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]

@@ -9,7 +9,7 @@ What is specific to networks, and lives here and not in the kernel:
 
 * **The competition unit is a determination (one channel) or a declared product set (a bundle).** Nothing ranks one
   node above another: TCKDB carries no method-versus-method ranking, so one eligible node is a sole eligible
-  candidate, several are incomparable alternatives listed in administrative order (``docs/specs/browse_order.md``),
+  candidate, several are incomparable alternatives listed in administrative order,
   none is no applicable candidate. There is no averaging, no weighting, no stitching of temperature windows and no
   splicing of channels across solves.
 * **Alternate fits are one candidate.** Within a determination the eligible fits are listed in administrative order,

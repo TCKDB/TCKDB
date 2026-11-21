@@ -6,9 +6,6 @@ non-suffix keys like ``LiteratureSummary.id``). Those
 integer keys are hidden from public responses by default; callers may opt in via
 ``include=internal_ids``, but the opt-in is only effective when the
 deployment allows it (``settings.allow_public_internal_ids``).
-
-See ``docs/specs/internal_ids_visibility_policy.md`` for the full
-policy.
 """
 
 from __future__ import annotations

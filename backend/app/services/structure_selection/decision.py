@@ -70,7 +70,7 @@ from app.services.structure_selection.models import (
 #: document shape, and that is refused through the manifest format (``MANIFEST_FORMAT_VERSION``), not through this number.
 DECISION_VERSION = 1
 #: Version of the administrative key below. Version 2: ``under_review`` and ``not_reviewed`` rank equally in the review
-#: key (``docs/specs/browse_order.md``).
+#: key.
 ADMIN_KEY_VERSION = 2
 
 ADMIN_KEY_SPEC: dict[str, Any] = {

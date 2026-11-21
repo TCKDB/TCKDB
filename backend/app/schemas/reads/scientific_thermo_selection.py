@@ -2,7 +2,7 @@
 
 Selection of one species entry's thermo record for the formation enthalpy at
 298.15 K (gas phase): which records are eligible for the question, and, among
-those, the display order of ``docs/specs/browse_order.md``. TCKDB carries no
+those, the browse display order. TCKDB carries no
 ranking between methods, so a selection never says one eligible record is
 better than another. A read: nothing is stored, no curator endorsement is
 created or changed, and the ordinary thermo browse order is untouched. See

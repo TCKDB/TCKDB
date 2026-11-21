@@ -149,7 +149,7 @@ What a **human curator** has said about one scientific record. It is the only vo
 | `rejected` | A curator reviewed the record and does not accept it. Absent from results unless the request asks for it with `include_rejected=true`. |
 | `deprecated` | The record is not to be used — superseded by a better one, or withdrawn. It is kept rather than deleted so an existing citation still resolves. Absent from results unless the request asks with `include_deprecated=true`. |
 
-> A response lists records in a fixed display order, echoed in `request.sort`. The review part of it is defined once, in `docs/specs/browse_order.md`; it is not a scientific preference.
+> A response lists records in a fixed display order, echoed in `request.sort`. Its review part puts `approved` first, `under_review` and `not_reviewed` together, then `deprecated`, then `rejected`; it is not a scientific preference.
 
 ## What TCKDB can check by itself
 

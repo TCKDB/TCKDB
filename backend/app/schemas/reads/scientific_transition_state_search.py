@@ -186,8 +186,7 @@ class TransitionStatesBrowseRequest(BaseModel):
     ordinary structures. ``participant_smiles`` filters on *that* graph
     (the reaction's reactants/products), not a TS graph that does not
     exist, which is why it is a structural filter without being a
-    composition filter in the ``elements``/heavy-atom sense above. See
-    ``docs/specs/scientific_transition_state_reads.md``.
+    composition filter in the ``elements``/heavy-atom sense above.
     """
 
     # --- TS-entry scalar filters -----------------------------------------

@@ -1,7 +1,6 @@
 """Acceptance tests: scientific responses hide internal IDs by default.
 
-Verifies the visibility contract defined in
-``docs/specs/internal_ids_visibility_policy.md``:
+Verifies the internal-id visibility contract:
 
 1. Default responses omit every ``*_id`` field, every bare integer-id
    array, and the non-suffix internal-PK fields

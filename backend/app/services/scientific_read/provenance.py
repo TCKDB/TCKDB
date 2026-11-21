@@ -1,7 +1,7 @@
 """Service implementation for /api/v1/scientific/reaction-entries/{id}/full.
 
 Composite document: joins species, kinetics, transition states, calculations,
-review summary into a single response. See docs/specs/browse_order.md.
+review summary into a single response.
 """
 
 from __future__ import annotations
@@ -1573,9 +1573,7 @@ def _enforce_full_expansion_caps(
     the molecule, this is a count of the corpus, and a caller who can
     read it off a cheap refusal has a row-counting oracle: set the cap
     low, sweep records, and recover the holdings profile and roughly the
-    upload schedule that ``docs/specs/public_identifier_policy.md``
-    (§"Why this matters now", item 3) refuses to leak through primary
-    keys. The count is logged instead, and is absent from ``detail`` as
+    upload schedule, which public refs exist to keep out of primary keys. The count is logged instead, and is absent from ``detail`` as
     well as ``context`` — ``detail`` is published too.
     """
     pairs: list[tuple[str, list | None, int]] = [

@@ -6,8 +6,7 @@ holds no reusable logic (services do that) — it *sequences* resolution
 services in dependency order and links the produced records to a
 submission.
 
-**The shape every workflow follows** (see
-[`docs/guides/system_flow.md`](../../../docs/guides/system_flow.md) §2):
+**The shape every workflow follows**:
 resolve identity (dedupe) → resolve provenance (calculation, software)
 → persist append-only results → `apply_review_policy()` to link records
 to the submission.

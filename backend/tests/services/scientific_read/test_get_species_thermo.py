@@ -382,8 +382,7 @@ def test_sort_is_deterministic(db_session):
 
 
 # ---------------------------------------------------------------------------
-# Statmech-source-calculation fallback for thermo provenance
-# (see docs/audits/thermo_provenance_geometry_audit.md).
+# Statmech-source-calculation fallback for thermo provenance.
 #
 # When a thermo's own ThermoSourceCalculation rows do not cover the freq /
 # SP / opt roles, the read service falls back to the StatmechSourceCalculation

@@ -20,8 +20,7 @@ Companion documents:
   recipe-style examples.
 - [workflow_tool_scientific_reads.md](workflow_tool_scientific_reads.md) —
   integration patterns for workflow tools.
-- [internal_ids_visibility_policy.md](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/internal_ids_visibility_policy.md) —
-  policy for integer-ID exposure.
+- [Internal IDs](#internal-ids) — when integer IDs are exposed.
 - [deployment_modes.md](../deployment/deployment_modes.md) —
   the three TCKDB deployment modes (local/offline, self-hosted
   online, hosted/community) and where this public surface fits.
@@ -377,16 +376,12 @@ To opt in to integer IDs:
   intentional.
 
 Public documentation, examples, and integrations should always use
-`*_ref` handles. See the
-[internal-ids visibility policy](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/internal_ids_visibility_policy.md)
-for the full contract.
+`*_ref` handles.
 
 ## Abuse-control expectations
 
 Hosted deployments enforce application-level rate limits and query
-caps. The full policy lives in
-[public_read_abuse_controls.md](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/public_read_abuse_controls.md).
-In short:
+caps:
 
 - Anonymous reads are rate-limited per client IP; authenticated
   reads have a larger, separate budget keyed by API-key or session
@@ -455,4 +450,3 @@ hosted querying.
 - [workflow_tool_scientific_reads.md](workflow_tool_scientific_reads.md) — workflow-tool integration patterns.
 - [Load demo data](../start/demo-data.md) — demo data setup.
 - [`clients/python/docs/configuration.md`](https://github.com/TCKDB/TCKDB/blob/main/clients/python/docs/configuration.md) — client configuration and the auth matrix.
-- [internal_ids_visibility_policy.md](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/internal_ids_visibility_policy.md) — internal-IDs contract.

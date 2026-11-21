@@ -4,7 +4,7 @@ This module turns selected local database rows (``Thermo``, ``Kinetics``)
 into validated :class:`ContributionBundle` payloads suitable for writing
 to disk.
 
-Scope (Local export v0, see ``docs/roadmaps/local-bundle-export-v0-spec.md``):
+Scope (local export v0):
 
 - Read-only against the local database.
 - Reconstruct upload-equivalent payloads (``ThermoUploadRequest`` /

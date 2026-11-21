@@ -25,6 +25,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Maintainer documents leave the repository (Unreleased)
+
+- **Behaviour:** none. Internal maintainer documents under `docs/` (decision records, plans, research, reviews, internal specs and validation write-ups) are no longer tracked; `.gitignore` and `mkdocs.yml` list their paths. They remain in git history. Published pages, code comments and API descriptions that cited them now state the fact they cited or drop the citation.
+- **Schema and migration:** none. No new environment variable.
+- **Versions:** `tckdb-schemas` 0.177.1, `tckdb-client` 0.210.1, `tckdb-mcp` 0.16.2.
+
 ## The catalogue lists the spellings in use that it has no entry for (Unreleased)
 
 - **Behaviour:** `GET /scientific/methods` and `GET /scientific/basis-sets` gain `uncatalogued`: the identity keys that levels of theory with at least one shown calculation use and no catalogue entry names, in key order, each with the stored spellings and its level and calculation usage counts (the same visibility as the entries' usage, so a calculation a list read hides is not counted). A method key also states its kind (`method` or `dispersion_correction`), family and DFT rung, and the `kind` and `method_family` filters apply to it; a basis-set key has no role or family, so a `role` or `family` filter leaves the list empty.

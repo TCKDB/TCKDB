@@ -1,6 +1,4 @@
 """Service implementation for /api/v1/scientific/species-entries/{id}/thermo.
-
-See docs/specs/browse_order.md.
 """
 
 from __future__ import annotations

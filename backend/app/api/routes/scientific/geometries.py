@@ -57,9 +57,6 @@ def scientific_geometry_detail(
     the field with a ``null`` value; the key is omitted from the
     payload entirely. See
     ``app.services.scientific_read.auth_visibility``.
-
-    See ``docs/specs/public_identifier_policy.md`` and
-    ``docs/specs/internal_ids_visibility_policy.md``.
     """
     request = caller_input(GeometryReadRequest, include=parse_include(include))
     payload = get_geometry(

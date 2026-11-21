@@ -1454,7 +1454,7 @@ displacement disagrees"), and TCKDB keeps it apart from not knowing.
 might retry. A retry with the same key and the same body replays the stored
 response instead of depositing twice; the same key with a different body is
 refused. Some routes require the header -- the route tables below say which.
-See `docs/specs/upload-idempotency-key-spec.md`.
+See `clients/python/docs/uploads_and_idempotency.md`.
 
 **Refuse, don't guess.** TCKDB refuses a payload it cannot interpret rather
 than filling a plausible default, and a producer should do the same: if your

@@ -2,8 +2,7 @@
 
 Table definitions **only** — no business logic. SQLAlchemy 2.0 style
 (explicit `Mapped[...]` + `mapped_column(...)`). Every model groups into
-one of four buckets; keeping them separate is the core design invariant
-(see [`docs/guides/system_flow.md`](../../../../docs/guides/system_flow.md) §1):
+one of four buckets; keeping them separate is the core design invariant:
 
 | Bucket | Models |
 |---|---|

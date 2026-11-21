@@ -3,8 +3,7 @@
 This module adds the *curation overlay* that lets TCKDB answer "what is **the**
 TCKDB value?" without ever touching the science it points at.
 
-Five tables, each in exactly one of the four buckets the schema is built on
-(see ``docs/guides/system_flow.md`` §1):
+Five tables, each in exactly one of the four buckets the schema is built on:
 
 ===========================  ==========  ==================================
 Table                        Bucket      Why

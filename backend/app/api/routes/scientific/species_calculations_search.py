@@ -100,8 +100,6 @@ def species_calculations_search_get(
     ``record.provenance.submission_ref`` on each result is served only
     to an authenticated caller — see
     ``app.services.scientific_read.auth_visibility``.
-
-    See ``docs/specs/species_calculation_search_api.md``.
     """
     reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
     request = caller_input(

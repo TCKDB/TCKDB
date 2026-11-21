@@ -1,9 +1,8 @@
 """Tests for the correction-scheme-provenance widening of
 ``resolve_or_create_scheme`` and its warning collector.
 
-Covers the citation-not-discarded fix (v1 §1.3/§3), the software-release
-dimension and unit dimension v2 added (``docs/plans/
-correction-scheme-provenance.md`` §3-§5.1), and the
+Covers the citation-not-discarded fix, the software-release
+dimension and unit dimension v2 added, and the
 ``uq_energy_correction_scheme_identity`` unique index the resolver's
 lookup must match.
 """

@@ -98,8 +98,7 @@ def reaction_kinetics(
     Provenance keys are always present; TS-chain fields are populated
     only for TS-backed records. Default sort is review
     status, then newest, then id (temperature coverage and evidence are
-    reported per record, not ranked). ``sort=`` is rejected (v0). See ``docs/specs/browse_order.md``
-    §Endpoint 3 and ``docs/specs/public_identifier_policy.md``.
+    reported per record, not ranked). ``sort=`` is rejected (v0).
     """
     # Validate the request (pressure alias conflict, etc.) before resolving
     # the resource handle, so a malformed request is rejected with 422

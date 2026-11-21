@@ -41,7 +41,6 @@ class PublicRefMixin:
     listener installed by
     :func:`app.services.public_refs.install_public_ref_listener`. Each
     ref-bearing ORM model adds ``PublicRefMixin`` to its inheritance.
-    See ``docs/specs/public_identifier_policy.md``.
 
     Format: ``{prefix}_{26-char base32 lowercase}``. Stored as
     ``String(40)`` — fits the current prefix registry (longest prefix

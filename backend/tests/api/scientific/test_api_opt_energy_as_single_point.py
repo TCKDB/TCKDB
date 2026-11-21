@@ -7,9 +7,6 @@ and its deliberate non-effect on the conformer-observation evidence
 summary (``has_sp`` / ``calculation_count``) on
 ``GET /scientific/conformer-observations/{ref}`` -- a derived value must
 never be countable as a real ``sp`` calculation.
-
-See docs/specs/species_calculation_search_api.md
-§"energy.single_point_equivalent".
 """
 
 from __future__ import annotations

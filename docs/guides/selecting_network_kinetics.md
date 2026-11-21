@@ -5,8 +5,8 @@ for one stated gas-phase question, and for depositors who want to know when a de
 describes the selection endpoint, what each answer means, and what the endpoint refuses to claim.
 
 In plain terms: a network can hold several solves of its master equation, fitted in different forms, over different
-temperatures and pressures, in different baths. Browsing lists them in a fixed display order (see
-[`browse_order.md`](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/browse_order.md)). Selection is a separate, opt-in question: "which of the solves can
+temperatures and pressures, in different baths. Browsing lists them in a fixed display order (review rank, then
+newest deposited). Selection is a separate, opt-in question: "which of the solves can
 answer this exact question, and what is the situation among them?" TCKDB carries no ranking of one method above
 another, so the honest answer is "these solves answer your question, and none is preferred".
 

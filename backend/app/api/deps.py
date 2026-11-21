@@ -474,8 +474,7 @@ def require_auth_for_legacy_reads(
 
     When the setting is false (local/dev), the dependency is a no-op
     and returns ``None`` so anonymous callers see the legacy shape
-    unchanged. See F14 in the audit and
-    ``docs/specs/public_read_abuse_controls.md``.
+    unchanged.
     """
     if not settings.legacy_reads_require_auth:
         return None

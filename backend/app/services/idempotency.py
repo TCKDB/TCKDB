@@ -1,7 +1,5 @@
 """Idempotency-key service for retry-safe write endpoints.
 
-See ``docs/specs/upload-idempotency-key-spec.md`` for the contract.
-
 This service stores the canonical SHA-256 hash of the request body and
 the successful response for the tuple
 ``(user_id, request_method, endpoint, idempotency_key)`` for 30 days.

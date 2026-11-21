@@ -10,14 +10,11 @@ existed: the spec annotated fields as ``CalculationResultSPSummary`` /
 kind of drift a human eye slides over.
 
 **Why it covers every spec.** A single-document guard misses an instance
-that a wider sweep sees: ``docs/specs/computed-species-bundle-spec.md``
-cited ``_assert_calculation_owned_by``, a helper removed when five per-product
-ownership checks were consolidated into one. The same sweep found two
-more in that one file (``_assert_dependency_role_type_compatible``,
-``_assert_thermo_role_type_compatible``) and a fourth in the artifact-upload
-spec (``_persist_artifact``, listed with a ✅ against a module it had been
-extracted out of). The defect class recurs, so the guard follows every
-document under ``backend/docs/specs/`` and ``docs/specs/``.
+that a wider sweep sees: a spec cited ``_assert_calculation_owned_by``, a
+helper removed when five per-product ownership checks were consolidated into
+one, and a second spec listed ``_persist_artifact`` with a ✅ against a module
+it had been extracted out of. The defect class recurs, so the guard follows
+every document under ``backend/docs/specs/``.
 
 **A spec both defines and references names, and only one of those is
 checkable.** These documents are partly design proposals: they declare shapes
@@ -83,10 +80,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
 
 #: Every spec corpus this guard follows.
-SPEC_DIRS = (
-    BACKEND_ROOT / "docs" / "specs",
-    REPO_ROOT / "docs" / "specs",
-)
+SPEC_DIRS = (BACKEND_ROOT / "docs" / "specs",)
 
 #: The one document the guard covers without widening. Named so that widening the
 #: sweep can never quietly stop covering the file it started from.
@@ -138,25 +132,6 @@ _ALLOWED: dict[tuple[str, str], str] = {
         "A proposal, in prose: 'a smaller `SoftwareSummary` shape would be the "
         "right v1 refactor; v0 reuses the existing fragment'. The document is "
         "explicit that it does not exist yet."
-    ),
-    (
-        "docs/specs/path_search_calculation_schema.md",
-        "NEBResultPayload",
-    ): (
-        "Deliberately names the pre-migration symbol. Section 10 is a "
-        "before/after table -- 'NEBResultPayload -> PathSearchResultPayload' -- "
-        "so the name NOT resolving is the migration having succeeded. "
-        "Correcting it would destroy the only record of what was renamed."
-    ),
-    (
-        "docs/specs/upload-idempotency-key-spec.md",
-        "ResponsePayload",
-    ): (
-        "A type-variable placeholder in an illustrative generic signature, "
-        "`def run_idempotent_write(..., operation: Callable[[], ResponsePayload])"
-        "`, in a block prefaced 'A wrapper helper may be useful'. It stands for "
-        "whatever the route returns; there is no such class and there should "
-        "not be one."
     ),
     (
         "backend/docs/specs/scientific_calculation_path_includes.md",
@@ -259,15 +234,15 @@ def _ids(pairs: list[tuple[str, str]]) -> list[str]:
 
 
 def test_every_spec_directory_exists_and_holds_documents() -> None:
-    """55 specs across two directories when this was written."""
+    """49 specs when last measured."""
     for directory in SPEC_DIRS:
         assert directory.is_dir(), f"{directory} is missing; a spec corpus moved and this guard did not."
         assert list(directory.glob("*.md")), f"{directory} holds no specs to check."
 
     discovered = _spec_paths()
     assert len(discovered) >= 45, (
-        f"Only {len(discovered)} spec documents discovered, against 55 when this "
-        f"guard was written. Discovery has probably broken rather than the corpus "
+        f"Only {len(discovered)} spec documents discovered, against 49 when last "
+        f"measured. Discovery has probably broken rather than the corpus "
         f"having shrunk that far."
     )
     assert ORIGINAL_SPEC in {_relative(p) for p in discovered}, (
@@ -291,15 +266,15 @@ def test_the_resolution_namespace_is_populated() -> None:
 
 
 def test_the_class_scan_finds_names_to_check() -> None:
-    """205 class references across 26 documents when this guard was written."""
+    """169 class references across 19 documents when last measured."""
     documents = {doc for doc, _ in _CLASS_REFERENCES}
     assert len(_CLASS_REFERENCES) >= 150, (
         f"Only {len(_CLASS_REFERENCES)} referenced class names found across the "
-        f"specs, against 205 when this guard was written. The scan has probably "
+        f"specs, against 169 when last measured. The scan has probably "
         f"broken rather than the specs having shrunk that far."
     )
-    assert len(documents) >= 18, (
-        f"Only {len(documents)} documents contributed a class name, against 26 when this guard was written."
+    assert len(documents) >= 15, (
+        f"Only {len(documents)} documents contributed a class name, against 19 when last measured."
     )
     assert _CLASS_CHECKS, "the allowlist has swallowed every class name to check"
 

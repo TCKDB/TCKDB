@@ -59,8 +59,7 @@ def species_search(
 
     Multiple identifiers AND-combine; inconsistent identifiers return an
     empty result set rather than 422. Client-supplied ``sort=`` is rejected
-    with 422 (``client_sort_not_supported``). See ``docs/specs/browse_order.md``
-    §Endpoint 1 for the contract.
+    with 422 (``client_sort_not_supported``).
     """
     reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
     request = caller_input(

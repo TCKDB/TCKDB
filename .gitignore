@@ -262,26 +262,32 @@ presentations/
 presentation
 node_modules
 
-# Internal docs — specs, decision records, policy notes, design rationale,
-# roadmaps, audits, and one-off internal write-ups. Not distributed publicly.
-# Public-facing docs live under docs/clients/, docs/contribution-bundles/,
-# docs/deployment/, docs/guides/, and docs/specs/. Anything else under
-# docs/ (including ad-hoc *.md files at the root) is internal.
-docs/*.md
-!docs/README.md
-!docs/index.md
-docs/audits/
-docs/decisions/
-docs/roadmaps/
-docs/paper/
-
-# Internal design/prompt specs kept local but not published. The user-facing
-# contract specs under docs/specs/ (referenced by mkdocs nav or shipped as
-# client/upload contracts) remain tracked.
-docs/specs/bulk_export_design.md
-docs/specs/chemkin_importer_design.md
-docs/specs/codex-prompt-upload-idempotency-key.md
-docs/specs/mcp_readonly_integration.md
+# Internal maintainer documents: specs, decision records, plans, research,
+# reviews, audits and validation write-ups. They are kept outside this
+# repository. docs/ holds only the published documentation site (the pages
+# in mkdocs.yml's nav, plus assets/, hooks/, stylesheets/ and requirements.txt).
+# Keep this list in step with exclude_docs in mkdocs.yml.
+/docs/*.md
+!/docs/index.md
+/docs/adr/
+/docs/audits/
+/docs/decisions/
+/docs/paper/
+/docs/plans/
+/docs/proposals/
+/docs/research/
+/docs/reviews/
+/docs/roadmaps/
+/docs/specs/
+/docs/validation/
+/docs/deployment/api_containerization_notes.md
+/docs/deployment/frontend-pi.md
+/docs/deployment/self_hosting.md
+/docs/guides/scientific_read_demo_data.md
+/docs/guides/system_flow.md
+/docs/guides/the_story_of_a_datapoint.md
+/docs/start/deployment.md
+/docs/site/
 
 # LibreOffice/OpenOffice lock files
 .~lock.*#
@@ -320,7 +326,6 @@ data/external/cccbdb/
 
 # Ignore the entire vtrace cache dir (supersedes the specific entries above)
 .vtrace/
-docs/specs/read_api_mvp.md
 
 # Agent scratch (this task)
 .agent_scratch/

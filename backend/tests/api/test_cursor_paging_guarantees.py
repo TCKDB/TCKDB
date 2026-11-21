@@ -3,7 +3,7 @@
 A cursor is opaque and tamper-proof, a forged one is a 422, the snapshot bounds insertions, and an empty cursor page
 still says it is a cursor page. It does NOT freeze review state: ``review_rank`` leads the sort key, so a review change
 can move a record across the reader's position and the traversal skips or repeats it. Those two behaviours are pinned
-here as documented behaviour (``docs/specs/browse_order.md``), not as bugs.
+here as documented behaviour, not as bugs.
 """
 
 from __future__ import annotations

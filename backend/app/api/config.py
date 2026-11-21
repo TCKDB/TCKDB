@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     # silently drops ``include=internal_ids`` from the resolved
     # include set. Set to ``True`` in local/dev/test environments
     # that need the legacy id-bearing shape for compatibility or
-    # debugging. See ``docs/specs/internal_ids_visibility_policy.md``.
+    # debugging.
     allow_public_internal_ids: bool = False
 
     # Secret that seals paging cursors (``next_cursor`` / ``cursor=``). A cursor holds record ids and sort values, which
@@ -65,7 +65,6 @@ class Settings(BaseSettings):
 
     # -----------------------------------------------------------------
     # Hosted abuse-control settings.
-    # See ``docs/specs/public_read_abuse_controls.md``.
     # -----------------------------------------------------------------
 
     # Master switch for the application-level rate limiter. The test
@@ -244,8 +243,7 @@ class Settings(BaseSettings):
     # one expensive query cannot consume a pool slot indefinitely.
     # ``0`` or ``None`` disables the app-level setting (production deployments
     # are encouraged to set ``ALTER ROLE tckdb SET
-    # statement_timeout = '30s'`` at the role level instead — see
-    # ``docs/specs/public_read_abuse_controls.md``).
+    # statement_timeout = '30s'`` at the role level instead).
     db_statement_timeout_ms: int | None = 30_000
 
     # Seconds libpq will spend trying to establish one connection before

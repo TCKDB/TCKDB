@@ -135,7 +135,8 @@ _REVIEW = Vocabulary(
     ),
     worked_example=(
         "A response lists records in a fixed display order, echoed in `request.sort`. "
-        "The review part of it is defined once, in `docs/specs/browse_order.md`; it is not a scientific preference."
+        "Its review part puts `approved` first, `under_review` and `not_reviewed` together, then `deprecated`, "
+        "then `rejected`; it is not a scientific preference."
     ),
 )
 

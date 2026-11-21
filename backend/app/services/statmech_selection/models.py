@@ -53,7 +53,7 @@ from app.services.statmech_selection.vocabulary import (
 ASSESSMENT_VERSION = 2
 NORMALIZER_VERSION = 1
 DECISION_VERSION = 1
-#: Version 2: ``under_review`` and ``not_reviewed`` rank equally in the review key (``docs/specs/browse_order.md``).
+#: Version 2: ``under_review`` and ``not_reviewed`` rank equally in the review key.
 ADMIN_KEY_VERSION = 2
 #: The finding semantics this release reads (shared with structure selection).
 SUPPORTED_FINDING_VERSIONS = frozenset({1})

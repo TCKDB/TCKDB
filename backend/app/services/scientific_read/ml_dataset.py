@@ -519,8 +519,8 @@ def _resolve_species_entry_ids(
             # configured cap, log the count. ``len(all_ids)`` is an
             # unfiltered ``SELECT`` over ``species_entry`` -- the total
             # number of species entries TCKDB holds, which is the
-            # enumeration signal ``docs/specs/public_identifier_policy.md``
-            # rejects sequential integer primary keys for.
+            # enumeration signal that rules out sequential integer primary
+            # keys as public identifiers.
             logger.info(
                 "ML export refused as ml_export_all_cap_exceeded; %d "
                 "species entries against a cap of %d",

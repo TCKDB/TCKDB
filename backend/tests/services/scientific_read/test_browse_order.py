@@ -1,4 +1,4 @@
-"""The browse order has one definition (docs/specs/browse_order.md) and every copy derives from it.
+"""The browse order has one definition and every copy derives from it.
 
 Display order: review rank, then deposition time (``created_at``) newest first, then a unique tie-breaker. The first
 record listed is display order, never a scientific preference. ``under_review`` ranks EQUAL to ``not_reviewed``.

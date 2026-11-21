@@ -1,7 +1,7 @@
 """Read schemas for /api/v1/scientific/reaction-entries/{id}/full.
 
 Composite document — joins species, kinetics, transition states, calculations,
-review summary in one response. See docs/specs/browse_order.md.
+review summary in one response.
 """
 
 from __future__ import annotations

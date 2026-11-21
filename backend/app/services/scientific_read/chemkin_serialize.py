@@ -1,4 +1,4 @@
-"""CHEMKIN mechanism serializer (docs/specs/bulk_export_design.md §5).
+"""CHEMKIN mechanism serializer.
 
 The exact inverse of a CHEMKIN importer: takes an :class:`ExportRecordSet`
 produced by :mod:`app.services.scientific_read.export` and reduced to at most

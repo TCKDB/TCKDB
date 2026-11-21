@@ -34,8 +34,7 @@ refused, see [Depositing a Thermo Record](../guides/depositing_a_thermo_record.m
 ## Useful References
 
 - [Admin auth quickstart](../deployment/admin_auth_quickstart.md)
-- [TCKDB client v0 spec](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/tckdb-client-spec.md)
-- [ARC adapter spec](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/arc-tckdb-adapter-spec.md)
+- [Python client](https://github.com/TCKDB/TCKDB/blob/main/clients/python/README.md)
 - [Contribution bundle format](../contribution-bundles/format.md)
 - [Schema reference](../guides/schema_reference.md) -- what every table and
   column means, generated from the models

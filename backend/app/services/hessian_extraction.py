@@ -65,8 +65,7 @@ request with the block code (HTTP 422). Here they surface as the warning
 ``hessian_not_stored_geometry_mismatch`` and the block code is carried as
 ``context.refusal_code`` (and named in the sentence), because this hook is
 best-effort and must never fail the upload.
-That divergence is recorded in the scientific check register (entry 10) and in
-``docs/specs/calculation_geometry_composition.md``.
+That divergence is recorded in the scientific check register (entry 10).
 """
 
 from __future__ import annotations

@@ -2,8 +2,7 @@
 
 The scientific read API intentionally follows the existing
 FastAPI-style error envelope used by the wider backend (write paths,
-lookup paths, admin paths). The spec at
-``docs/specs/browse_order.md`` §Error model documents this shape.
+lookup paths, admin paths).
 
 These tests exist so that the envelope cannot drift back toward the
 older draft ``{"error": {"code", "message", "legal_values"}}`` shape

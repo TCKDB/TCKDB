@@ -243,9 +243,6 @@ def scientific_calculation_detail(
     ``X-API-Key`` header or a valid session cookie). Anonymous callers
     do not get the field with a ``null`` value; the key is omitted from
     the payload entirely. See ``app.services.scientific_read.auth_visibility``.
-
-    See ``docs/specs/public_identifier_policy.md`` and
-    ``docs/specs/internal_ids_visibility_policy.md``.
     """
     request = caller_input(CalculationDetailRequest, include=parse_include(include))
     payload = get_calculation(

@@ -1,7 +1,5 @@
 """Service implementation for /api/v1/scientific/reaction-entries/{id}/kinetics.
 
-See docs/specs/browse_order.md.
-
 Provenance keys are always present; TS-chain fields are populated
 only for TS-backed records. Evidence completeness uses the L1 kinetics
 checklist; TS-related predicates are ``False`` (not missing) for non-TS-backed

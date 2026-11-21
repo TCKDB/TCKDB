@@ -2,8 +2,6 @@
 """QCSchema interchange demonstration: a Psi4 Hessian through TCKDB and back,
 and the same molecule's Gaussian record beside it.
 
-The write-up is ``docs/validation/qcschema_interchange.md``.
-
 Inputs are committed fixtures; the database may be populated
 ------------------------------------------------------------
 ``backend/tests/fixtures/qcschema/water_b3lyp_def2tzvp_psi4/``:

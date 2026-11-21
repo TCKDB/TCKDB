@@ -10,9 +10,8 @@ Why this wrapper instead of ``tckdb-client``?
   wrapper keeps route, include-token, and artifact-safety policy explicit
   while the generated client catches up.
 
-``docs/specs/mcp_readonly_integration.md`` still prefers
-``tckdb-client`` long-term. Revisit when it supports root-relative
-paths and/or a POST species search.
+``tckdb-client`` is still the preferred transport long-term. Revisit when it
+supports root-relative paths and/or a POST species search.
 """
 
 from __future__ import annotations
