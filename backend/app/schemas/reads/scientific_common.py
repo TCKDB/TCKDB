@@ -660,7 +660,8 @@ class LiteratureSummary(BaseModel):
     avoiding a heavier include for what is usually a sidebar fact.
 
     ``literature_ref`` is the public stable handle; ``id`` stays
-    for the compatibility window.
+    for the compatibility window. ``doi`` is served only for a row whose
+    metadata the registry resolved.
     """
 
     id: int
@@ -668,8 +669,40 @@ class LiteratureSummary(BaseModel):
     title: str | None = None
     title_source: LiteratureTitleSource | None = None
     year: int | None = None
-    doi: str | None = None
+    doi: str | None = Field(
+        default=None,
+        description=(
+            "The DOI, only when the row's metadata was resolved from the DOI "
+            "registry (title_source = resolved_metadata); null otherwise."
+        ),
+    )
     isbn: str | None = None
+
+    @classmethod
+    def from_row(cls, lit) -> LiteratureSummary:
+        """Project a ``Literature`` row, withholding an unverified DOI."""
+        return cls(
+            id=lit.id,
+            literature_ref=lit.public_ref,
+            title=lit.title,
+            title_source=lit.title_source,
+            year=lit.year,
+            doi=verified_doi(lit.title_source, lit.doi),
+            isbn=lit.isbn,
+        )
+
+
+def verified_doi(
+    title_source: LiteratureTitleSource | str | None, doi: str | None
+) -> str | None:
+    """The DOI a public read may carry: only one the registry resolved.
+
+    A DOI on a row whose metadata was not resolved is depositor-typed text
+    (the server only trims and lower-cases it), so it is withheld.
+    """
+    if title_source != LiteratureTitleSource.resolved_metadata:
+        return None
+    return doi
 
 
 # ---------------------------------------------------------------------------

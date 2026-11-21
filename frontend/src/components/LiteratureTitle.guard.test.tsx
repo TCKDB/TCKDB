@@ -1,5 +1,5 @@
-// Sentinel guard: a literature title shows on a public page only when
-// the server says it was resolved from DOI/ISBN metadata. Any other title, and any DOI, is depositor text.
+// Sentinel guard: a literature title and DOI show on a public page only when
+// the server says they were resolved from DOI/ISBN metadata. Any other title or DOI is depositor text.
 
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
@@ -75,6 +75,25 @@ describe("a literature title on a public page", () => {
         expectNoSentinel()
         expect(screen.getByText(/lit_abc/)).toBeVisible()
         expect(screen.getByText(TITLE_NOT_VERIFIED)).toBeVisible()
+    })
+
+    it("links the DOI of a registry-resolved record to doi.org", async () => {
+        await renderWith({ ...base, title_source: "resolved_metadata" })
+        const link = screen.getByRole("link", { name: "doi:10.1000/xyz" })
+        expect(link).toHaveAttribute("href", "https://doi.org/10.1000/xyz")
+        expect(link).toHaveAttribute("rel", "noopener noreferrer")
+    })
+
+    it("does not link a resolved record's DOI that is not DOI-shaped", async () => {
+        await renderWith({ ...base, doi: "10.1/ DEPOSITOR_SENTINEL_doi visit spam.example", title_source: "resolved_metadata" })
+        expect(document.body.innerHTML).not.toContain("spam.example")
+        expect(document.body.innerHTML).not.toContain("doi.org")
+    })
+
+    it("never prints or links the DOI of a record whose origin was never recorded", async () => {
+        await renderWith({ ...base, title_source: null })
+        expect(document.body.innerHTML).not.toContain("10.1000/xyz")
+        expect(document.body.innerHTML).not.toContain("doi.org")
     })
 
     it("never prints or links the DOI of an unverified record: it is depositor-typed text", async () => {

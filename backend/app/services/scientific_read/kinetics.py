@@ -1473,15 +1473,7 @@ def _literature_summaries(
         return {}
     rows = session.scalars(select(Literature).where(Literature.id.in_(lit_ids))).all()
     return {
-        lit.id: LiteratureSummary(
-            id=lit.id,
-            literature_ref=lit.public_ref,
-            title=lit.title,
-            title_source=lit.title_source,
-            year=lit.year,
-            doi=lit.doi,
-            isbn=lit.isbn,
-        )
+        lit.id: LiteratureSummary.from_row(lit)
         for lit in rows
     }
 

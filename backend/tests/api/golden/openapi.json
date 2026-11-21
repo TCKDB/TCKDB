@@ -30469,7 +30469,7 @@
         "type": "object"
       },
       "LiteratureIdentifiers": {
-        "description": "External identifiers carried on a literature row.\n\nThe fields surface as-stored in the DB. Normalized lookups (against\n``ix_literature_doi_normalized`` etc.) are handled by the upload\nservice; this surface returns the verbatim string.",
+        "description": "External identifiers carried on a literature row.\n\nThe fields surface as-stored in the DB. Normalized lookups (against\n``ix_literature_doi_normalized`` etc.) are handled by the upload\nservice; this surface returns the verbatim string. ``doi`` is served\nonly when the registry resolved the row's metadata.",
         "properties": {
           "doi": {
             "anyOf": [
@@ -30480,6 +30480,7 @@
                 "type": "null"
               }
             ],
+            "description": "The DOI, only when the row's metadata was resolved from the DOI registry (title_source = resolved_metadata); null otherwise.",
             "title": "Doi"
           },
           "isbn": {
@@ -30923,7 +30924,7 @@
         "type": "object"
       },
       "LiteratureSummary": {
-        "description": "Minimal literature reference used in provenance summaries.\n\nA canonical literature read model lives in\n``app/schemas/entities/literature.py`` (LiteratureRead). This summary is a\ndeliberately smaller shape sufficient for scientific-read provenance,\navoiding a heavier include for what is usually a sidebar fact.\n\n``literature_ref`` is the public stable handle; ``id`` stays\nfor the compatibility window.",
+        "description": "Minimal literature reference used in provenance summaries.\n\nA canonical literature read model lives in\n``app/schemas/entities/literature.py`` (LiteratureRead). This summary is a\ndeliberately smaller shape sufficient for scientific-read provenance,\navoiding a heavier include for what is usually a sidebar fact.\n\n``literature_ref`` is the public stable handle; ``id`` stays\nfor the compatibility window. ``doi`` is served only for a row whose\nmetadata the registry resolved.",
         "properties": {
           "doi": {
             "anyOf": [
@@ -30934,6 +30935,7 @@
                 "type": "null"
               }
             ],
+            "description": "The DOI, only when the row's metadata was resolved from the DOI registry (title_source = resolved_metadata); null otherwise.",
             "title": "Doi"
           },
           "id": {

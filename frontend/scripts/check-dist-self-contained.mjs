@@ -129,6 +129,8 @@ const ALLOWED_URLS = [
     { url: "https://react.dev/errors/", why: "React's minified-error link; the error code is appended at run time" },
     { url: "https://reactrouter.com/en/main/routers/picking-a-router.", why: "text of a React Router error message" },
     { url: "https://github.com/ungap/url-search-params.", why: "text of a React Router warning" },
+    // Link targets a reader follows, never fetched.
+    { url: "https://doi.org/", why: "DOI resolver base of a registry-resolved citation link (literatureCitation.ts); the DOI is appended" },
     { url: "https://github.com/kosua20/Rendu", why: "comment inside 3Dmol.js shader source (a string to the parser)" },
     { url: "https://github.com/molstar/molstar/blob/master/src/mol-gl/shader/fxaa.frag.ts", why: "comment inside 3Dmol.js shader source" },
     { url: "http://mrl.nyu.edu/~dzorin/cg05/lecture12.pdf", why: "comment inside 3Dmol.js shader source" },
