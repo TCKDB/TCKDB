@@ -793,6 +793,7 @@ schema package, backend package and Python client in editable mode:
 python -m pip install -e schemas/python/tckdb-schemas
 python -m pip install -e "backend[dev]"
 python -m pip install -e clients/python
+python -m pip install --no-deps -r backend/requirements-adapters.txt
 ```
 
 The client is there for `tests/client_builder_contract/`, which validates
@@ -802,6 +803,15 @@ through `tests/_ci_dependency.require_module`: without it they skip
 locally, with the install command in the reason, and fail on CI
 (`GITHUB_ACTIONS=true`). Before #575 the CI job did not install the client
 and all nine modules skipped on every run while the gate passed.
+
+`backend/requirements-adapters.txt` pins `tckdb-chemkin` and `tckdb-qcschema`
+from [tckdb-adapters](https://github.com/TCKDB/tckdb-adapters) to one commit,
+for the CHEMKIN round trip (`tests/integration/test_chemkin_*`) and the QCSchema
+interchange report (`tests/scripts/test_qcschema_interchange_report.py`).
+`--no-deps` keeps this checkout's `tckdb-client` and `tckdb-schemas`; RDKit
+comes from `backend/environment.yml` and `qcelemental` from the `[dev]` extra.
+Those tests load the packages through `require_module` too. To test against
+another adapters commit, change the sha on both lines.
 
 The gate runs:
 

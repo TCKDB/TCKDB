@@ -23,7 +23,6 @@ T_mid survives the trip.
 
 from __future__ import annotations
 
-import sys
 from collections import Counter
 from pathlib import Path
 
@@ -32,18 +31,8 @@ from rdkit import Chem
 
 from tests._ci_dependency import require_module
 
-# The CHEMKIN importer adapter (``tckdb_chemkin``) lives under
-# clients/python/adapters/chemkin and is not installed into tckdb_env, so its
-# package root is appended to sys.path here — inline (rather than in a
-# tests/integration/conftest.py) to avoid a bare-``conftest`` module-name
-# collision. APPEND (not insert(0)): this directory also carries its own
-# ``tests`` package, and fronting sys.path would shadow the backend ``tests``
-# package for the rest of the session.
-_CHEMKIN_ADAPTER = (
-    Path(__file__).resolve().parents[3] / "clients" / "python" / "adapters" / "chemkin"
-)
-if _CHEMKIN_ADAPTER.is_dir() and str(_CHEMKIN_ADAPTER) not in sys.path:
-    sys.path.append(str(_CHEMKIN_ADAPTER))
+# The CHEMKIN importer, from tckdb-adapters (pinned in backend/requirements-adapters.txt).
+require_module("tckdb_chemkin", install="pip install --no-deps -r backend/requirements-adapters.txt")
 
 from tckdb_chemkin.duplicates import duplicate_flag_warnings
 from tckdb_chemkin.identity import (

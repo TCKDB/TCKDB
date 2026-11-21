@@ -14,9 +14,10 @@ lives in a SAVEPOINT the script rolls back itself) and check three things:
 * the frequency analysis is not vacuous: water has exactly three
   vibrations, on both sides, none imaginary.
 
-The adapter needs ``qcelemental`` (the backend ``[dev]`` extra pins it). A
-workstation without it skips; CI installs the extra, so there a missing
-``qcelemental`` fails instead of skipping.
+The adapter is ``tckdb-qcschema`` from tckdb-adapters, pinned in
+``backend/requirements-adapters.txt``, and it needs ``qcelemental`` (the
+backend ``[dev]`` extra pins it). A workstation without either skips; CI
+installs both, so there a missing one fails instead of skipping.
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ import sys
 import numpy as np
 import pytest
 
+from tests._ci_dependency import require_module
 from tests.services._live_object_store import on_ci
 
 _REPORT = pathlib.Path(__file__).parents[2] / "scripts" / "validation" / "qcschema_interchange_report.py"
@@ -58,6 +60,11 @@ def require_qcelemental() -> None:
     if on_ci():
         pytest.fail(message + " -- CI installs the [dev] extra, so this is a broken setup, not a skip")
     pytest.skip(message)
+
+
+@pytest.fixture
+def require_adapter(require_qcelemental) -> None:
+    require_module("tckdb_qcschema", install="pip install --no-deps -r backend/requirements-adapters.txt")
 
 
 def _transposed_packing(flat, natoms):
@@ -125,7 +132,7 @@ def _lookup(report, path):
     return node
 
 
-def test_round_trip_is_exact_and_every_measurement_is_reported(db_session, require_qcelemental):
+def test_round_trip_is_exact_and_every_measurement_is_reported(db_session, require_adapter):
     report = report_script.build_report(db_session, include_commit=False)
 
     checks = report["round_trip"]["checks"]
@@ -174,7 +181,7 @@ def test_round_trip_is_exact_and_every_measurement_is_reported(db_session, requi
         assert len(residue["rigid_body_curvature_cm1"]) == residue["rigid_body_dimension"] == 6
 
 
-def test_report_is_byte_stable_and_include_commit_false_drops_only_the_commit(db_session, require_qcelemental):
+def test_report_is_byte_stable_and_include_commit_false_drops_only_the_commit(db_session, require_adapter):
     first = report_script.build_report(db_session, include_commit=True)
     second = report_script.build_report(db_session, include_commit=False)
     assert "tckdb_commit" in first
@@ -183,7 +190,7 @@ def test_report_is_byte_stable_and_include_commit_false_drops_only_the_commit(db
     assert report_script.canonical_json(first) == report_script.canonical_json(second)
 
 
-def test_importer_packing_in_transposed_order_goes_red(db_session, monkeypatch, require_qcelemental):
+def test_importer_packing_in_transposed_order_goes_red(db_session, monkeypatch, require_adapter):
     with report_script.adapter_modules() as adapter:
         monkeypatch.setattr(adapter.mapping, "pack_lower_triangle", _transposed_packing)
         report = report_script.build_report(db_session, adapter=adapter, include_commit=False)
@@ -196,7 +203,7 @@ def test_importer_packing_in_transposed_order_goes_red(db_session, monkeypatch, 
     assert "identity_preserved" not in failed
 
 
-def test_exporter_unpacking_in_transposed_order_goes_red(db_session, monkeypatch, require_qcelemental):
+def test_exporter_unpacking_in_transposed_order_goes_red(db_session, monkeypatch, require_adapter):
     with report_script.adapter_modules() as adapter:
         monkeypatch.setattr(adapter.exporter, "unpack_lower_triangle", _transposed_unpacking)
         report = report_script.build_report(db_session, adapter=adapter, include_commit=False)
@@ -205,7 +212,7 @@ def test_exporter_unpacking_in_transposed_order_goes_red(db_session, monkeypatch
     assert report_script.failed_checks(report) == ["exported_hessian_exact_after_pack_unpack"]
 
 
-def test_nothing_is_left_in_the_database(db_session, require_qcelemental):
+def test_nothing_is_left_in_the_database(db_session, require_adapter):
     from sqlalchemy import func, select
 
     from app.db.models.app_user import AppUser
@@ -236,7 +243,7 @@ def test_a_fixture_that_disagrees_with_meta_is_reported(tmp_path):
     assert report_script.load_fixtures().digest_mismatches == []
 
 
-def test_the_adapter_import_leaves_no_trace(require_qcelemental):
+def test_the_adapter_import_leaves_no_trace(require_adapter):
     before_path = list(sys.path)
     before = {name: module for name, module in sys.modules.items() if name.split(".")[0] in {"tckdb_client", "tckdb_qcschema"}}
     with report_script.adapter_modules() as adapter:
@@ -284,7 +291,7 @@ def _report_and_exported_level(db_session, monkeypatch):
     ],
 )
 def test_round_trip_passes_when_the_level_exists_under_another_spelling(
-    db_session, monkeypatch, require_qcelemental, method, basis
+    db_session, monkeypatch, require_adapter, method, basis
 ):
     """The shared level-of-theory row keeps its first spelling; the export reads it back."""
     seeded = _seed_level(db_session, method=method, basis=basis)
@@ -298,7 +305,7 @@ def test_round_trip_passes_when_the_level_exists_under_another_spelling(
     assert (seeded.method, seeded.basis) == (method, basis)
 
 
-def test_report_is_the_same_on_an_empty_and_a_populated_database(db_session, monkeypatch, require_qcelemental):
+def test_report_is_the_same_on_an_empty_and_a_populated_database(db_session, monkeypatch, require_adapter):
     empty, empty_level = _report_and_exported_level(db_session, monkeypatch)
     _seed_level(db_session, method="B3LYP", basis="Def2TZVP")
     populated, populated_level = _report_and_exported_level(db_session, monkeypatch)
@@ -309,7 +316,7 @@ def test_report_is_the_same_on_an_empty_and_a_populated_database(db_session, mon
     assert report_script.canonical_json(populated) == report_script.canonical_json(empty)
 
 
-def test_round_trip_passes_when_the_software_name_differs_in_case(db_session, require_qcelemental):
+def test_round_trip_passes_when_the_software_name_differs_in_case(db_session, require_adapter):
     from app.db.models.software import Software
 
     db_session.add(Software(name="PSI4"))
@@ -326,7 +333,7 @@ def test_round_trip_passes_when_the_software_name_differs_in_case(db_session, re
         ("method", "b3lyp5"),
     ],
 )
-def test_a_different_basis_or_method_still_fails_the_round_trip(db_session, monkeypatch, require_qcelemental, path, wrong):
+def test_a_different_basis_or_method_still_fails_the_round_trip(db_session, monkeypatch, require_adapter, path, wrong):
     """A real change of basis or method, not a spelling, is an unexpected change."""
     with report_script.adapter_modules() as adapter:
         original = adapter.exporter.export_calculation

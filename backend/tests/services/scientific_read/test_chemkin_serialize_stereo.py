@@ -8,12 +8,8 @@ database: the stand-ins carry the descriptor columns exactly as the resolver com
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-import pytest
-
 from app.chemistry.stereo import ResolvedStereo
+from tests._ci_dependency import require_module
 from tests.services.scientific_read.test_chemkin_serialize_kinetics import _serialize, _species
 from tests.services.test_stereo_descriptor import embed_xyz, resolve, species_key
 
@@ -101,13 +97,9 @@ def test_an_achiral_species_prints_no_stereo() -> None:
 # The CHEMKIN importer reads the structure and ignores the stereo text
 # ---------------------------------------------------------------------------
 
-_ADAPTER = Path(__file__).resolve().parents[4] / "clients" / "python" / "adapters" / "chemkin"
-
-
-@pytest.mark.skipif(not _ADAPTER.is_dir(), reason="CHEMKIN adapter not present")
 def test_the_importer_resolves_the_structure_and_ignores_the_stereo_comment() -> None:
-    if str(_ADAPTER) not in sys.path:
-        sys.path.append(str(_ADAPTER))
+    # The CHEMKIN importer, from tckdb-adapters (pinned in backend/requirements-adapters.txt).
+    require_module("tckdb_chemkin", install="pip install --no-deps -r backend/requirements-adapters.txt")
     from tckdb_chemkin.identity import IdentityResolver
     from tckdb_chemkin.parser import parse_mechanism
 

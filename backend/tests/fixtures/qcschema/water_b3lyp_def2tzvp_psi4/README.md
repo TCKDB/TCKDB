@@ -16,6 +16,7 @@ ninth route case.
 | `water_b3lyp_def2tzvp_hessian_v2.json` | the same result converted with qcelemental's `convert_v(2)` (family v2) |
 | `run_psi4_water_hessian.py` | the exact script that produced both documents, byte for byte |
 | `gaussian_reference.json` | the Gaussian 16 C.02 record the Psi4 run is compared with |
+| `ENVIRONMENT.lock.txt` | the conda environment the run used (`conda list --explicit`) |
 | `meta.json` | the expected route for both documents, the generator versions, and the sha256 of every file above |
 
 ## Provenance
@@ -25,9 +26,10 @@ ninth route case.
   writes them here.
 - **Environment.** Psi4 1.11 through qcengine 0.51.0, with qcelemental 0.51.2,
   in the conda environment `tckdb_qcschema_psi4`. That is the same pinned
-  environment as the adapter's HF/STO-3G corpus. Its recipe is
-  `clients/python/adapters/qcschema/tests/fixtures/ENVIRONMENT.lock.txt`, and
-  `meta.json` records the lockfile's sha256.
+  environment as the adapter's HF/STO-3G corpus. Its recipe at the time of
+  the run is `ENVIRONMENT.lock.txt` here, and `meta.json` records its sha256.
+  (The adapter, and its later lockfile with `torsiondrive` added, are in
+  [tckdb-adapters](https://github.com/TCKDB/tckdb-adapters).)
 - **Geometry.** The input geometry of the Gaussian record
   (`geom_yfbeuczxncz7kxfjnuaivx72ne`), in Angstrom, as the script's
   `COORDS_ANGSTROM`. `fix_com` and `fix_orientation` are set, so the Psi4

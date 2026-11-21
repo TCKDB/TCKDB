@@ -110,9 +110,9 @@ pip install "git+https://github.com/TCKDB/TCKDB.git#subdirectory=schemas/python/
 pip install "git+https://github.com/TCKDB/TCKDB.git#subdirectory=clients/python"
 ```
 
-Adapters turn program and workflow output into uploads: ARC
-([tckdb-adapters](https://github.com/calvinp0/tckdb-adapters)), CHEMKIN
-mechanisms and QCSchema results (in [`clients/python/adapters`](clients/python/adapters)).
+Adapters turn program and workflow output into uploads: ARC, CHEMKIN
+mechanisms and QCSchema results, in
+[tckdb-adapters](https://github.com/TCKDB/tckdb-adapters).
 Any tool that can POST JSON can upload; see
 [Upload](https://tckdb.github.io/TCKDB/start/uploads/) and
 [Depositing](https://tckdb.github.io/TCKDB/guides/depositing_a_thermo_record/).

@@ -58,7 +58,7 @@ TREES: dict[str, int] = {
     "backend/scripts": 80,
     "backend/tests": 1000,
     "schemas/python": 90,
-    "clients/python": 190,
+    "clients/python": 140,
     "frontend/src": 450,
 }
 
@@ -116,7 +116,6 @@ _SKIP_RULES: tuple[tuple[str, str, str], ...] = (
     ("backend/tests/fixtures/arc_runs/", "output.yml", "recorded producer program output, data not prose"),
     ("backend/tests/fixtures/arc_runs/", "*.payload.json", "recorded producer payloads, data not prose"),
     ("backend/tests/fixtures/qcschema_scan/", "*.json", "recorded producer payloads, data not prose"),
-    ("clients/python/adapters/qcschema/tests/fixtures/", "*.json", "recorded QCSchema documents, data not prose"),
     (
         "backend/tests/integration/fixtures/rmg_formic_acid_wu2026/", "chem_annotated.*",
         "recorded RMG model data, ids such as \"#123\" are data, not prose",
@@ -147,8 +146,6 @@ _LICENCE_REASON = "copyright holder line of the licence"
 ALLOWLIST: tuple[tuple[str, str, int, str], ...] = (
     ("schemas/python/tckdb-schemas/LICENSE", "Calvin", 1, _LICENCE_REASON),
     ("clients/python/LICENSE", "Calvin", 1, _LICENCE_REASON),
-    ("clients/python/adapters/chemkin/LICENSE", "Calvin", 1, _LICENCE_REASON),
-    ("clients/python/adapters/qcschema/LICENSE", "Calvin", 1, _LICENCE_REASON),
     (
         "backend/tests/scripts/test_aggregate_pr_gates.py", "paper/", 6,
         "sample changed-file paths for the path-filter logic under test",
