@@ -237,6 +237,10 @@ The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verb
 
 New enum `PathCoordinateUnit` (`angstrom`, `bohr`, `amu_half_bohr`, `amu_half_angstrom`, `fraction`, `step`). `PathSearchResultPayload` gains optional `path_coordinate_unit`, the unit of every point's `path_coordinate`; `IRCResultPayload` gains optional `reaction_coordinate_unit`, the unit of every point's `reaction_coordinate`. Omitted, the unit is stored as unknown. A `fraction` unit refuses a coordinate outside [0, 1]; a `step` unit refuses one that is not a whole number. An unknown unit token is refused.
 
+### 0.175.3 - 2026-11-21
+
+No schema, payload or code change. The `Documentation` project URL points at https://tckdb.github.io/TCKDB/, and the README links this changelog by its full GitHub address, so the link works on the package's PyPI page.
+
 ### 0.175.2 - 2026-11-14
 
 No schema, payload or code change. Field descriptions and docstrings explain a rule in terms of what any producer sends, naming a workflow tool only as one example. The generated producer contract carries the same text.
@@ -248,10 +252,6 @@ No schema, payload or code change. The package changelog describes each change b
 ### 0.175.0 - 2026-11-14
 
 Two refusal codes are added: `species_name_duplicate` (409) and `species_name_invalid` (422), returned by `POST /api/v1/curation/species-names` (curator or admin). The producer contract lists both curation routes among the role-gated write routes. No model or payload shape changed.
-
-### 0.174.5 - 2026-11-14
-
-The producer contract's further-reading list names the scientific check register once, for which checks refuse and which only warn and for the chemistry positions TCKDB enforces, and no longer links a design record. No refusal, warning, field or behaviour changes.
 
 ## Every producer route
 

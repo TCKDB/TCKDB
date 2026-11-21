@@ -35,8 +35,8 @@ conda run -n tckdb_env pip install -e "./backend[dev]"
 ```
 
 `.env` holds the values `docker-compose.yml` needs. `backend/.env` holds the
-backend's settings. Alembic reads it on its own; the API reads only its
-environment, so export the file in the shell that starts the API (step 4).
+backend's settings. Alembic and the API read it on their own; a variable set
+in the shell wins over the file.
 `backend/.env.local.example` turns on open registration and runs the upload
 worker inside the API.
 
@@ -79,14 +79,11 @@ runs the same script; set `TCKDB_BOOTSTRAP_PASSWORD` first.
 ## 4. Start the API
 
 ```bash
-set -a; source backend/.env; set +a
 make api
 ```
 
 `make api` runs `uvicorn main:app --host 127.0.0.1 --port 8010` from
-`backend/` in the foreground. The API reads its settings from the
-environment, not from `backend/.env`, hence the `source`. The defaults match
-the development templates, so skipping it works until you change a value. With `TCKDB_INLINE_WORKER=true` (set by
+`backend/` in the foreground. With `TCKDB_INLINE_WORKER=true` (set by
 `backend/.env.local.example`), the upload worker runs inside the API. To run
 it on its own, set `TCKDB_INLINE_WORKER=false` and start it in a second
 terminal, from `backend/`:

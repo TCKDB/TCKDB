@@ -52,7 +52,7 @@ rather than inside the server.
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md).
+See [CHANGELOG.md](https://github.com/TCKDB/TCKDB/blob/main/schemas/python/tckdb-schemas/CHANGELOG.md).
 
 ## Layout
 

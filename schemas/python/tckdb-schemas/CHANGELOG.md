@@ -4,6 +4,10 @@
 
 New enum `PathCoordinateUnit` (`angstrom`, `bohr`, `amu_half_bohr`, `amu_half_angstrom`, `fraction`, `step`). `PathSearchResultPayload` gains optional `path_coordinate_unit`, the unit of every point's `path_coordinate`; `IRCResultPayload` gains optional `reaction_coordinate_unit`, the unit of every point's `reaction_coordinate`. Omitted, the unit is stored as unknown. A `fraction` unit refuses a coordinate outside [0, 1]; a `step` unit refuses one that is not a whole number. An unknown unit token is refused.
 
+## 0.175.3 - 2026-11-21
+
+No schema, payload or code change. The `Documentation` project URL points at https://tckdb.github.io/TCKDB/, and the README links this changelog by its full GitHub address, so the link works on the package's PyPI page.
+
 ## 0.175.2 - 2026-11-14
 
 No schema, payload or code change. Field descriptions and docstrings explain a rule in terms of what any producer sends, naming a workflow tool only as one example. The generated producer contract carries the same text.
