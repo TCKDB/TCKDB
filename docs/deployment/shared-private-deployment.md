@@ -14,24 +14,24 @@ Before anyone else can reach it, tick every row of the
 
 ## Install
 
-Follow [Self-host](README.md) and answer the env script's questions like
-this:
+Follow [Self-host](README.md) and pick how the lab reaches it from
+[Make it reachable](README.md#make-it-reachable):
 
-- **Deployment mode:** `shared_private`, the default.
-- **Public URL:** the address the lab will use, for example
-  `https://tckdb.lab.example.org`.
-- **Trusted proxy header:** the header your proxy sets, for example
-  `X-Real-IP`, or none.
+- **Lab network, plain HTTP** (`--access lan`): the web UI is published on
+  the server's lab address. Quickest, but session cookies cross the network
+  unencrypted, so use it only on a network you trust.
+- **HTTPS with a domain name** (`--access https --mode shared_private`):
+  needs a public DNS name and ports 80 and 443 open to the internet, for the
+  certificate.
+- **Your own proxy** with a lab or institutional certificate, below. Keep
+  the default access and answer `shared_private`.
+- **Tailscale**, for a lab that already shares a tailnet.
 
-`shared_private` makes the API refuse to start while a safety setting is
+Keep the deployment mode at `shared_private`. It makes the API refuse to start while a safety setting is
 unsafe: open registration, `/docs`, unauthenticated legacy routes, internal
 IDs, insecure cookies or rate limiting off. The error lists every problem at
-once.
-
-If the lab network is trusted and you will not set up HTTPS, give an
-`http://` public URL. The script then sets `SESSION_COOKIE_SECURE=false` and
-`SESSION_COOKIE_ALLOW_PLAIN_HTTP=true`, so browser login works, and session
-cookies cross the network unencrypted.
+once. Plain HTTP passes only because the script also sets
+`SESSION_COOKIE_ALLOW_PLAIN_HTTP=true`.
 
 ## Accounts
 
@@ -111,11 +111,12 @@ Set `TRUSTED_PROXY_HEADER=X-Real-IP` to match. To serve the API alone, proxy
 to `127.0.0.1:8010` instead.
 
 The proxy must overwrite `X-Real-IP` with the client's address, as the
-`$remote_addr` line does. The web UI passes on whatever `X-Real-IP` arrives,
-so behind a proxy that leaves it alone, a client could pick its own
-rate-limit key. Caddy and Traefik pass cookies and `X-API-Key` through by
-default, but don't set `X-Real-IP`: add a header rule that sets it, or leave
-`TRUSTED_PROXY_HEADER` unset.
+`$remote_addr` line does. The web UI keeps an `X-Real-IP` that arrives from
+this machine, so behind a proxy that passes the client's value on, a client
+could pick its own rate-limit key. Caddy and Traefik pass cookies and
+`X-API-Key` through by default, but don't set `X-Real-IP`: add a header rule
+that sets it (Caddy: `header_up X-Real-IP {remote_host}`, as in
+`deploy/caddy/Caddyfile`), or leave `TRUSTED_PROXY_HEADER` unset.
 
 Route only the web UI and the API through the proxy. The database, the
 object store and the MinIO console stay private.
@@ -127,8 +128,12 @@ object store and the MinIO console stay private.
   internet.
 - If the proxy must be public, allow only the source ranges that need it,
   such as cluster login nodes and lab subnets.
-- Postgres (5432) and the object store (9000) bind to 127.0.0.1 already.
-  Keep them there.
+- Postgres (5432), the object store (9000) and the API (8010) bind to
+  127.0.0.1 in every access option. Only the web UI, or Caddy in front of
+  it, is opened.
+- With `--access lan`, Docker opens the web UI port ahead of ufw and
+  firewalld rules. Limit it at the network's firewall or in Docker's
+  `DOCKER-USER` chain.
 - Revoke a person's keys when they leave.
 
 ## Health checks

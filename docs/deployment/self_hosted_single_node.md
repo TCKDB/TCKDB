@@ -53,18 +53,23 @@ sudo install -d -o tckdb -g tckdb /opt/tckdb
 ```bash
 sudo -u tckdb git clone https://github.com/TCKDB/TCKDB.git /opt/tckdb
 cd /opt/tckdb
-sudo -u tckdb backend/scripts/ops/tckdb_make_env.sh --mode hosted_public \
-    --public-url https://tckdb.example.org --proxy-header CF-Connecting-IP
-sudo -u tckdb docker compose --env-file .env.selfhosted --env-file .env.db-admin --profile selfhost up -d --wait
+sudo -u tckdb backend/scripts/ops/tckdb_make_env.sh --access cloudflare \
+    --domain tckdb.example.org
+sudo -u tckdb docker compose --env-file .env.selfhosted --env-file .env.db-admin \
+    --profile selfhost --profile cloudflare up -d --wait
 sudo -u tckdb backend/scripts/check_selfhosted_deployment.sh
 ```
 
-The script still asks for the administrator's username and email. Run the
-later `docker compose` commands on this page as `tckdb` too.
+The script still asks for the tunnel token and the administrator's username
+and email. Run the later `docker compose` commands on this page as `tckdb`
+too. Set up the tunnel ([below](#cloudflare-tunnel)) before the first start.
 
-`--public-url` is the address people will use, without `/api/v1`. The web UI
-answers at its root and the API under `/api/v1`. `CF-Connecting-IP` is the
-header Cloudflare sets; see [Trusted proxy header](#trusted-proxy-header).
+`--access cloudflare` sets `hosted_public`, the public URL
+`https://tckdb.example.org` (the web UI at its root, the API under
+`/api/v1`) and `CF-Connecting-IP`, the header Cloudflare sets; see
+[Trusted proxy header](#trusted-proxy-header). For HTTPS on your own ports
+80 and 443 instead, use `--access https` and the `caddy` profile; see
+[Make it reachable](README.md#make-it-reachable).
 
 ## The settings that matter
 
@@ -113,8 +118,9 @@ Pick one. Two ingresses in front of one API fight each other.
 |---|---|---|
 | Cloudflare Tunnel, as the compose `cloudflared` service | A public HTTPS hostname, no open inbound port | Below |
 | Cloudflare Tunnel, as a `cloudflared` system service | The same | Cloudflare's instructions; don't also start the compose service |
-| nginx, Caddy or Traefik | TLS in front of `127.0.0.1:8011` | Your proxy config; see [Lab server](shared-private-deployment.md#reverse-proxy) |
-| Tailscale, WireGuard or an SSH tunnel | Private access only, no public surface | Your overlay network |
+| Caddy, as the compose `caddy` service | HTTPS on your own 80 and 443, with a Let's Encrypt certificate | [Make it reachable](README.md#3-the-internet-with-your-domain-name) |
+| Your own nginx, Caddy or Traefik | TLS in front of `127.0.0.1:8011` | Your proxy config; see [Lab server](shared-private-deployment.md#reverse-proxy) |
+| Tailscale, WireGuard or an SSH tunnel | Private access only, no public surface | Your overlay network; Tailscale in [Make it reachable](README.md#4-the-internet-with-no-open-port) |
 
 ## Cloudflare Tunnel
 
@@ -143,7 +149,8 @@ enabled (the free tier is enough).
    `example.org`, type `HTTP`, URL `127.0.0.1:8011`. That serves the web UI
    and the API. Use `127.0.0.1:8010` instead for the API alone. Add no other
    rule: never 5432 (Postgres), 9000 (the object store) or 9001.
-4. **Start it:**
+4. **Start it.** The start command from [Install](#install) includes the
+   `cloudflare` profile. To add the tunnel to a running stack:
 
     ```bash
     docker compose --env-file .env.selfhosted --env-file .env.db-admin \

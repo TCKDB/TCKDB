@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="tk-svg" viewBox="0 0 400 478" role="img" aria-labelledby="tk-reach-title tk-reach-desc">
+<title id="tk-reach-title">Ports open in each access option</title>
+<desc id="tk-reach-desc">Option 1, this machine only: the web UI on 127.0.0.1:8011, nothing open to other machines. Option 2, lab network: the web UI port 8011 open on the lab address, plain HTTP. Option 3, the internet with your domain: Caddy opens 80/tcp, 443/tcp and 443/udp. Option 4, Cloudflare Tunnel or Tailscale: no inbound port; the tunnel dials out. In every option Postgres (5432), SeaweedFS (9000) and the API (8010) stay on 127.0.0.1.</desc>
+<style>
+.tk-svg{color:var(--md-default-fg-color,#1f2328);font-family:var(--md-text-font-family,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif)}
+.tk-svg text{fill:currentColor}
+.tk-svg .tk-box{fill:var(--md-default-bg-color,#fff);stroke:currentColor;stroke-opacity:.3;stroke-width:1.2}
+.tk-svg .tk-host{fill:currentColor;fill-opacity:.05;stroke:currentColor;stroke-opacity:.25}
+.tk-svg .tk-open{fill:currentColor;fill-opacity:.14;stroke:currentColor;stroke-opacity:.6;stroke-width:1.2}
+.tk-svg .tk-local{fill:var(--md-default-bg-color,#fff);stroke:currentColor;stroke-opacity:.45;stroke-width:1.2;stroke-dasharray:4 3}
+.tk-svg .tk-h{font-size:14.5px;font-weight:700}
+.tk-svg .tk-c{font-family:var(--md-code-font-family,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);font-size:11.5px}
+.tk-svg .tk-d{font-size:12px;fill-opacity:.75}
+.tk-svg .tk-lab{font-size:11.5px;fill-opacity:.75}
+</style>
+<rect class="tk-box" x="8" y="8" width="384" height="88" rx="8"/>
+<text class="tk-h" x="22" y="32">1 · This machine only</text>
+<text class="tk-d" x="22" y="51">Open to nobody else. The default.</text>
+<rect class="tk-local" x="22" y="62" width="118" height="22" rx="5"/>
+<text class="tk-c" x="81" y="77" text-anchor="middle">127.0.0.1:8011</text>
+<rect class="tk-box" x="8" y="106" width="384" height="88" rx="8"/>
+<text class="tk-h" x="22" y="130">2 · Lab network</text>
+<text class="tk-d" x="22" y="149">The web UI on this machine's lab address, plain HTTP.</text>
+<rect class="tk-open" x="22" y="160" width="118" height="22" rx="5"/>
+<text class="tk-c" x="81" y="175" text-anchor="middle">lab address:8011</text>
+<rect class="tk-box" x="8" y="204" width="384" height="88" rx="8"/>
+<text class="tk-h" x="22" y="228">3 · Internet, your domain (HTTPS)</text>
+<text class="tk-d" x="22" y="247">Caddy answers and holds the certificate.</text>
+<rect class="tk-open" x="22" y="258" width="70" height="22" rx="5"/>
+<text class="tk-c" x="57" y="273" text-anchor="middle">80/tcp</text>
+<rect class="tk-open" x="100" y="258" width="76" height="22" rx="5"/>
+<text class="tk-c" x="138" y="273" text-anchor="middle">443/tcp</text>
+<rect class="tk-open" x="184" y="258" width="76" height="22" rx="5"/>
+<text class="tk-c" x="222" y="273" text-anchor="middle">443/udp</text>
+<rect class="tk-box" x="8" y="302" width="384" height="88" rx="8"/>
+<text class="tk-h" x="22" y="326">4 · Cloudflare Tunnel or Tailscale</text>
+<text class="tk-d" x="22" y="345">The tunnel dials out. Nothing listens for the internet.</text>
+<rect class="tk-local" x="22" y="356" width="118" height="22" rx="5"/>
+<text class="tk-c" x="81" y="371" text-anchor="middle">no inbound port</text>
+<rect class="tk-host" x="8" y="400" width="384" height="70" rx="10"/>
+<rect class="tk-open" x="22" y="412" width="28" height="16" rx="4"/>
+<text class="tk-lab" x="58" y="424">open to other machines</text>
+<rect class="tk-local" x="212" y="412" width="28" height="16" rx="4"/>
+<text class="tk-lab" x="248" y="424">this machine only</text>
+<text class="tk-lab" x="200" y="454" text-anchor="middle">In every option, 5432, 9000 and 8010 stay on 127.0.0.1.</text>
+</svg>
