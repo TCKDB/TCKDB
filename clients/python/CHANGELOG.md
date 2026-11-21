@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.208.3 - 2026-11-21
+
+The `tckdb-schemas` requirement is widened to `>=0.158,<0.177`, which admits the schemas release whose path-search and IRC results carry a coordinate unit. Such a result is sent as a payload dict, so `path_coordinate_unit` and `reaction_coordinate_unit` pass through unchanged. No client behaviour changed.
+
 ## 0.208.2 - 2026-11-14
 
 No client behaviour changed. Docstrings and comments in the client and the QCSchema adapter explain behaviour in terms of what any producer sends, naming a workflow tool only as one example.

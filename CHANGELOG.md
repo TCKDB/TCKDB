@@ -22,6 +22,15 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Path-search and IRC coordinates carry a unit (Unreleased)
+
+- **Behaviour:** a path-search result states the unit of its points' `path_coordinate` (`path_coordinate_unit`) and an IRC result the unit of its points' `reaction_coordinate` (`reaction_coordinate_unit`), from `angstrom`, `bohr`, `amu_half_bohr`, `amu_half_angstrom`, `fraction` and `step`. Both are optional on upload and null on read when not recorded; existing rows are null. A `fraction` coordinate outside [0, 1] or a non-whole `step` coordinate is refused (422).
+- **Behaviour:** `GET /scientific/calculations/{ref}/path-search` and `/irc`, `include=path_search` / `include=irc` on calculation reads, and `GET /calculations/{id}/path-search-result` / `irc-result` return the unit.
+- **Behaviour:** TCKDB's ORCA log parser states `angstrom` for an NEB path summary with a `Dist.(Ang.)` column and no unit for the NEB-TS table, which has no distance column. ORCA's IRC summary has no coordinate column, so it states none.
+- **Behaviour:** the site labels the path-search and IRC axes and the path facts with the unit when one is recorded ("distance along the path, Å", "3.76 Å along the path") and keeps the "as deposited" wording when none is.
+- **Schema and migration:** new revision `e3b7c1a9d452` on top of `a6fc04f5667e`: enum `path_coordinate_unit` and nullable columns `calc_path_search_result.path_coordinate_unit` and `calc_irc_result.reaction_coordinate_unit`, no default and no backfill. No new environment variable.
+- **Versions:** `tckdb-schemas` 0.176.0, `tckdb-client` 0.208.3.
+
 ## A method and basis-set catalogue names what a level of theory's spellings are (Unreleased)
 
 - **Behaviour:** new curated reference tables say what a stored method, dispersion or basis-set spelling names: `method_catalogue` (22 entries: 20 methods, 2 dispersion corrections) and `basis_set_catalogue` (15 entries), each with a short name, full name, one definitional sentence, and the articles that define it (45 `literature` rows, Crossref-resolved, `title_source = resolved_metadata`, with their authors in order). An existing citation of a seeded DOI is reused, also when its DOI carries a `doi:` prefix; one whose title was not registry-resolved takes the seed's Crossref fields and authors, and a registry-resolved one is left as it stands. `GET /literature` on a fresh database lists these 45 rows. Entries are keyed by the existing identity keys; `*_catalogue_key` lets several keys name one entry, so `gfn2` and `gfn2-xtb` both reach GFN2-xTB. `level_of_theory` and `lot_hash` are unchanged. No read route serves the catalogue yet.

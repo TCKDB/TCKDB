@@ -6569,6 +6569,16 @@
             "title": "Points",
             "type": "array"
           },
+          "reaction_coordinate_unit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PathCoordinateUnit-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "ts_point_index": {
             "anyOf": [
               {
@@ -6807,6 +6817,16 @@
               }
             ],
             "title": "Point Count"
+          },
+          "reaction_coordinate_unit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PathCoordinateUnit-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "reverse_point_count": {
             "title": "Reverse Point Count",
@@ -7860,6 +7880,16 @@
             ],
             "title": "Note"
           },
+          "path_coordinate_unit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PathCoordinateUnit-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "points": {
             "default": [],
             "items": {
@@ -8140,6 +8170,16 @@
               }
             ],
             "title": "Note"
+          },
+          "path_coordinate_unit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PathCoordinateUnit-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "selected_ts_point_index": {
             "anyOf": [
@@ -23249,7 +23289,7 @@
       },
       "IRCPointPayload": {
         "additionalProperties": false,
-        "description": "Upload-facing inline payload for one IRC-path sampled point.\n\nGeometries are accepted inline as ``GeometryPayload`` and resolved/deduped\nvia the existing geometry resolution service at persistence time.\n\n:param point_index: Zero-based index preserving the source step number.\n:param direction: Per-point direction (nullable for the TS marker point).\n:param is_ts: Whether this point marks the transition state.\n:param reaction_coordinate: Reaction-coordinate value at this point.\n:param electronic_energy_hartree: Electronic energy in hartree.\n:param relative_energy_kj_mol: Relative energy vs the zero-energy reference.\n:param max_gradient: Max gradient component at this point.\n:param rms_gradient: RMS gradient at this point.\n:param geometry: Optional inline geometry payload for this point.\n:param note: Optional free-text note.",
+        "description": "Upload-facing inline payload for one IRC-path sampled point.\n\nGeometries are accepted inline as ``GeometryPayload`` and resolved/deduped\nvia the existing geometry resolution service at persistence time.\n\n:param point_index: Zero-based index preserving the source step number.\n:param direction: Per-point direction (nullable for the TS marker point).\n:param is_ts: Whether this point marks the transition state.\n:param reaction_coordinate: Reaction-coordinate value at this point, in\n    the result's ``reaction_coordinate_unit``.\n:param electronic_energy_hartree: Electronic energy in hartree.\n:param relative_energy_kj_mol: Relative energy vs the zero-energy reference.\n:param max_gradient: Max gradient component at this point.\n:param rms_gradient: RMS gradient at this point.\n:param geometry: Optional inline geometry payload for this point.\n:param note: Optional free-text note.",
         "properties": {
           "direction": {
             "anyOf": [
@@ -23444,7 +23484,7 @@
       },
       "IRCResultPayload": {
         "additionalProperties": false,
-        "description": "Upload-facing inline result for an IRC calculation.\n\n``direction``, ``has_forward`` and ``has_reverse`` are each optional, and\nomitting one says \"the producer did not state it\". That is a real position\nfor a producer to be in: an IRC whose log does not record which way it ran\nis still a path with points on it, and requiring the three to be written\nmade such a producer drop the whole result. A value that is not stated is\nstored as NULL and read back as null, never as ``false``: ``has_forward``\nfalse is a claim that no forward-branch point exists, which is a different\nstatement from not knowing.\n\n:param direction: Overall run mode (forward / reverse / both). Omit when\n    the run mode is not stated.\n:param has_forward: True when at least one forward-branch point is present,\n    false when none is. Omit when not stated.\n:param has_reverse: True when at least one reverse-branch point is present,\n    false when none is. Omit when not stated.\n:param ts_point_index: Optional index of the point marked as TS.\n:param point_count: Optional total sampled-point count (consistency check).\n:param zero_energy_reference_hartree: Optional energy used as relative zero.\n:param note: Optional free-text note.\n:param points: Sampled IRC-path points attached to the result.",
+        "description": "Upload-facing inline result for an IRC calculation.\n\n``direction``, ``has_forward`` and ``has_reverse`` are each optional, and\nomitting one says \"the producer did not state it\". That is a real position\nfor a producer to be in: an IRC whose log does not record which way it ran\nis still a path with points on it, and requiring the three to be written\nmade such a producer drop the whole result. A value that is not stated is\nstored as NULL and read back as null, never as ``false``: ``has_forward``\nfalse is a claim that no forward-branch point exists, which is a different\nstatement from not knowing.\n\n:param direction: Overall run mode (forward / reverse / both). Omit when\n    the run mode is not stated.\n:param has_forward: True when at least one forward-branch point is present,\n    false when none is. Omit when not stated.\n:param has_reverse: True when at least one reverse-branch point is present,\n    false when none is. Omit when not stated.\n:param ts_point_index: Optional index of the point marked as TS.\n:param point_count: Optional total sampled-point count (consistency check).\n:param zero_energy_reference_hartree: Optional energy used as relative zero.\n:param reaction_coordinate_unit: Unit of every point's\n    ``reaction_coordinate``. Gaussian reports a mass-weighted arc length\n    (``amu_half_bohr``); a program that numbers its steps instead gives\n    ``step``. Omit when the unit is not known; it is stored as NULL and\n    never inferred.\n:param note: Optional free-text note.\n:param points: Sampled IRC-path points attached to the result.",
         "properties": {
           "direction": {
             "anyOf": [
@@ -23507,6 +23547,16 @@
             },
             "title": "Points",
             "type": "array"
+          },
+          "reaction_coordinate_unit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PathCoordinateUnit-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "ts_point_index": {
             "anyOf": [
@@ -42075,6 +42125,31 @@
         "title": "ParserStamp",
         "type": "object"
       },
+      "PathCoordinateUnit-Input": {
+        "enum": [
+          "angstrom",
+          "bohr",
+          "amu_half_bohr",
+          "amu_half_angstrom",
+          "fraction",
+          "step"
+        ],
+        "title": "PathCoordinateUnit",
+        "type": "string"
+      },
+      "PathCoordinateUnit-Output": {
+        "description": "Unit of the coordinate along a reaction path (path search or IRC).\n\n- ``angstrom`` / ``bohr``: Cartesian arc length.\n- ``amu_half_bohr`` / ``amu_half_angstrom``: mass-weighted arc length\n  (amu^1/2 times bohr or angstrom), as Gaussian reports an IRC.\n- ``fraction``: arc length normalised to 0 at the first point and 1 at\n  the last.\n- ``step``: a step or image counter with no physical dimension.",
+        "enum": [
+          "angstrom",
+          "bohr",
+          "amu_half_bohr",
+          "amu_half_angstrom",
+          "fraction",
+          "step"
+        ],
+        "title": "PathCoordinateUnit",
+        "type": "string"
+      },
       "PathSearchMethod-Input": {
         "enum": [
           "neb",
@@ -42245,7 +42320,7 @@
       },
       "PathSearchPointPayload": {
         "additionalProperties": false,
-        "description": "Upload-facing inline payload for one path-search point.\n\nGeneralizes NEB images, GSM nodes, and string-method path points.\n\n:param point_index: Zero-based point index along the path.\n:param electronic_energy_hartree: Electronic energy at this point.\n:param relative_energy_kj_mol: Energy relative to the zero-energy reference.\n:param path_coordinate: Optional path-coordinate value (e.g. cumulative\n    path distance for NEB, reaction-coordinate for GSM/string methods).\n:param max_force: Max force component at this point.\n:param rms_force: RMS force at this point.\n:param max_gradient: Max gradient component at this point.\n:param rms_gradient: RMS gradient at this point.\n:param is_ts_guess: Whether this point is the algorithm's TS guess.\n:param is_climbing_image: Whether this image was the climbing image\n    (NEB-CI specific; ignored by string-method outputs). ``false``\n    is the default and is stored exactly as sent, so ``false`` reads as\n    \"not a climbing image\" and as \"not stated\" alike: a producer that\n    does not know should name the climbing image through the result's\n    ``climbing_image_index`` or leave every point at the default. A\n    tri-state value would need a nullable column and is not offered yet.\n:param geometry: Optional inline geometry payload for this point.\n:param note: Optional free-text note.",
+        "description": "Upload-facing inline payload for one path-search point.\n\nGeneralizes NEB images, GSM nodes, and string-method path points.\n\n:param point_index: Zero-based point index along the path.\n:param electronic_energy_hartree: Electronic energy at this point.\n:param relative_energy_kj_mol: Energy relative to the zero-energy reference.\n:param path_coordinate: Optional path-coordinate value (e.g. cumulative\n    path distance for NEB, reaction-coordinate for GSM/string methods),\n    in the result's ``path_coordinate_unit``.\n:param max_force: Max force component at this point.\n:param rms_force: RMS force at this point.\n:param max_gradient: Max gradient component at this point.\n:param rms_gradient: RMS gradient at this point.\n:param is_ts_guess: Whether this point is the algorithm's TS guess.\n:param is_climbing_image: Whether this image was the climbing image\n    (NEB-CI specific; ignored by string-method outputs). ``false``\n    is the default and is stored exactly as sent, so ``false`` reads as\n    \"not a climbing image\" and as \"not stated\" alike: a producer that\n    does not know should name the climbing image through the result's\n    ``climbing_image_index`` or leave every point at the default. A\n    tri-state value would need a nullable column and is not offered yet.\n:param geometry: Optional inline geometry payload for this point.\n:param note: Optional free-text note.",
         "properties": {
           "electronic_energy_hartree": {
             "anyOf": [
@@ -42457,7 +42532,7 @@
       },
       "PathSearchResultPayload": {
         "additionalProperties": false,
-        "description": "Upload-facing inline result bundle for a path-search calculation.\n\nA path-search calculation explores a reaction path between or from\nmolecular endpoints to produce a TS guess. The specific algorithm\n(NEB, GSM, growing/freezing string, ...) lives on ``method`` rather\nthan as a separate top-level calculation type.\n\n:param method: The path-search algorithm used.\n:param is_double_ended: Whether the algorithm uses two endpoints\n    (NEB, GSM) versus single-ended (growing string, freezing string).\n:param converged: Whether the path search met its own stopping\n    criteria. What that means depends on ``method``, and the producer\n    states the algorithm's verdict, not a proxy for it:\n\n    * ``neb``: the band's force (and, where used, step) thresholds were\n      satisfied, climbing image included for a climbing-image run, and\n      the run did not stop on its iteration limit.\n    * ``gsm``, ``growing_string``, ``freezing_string``: the string\n      finished growing (or freezing) and the program's own convergence\n      test on the path, or on the TS node it reports, passed.\n    * ``other``: the method's own convergence verdict; describe the\n      criterion in ``note``.\n\n    ``true`` means that verdict was observed. ``false`` means it was\n    observed to fail. Leave it absent when it was not observed: the\n    existence of an output file, a nonzero exit code or a parsed TS\n    guess is not a convergence verdict, so none of them justifies\n    ``true``.\n:param n_points: Total sampled-point count (consistency check).\n:param selected_ts_point_index: Index of the point selected as the\n    TS guess (0-based). Must match a ``points[].point_index``.\n:param climbing_image_index: Optional index of the climbing image in\n    NEB-CI runs.\n:param source_endpoint_count: Optional count of endpoint geometries\n    consumed by the algorithm (typically 2 for double-ended runs).\n:param zero_energy_reference_hartree: Energy used as relative zero\n    for ``relative_energy_kj_mol`` on each point.\n:param note: Optional free-text note.\n:param points: Path samples (images / nodes / path points), unique on\n    ``point_index``.",
+        "description": "Upload-facing inline result bundle for a path-search calculation.\n\nA path-search calculation explores a reaction path between or from\nmolecular endpoints to produce a TS guess. The specific algorithm\n(NEB, GSM, growing/freezing string, ...) lives on ``method`` rather\nthan as a separate top-level calculation type.\n\n:param method: The path-search algorithm used.\n:param is_double_ended: Whether the algorithm uses two endpoints\n    (NEB, GSM) versus single-ended (growing string, freezing string).\n:param converged: Whether the path search met its own stopping\n    criteria. What that means depends on ``method``, and the producer\n    states the algorithm's verdict, not a proxy for it:\n\n    * ``neb``: the band's force (and, where used, step) thresholds were\n      satisfied, climbing image included for a climbing-image run, and\n      the run did not stop on its iteration limit.\n    * ``gsm``, ``growing_string``, ``freezing_string``: the string\n      finished growing (or freezing) and the program's own convergence\n      test on the path, or on the TS node it reports, passed.\n    * ``other``: the method's own convergence verdict; describe the\n      criterion in ``note``.\n\n    ``true`` means that verdict was observed. ``false`` means it was\n    observed to fail. Leave it absent when it was not observed: the\n    existence of an output file, a nonzero exit code or a parsed TS\n    guess is not a convergence verdict, so none of them justifies\n    ``true``.\n:param n_points: Total sampled-point count (consistency check).\n:param selected_ts_point_index: Index of the point selected as the\n    TS guess (0-based). Must match a ``points[].point_index``.\n:param climbing_image_index: Optional index of the climbing image in\n    NEB-CI runs.\n:param source_endpoint_count: Optional count of endpoint geometries\n    consumed by the algorithm (typically 2 for double-ended runs).\n:param zero_energy_reference_hartree: Energy used as relative zero\n    for ``relative_energy_kj_mol`` on each point.\n:param path_coordinate_unit: Unit of every point's ``path_coordinate``.\n    A cumulative Cartesian distance, as ORCA's NEB ``Dist.(Ang.)`` column\n    or a GSM node displacement, is ``angstrom``; a string method's\n    normalised arc length is ``fraction``. Omit when the unit is not\n    known; it is stored as NULL and never inferred.\n:param note: Optional free-text note.\n:param points: Path samples (images / nodes / path points), unique on\n    ``point_index``.",
         "properties": {
           "climbing_image_index": {
             "anyOf": [
@@ -42518,6 +42593,16 @@
               }
             ],
             "title": "Note"
+          },
+          "path_coordinate_unit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PathCoordinateUnit-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "points": {
             "items": {

@@ -35,6 +35,7 @@ from app.db.models.common import (
     LegacyCompositeShape,
     ParameterSource,
     ParameterStatementKind,
+    PathCoordinateUnit,
     PathSearchMethod,
     RecordReviewStatus,
     ScanCoordinateKind,
@@ -891,6 +892,8 @@ class CalculationPathSearchSummary(BaseModel):
     climbing_image_index: int | None = None
     source_endpoint_count: int | None = None
     zero_energy_reference_hartree: float | None = None
+    #: Unit of every point's ``path_coordinate`` and of the min/max below; null when not recorded.
+    path_coordinate_unit: PathCoordinateUnit | None = None
     note: str | None = None
 
     # Aggregates over calc_path_search_point.
@@ -932,6 +935,8 @@ class CalculationIRCSummary(BaseModel):
     ts_point_index: int | None = None
     point_count: int | None = None
     zero_energy_reference_hartree: float | None = None
+    #: Unit of every point's ``reaction_coordinate`` and of the min/max below; null when not recorded.
+    reaction_coordinate_unit: PathCoordinateUnit | None = None
     note: str | None = None
 
     forward_point_count: int

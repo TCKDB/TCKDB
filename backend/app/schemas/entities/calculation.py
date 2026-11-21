@@ -30,6 +30,7 @@ from app.db.models.common import (
     HessianSource,
     IRCDirection,
     ParameterSource,
+    PathCoordinateUnit,
     PathSearchMethod,
     ValidationStatus,
 )
@@ -446,6 +447,7 @@ class CalculationIRCResultRead(ORMBaseSchema):
     ts_point_index: int | None = None
     point_count: int | None = None
     zero_energy_reference_hartree: float | None = None
+    reaction_coordinate_unit: PathCoordinateUnit | None = None
     note: str | None = None
     points: list[CalculationIRCPointRead] = Field(default_factory=list)
 
@@ -483,6 +485,7 @@ class CalculationPathSearchResultRead(ORMBaseSchema):
     climbing_image_index: int | None = None
     source_endpoint_count: int | None = None
     zero_energy_reference_hartree: float | None = None
+    path_coordinate_unit: PathCoordinateUnit | None = None
     note: str | None = None
     points: list[CalculationPathSearchPointRead] = []
 

@@ -47,6 +47,7 @@ from app.db.models.common import (
     IRCDirection,
     ParameterSource,
     ParameterStatementKind,
+    PathCoordinateUnit,
     PathSearchMethod,
     ScanCoordinateKind,
     SCFStabilityStatus,
@@ -1324,6 +1325,9 @@ class CalculationIRCResult(Base):
     unstated flag into that claim.
 
     Per-point direction is on ``CalculationIRCPoint.direction``.
+
+    ``reaction_coordinate_unit`` is the unit of every point's
+    ``reaction_coordinate``; NULL means the unit was not recorded.
     """
 
     __tablename__ = "calc_irc_result"
@@ -1343,6 +1347,10 @@ class CalculationIRCResult(Base):
     point_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     zero_energy_reference_hartree: Mapped[Optional[float]] = mapped_column(
         nullable=True
+    )
+    reaction_coordinate_unit: Mapped[Optional[PathCoordinateUnit]] = mapped_column(
+        SAEnum(PathCoordinateUnit, name="path_coordinate_unit"),
+        nullable=True,
     )
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
@@ -1417,6 +1425,9 @@ class CalculationPathSearchResult(Base):
     freezing string, ...). The specific algorithm is data on
     ``method`` rather than a separate ``CalculationType``. The path
     sample (images, nodes, ...) lives in ``calc_path_search_point``.
+
+    ``path_coordinate_unit`` is the unit of every point's
+    ``path_coordinate``; NULL means the unit was not recorded.
     """
 
     __tablename__ = "calc_path_search_result"
@@ -1444,6 +1455,10 @@ class CalculationPathSearchResult(Base):
     )
     zero_energy_reference_hartree: Mapped[Optional[float]] = mapped_column(
         nullable=True
+    )
+    path_coordinate_unit: Mapped[Optional[PathCoordinateUnit]] = mapped_column(
+        SAEnum(PathCoordinateUnit, name="path_coordinate_unit", create_type=False),
+        nullable=True,
     )
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 

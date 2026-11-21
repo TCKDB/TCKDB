@@ -13,6 +13,8 @@ shared geometry-link policy, shared internal-id visibility policy).
 
 from __future__ import annotations
 
+import pytest
+
 from app.db.models.calculation import (
     CalculationIRCPoint,
     CalculationIRCResult,
@@ -27,6 +29,7 @@ from app.db.models.common import (
     CalculationType,
     CoordinateUnit,
     IRCDirection,
+    PathCoordinateUnit,
     PathSearchMethod,
     ScanCoordinateKind,
 )
@@ -593,6 +596,7 @@ def _make_irc_calc(
     ts_point_index: int | None = 0,
     point_count: int | None = None,
     note: str | None = None,
+    reaction_coordinate_unit: PathCoordinateUnit | None = None,
 ):
     """Build a calc + ``calc_irc_result`` row."""
     _, _, calc = _make_species_owned_calc(
@@ -607,6 +611,7 @@ def _make_irc_calc(
             ts_point_index=ts_point_index,
             point_count=point_count,
             zero_energy_reference_hartree=-100.0,
+            reaction_coordinate_unit=reaction_coordinate_unit,
             note=note,
         )
     )
@@ -789,6 +794,14 @@ def test_irc_response_includes_irc_summary(client, db_session):
     assert irc["forward_point_count"] == 2
     assert irc["reverse_point_count"] == 2
     assert irc["ts_point_count"] == 1
+
+
+@pytest.mark.parametrize("unit", [PathCoordinateUnit.amu_half_bohr, None])
+def test_irc_response_reports_the_reaction_coordinate_unit(client, db_session, unit):
+    calc = _make_irc_calc(db_session, reaction_coordinate_unit=unit)
+    _attach_irc_point(db_session, calculation=calc, point_index=0, is_ts=True, reaction_coordinate=0.0)
+    body = client.get(_irc_url(calc.public_ref)).json()
+    assert body["irc"]["reaction_coordinate_unit"] == (None if unit is None else unit.value)
 
 
 def test_irc_response_includes_paginated_points(client, db_session):
@@ -1024,6 +1037,7 @@ def _make_path_search_calc(
     climbing_image_index: int | None = None,
     source_endpoint_count: int | None = 2,
     note: str | None = None,
+    path_coordinate_unit: PathCoordinateUnit | None = None,
 ):
     """Build a calc + ``calc_path_search_result`` row."""
     _, _, calc = _make_species_owned_calc(
@@ -1040,6 +1054,7 @@ def _make_path_search_calc(
             climbing_image_index=climbing_image_index,
             source_endpoint_count=source_endpoint_count,
             zero_energy_reference_hartree=-100.0,
+            path_coordinate_unit=path_coordinate_unit,
             note=note,
         )
     )
@@ -1253,6 +1268,16 @@ def test_path_search_response_includes_path_search_summary(
     assert ps["stored_point_count"] == 5
     assert ps["ts_guess_count"] == 1
     assert ps["climbing_image_count"] == 1
+
+
+@pytest.mark.parametrize("unit", [PathCoordinateUnit.angstrom, None])
+def test_path_search_response_reports_the_path_coordinate_unit(client, db_session, unit):
+    calc = _make_path_search_calc(db_session, path_coordinate_unit=unit)
+    db_session.add(CalculationPathSearchPoint(calculation_id=calc.id, point_index=0, path_coordinate=3.759))
+    db_session.flush()
+    body = client.get(_path_search_url(calc.public_ref)).json()
+    assert body["path_search"]["path_coordinate_unit"] == (None if unit is None else unit.value)
+    assert body["path_search"]["max_path_coordinate"] == 3.759
 
 
 def test_path_search_response_includes_paginated_points(
