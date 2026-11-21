@@ -155,6 +155,10 @@ docker compose --env-file .env.selfhosted --env-file .env.db-admin \
     --profile selfhost up -d --wait
 ```
 
+Options 2 and 3 need an image newer than 0.2.0; set `TCKDB_IMAGE_TAG` to the
+latest release. With 0.2.0 the API refuses the plain-HTTP cookie setting and
+does not start, and the web UI passes on any `X-Real-IP` a client sends.
+
 Without `--lan-address` the script offers the address of the default route.
 It sets:
 
@@ -181,6 +185,9 @@ Docker opens a published port ahead of ufw and firewalld rules. To limit
 which machines can connect, filter at the network's firewall or in Docker's
 `DOCKER-USER` chain. The script warns if the address is a public one.
 
+Rootless Docker does not pass on the client's address: every lab machine
+then looks like one client to the rate limiter.
+
 ### 3. The internet, with your domain name
 
 You need:
@@ -197,6 +204,9 @@ backend/scripts/ops/tckdb_make_env.sh --access https --domain tckdb.example.org 
 docker compose --env-file .env.selfhosted --env-file .env.db-admin \
     --profile selfhost --profile caddy up -d --wait
 ```
+
+Options 2 and 3 need an image newer than 0.2.0; set `TCKDB_IMAGE_TAG` to the
+latest release.
 
 The `caddy` profile adds [Caddy](https://caddyserver.com/) with
 `deploy/caddy/Caddyfile`. On first start it gets a certificate for the
@@ -227,7 +237,7 @@ no public address.
 **Cloudflare Tunnel.** You need a domain on Cloudflare and a tunnel: in the
 Zero Trust dashboard, Networks → Tunnels → Create a tunnel → Cloudflared.
 Copy its token. Give the tunnel a public hostname with the service
-`http://localhost:8011`.
+`http://127.0.0.1:8011`.
 
 ```bash
 backend/scripts/ops/tckdb_make_env.sh --access cloudflare --domain tckdb.example.org
@@ -275,6 +285,12 @@ from this machine, so a proxy that passes the client's value on lets the
 client choose its own rate-limit key. [Lab server](shared-private-deployment.md#reverse-proxy)
 has an nginx example.
 
+The web UI trusts `X-Real-IP` only from its own IPv4 Docker networks, which
+is where a connection to `127.0.0.1:8011` arrives from. Point the proxy at
+`127.0.0.1`, not at `localhost` (which may resolve to `::1`) or the
+machine's own address. From anywhere else the header is replaced and every
+request looks like it came from the proxy.
+
 ### Change an existing install
 
 Edit `.env.selfhosted` to match the option: `TCKDB_WEB_BIND`,
@@ -289,7 +305,9 @@ passwords, which the existing database refuses.
 1. [Back up](#back-up) first.
 2. Update the checkout with `git pull`.
 3. Set the image tag in `.env.selfhosted`: `TCKDB_IMAGE_TAG=<tag>`, where the
-   tag is a release such as `0.2.0` or `sha-<commit>`.
+   tag is a release such as `0.2.0` or `sha-<commit>`. One tag names both the
+   API and the web UI image, so a `sha-` tag must come from a commit that
+   built both. A release tag always does.
 4. Run the `up -d --wait` command again.
 
 `init` runs the migrations before the new API starts. Keep the tag in the env

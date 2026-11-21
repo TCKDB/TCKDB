@@ -506,7 +506,13 @@ services:
   #
   # TCKDB_CADDY_TLS names the Caddyfile snippet that holds the tls setting:
   # TCKDB_TLS when set, else `acme_email` when TCKDB_ACME_EMAIL is set, else
-  # the Caddyfile's default, `acme`.
+  # `acme`. Compose renders the last case as an empty value, which Caddy's
+  # `{$VAR:default}` does not replace (it applies only to an unset variable),
+  # so the entrypoint fills it in.
+  #
+  # A refused start waits a minute before exiting, so a missing domain does
+  # not fill the log with restarts; the healthcheck fails meanwhile, which is
+  # what `up --wait` reports.
   caddy:
     profiles: ["caddy"]
     image: caddy:2.11.9-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
@@ -514,11 +520,22 @@ services:
       - /bin/sh
       - -c
       - |
+        refuse() { echo "caddy: $$1" >&2; sleep 60; exit 78; }
         if [ -z "$${TCKDB_DOMAIN}" ]; then
-          echo "caddy: TCKDB_DOMAIN is not set; set it in .env.selfhosted to the domain name this server answers to" >&2
-          exit 78
+          refuse "TCKDB_DOMAIN is not set; set it in .env.selfhosted to the domain name this server answers to"
         fi
+        export TCKDB_CADDY_TLS="$${TCKDB_CADDY_TLS:-acme}"
+        case "$$TCKDB_CADDY_TLS" in
+          acme|acme_email|internal) ;;
+          *) refuse "TCKDB_TLS must be empty or internal, got '$$TCKDB_CADDY_TLS'" ;;
+        esac
         exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     environment:
       TCKDB_DOMAIN: ${TCKDB_DOMAIN:-}
       TCKDB_ACME_EMAIL: ${TCKDB_ACME_EMAIL:-}

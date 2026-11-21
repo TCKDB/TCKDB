@@ -4,6 +4,8 @@
 #   TCKDB_DOMAIN      the domain name this server answers to (required)
 #   TCKDB_ACME_EMAIL  contact address for the certificate authority (optional)
 #   TCKDB_TLS         `internal` for Caddy's own certificate authority (testing)
+# The compose entrypoint turns these into TCKDB_CADDY_TLS, the name of one of
+# the snippets below, and never leaves it empty.
 
 # Let's Encrypt, no contact address.
 (tls_acme) {
@@ -20,7 +22,7 @@
 }
 
 {$TCKDB_DOMAIN} {
-	import tls_{$TCKDB_CADDY_TLS:acme}
+	import tls_{$TCKDB_CADDY_TLS}
 
 	encode zstd gzip
 

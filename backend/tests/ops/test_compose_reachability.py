@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -256,6 +257,25 @@ def test_make_env_rejects_bad_access_settings(tmp_path: Path, args: list[str], m
 
 
 @pytest.mark.parametrize(
+    ("args", "warned"),
+    [
+        (["--access", "lan", "--lan-address", "192.168.50.10"], True),
+        (["--access", "https", "--domain", "tckdb.example.org"], True),
+        (["--access", "https", "--domain", "tckdb.example.org", "--set", "TCKDB_IMAGE_TAG=0.2.0"], True),
+        (["--access", "lan", "--lan-address", "192.168.50.10", "--set", "TCKDB_IMAGE_TAG=0.3.0"], False),
+        (["--access", "cloudflare", "--domain", "tckdb.example.org"], False),
+        ([], False),
+    ],
+)
+def test_make_env_says_lan_and_https_need_an_image_newer_than_0_2_0(
+    tmp_path: Path, args: list[str], warned: bool
+) -> None:
+    result = _make_env(tmp_path, *args)
+    assert result.returncode == 0, result.stderr
+    assert ("needs an image newer than 0.2.0" in result.stdout) is warned
+
+
+@pytest.mark.parametrize(
     ("address", "public"),
     [("192.168.50.10", False), ("10.0.0.4", False), ("172.20.1.2", False), ("100.101.102.103", False),
      ("203.0.113.10", True), ("172.32.0.1", True)],
@@ -281,51 +301,103 @@ def test_caddy_replaces_x_real_ip_and_proxies_to_the_web_ui() -> None:
     assert "networks" not in caddy, "caddy belongs on default only, never on storage"
 
 
-@pytest.mark.parametrize(
-    ("settings", "snippet"),
-    [
-        ("", "acme"),
-        ("TCKDB_ACME_EMAIL=admin@example.org\n", "acme_email"),
-        ("TCKDB_ACME_EMAIL=admin@example.org\nTCKDB_TLS=internal\n", "internal"),
-    ],
-)
-def test_every_tls_choice_names_a_caddyfile_snippet(tmp_path: Path, settings: str, snippet: str) -> None:
-    (tmp_path / ".env.selfhosted").write_text(
-        f"{SECRETS}COMPOSE_PROFILES=selfhost,caddy\nTCKDB_DOMAIN=tckdb.example.org\n{settings}"
-    )
-    (tmp_path / ".env.db-admin").write_text("")
-    rendered = _compose_config(tmp_path)["caddy"]["environment"]["TCKDB_CADDY_TLS"]
-    assert (rendered or "acme") == snippet
-    assert "import tls_{$TCKDB_CADDY_TLS:acme}" in CADDYFILE.read_text()
-    assert f"\n(tls_{snippet}) {{\n" in CADDYFILE.read_text()
-
-
 def _caddy_entrypoint() -> str:
     entrypoint = SERVICES["caddy"]["entrypoint"]
     assert entrypoint[:2] == ["/bin/sh", "-c"], entrypoint
     return entrypoint[2].replace("$$", "$")
 
 
-@pytest.mark.parametrize("domain", ["", "tckdb.example.org"])
-def test_caddy_refuses_to_start_without_a_domain(tmp_path: Path, domain: str) -> None:
-    log = tmp_path / "caddy.log"
-    fake = tmp_path / "caddy"
-    fake.write_text(f'#!/bin/sh\necho "caddy $*" >> "{log}"\n')
-    fake.chmod(0o755)
+def _run_caddy_entrypoint(tmp_path: Path, env: dict[str, str]) -> tuple[subprocess.CompletedProcess, Path, Path]:
+    """Run the compose entrypoint with stand-ins for ``caddy`` and ``sleep``.
+
+    The ``caddy`` stand-in records its arguments and the TCKDB_CADDY_TLS it
+    was started with; ``sleep`` records its argument instead of waiting.
+    """
+    bindir = tmp_path / "bin"
+    bindir.mkdir(exist_ok=True)
+    caddy_log, sleep_log = tmp_path / "caddy.log", tmp_path / "sleep.log"
+    (bindir / "caddy").write_text(
+        f'#!/bin/sh\necho "caddy $*" >> "{caddy_log}"\necho "TCKDB_CADDY_TLS=[$TCKDB_CADDY_TLS]" >> "{caddy_log}"\n'
+    )
+    (bindir / "sleep").write_text(f'#!/bin/sh\necho "$*" >> "{sleep_log}"\n')
+    for stub in bindir.iterdir():
+        stub.chmod(0o755)
     result = subprocess.run(
         ["sh", "-c", _caddy_entrypoint()],
-        env={"PATH": f"{tmp_path}:{os.environ['PATH']}", "TCKDB_DOMAIN": domain},
+        env={"PATH": f"{bindir}:{os.environ['PATH']}", **env},
         capture_output=True,
         text=True,
         timeout=30,
     )
+    return result, caddy_log, sleep_log
+
+
+def _caddy_substitute(text: str, env: dict[str, str]) -> str:
+    """Caddy's parse-time ``{$VAR}`` / ``{$VAR:default}``: the default applies only when VAR is unset."""
+    return re.sub(
+        r"\{\$([A-Za-z0-9_]+)(?::([^}]*))?\}",
+        lambda m: env[m.group(1)] if m.group(1) in env else (m.group(2) or ""),
+        text,
+    )
+
+
+@pytest.mark.parametrize(
+    ("settings", "snippet"),
+    [
+        ("", "acme"),
+        ("TCKDB_ACME_EMAIL=admin@example.org\n", "acme_email"),
+        ("TCKDB_ACME_EMAIL=admin@example.org\nTCKDB_TLS=internal\n", "internal"),
+        ("TCKDB_TLS=internal\n", "internal"),
+    ],
+)
+def test_every_tls_choice_starts_caddy_on_a_defined_snippet(tmp_path: Path, settings: str, snippet: str) -> None:
+    (tmp_path / ".env.selfhosted").write_text(
+        f"{SECRETS}COMPOSE_PROFILES=selfhost,caddy\nTCKDB_DOMAIN=tckdb.example.org\n{settings}"
+    )
+    (tmp_path / ".env.db-admin").write_text("")
+    # Exactly what the container is given, empty values included.
+    container_env = _compose_config(tmp_path)["caddy"]["environment"]
+    result, caddy_log, _ = _run_caddy_entrypoint(tmp_path, container_env)
+    assert result.returncode == 0, result.stderr
+    assert caddy_log.read_text().splitlines() == [
+        "caddy run --config /etc/caddy/Caddyfile --adapter caddyfile",
+        f"TCKDB_CADDY_TLS=[{snippet}]",
+    ]
+    # The import line, resolved the way Caddy resolves it, names a snippet the Caddyfile defines.
+    caddyfile = _caddy_substitute(CADDYFILE.read_text(), {**container_env, "TCKDB_CADDY_TLS": snippet})
+    imports = re.findall(r"^\s*import (\S+)\s*$", caddyfile, flags=re.M)
+    assert imports == [f"tls_{snippet}"]
+    assert f"\n(tls_{snippet}) {{\n" in caddyfile
+
+
+def test_caddy_refuses_an_unknown_tls_choice(tmp_path: Path) -> None:
+    result, caddy_log, sleep_log = _run_caddy_entrypoint(
+        tmp_path, {"TCKDB_DOMAIN": "tckdb.example.org", "TCKDB_CADDY_TLS": "letsencrypt"}
+    )
+    assert result.returncode == 78
+    assert "TCKDB_TLS must be empty or internal, got 'letsencrypt'" in result.stderr
+    assert not caddy_log.exists()
+    assert sleep_log.read_text() == "60\n"
+
+
+@pytest.mark.parametrize("domain", ["", "tckdb.example.org"])
+def test_caddy_refuses_to_start_without_a_domain(tmp_path: Path, domain: str) -> None:
+    result, caddy_log, sleep_log = _run_caddy_entrypoint(tmp_path, {"TCKDB_DOMAIN": domain})
     if domain:
         assert result.returncode == 0, result.stderr
-        assert log.read_text() == "caddy run --config /etc/caddy/Caddyfile --adapter caddyfile\n"
+        assert caddy_log.read_text().splitlines()[0] == "caddy run --config /etc/caddy/Caddyfile --adapter caddyfile"
+        assert not sleep_log.exists()
     else:
         assert result.returncode == 78
         assert "caddy: TCKDB_DOMAIN is not set" in result.stderr
-        assert not log.exists()
+        assert not caddy_log.exists()
+        # It waits before exiting, so a restart policy does not loop it hot.
+        assert sleep_log.read_text() == "60\n"
+
+
+def test_caddy_has_a_healthcheck_for_up_wait() -> None:
+    check = SERVICES["caddy"]["healthcheck"]
+    assert check["test"] == ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
 
 
 # ---------------------------------------------------------------------------

@@ -323,7 +323,8 @@ case "$ACCESS" in
                 || (o1 == 100 && o2 >= 64 && o2 <= 127) || (o1 == 169 && o2 == 254) )); then
             echo "warning: $LAN_ADDRESS is a public address; anyone who can reach it gets the web UI over plain http. Use --access https, or limit it to the lab at the network's firewall"
         fi
-        echo "before you start: allow TCP port $web_port from the lab network in this machine's firewall, if it has one" ;;
+        echo "before you start:"
+        echo "  - allow TCP port $web_port from the lab network in this machine's firewall, if it has one" ;;
     https)
         echo "before you start:"
         echo "  - point a DNS A (or AAAA) record for $DOMAIN at this server's public address"
@@ -332,8 +333,14 @@ case "$ACCESS" in
         echo "before you start:"
         grep -Eq '^CLOUDFLARED_TUNNEL_TOKEN=.' "$RUNTIME_FILE" \
             || echo "  - add CLOUDFLARED_TUNNEL_TOKEN=<token> to $RUNTIME_FILE"
-        echo "  - in the tunnel's settings, route the public hostname $DOMAIN to http://localhost:$web_port" ;;
+        echo "  - in the tunnel's settings, route the public hostname $DOMAIN to http://127.0.0.1:$web_port" ;;
 esac
+if [[ "$ACCESS" == lan || "$ACCESS" == https ]]; then
+    image_tag="$(sed -n 's/^TCKDB_IMAGE_TAG=//p' "$RUNTIME_FILE")"
+    if [[ -z "$image_tag" || "$image_tag" == 0.2.0 ]]; then
+        echo "  - this access needs an image newer than 0.2.0; set TCKDB_IMAGE_TAG in $RUNTIME_FILE to the latest release"
+    fi
+fi
 [[ "$ACCESS" == local ]] || echo
 profile_flags="--profile ${profiles//,/ --profile }"
 echo "start it with:"
