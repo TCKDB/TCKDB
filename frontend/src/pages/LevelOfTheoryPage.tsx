@@ -169,7 +169,7 @@ function CatalogueSection({ record }: { record: LevelOfTheoryRecord }) {
     return (
         <section className="ledger-section" aria-labelledby="lot-catalogue-heading">
             <SectionHeading id="lot-catalogue-heading" guide={{ to: "method-catalogue", question: "What is the method and basis-set catalogue?" }}>
-                Method and basis-set catalogue
+                Catalogue
             </SectionHeading>
             {slots.some((entry) => entry.card !== null) && (
                 <div className="catalogue-cards">
