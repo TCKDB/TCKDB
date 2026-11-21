@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## tckdb-client declares pydantic; client and schemas link the documentation site (Unreleased)
+
+- **Packaging:** `tckdb-client` declares `pydantic>=2.6`, which its builders import directly; it used to arrive only through `tckdb-schemas`. The `Documentation` URL of both packages is https://tckdb.github.io/TCKDB/, and the schemas README links its changelog by its full address, so the link works on PyPI.
+- **Schema and migration:** none. No new environment variable. No behaviour changed.
+- **Versions:** `tckdb-client` 0.209.1, `tckdb-schemas` 0.175.3 (metadata and text only; the client's `tckdb-schemas` window `>=0.158,<0.176` is unchanged and contains 0.175.3).
+
 ## tckdb-mcp carries a licence file and working project links (Unreleased)
 
 - **Packaging:** `tckdb-mcp` declares `license = "MIT"` with `license-files` and ships the MIT `LICENSE` in its wheel and sdist (it used the deprecated `license = { text = "MIT" }` table and shipped no licence text). Its `project.urls` point at `https://github.com/TCKDB/TCKDB` and `https://tckdb.github.io/TCKDB/`; they named `github.com/tckdb` and `github.com/tckdb/tckdb_v2`, which do not exist. Python 3.13 is listed in the classifiers, the sdist leaves out the tests, and the build needs setuptools 77 or later.
