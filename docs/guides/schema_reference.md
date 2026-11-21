@@ -27,6 +27,63 @@ the gap.
 
 ## Curation
 
+### `basis_set_catalogue`
+
+**Role:** curation
+
+**Purpose:** Curation: one basis set TCKDB describes (ref prefix ``bcat_``, content-derived from ``key``).
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `key` | TEXT | no | — | — | — | not documented |
+| `role` | BasisSetRole (enum) | no | — | — | `orbital`, `auxiliary_correlation`, `auxiliary_coulomb`, `cabs` | not documented |
+| `family` | TEXT | no | — | — | — | not documented |
+| `short_name` | TEXT | no | — | — | — | not documented |
+| `full_name` | TEXT | no | — | — | — | not documented |
+| `description` | TEXT | no | — | — | — | not documented |
+| `seed_version` | INTEGER | no | — | — | — | not documented |
+| `updated_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+| `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+| `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_basis_set_catalogue_key_is_normalised`: `key = lower(btrim(key)) AND key <> ''`
+- `ck_basis_set_catalogue_seed_version_positive`: `seed_version >= 1`
+
+### `basis_set_catalogue_key`
+
+**Role:** curation
+
+**Purpose:** Curation: a ``basis_identity_key`` value that names a basis-set catalogue entry.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `key` | TEXT | no | — | — | — | not documented |
+| `basis_set_catalogue_id` | BIGINT | no | — | basis_set_catalogue.id | — | not documented |
+
+**Check constraints:**
+
+- `ck_basis_set_catalogue_key_key_is_normalised`: `key = lower(btrim(key)) AND key <> ''`
+
+### `basis_set_catalogue_literature`
+
+**Role:** curation
+
+**Purpose:** Curation: one article a basis-set catalogue entry cites, with its role and citation position.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `basis_set_catalogue_id` | BIGINT | no | — | basis_set_catalogue.id | — | not documented |
+| `literature_id` | BIGINT | no | — | literature.id | — | not documented |
+| `role` | CatalogueReferenceRole (enum) | no | — | — | `original`, `component`, `implementation` | not documented |
+| `position` | SMALLINT | no | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_basis_set_catalogue_literature_position_positive`: `position >= 1`
+
 ### `conformer_selection`
 
 **Role:** curation
@@ -42,6 +99,62 @@ the gap.
 | `note` | TEXT | yes | — | — | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `created_by` | BIGINT | yes | — | app_user.id | — | not documented |
+
+### `method_catalogue`
+
+**Role:** curation
+
+**Purpose:** Curation: one method or dispersion correction TCKDB describes (ref prefix ``mcat_``, from ``key``).
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `key` | TEXT | no | — | — | — | not documented |
+| `kind` | CatalogueMethodKind (enum) | no | — | — | `method`, `dispersion_correction` | not documented |
+| `short_name` | TEXT | no | — | — | — | not documented |
+| `full_name` | TEXT | no | — | — | — | not documented |
+| `description` | TEXT | no | — | — | — | not documented |
+| `seed_version` | INTEGER | no | — | — | — | not documented |
+| `updated_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+| `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+| `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_method_catalogue_key_is_normalised`: `key = lower(btrim(key)) AND key <> ''`
+- `ck_method_catalogue_seed_version_positive`: `seed_version >= 1`
+
+### `method_catalogue_key`
+
+**Role:** curation
+
+**Purpose:** Curation: a ``method_identity_key`` or ``dispersion_identity_key`` value naming a method catalogue entry.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `key` | TEXT | no | — | — | — | not documented |
+| `method_catalogue_id` | BIGINT | no | — | method_catalogue.id | — | not documented |
+
+**Check constraints:**
+
+- `ck_method_catalogue_key_key_is_normalised`: `key = lower(btrim(key)) AND key <> ''`
+
+### `method_catalogue_literature`
+
+**Role:** curation
+
+**Purpose:** Curation: one article a method catalogue entry cites, with its role and citation position.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `method_catalogue_id` | BIGINT | no | — | method_catalogue.id | — | not documented |
+| `literature_id` | BIGINT | no | — | literature.id | — | not documented |
+| `role` | CatalogueReferenceRole (enum) | no | — | — | `original`, `component`, `implementation` | not documented |
+| `position` | SMALLINT | no | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_method_catalogue_literature_position_positive`: `position >= 1`
 
 ### `release_manifest`
 

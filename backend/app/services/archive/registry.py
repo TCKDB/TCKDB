@@ -14,6 +14,7 @@ from collections.abc import Mapping
 from sqlalchemy import MetaData, Table
 
 from app.schemas.reaction_family import CANONICAL_REACTION_FAMILIES
+from app.services.method_catalogue_seed import load_seed
 
 INCLUDED_TABLES: frozenset[str] = frozenset(
     {
@@ -25,6 +26,9 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         # ``artifact_integrity_failed`` — a silent trust regression
         # created by the archive itself.
         "artifact_integrity_event",
+        "basis_set_catalogue",
+        "basis_set_catalogue_key",
+        "basis_set_catalogue_literature",
         "applied_energy_correction_component",
         "applied_group_additivity",
         "applied_group_additivity_component",
@@ -124,6 +128,11 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "literature",
         "literature_author",
         "machine_review_curator_task",
+        # The method and basis-set catalogue: curated reference data the migration writes from the seed files,
+        # with its links to literature. Preseeded (below), so a restore hands back the source's catalogue.
+        "method_catalogue",
+        "method_catalogue_key",
+        "method_catalogue_literature",
         "molecular_property_observation",
         "network",
         "network_channel",
@@ -274,6 +283,35 @@ MIGRATION_WRITTEN_TABLES: frozenset[str] = frozenset(
 )
 
 
+def _catalogue_preseeds() -> dict[str, tuple[tuple[str, ...], frozenset[tuple[object, ...]]]]:
+    """The rows the catalogue revision writes into a fresh database, by identity.
+
+    A link row has no identity beyond the two ids it joins, which differ between databases, so a link table is
+    checked by its ``(role, position)`` pairs (``author_order`` for literature authors); the catalogue keys, the
+    literature DOIs and the author names pin the rest.
+    """
+    seed = load_seed()
+    out: dict[str, tuple[tuple[str, ...], frozenset[tuple[object, ...]]]] = {
+        "literature": (("doi",), frozenset((doi,) for doi in seed.references)),
+        "author": (
+            ("family_name", "full_name"),
+            frozenset((name, name) for ref in seed.references.values() for name in ref.authors),
+        ),
+        "literature_author": (
+            ("author_order",),
+            frozenset((order,) for ref in seed.references.values() for order in range(1, len(ref.authors) + 1)),
+        ),
+    }
+    for table, entries in (("method_catalogue", seed.methods), ("basis_set_catalogue", seed.basis_sets)):
+        out[table] = (("key",), frozenset((e.key,) for e in entries))
+        out[f"{table}_key"] = (("key",), frozenset((k,) for e in entries for k in e.keys))
+        out[f"{table}_literature"] = (
+            ("role", "position"),
+            frozenset((c.role, i) for e in entries for i, c in enumerate(e.references, start=1)),
+        )
+    return out
+
+
 # A freshly migrated database intentionally contains these identity rows.
 # Restore accepts exactly this target-side set, removes it, and then restores
 # the archived rows. Other included tables must be empty.
@@ -339,6 +377,7 @@ PRESEEDED_TABLES: Mapping[
         ("name", "version"),
         frozenset({("torsion_basin", 1), ("torsion_basin", 2), ("torsion_basin", 3)}),
     ),
+    **_catalogue_preseeds(),
 }
 
 

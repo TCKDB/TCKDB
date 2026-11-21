@@ -188,7 +188,7 @@ const calculationCoreSchema = z.object({
 // include=results
 // ---------------------------------------------------------------------------
 
-const resultsSchema = z.object({
+export const resultsSchema = z.object({
     kind: z.string(),
     sp: z.object({
         electronic_energy_hartree: z.number().nullable().optional(),

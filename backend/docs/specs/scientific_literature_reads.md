@@ -89,6 +89,12 @@ upload time against the `ix_literature_doi_normalized` /
 `ix_literature_isbn_normalized` expression indices; this surface does
 not re-normalize.
 
+`doi` is served only when the row's metadata was resolved from the DOI
+registry (`title_source = resolved_metadata`); otherwise it is `null`.
+The same rule applies to the `doi` of every `LiteratureSummary` embedded
+in a scientific record and to the DOI written into a network CHEMKIN
+export.
+
 ### 3.5 LiteratureAuthorSummary
 
 | Field | Source |

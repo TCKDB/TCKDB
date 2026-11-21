@@ -1,5 +1,5 @@
-// Source guard: a literature title is read only through `literatureCitation.ts`. Any other access
-// (`literature.title`, `lit?.title`, `source_literature.title`) can put depositor-typed text on a public page.
+// Source guard: a literature title or DOI is read only through `literatureCitation.ts`. Any other access
+// (`literature.title`, `lit?.doi`, `source_literature.title`) can put depositor-typed text on a public page.
 
 import { describe, expect, it } from "vitest"
 
@@ -9,13 +9,14 @@ const sources = import.meta.glob(["../**/*.ts", "../**/*.tsx", "!../**/*.test.ts
     eager: true,
 }) as Record<string, string>
 
-const ACCESS = /\b\w*(?:literature|lit)\w*\??\.title\b/i
+const ACCESS = /\b\w*(?:literature|lit)\w*\??\.(?:title|doi)\b/i
 
-describe("literature title access", () => {
+describe("literature title and DOI access", () => {
     it("scans real source files (not vacuous)", () => {
         expect(Object.keys(sources).length).toBeGreaterThan(50)
         expect(ACCESS.test("record.literature?.title")).toBe(true)
         expect(ACCESS.test("scheme.source_literature.title")).toBe(true)
+        expect(ACCESS.test("record.literature?.doi")).toBe(true)
     })
 
     it("happens only in literatureCitation.ts", () => {

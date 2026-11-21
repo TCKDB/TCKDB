@@ -1,0 +1,118 @@
+/* Stepping through the points of a path: a strip of small pictures, the shared viewer with a stepper, and the point's values. */
+.path-steps {
+    margin: var(--s-3) 0 var(--s-5);
+}
+
+.path-strip {
+    position: relative;
+    display: flex;
+    gap: var(--s-2);
+    margin: 0 0 var(--s-4);
+    padding: 0 0 var(--s-2);
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    list-style: none;
+}
+
+.path-strip > .path-strip-card {
+    flex: 0 0 7.5rem;
+    scroll-snap-align: start;
+}
+
+.path-strip-card .conformer-card-select {
+    min-height: 44px;
+    padding: var(--s-2);
+    gap: .2rem;
+}
+
+.path-strip-card .shape-picture {
+    min-height: 5.5rem;
+}
+
+.path-strip-card .mol-poster {
+    max-width: 5.5rem;
+}
+
+.path-strip-card .conformer-card-label {
+    font: var(--type-ui-font);
+    font-weight: 600;
+}
+
+.path-strip-card .conformer-card-meta {
+    font: var(--type-data-font);
+}
+
+.path-strip > .path-strip-card--marked {
+    border-width: 2px;
+    border-color: var(--accent);
+}
+
+.path-steps-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-4);
+}
+
+@media (min-width: 62rem) {
+    .path-steps-body {
+        grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+        align-items: start;
+    }
+}
+
+.path-steps-viewer {
+    margin: 0;
+}
+
+.path-stepper {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--s-2);
+    margin-bottom: var(--s-3);
+}
+
+.path-stepper button {
+    min-height: 44px;
+    padding: .3rem .8rem;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--accent);
+    font: var(--type-ui-font);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.path-stepper button:disabled {
+    color: var(--muted);
+    cursor: default;
+}
+
+.path-stepper button:focus-visible,
+.path-stepper input:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.path-stepper-slider {
+    display: grid;
+    gap: .2rem;
+}
+
+.path-stepper-label {
+    color: var(--muted);
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
+}
+
+.path-stepper-slider input {
+    width: 100%;
+    min-height: 44px;
+    accent-color: var(--accent);
+}
+
+.path-steps-facts {
+    grid-template-columns: minmax(0, 1fr);
+}
