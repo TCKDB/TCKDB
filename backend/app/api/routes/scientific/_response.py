@@ -452,6 +452,7 @@ LEVEL_OF_THEORY_RECORD_SECTIONS = IncludeGatedSections(
         "frequency_scale_factors": ("frequency_scale_factors",),
         "used_by": ("used_by",),
         "software": ("software",),
+        "catalogue": ("catalogue",),
     },
 )
 

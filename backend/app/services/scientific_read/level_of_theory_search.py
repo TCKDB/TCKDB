@@ -79,6 +79,7 @@ from app.services.scientific_read.lot_identity_filters import (
     method_matches,
     solvent_matches,
 )
+from app.services.scientific_read.method_catalogue import load_catalogue_index
 
 _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "level_of_theory_ref",
@@ -341,13 +342,16 @@ def _materialize_records(
     ).all()
     by_id = {r.id: r for r in rows}
     schemes = composite_scheme_summaries(session, page_ids)
+    catalogue_index = load_catalogue_index(session) if "catalogue" in includes else None
     out: list[ScientificLevelOfTheoryRecord] = []
     for lid in page_ids:
         lot = by_id.get(lid)
         if lot is None:  # pragma: no cover — race with delete
             continue
         out.append(
-            build_level_of_theory_record(session, lot=lot, includes=includes, composite_schemes=schemes)
+            build_level_of_theory_record(
+                session, lot=lot, includes=includes, composite_schemes=schemes, catalogue_index=catalogue_index
+            )
         )
     return out
 

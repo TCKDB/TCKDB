@@ -337,6 +337,7 @@ def test_family_and_rung_are_never_an_order_key_a_tie_break_or_a_select_default(
         "api/routes/scientific/kinetics_search.py",
         "api/routes/scientific/level_of_theory.py",
         "api/routes/scientific/level_of_theory_browse.py",
+        "api/routes/scientific/method_catalogue.py",
         "api/routes/scientific/species_browse.py",
         "api/routes/scientific/species_calculations_search.py",
         "api/routes/scientific/thermo.py",
@@ -345,6 +346,7 @@ def test_family_and_rung_are_never_an_order_key_a_tie_break_or_a_select_default(
         "api/routes/scientific/transition_states_browse.py",
         "schemas/reads/_method_family.py",
         "schemas/reads/scientific_level_of_theory.py",
+        "schemas/reads/scientific_method_catalogue.py",
         # Asks one yes/no question: is this calculation's method a composite (or DFT), so that a log's reported grid
         # rows belong to its own method. It filters, orders and selects no records.
         "services/calculation_parameter_extraction.py",
@@ -359,6 +361,8 @@ def test_family_and_rung_are_never_an_order_key_a_tie_break_or_a_select_default(
         "services/scientific_read/calculation_provenance_filters.py",
         "services/scientific_read/calculations_search.py",
         "services/scientific_read/level_of_theory_search.py",
+        # Derives a catalogue card's family and rung from its keys and filters the browse by family; it orders by key.
+        "services/scientific_read/method_catalogue.py",
         "services/scientific_read/lot_identity_filters.py",
         "services/scientific_read/species_calculations_search.py",
         "services/selection_filters.py",

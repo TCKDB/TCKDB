@@ -849,6 +849,41 @@ class TestCompositeScheme:
 
 
 # ---------------------------------------------------------------------------
+# Method and basis-set catalogue
+# ---------------------------------------------------------------------------
+
+
+class TestMethodCatalogue:
+    def test_browse_methods_reaches_the_path_with_filters(self):
+        handler, seen = _capture(_envelope())
+        client, _ = make_client(handler)
+        client.browse_methods(kind="method", method_family="dft")
+        assert _path_of(str(seen[0].url)).endswith("/scientific/methods")
+        assert _query_of(str(seen[0].url)) == {"kind": ["method"], "method_family": ["dft"]}
+
+    def test_get_method_quotes_the_spelling(self):
+        handler, seen = _capture(_detail({"method": {}, "levels": []}))
+        client, _ = make_client(handler)
+        client.get_method("CCSD(T)-F12 ")
+        assert seen[0].url.path.endswith("/scientific/methods/CCSD(T)-F12 ")
+        assert seen[0].url.raw_path.decode().endswith("/scientific/methods/CCSD%28T%29-F12%20")
+
+    def test_browse_basis_sets_reaches_the_path_with_filters(self):
+        handler, seen = _capture(_envelope())
+        client, _ = make_client(handler)
+        client.browse_basis_sets(role="orbital", family="Karlsruhe def2")
+        assert _path_of(str(seen[0].url)).endswith("/scientific/basis-sets")
+        assert _query_of(str(seen[0].url)) == {"role": ["orbital"], "family": ["Karlsruhe def2"]}
+
+    def test_get_basis_set_reaches_the_detail_path(self):
+        handler, seen = _capture(_detail({"basis_set": {}, "levels": []}))
+        client, _ = make_client(handler)
+        client.get_basis_set("bcat_abc", profile="curated")
+        assert _path_of(str(seen[0].url)).endswith("/scientific/basis-sets/bcat_abc")
+        assert _query_of(str(seen[0].url))["profile"] == ["curated"]
+
+
+# ---------------------------------------------------------------------------
 # Literature
 # ---------------------------------------------------------------------------
 
