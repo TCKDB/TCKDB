@@ -4,31 +4,31 @@
   "algorithm": 6,
   "pins": {
     "computed_calculation": {
-      "1": "a99f0d4a7bfd53829c7ade18ef53662be22f27baa06e65e81c56f10777f42257"
+      "1": "419e9c0293524f2b2432983ebd030f762834d751fe2ce160caa463ea51d259ec"
     },
     "computed_kinetics": {
-      "1": "a8dbfa4e776955958f8b6b970353a4727e4461ea1ef690bcb36b39c29917fe17"
+      "1": "f3e6d4c231a17705d8864b17b4b700b46b2664ec7fd4c1dc1e8cc1477f56fae4"
     },
     "computed_statmech": {
-      "1": "f8874e534b830b631662ae96fb32268ea18347b6481c41832f4af976e09e4e03"
+      "1": "dd26f801bc3a1530bec17437ba96c881998a6c5e7a050054a2612b6002b897ba"
     },
     "computed_thermo": {
-      "1": "e358f9d314fc9932a3a041cc928e44dbee95e5b694872a6dbaefcfac0bbf3969"
+      "1": "bdeb32a190ad747f7cbac566285e6a44f6f9d1aff6ca1abe40bdc920afe76f93"
     },
     "computed_transition_state": {
-      "2": "c2b8238721e3c9dbb848c0bba05d32056e97f8a4aff561f120cc100a2bc78f0f"
+      "2": "2c9263a9742eff40575d0e6671c095332a07cd71ac96ece3538cac9e2b0f18dc"
     },
     "computed_transport": {
-      "1": "13dab1e06c1df4ba078d326f530d3f51a6a790aca3612b319924cde9f2eab786"
+      "1": "5e9bb07ec88201552d890532cb85c50ea43ff2e32f61f92421028104f765797d"
     },
     "computed_ts_statmech": {
-      "1": "90951074d2bcd429547a90f5690bb8d9fb892f1aa170f45ebbe52110766290d8"
+      "1": "64e4c0851148d9200ef25c72b3da10c6d0a6c43ea0b38ad39bcacc18b9780cd9"
     },
     "tckdb_reproducibility": {
-      "1": "d819c4995e4d882f11c38a431fb1e353cc3062d36dd9db0688d3c4c2e026a61c"
+      "1": "63f41f361c535264b45a97686ba0e392a5b58f0a5ca5b5bf6c9bac7154689dd9"
     },
     "tckdb_reproducibility_ts_statmech": {
-      "1": "db93e2c2466085c4921093b74373ba164b66a226f5121c472d5ab73f616dd313"
+      "1": "b31bf4f9614adea2d66f6ca14fe24dd96a66ac0dfe04cf391b38cfde457137ad"
     }
   },
   "unbumped_overrides": [
@@ -502,6 +502,51 @@
       "name": "tckdb_reproducibility_ts_statmech",
       "version": 1,
       "reason": "The fingerprint walk reaches app.services.public_refs.PREFIXES, which gained the method and basis-set catalogue prefixes. The software, workflow-tool and literature prefixes these rubrics read are unchanged, so no verdict can change."
+    },
+    {
+      "name": "computed_calculation",
+      "version": 1,
+      "reason": "The IRC and path-search results gained a coordinate unit column. Every closure reaches the new PathCoordinateUnit enum through those models; no check or grading reads the unit, and no stored assessment changes."
+    },
+    {
+      "name": "computed_kinetics",
+      "version": 1,
+      "reason": "The IRC and path-search results gained a coordinate unit column. Every closure reaches the new PathCoordinateUnit enum through those models; no check or grading reads the unit, and no stored assessment changes."
+    },
+    {
+      "name": "computed_statmech",
+      "version": 1,
+      "reason": "The IRC and path-search results gained a coordinate unit column. Every closure reaches the new PathCoordinateUnit enum through those models; no check or grading reads the unit, and no stored assessment changes."
+    },
+    {
+      "name": "computed_thermo",
+      "version": 1,
+      "reason": "The IRC and path-search results gained a coordinate unit column. Every closure reaches the new PathCoordinateUnit enum through those models; no check or grading reads the unit, and no stored assessment changes."
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "The IRC and path-search results gained a coordinate unit column. Every closure reaches the new PathCoordinateUnit enum through those models; no check or grading reads the unit, and no stored assessment changes."
+    },
+    {
+      "name": "computed_transport",
+      "version": 1,
+      "reason": "The IRC and path-search results gained a coordinate unit column. Every closure reaches the new PathCoordinateUnit enum through those models; no check or grading reads the unit, and no stored assessment changes."
+    },
+    {
+      "name": "computed_ts_statmech",
+      "version": 1,
+      "reason": "The IRC and path-search results gained a coordinate unit column. Every closure reaches the new PathCoordinateUnit enum through those models; no check or grading reads the unit, and no stored assessment changes."
+    },
+    {
+      "name": "tckdb_reproducibility",
+      "version": 1,
+      "reason": "The IRC and path-search results gained a coordinate unit column. Every closure reaches the new PathCoordinateUnit enum through those models; no check or grading reads the unit, and no stored assessment changes."
+    },
+    {
+      "name": "tckdb_reproducibility_ts_statmech",
+      "version": 1,
+      "reason": "The IRC and path-search results gained a coordinate unit column. Every closure reaches the new PathCoordinateUnit enum through those models; no check or grading reads the unit, and no stored assessment changes."
     }
   ]
 }
