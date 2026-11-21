@@ -138,3 +138,4 @@ exclude_docs: |
   /guides/system_flow.md
   /guides/the_story_of_a_datapoint.md
   /start/deployment.md
+  /site/
