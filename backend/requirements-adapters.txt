@@ -5,9 +5,10 @@
 # adapter. Pinned by commit; move both lines together.
 #
 # Install after the in-repository packages, without dependencies, so the tests
-# run against this checkout's tckdb-client and tckdb-schemas (RDKit and
-# qcelemental come from backend/environment.yml and the [dev] extra):
+# run against this checkout's tckdb-client and tckdb-schemas even when their
+# version has moved past the adapters' window (RDKit and qcelemental come from
+# backend/environment.yml and the [dev] extra):
 #
 #   python -m pip install --no-deps -r backend/requirements-adapters.txt
-tckdb-chemkin @ git+https://github.com/calvinp0/tckdb-adapters@976a89433cb7de7937c543ca7f4585e9716ee45f#subdirectory=tckdb_chemkin
-tckdb-qcschema @ git+https://github.com/calvinp0/tckdb-adapters@976a89433cb7de7937c543ca7f4585e9716ee45f#subdirectory=tckdb_qcschema
+tckdb-chemkin @ git+https://github.com/calvinp0/tckdb-adapters@e5b25ce78858c79541ef91f7b59e346c8b12f292#subdirectory=tckdb_chemkin
+tckdb-qcschema @ git+https://github.com/calvinp0/tckdb-adapters@e5b25ce78858c79541ef91f7b59e346c8b12f292#subdirectory=tckdb_qcschema
