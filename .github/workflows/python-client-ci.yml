@@ -25,6 +25,8 @@ on:
       # comparison vocabularies out of this one file, so a change to them must
       # run the client suite. The exact file, not a glob over services.
       - "backend/app/services/relative_conformer_energy/compare.py"
+      # The package-metadata job builds tckdb-mcp too.
+      - "integrations/mcp/**"
   push:
     branches:
       - main
@@ -35,6 +37,7 @@ on:
       - "backend/app/api/**"
       - "backend/tests/api/golden/openapi.json"
       - "backend/app/services/relative_conformer_energy/compare.py"
+      - "integrations/mcp/**"
   workflow_dispatch:
 
 permissions:
@@ -115,3 +118,37 @@ jobs:
       - name: Run wire-contract schema tests
         working-directory: schemas/python/tckdb-schemas
         run: python -m pytest
+
+  package-metadata:
+    # Builds every distribution .github/workflows/publish-python.yml can
+    # publish and checks its metadata the way PyPI will, so a missing readme
+    # or a malformed field fails here and not on release day.
+    name: Package build and metadata check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build tools
+        run: python -m pip install "build>=1.2" "twine>=6.1"
+
+      - name: Build every published package and check its metadata
+        run: |
+          for dir in \
+              schemas/python/tckdb-schemas \
+              clients/python \
+              clients/python/adapters/chemkin \
+              clients/python/adapters/qcschema \
+              integrations/mcp; do
+            python -m build --outdir "dist/$(basename "$dir")" "$dir"
+          done
+          python -m twine check --strict dist/*/*

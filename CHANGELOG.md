@@ -22,6 +22,14 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Python packages publish to PyPI from a release tag (Unreleased)
+
+- **Behaviour:** `.github/workflows/publish-python.yml` publishes one distribution per tag `<dist-name>-v<version>` (`tckdb-schemas`, `tckdb-client`, `tckdb-chemkin`, `tckdb-qcschema`, `tckdb-mcp`). It refuses a tag whose version differs from the package's `pyproject.toml` or whose commit is not on `main`; builds the sdist and wheel; runs `twine check --strict`; installs the wheel into a clean environment with the first-party packages it requires, built from the same commit, and imports it; publishes to TestPyPI; and, for a pushed tag only, publishes to PyPI. Uploads use trusted publishing in the GitHub environments `testpypi` and `pypi`; no secret is stored. A manual run builds the chosen package and publishes to TestPyPI only.
+- **Behaviour:** `backend/scripts/python_release.py` resolves a tag to its package with `check_package_version_bump.PACKAGES` and runs the install check; `backend/tests/scripts/test_publish_python_workflow.py`, run by the repo gate, pins the workflow's package list to `PACKAGES` and the shape of the publish jobs.
+- **Behaviour:** Python Client CI gains a job that builds all five distributions and runs `twine check --strict` on them, and runs on changes under `integrations/mcp/`.
+- **Docs:** the maintainer runbook is `backend/docs/deployment/publishing_python_packages.md` (trusted-publisher values, tag scheme, release order, TestPyPI dry run).
+- **Schema and migration:** none. No new environment variable. No distributed package changed.
+
 ## tckdb-client declares pydantic; client and schemas link the documentation site (Unreleased)
 
 - **Packaging:** `tckdb-client` declares `pydantic>=2.6`, which its builders import directly; it used to arrive only through `tckdb-schemas`. The `Documentation` URL of both packages is https://tckdb.github.io/TCKDB/, and the schemas README links its changelog by its full address, so the link works on PyPI.
