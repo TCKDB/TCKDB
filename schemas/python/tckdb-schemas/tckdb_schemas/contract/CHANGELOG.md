@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.177.0 - 2026-11-21
+
+`method_family_classification` is at version 2 (`CLASSIFICATION_VERSION = 2`). Three method names gain a family: `gfn2` is `semiempirical` (GFN2-xTB), `wb97xd3` is `dft` rung 4 (ωB97X-D3, a range-separated hybrid) and `mrci+davidson` is `multireference` (MRCI with the Davidson correction, MRCI+Q). Every other name classifies as before. No refusal, warning, field or payload shape changed.
+
 ## 0.176.0 - 2026-11-21
 
 New enum `PathCoordinateUnit` (`angstrom`, `bohr`, `amu_half_bohr`, `amu_half_angstrom`, `fraction`, `step`). `PathSearchResultPayload` gains optional `path_coordinate_unit`, the unit of every point's `path_coordinate`; `IRCResultPayload` gains optional `reaction_coordinate_unit`, the unit of every point's `reaction_coordinate`. Omitted, the unit is stored as unknown. A `fraction` unit refuses a coordinate outside [0, 1]; a `step` unit refuses one that is not a whole number. An unknown unit token is refused.

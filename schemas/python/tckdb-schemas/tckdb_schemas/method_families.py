@@ -71,7 +71,7 @@ from tckdb_schemas.method_names import method_identity_key
 
 #: Stable name of the classification. The version is separate (:data:`CLASSIFICATION_VERSION`), never part of this.
 CLASSIFICATION_NAME = "method_family_classification"
-CLASSIFICATION_VERSION = 1
+CLASSIFICATION_VERSION = 2
 
 
 class MethodFamily(str, Enum):
@@ -229,6 +229,7 @@ DFT_BY_RUNG: dict[int, tuple[str, ...]] = {
         "wb97",
         "wb97x",
         "wb97xd",
+        "wb97xd3",
         "wb97x-v",
         "wb97m",
         "wb97m-v",
@@ -342,6 +343,7 @@ OTHER_BY_FAMILY: dict[MethodFamily, tuple[str, ...]] = {
         "mrcic",
         "mrci",
         "mrci+q",
+        "mrci+davidson",
         "mrci(q)",
         "mrcisd",
         "mrcisd+q",
@@ -392,6 +394,7 @@ OTHER_BY_FAMILY: dict[MethodFamily, tuple[str, ...]] = {
         "gfn0-xtb",
         "gfn1-xtb",
         "gfn2-xtb",
+        "gfn2",
         "dftb",
         "dftb2",
         "dftb3",

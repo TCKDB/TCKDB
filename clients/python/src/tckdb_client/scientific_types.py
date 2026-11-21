@@ -969,12 +969,28 @@ class CatalogueCard(TypedDict, total=False):
     usage: JSONDict
 
 
+class UncataloguedKey(TypedDict, total=False):
+    """An identity key that shown levels of theory use and no catalogue entry names.
+
+    ``key``, the stored spellings that share it (``spellings_seen``) and its ``usage``. A method key also has ``kind``
+    (``method`` or ``dispersion_correction``), ``family`` and ``dft_rung``.
+    """
+
+    key: Required[str]
+    kind: str
+    family: str | None
+    dft_rung: int | None
+    spellings_seen: list[str]
+    usage: JSONDict
+
+
 class CatalogueBrowseResponse(TypedDict):
-    """The whole catalogue (methods or basis sets), in key order, unpaged."""
+    """The whole catalogue (methods or basis sets), in key order, unpaged, and the keys in use that no entry names."""
 
     request: ScientificRequestEcho
     review_summary: ReviewStatusSummary
     records: list[CatalogueCard]
+    uncatalogued: list[UncataloguedKey]
 
 
 class MethodCatalogueRecord(TypedDict):
@@ -1992,6 +2008,7 @@ __all__ = [
     "TransitionStateSearchResponse",
     "TransportRecord",
     "TransportSearchResponse",
+    "UncataloguedKey",
     "WatermarkEcho",
     "WorkflowToolReleaseIdentity",
 ]

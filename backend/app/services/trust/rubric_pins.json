@@ -16,7 +16,7 @@
       "1": "bdeb32a190ad747f7cbac566285e6a44f6f9d1aff6ca1abe40bdc920afe76f93"
     },
     "computed_transition_state": {
-      "2": "2c9263a9742eff40575d0e6671c095332a07cd71ac96ece3538cac9e2b0f18dc"
+      "2": "b9ef788aa38bea8ec06db394fc817943fa700ec70227bb92208d889e04235663"
     },
     "computed_transport": {
       "1": "5e9bb07ec88201552d890532cb85c50ea43ff2e32f61f92421028104f765797d"
@@ -547,6 +547,11 @@
       "name": "tckdb_reproducibility_ts_statmech",
       "version": 1,
       "reason": "The IRC and path-search results gained a coordinate unit column. Every closure reaches the new PathCoordinateUnit enum through those models; no check or grading reads the unit, and no stored assessment changes."
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "method_family_classification version 2 adds gfn2, wb97xd3 and mrci+davidson to the table. The closure reaches the table only through filter_by_provenance's method_family and DFT-rung filters, which the structure loader never passes, so no stored or read-time verdict changes."
     }
   ]
 }

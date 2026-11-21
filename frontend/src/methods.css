@@ -230,6 +230,34 @@
     color: var(--muted);
 }
 
+/* Spellings in use that no catalogue entry names, under each catalogue table. */
+.catalogue-uncatalogued {
+    margin-top: var(--s-4);
+}
+
+.catalogue-uncatalogued-heading {
+    margin: 0 0 var(--s-2);
+}
+
+.catalogue-uncatalogued-list {
+    display: grid;
+    gap: var(--s-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.catalogue-uncatalogued-list li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 var(--s-3);
+    min-width: 0;
+}
+
+.catalogue-uncatalogued-name {
+    overflow-wrap: anywhere;
+}
+
 /* The entry page's references: the role beside its articles; stacked on a phone. */
 .catalogue-reference-groups {
     display: grid;

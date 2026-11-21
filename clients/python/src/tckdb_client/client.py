@@ -5054,7 +5054,8 @@ class TCKDBClient:
         """``GET /scientific/methods`` -- every method and dispersion correction in the catalogue, in key order, unpaged.
 
         ``kind`` is ``method`` or ``dispersion_correction``; ``method_family`` one of the method families. Each card
-        carries its names, definition, references and usage. Nothing is ranked.
+        carries its names, definition, references and usage. ``uncatalogued`` lists the method and dispersion keys
+        that shown levels of theory use and no entry names, with their usage; the same filters apply. Nothing is ranked.
         """
 
         return self.request_json(
@@ -5085,7 +5086,8 @@ class TCKDBClient:
         """``GET /scientific/basis-sets`` -- every basis set in the catalogue, in key order, unpaged.
 
         ``role`` is ``orbital``, ``auxiliary_correlation``, ``auxiliary_coulomb`` or ``cabs``; ``family`` a family name
-        as written (``Karlsruhe def2``). Nothing is ranked.
+        as written (``Karlsruhe def2``). ``uncatalogued`` lists the basis-set keys that shown levels of theory use and
+        no entry names, with their usage; it is empty under a role or family filter. Nothing is ranked.
         """
 
         return self.request_json(

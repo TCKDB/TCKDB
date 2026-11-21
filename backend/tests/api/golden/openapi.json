@@ -3073,6 +3073,14 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "uncatalogued": {
+            "description": "Keys used by at least one level of theory counted in usage that no entry names, in key order. They have no role or family, so a role or family filter leaves this list empty.",
+            "items": {
+              "$ref": "#/components/schemas/UncataloguedBasisSet"
+            },
+            "title": "Uncatalogued",
+            "type": "array"
           }
         },
         "required": [
@@ -32175,6 +32183,14 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "uncatalogued": {
+            "description": "Keys used by at least one level of theory counted in usage that no entry names, in key order. The kind and family filters apply to them as to the entries.",
+            "items": {
+              "$ref": "#/components/schemas/UncataloguedMethod"
+            },
+            "title": "Uncatalogued",
+            "type": "array"
           }
         },
         "required": [
@@ -74860,6 +74876,84 @@
         "title": "TunnelingModel",
         "type": "string"
       },
+      "UncataloguedBasisSet": {
+        "description": "A basis-set identity key that levels of theory use (as basis, auxiliary or CABS basis) and no entry names.",
+        "properties": {
+          "key": {
+            "description": "The identity key the stored spellings share.",
+            "title": "Key",
+            "type": "string"
+          },
+          "spellings_seen": {
+            "description": "The distinct stored spellings, on levels of theory counted in usage.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Spellings Seen",
+            "type": "array"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/CatalogueUsage"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "UncataloguedBasisSet",
+        "type": "object"
+      },
+      "UncataloguedMethod": {
+        "description": "A method or dispersion identity key that levels of theory use and no catalogue entry names.",
+        "properties": {
+          "dft_rung": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dft Rung"
+          },
+          "family": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MethodFamily"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Derived from the key by the method-family classification; null for a dispersion correction."
+          },
+          "key": {
+            "description": "The identity key the stored spellings share.",
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CatalogueMethodKind"
+          },
+          "spellings_seen": {
+            "description": "The distinct stored spellings, on levels of theory counted in usage.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Spellings Seen",
+            "type": "array"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/CatalogueUsage"
+          }
+        },
+        "required": [
+          "key",
+          "kind"
+        ],
+        "title": "UncataloguedMethod",
+        "type": "object"
+      },
       "UploadJobKind": {
         "enum": [
           "computed_reaction",
@@ -95793,7 +95887,7 @@
     },
     "/api/v1/scientific/basis-sets": {
       "get": {
-        "description": "List the basis sets in the catalogue, in key order, with their references and usage.",
+        "description": "List the basis sets in the catalogue, in key order, with their references and usage, and the basis-set keys in\nuse that no entry names.",
         "operationId": "scientific_basis_sets_browse_api_v1_scientific_basis_sets_get",
         "parameters": [
           {
@@ -102758,7 +102852,7 @@
     },
     "/api/v1/scientific/methods": {
       "get": {
-        "description": "List the methods and dispersion corrections in the catalogue, in key order, with their references and usage.",
+        "description": "List the methods and dispersion corrections in the catalogue, in key order, with their references and usage,\nand the method and dispersion keys in use that no entry names.",
         "operationId": "scientific_methods_browse_api_v1_scientific_methods_get",
         "parameters": [
           {

@@ -53,6 +53,51 @@ describe("MethodsIndexPage: the catalogue tables", () => {
         expect(within(basis).getByText("Karlsruhe def2 · orbital basis")).toBeInTheDocument()
     })
 
+    it("lists the spellings in use that no entry names under each table, in the server's order", async () => {
+        const usage = (levels: number, calculations: number) => ({ level_usage_count: levels, calculation_usage_count: calculations })
+        server.use(
+            ...baseHandlers(),
+            http.get("/api/v1/scientific/methods", () => HttpResponse.json({
+                ...ENVELOPE,
+                records: [b3lypCard()],
+                uncatalogued: [
+                    { key: "d2", kind: "dispersion_correction", family: null, dft_rung: null, spellings_seen: ["D2"], usage: usage(1, 2) },
+                    { key: "pm7", kind: "method", family: "semiempirical", dft_rung: null, spellings_seen: ["PM7", "pm7"], usage: usage(2, 4) },
+                ],
+            })),
+            http.get("/api/v1/scientific/basis-sets", () => HttpResponse.json({
+                ...ENVELOPE,
+                records: [def2tzvpCard()],
+                uncatalogued: [{ key: "aug-cc-pvtz-f12", spellings_seen: ["aug-cc-pVTZ-F12"], usage: usage(1, 39) }],
+            })),
+        )
+        render(<MemoryRouter><MethodsIndexPage /></MemoryRouter>)
+
+        const methodSection = await screen.findByRole("region", { name: "Method catalogue" })
+        const methodList = await within(methodSection).findByRole("region", { name: "In use, not in the catalogue" })
+        expect(within(methodList).getAllByRole("listitem").map((item) => item.textContent)).toEqual([
+            "D2 (dispersion correction)Used by 1 level of theory · 2 calculations",
+            "PM7, pm7Used by 2 levels of theory · 4 calculations",
+        ])
+        expect(within(methodList).queryByRole("link")).toBeNull()
+
+        const basisSection = screen.getByRole("region", { name: "Basis-set catalogue" })
+        const basisList = await within(basisSection).findByRole("region", { name: "In use, not in the catalogue" })
+        expect(within(basisList).getByRole("listitem")).toHaveTextContent("aug-cc-pVTZ-F12Used by 1 level of theory · 39 calculations")
+    })
+
+    it("shows no uncatalogued list when every spelling in use has an entry", async () => {
+        server.use(
+            ...baseHandlers(),
+            http.get("/api/v1/scientific/methods", () => HttpResponse.json({ ...ENVELOPE, records: [b3lypCard()], uncatalogued: [] })),
+            http.get("/api/v1/scientific/basis-sets", () => HttpResponse.json({ ...ENVELOPE, records: [def2tzvpCard()] })),
+        )
+        render(<MemoryRouter><MethodsIndexPage /></MemoryRouter>)
+        await screen.findByRole("table", { name: "Basis-set catalogue" })
+        await screen.findByRole("table", { name: "Method catalogue" })
+        expect(screen.queryByRole("heading", { name: "In use, not in the catalogue" })).toBeNull()
+    })
+
     it("says so when a catalogue list cannot be loaded, and keeps the rest of the page", async () => {
         server.use(
             ...baseHandlers(),
