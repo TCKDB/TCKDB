@@ -1,0 +1,174 @@
+# Basis sets in the basis-set catalogue.
+#
+# `key` is the entry's identity key, basis_identity_key() of the name. `aliases` are further identity keys that
+# name the same entry. `references` are DOIs listed in literature.yml, in citation order. Descriptions are
+# definitional only. `known_uncatalogued` lists identity keys in use that have no entry because no article
+# defining that name has been verified.
+
+seed_version: 1
+
+known_uncatalogued:
+  - aug-cc-pvtz-f12
+
+basis_sets:
+  - key: def2-svp
+    role: orbital
+    family: Karlsruhe def2
+    short_name: def2-SVP
+    full_name: Karlsruhe def2 split-valence polarised basis set
+    description: >-
+      The split-valence basis set with polarisation functions of the Karlsruhe def2 family, defined for H to Rn
+      with effective core potentials beyond Kr.
+    references:
+      - {doi: 10.1039/b508541a, role: original}
+
+  - key: def2-tzvp
+    role: orbital
+    family: Karlsruhe def2
+    short_name: def2-TZVP
+    full_name: Karlsruhe def2 triple-zeta valence polarised basis set
+    description: >-
+      The triple-zeta valence basis set with polarisation functions of the Karlsruhe def2 family, defined for H to
+      Rn with effective core potentials beyond Kr.
+    references:
+      - {doi: 10.1039/b508541a, role: original}
+
+  - key: def2/j
+    role: auxiliary_coulomb
+    family: Karlsruhe def2
+    short_name: def2/J
+    full_name: Karlsruhe def2 universal Coulomb-fitting auxiliary basis set
+    description: >-
+      The auxiliary basis set for resolution-of-identity fitting of the Coulomb term with any Karlsruhe def2
+      orbital basis, defined for H to Rn.
+    references:
+      - {doi: 10.1039/b515623h, role: original}
+
+  - key: def2/jk
+    aliases: [def2-universal-jkfit]
+    role: auxiliary_coulomb
+    family: Karlsruhe def2
+    short_name: def2/JK
+    full_name: Karlsruhe def2 universal Coulomb- and exchange-fitting auxiliary basis set
+    description: >-
+      The auxiliary basis set for resolution-of-identity fitting of the Coulomb and Hartree-Fock exchange terms with
+      any Karlsruhe def2 orbital basis, defined for H to Rn.
+    references:
+      - {doi: 10.1002/jcc.20702, role: original}
+
+  - key: cc-pvdz
+    role: orbital
+    family: Dunning correlation-consistent
+    short_name: cc-pVDZ
+    full_name: Correlation-consistent polarised valence double-zeta basis set
+    description: >-
+      The double-zeta member of Dunning's correlation-consistent basis sets, in which each shell of polarisation
+      functions is added in the group that lowers the correlation energy by a similar amount.
+    references:
+      - {doi: 10.1063/1.456153, role: original}
+
+  - key: cc-pvtz
+    role: orbital
+    family: Dunning correlation-consistent
+    short_name: cc-pVTZ
+    full_name: Correlation-consistent polarised valence triple-zeta basis set
+    description: >-
+      The triple-zeta member of Dunning's correlation-consistent basis sets, in which each shell of polarisation
+      functions is added in the group that lowers the correlation energy by a similar amount.
+    references:
+      - {doi: 10.1063/1.456153, role: original}
+
+  - key: cc-pvqz
+    role: orbital
+    family: Dunning correlation-consistent
+    short_name: cc-pVQZ
+    full_name: Correlation-consistent polarised valence quadruple-zeta basis set
+    description: >-
+      The quadruple-zeta member of Dunning's correlation-consistent basis sets, in which each shell of polarisation
+      functions is added in the group that lowers the correlation energy by a similar amount.
+    references:
+      - {doi: 10.1063/1.456153, role: original}
+
+  - key: aug-cc-pvtz
+    role: orbital
+    family: Dunning correlation-consistent
+    short_name: aug-cc-pVTZ
+    full_name: Dunning cc-pVTZ augmented with diffuse functions
+    description: The cc-pVTZ basis set with one diffuse function added for each angular momentum it contains.
+    references:
+      - {doi: 10.1063/1.462569, role: original}
+
+  - key: aug-cc-pv(t+d)z
+    role: orbital
+    family: Dunning correlation-consistent
+    short_name: aug-cc-pV(T+d)Z
+    full_name: aug-cc-pVTZ with an additional tight d function on second-row atoms
+    description: >-
+      The aug-cc-pVTZ basis set with a tight d function added on the second-row atoms Al to Ar; on other atoms it
+      is aug-cc-pVTZ.
+    references:
+      - {doi: 10.1063/1.1367373, role: original}
+      - {doi: 10.1063/1.462569, role: component}
+
+  - key: cc-pvdz-f12
+    role: orbital
+    family: Peterson correlation-consistent F12
+    short_name: cc-pVDZ-F12
+    full_name: Correlation-consistent double-zeta basis set for explicitly correlated methods
+    description: >-
+      A double-zeta basis set, diffuse functions included, optimised for F12 explicitly correlated calculations.
+    references:
+      - {doi: 10.1063/1.2831537, role: original}
+
+  - key: cc-pvtz-f12
+    role: orbital
+    family: Peterson correlation-consistent F12
+    short_name: cc-pVTZ-F12
+    full_name: Correlation-consistent triple-zeta basis set for explicitly correlated methods
+    description: >-
+      A triple-zeta basis set, diffuse functions included, optimised for F12 explicitly correlated calculations.
+    references:
+      - {doi: 10.1063/1.2831537, role: original}
+
+  - key: cc-pvqz-f12
+    role: orbital
+    family: Peterson correlation-consistent F12
+    short_name: cc-pVQZ-F12
+    full_name: Correlation-consistent quadruple-zeta basis set for explicitly correlated methods
+    description: >-
+      A quadruple-zeta basis set, diffuse functions included, optimised for F12 explicitly correlated calculations.
+    references:
+      - {doi: 10.1063/1.2831537, role: original}
+
+  - key: cc-pvtz-f12-cabs
+    role: cabs
+    family: Peterson correlation-consistent F12
+    short_name: cc-pVTZ-F12-CABS
+    full_name: Complementary auxiliary basis set (OptRI) for cc-pVTZ-F12
+    description: >-
+      The complementary auxiliary basis set used to resolve the identity in the F12 terms of explicitly correlated
+      calculations with the cc-pVTZ-F12 orbital basis.
+    references:
+      - {doi: 10.1063/1.3009271, role: original}
+
+  - key: aug-cc-pvtz/c
+    role: auxiliary_correlation
+    family: Dunning correlation-consistent
+    short_name: aug-cc-pVTZ/C
+    full_name: Correlation-fitting auxiliary basis set for aug-cc-pVTZ
+    description: >-
+      The auxiliary basis set for resolution-of-identity fitting in the correlation treatment (RI-MP2 and related
+      methods) with the aug-cc-pVTZ orbital basis.
+    references:
+      - {doi: 10.1063/1.1445115, role: original}
+
+  - key: 6-31g(d)
+    aliases: [6-31g*]
+    role: orbital
+    family: Pople
+    short_name: 6-31G(d)
+    full_name: Pople 6-31G split-valence basis set with d polarisation functions
+    description: The 6-31G split-valence basis set with one set of d polarisation functions on each non-hydrogen atom.
+    references:
+      - {doi: 10.1063/1.1677527, role: original}
+      - {doi: 10.1007/BF00533485, role: original}

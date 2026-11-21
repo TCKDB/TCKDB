@@ -2258,3 +2258,27 @@ class SpeciesNameSourceKind(str, Enum):
 
     curated = "curated"
     offline_import = "offline_import"
+
+
+class CatalogueMethodKind(str, Enum):
+    """What a ``method_catalogue`` entry names: an electronic-structure method or a dispersion correction."""
+
+    method = "method"
+    dispersion_correction = "dispersion_correction"
+
+
+class BasisSetRole(str, Enum):
+    """What a ``basis_set_catalogue`` entry is used for."""
+
+    orbital = "orbital"
+    auxiliary_correlation = "auxiliary_correlation"  # RI fitting set for the correlation treatment (/C)
+    auxiliary_coulomb = "auxiliary_coulomb"  # RI fitting set for Coulomb or Coulomb-plus-exchange (/J, /JK)
+    cabs = "cabs"  # complementary auxiliary basis of an F12 method
+
+
+class CatalogueReferenceRole(str, Enum):
+    """Why a catalogue entry cites an article."""
+
+    original = "original"  # defines the method or basis set
+    component = "component"  # defines a part the method or basis set is built from
+    implementation = "implementation"  # the program the method is defined by

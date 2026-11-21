@@ -67,6 +67,13 @@ enum AtomParamApplication {
   added
 }
 
+enum BasisSetRole {
+  orbital
+  auxiliary_correlation
+  auxiliary_coulomb
+  cabs
+}
+
 enum CalculationDependencyRole {
   optimized_from
   freq_on
@@ -107,6 +114,17 @@ enum CalculationType {
   path_search
   conf
   composite
+}
+
+enum CatalogueMethodKind {
+  method
+  dispersion_correction
+}
+
+enum CatalogueReferenceRole {
+  original
+  component
+  implementation
 }
 
 enum CompositeAssembly {
@@ -1220,6 +1238,66 @@ Table author {
   indexes {
     orcid [unique, name: 'uq_author_orcid']
   }
+}
+
+Table basis_set_catalogue {
+  id bigint [pk, not null]
+  key text [not null]
+  role BasisSetRole [not null]
+  family text [not null]
+  short_name text [not null]
+  full_name text [not null]
+  description text [not null]
+  seed_version int [not null]
+  updated_at timestamp [not null, default: 'now']
+  created_at timestamp [not null, default: 'now']
+  public_ref string [not null]
+
+  indexes {
+    public_ref [unique, name: 'ix_basis_set_catalogue_public_ref']
+    key [unique, name: 'uq_basis_set_catalogue_key']
+  }
+
+  checks {
+    `key = lower(btrim(key)) AND key <> ''` [name: 'ck_basis_set_catalogue_key_is_normalised']
+    `seed_version >= 1` [name: 'ck_basis_set_catalogue_seed_version_positive']
+  }
+
+  Note: 'Curation: one basis set TCKDB describes (ref prefix ``bcat_``, content-derived from ``key``).'
+}
+
+Table basis_set_catalogue_key {
+  key text [pk, not null]
+  basis_set_catalogue_id bigint [not null, ref: > basis_set_catalogue.id]
+
+  indexes {
+    basis_set_catalogue_id [name: 'ix_basis_set_catalogue_key_basis_set_catalogue_id']
+  }
+
+  checks {
+    `key = lower(btrim(key)) AND key <> ''` [name: 'ck_basis_set_catalogue_key_key_is_normalised']
+  }
+
+  Note: 'Curation: a ``basis_identity_key`` value that names a basis-set catalogue entry.'
+}
+
+Table basis_set_catalogue_literature {
+  basis_set_catalogue_id bigint [not null, ref: > basis_set_catalogue.id]
+  literature_id bigint [not null, ref: > literature.id]
+  role CatalogueReferenceRole [not null]
+  position int [not null]
+
+  indexes {
+    (basis_set_catalogue_id, literature_id) [pk]
+    literature_id [name: 'ix_basis_set_catalogue_literature_literature_id']
+    (basis_set_catalogue_id, position) [unique, name: 'uq_basis_set_catalogue_literature_position']
+  }
+
+  checks {
+    `position >= 1` [name: 'ck_basis_set_catalogue_literature_position_positive']
+  }
+
+  Note: 'Curation: one article a basis-set catalogue entry cites, with its role and citation position.'
 }
 
 Table calc_composite_input {
@@ -2835,6 +2913,65 @@ Table machine_review_curator_task {
   }
 
   Note: 'One human to-do about one finding on one record in one submission.'
+}
+
+Table method_catalogue {
+  id bigint [pk, not null]
+  key text [not null]
+  kind CatalogueMethodKind [not null]
+  short_name text [not null]
+  full_name text [not null]
+  description text [not null]
+  seed_version int [not null]
+  updated_at timestamp [not null, default: 'now']
+  created_at timestamp [not null, default: 'now']
+  public_ref string [not null]
+
+  indexes {
+    public_ref [unique, name: 'ix_method_catalogue_public_ref']
+    key [unique, name: 'uq_method_catalogue_key']
+  }
+
+  checks {
+    `key = lower(btrim(key)) AND key <> ''` [name: 'ck_method_catalogue_key_is_normalised']
+    `seed_version >= 1` [name: 'ck_method_catalogue_seed_version_positive']
+  }
+
+  Note: 'Curation: one method or dispersion correction TCKDB describes (ref prefix ``mcat_``, from ``key``).'
+}
+
+Table method_catalogue_key {
+  key text [pk, not null]
+  method_catalogue_id bigint [not null, ref: > method_catalogue.id]
+
+  indexes {
+    method_catalogue_id [name: 'ix_method_catalogue_key_method_catalogue_id']
+  }
+
+  checks {
+    `key = lower(btrim(key)) AND key <> ''` [name: 'ck_method_catalogue_key_key_is_normalised']
+  }
+
+  Note: 'Curation: a ``method_identity_key`` or ``dispersion_identity_key`` value naming a method catalogue entry.'
+}
+
+Table method_catalogue_literature {
+  method_catalogue_id bigint [not null, ref: > method_catalogue.id]
+  literature_id bigint [not null, ref: > literature.id]
+  role CatalogueReferenceRole [not null]
+  position int [not null]
+
+  indexes {
+    (literature_id, method_catalogue_id) [pk]
+    literature_id [name: 'ix_method_catalogue_literature_literature_id']
+    (method_catalogue_id, position) [unique, name: 'uq_method_catalogue_literature_position']
+  }
+
+  checks {
+    `position >= 1` [name: 'ck_method_catalogue_literature_position_positive']
+  }
+
+  Note: 'Curation: one article a method catalogue entry cites, with its role and citation position.'
 }
 
 Table molecular_property_observation {

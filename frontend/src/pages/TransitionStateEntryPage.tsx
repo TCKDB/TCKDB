@@ -17,6 +17,7 @@ import { Breadcrumbs } from "../components/Breadcrumbs"
 import { DepositorNote } from "../components/DepositorNote"
 import { Disclosure } from "../components/Disclosure"
 import { EnergyProfile } from "../components/EnergyProfile"
+import { PathSearchCard } from "../components/PathSearchCard"
 import { ListPager } from "../components/ListPager"
 import { LevelLabel } from "../components/LevelLabel"
 import { PageShell } from "../components/PageShell"
@@ -195,6 +196,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
     const calculationsAvailability = sectionAvailability(record.calculations)
     const calculations = sortCalculationsByStage(record.calculations ?? [])
     const ircCalc = calculations.find((calc) => calc.type === "irc") ?? null
+    const pathSearchCalcs = calculations.filter((calc) => calc.type === "path_search")
     const checks = transitionStateChecks(record)
 
     const geometriesAvailability = sectionAvailability(record.geometries)
@@ -519,7 +521,10 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                         ) : (
                             <p className="empty-projection">No saddle-point (final) geometry was deposited for this entry.</p>
                         )}
-                        {[...otherGeometriesByRole.entries()].map(([role, roleGeometries]) => {
+                        {pathSearchCalcs.map((calc) => (
+                            <PathSearchCard key={calc.calculation_ref} calculationRef={calc.calculation_ref} levelOfTheory={calc.level_of_theory ?? null} />
+                        ))}
+                        {[...otherGeometriesByRole.entries()].filter(([role]) => !(role === "path_search_point" && pathSearchCalcs.length > 0)).map(([role, roleGeometries]) => {
                             const natoms = roleGeometries[0]?.natoms ?? null
                             return (
                                 <Disclosure

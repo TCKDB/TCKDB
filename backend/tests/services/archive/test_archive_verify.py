@@ -12,7 +12,7 @@ import tarfile
 from pathlib import Path
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import or_, text, tuple_
 
 from app.db.base import Base
 from app.services.archive import registry, restore_archive, verify_archive, write_archive
@@ -103,6 +103,12 @@ def _empty_archive_tables(session) -> None:
     for table in reversed(Base.metadata.sorted_tables):
         if table.name not in PRESEEDED_TABLES:
             session.execute(table.delete())
+            continue
+        identity_names, expected = PRESEEDED_TABLES[table.name]
+        identity = [table.c[name] for name in identity_names]
+        session.execute(
+            table.delete().where(or_(~tuple_(*identity).in_(list(expected)), *(c.is_(None) for c in identity)))
+        )
     session.execute(text("SET LOCAL session_replication_role = origin"))
     session.expunge_all()
 

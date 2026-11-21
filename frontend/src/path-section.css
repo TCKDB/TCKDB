@@ -1,0 +1,136 @@
+/* "The path" on a path-search calculation: facts, the figure, and the calculations that followed. */
+.path-facts {
+    margin: var(--s-3) 0 var(--s-4);
+}
+
+.path-lineage {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: var(--s-2);
+    margin: var(--s-3) 0;
+    padding: 0;
+    list-style: none;
+}
+
+.path-lineage > li {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.path-lineage-node {
+    display: grid;
+    gap: .2rem;
+    max-width: 22rem;
+    padding: var(--s-2) var(--s-3);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+}
+
+.path-lineage-node--self {
+    border-color: var(--accent);
+    border-width: 2px;
+}
+
+.path-lineage-facts {
+    color: var(--muted);
+    font: var(--type-ui-font);
+    overflow-wrap: anywhere;
+}
+
+.path-lineage > li.path-lineage-edge {
+    gap: .3rem;
+}
+
+.path-lineage-edge {
+    color: var(--muted);
+    font: var(--type-ui-font);
+}
+
+.path-lineage > li.path-lineage-group {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--s-2);
+}
+
+.path-lineage-group ul {
+    display: grid;
+    gap: var(--s-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.path-lineage-back {
+    max-width: var(--measure-prose);
+}
+
+.path-lineage-arrow {
+    display: inline-block;
+}
+
+@media (max-width: 40rem) {
+    .path-lineage {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .path-lineage-node {
+        flex: 1;
+        max-width: none;
+    }
+
+    .path-lineage > li.path-lineage-group,
+    .path-lineage-group ul {
+        align-items: stretch;
+        width: 100%;
+    }
+
+    .path-lineage > li.path-lineage-edge {
+        padding-left: var(--s-3);
+    }
+
+    .path-lineage-arrow {
+        transform: rotate(90deg);
+    }
+}
+
+.path-card {
+    margin-top: var(--s-4);
+}
+
+.path-card-facts {
+    margin: var(--s-3) 0;
+}
+
+.path-sparkline {
+    display: block;
+    width: 20rem;
+    max-width: 100%;
+    height: auto;
+    margin-bottom: var(--s-2);
+}
+
+.path-sparkline-rule {
+    stroke: var(--divider-strong);
+    stroke-width: 1.5;
+}
+
+.path-sparkline-line {
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 1.5;
+}
+
+.path-sparkline-point {
+    fill: var(--surface);
+    stroke: var(--ink);
+    stroke-width: 1.5;
+}
+
+.path-sparkline-point--marked {
+    fill: var(--accent);
+    stroke: var(--accent);
+}
