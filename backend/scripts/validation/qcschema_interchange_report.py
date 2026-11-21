@@ -26,8 +26,9 @@ stored under another case is reused the same way and does not reach the report.
 
 The round trip (asserted, exit status 1 on any failure)
 -------------------------------------------------------
-The v2 document is read and mapped by the real adapter
-(``clients/python/adapters/qcschema``: ``reader.read_document`` then
+The v2 document is read and mapped by the real adapter (``tckdb-qcschema``
+from tckdb-adapters, pinned in ``backend/requirements-adapters.txt``:
+``reader.read_document`` then
 ``mapping.build_conformer_upload_payload`` with ``--smiles O``), posted to the
 real ``POST /api/v1/uploads/conformers`` route of an in-process application
 through the real ``tckdb-client`` (an in-process transport, no socket), with a
@@ -126,6 +127,7 @@ import argparse
 import contextlib
 import hashlib
 import importlib
+import importlib.util
 import json
 import math
 import platform
@@ -169,9 +171,10 @@ RUN_SCRIPT_NAME = "run_psi4_water_hessian.py"
 META_NAME = "meta.json"
 FIXTURE_FILES = (V1_NAME, V2_NAME, REFERENCE_NAME, RUN_SCRIPT_NAME)
 
-ADAPTER_ROOT = REPO_ROOT / "clients" / "python" / "adapters" / "qcschema"
 CLIENT_SRC = REPO_ROOT / "clients" / "python" / "src"
-PSI4_LOCKFILE = ADAPTER_ROOT / "tests" / "fixtures" / "ENVIRONMENT.lock.txt"
+PSI4_LOCKFILE = FIXTURE_DIR / "ENVIRONMENT.lock.txt"
+#: How the adapter is installed; it is not part of this repository.
+ADAPTER_INSTALL = "pip install --no-deps -r backend/requirements-adapters.txt"
 
 #: Identity is declared, never perceived: Psi4 drops ``molecule.identifiers``
 #: and TCKDB does not derive a SMILES from 3D coordinates.
@@ -356,22 +359,26 @@ def _owned(module_name: str) -> bool:
 
 @contextlib.contextmanager
 def adapter_modules() -> Iterator[SimpleNamespace]:
-    """Import ``tckdb_qcschema`` and ``tckdb_client`` from this checkout.
+    """Import the installed ``tckdb_qcschema`` with ``tckdb_client`` from this checkout.
 
-    Neither is a backend dependency, and an installed ``tckdb_client`` may be
-    another checkout's older copy. So both are imported from
-    ``clients/python`` for the duration of the block and removed afterwards:
-    any copy already in ``sys.modules`` is set aside and put back, and the
-    path entries are taken out again, so no other test in the same process
-    sees a different ``tckdb_client`` because this ran.
+    Neither is a backend dependency. The adapter comes from tckdb-adapters
+    (``ADAPTER_INSTALL``); an installed ``tckdb_client`` may be another
+    checkout's older copy, so the client is imported from ``clients/python``
+    and the adapter runs against it. Both are imported for the duration of
+    the block and removed afterwards: any copy already in ``sys.modules`` is
+    set aside and put back, and the path entry is taken out again, so no
+    other test in the same process sees a different ``tckdb_client`` because
+    this ran.
     """
     stashed = {name: module for name, module in sys.modules.items() if _owned(name)}
     for name in stashed:
         del sys.modules[name]
-    inserted = [str(CLIENT_SRC), str(ADAPTER_ROOT)]
+    inserted = [str(CLIENT_SRC)]
     for entry in reversed(inserted):
         sys.path.insert(0, entry)
     try:
+        if importlib.util.find_spec("tckdb_qcschema") is None:
+            raise FixtureError(f"tckdb-qcschema is not installed; {ADAPTER_INSTALL}")
         modules = SimpleNamespace(
             package=importlib.import_module("tckdb_qcschema"),
             reader=importlib.import_module("tckdb_qcschema.reader"),
@@ -382,10 +389,9 @@ def adapter_modules() -> Iterator[SimpleNamespace]:
             uploader=importlib.import_module("tckdb_qcschema.uploader"),
             client=importlib.import_module("tckdb_client"),
         )
-        for module in (modules.package, modules.client):
-            origin = Path(module.__file__).resolve()
-            if REPO_ROOT not in origin.parents:
-                raise FixtureError(f"{module.__name__} resolved outside this checkout: {origin}")
+        origin = Path(modules.client.__file__).resolve()
+        if REPO_ROOT not in origin.parents:
+            raise FixtureError(f"tckdb_client resolved outside this checkout: {origin}")
         # ``tckdb_client.__version__`` comes from installed distribution
         # metadata: "0.0.0+local" when the package is not installed (backend
         # CI), or another checkout's version when an older copy is. The code

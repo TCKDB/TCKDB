@@ -3,7 +3,7 @@
 This is the headline test that guards the two *separately-packaged* CHEMKIN
 adapters against silent drift:
 
-* the **importer** (client adapter, ``clients/python/adapters/chemkin`` —
+* the **importer** (``tckdb-chemkin`` from tckdb-adapters —
   ``parser`` / ``normalizer`` / ``identity`` / ``payloads``), and
 * the **exporter** (backend ``app/services/scientific_read/export.py`` +
   ``chemkin_serialize.py``).
@@ -25,7 +25,6 @@ CHEMKIN ``DUPLICATE`` group), NASA-7 thermo, transport.
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
@@ -33,22 +32,8 @@ from rdkit import Chem
 
 from tests._ci_dependency import require_module
 
-# The CHEMKIN importer adapter (``tckdb_chemkin``) lives under
-# clients/python/adapters/chemkin and is not installed into tckdb_env, so its
-# package root is prepended to sys.path here — inline (rather than in a
-# tests/integration/conftest.py) to avoid a bare-``conftest`` module-name
-# collision with tests that do ``from conftest import ...``. Only the pure
-# stages are used; the network ``uploader`` stage is never imported.
-_CHEMKIN_ADAPTER = (
-    Path(__file__).resolve().parents[3] / "clients" / "python" / "adapters" / "chemkin"
-)
-if _CHEMKIN_ADAPTER.is_dir() and str(_CHEMKIN_ADAPTER) not in sys.path:
-    # APPEND (not insert(0)): this directory also contains its own ``tests``
-    # package, and inserting it at the front would shadow the backend ``tests``
-    # package for the rest of the session, breaking other tests that do
-    # ``from tests... import``. Appending keeps backend ``tests`` first while
-    # still making the unique ``tckdb_chemkin`` package importable.
-    sys.path.append(str(_CHEMKIN_ADAPTER))
+# The CHEMKIN importer, from tckdb-adapters (pinned in backend/requirements-adapters.txt).
+require_module("tckdb_chemkin", install="pip install --no-deps -r backend/requirements-adapters.txt")
 
 from tckdb_chemkin.identity import (
     IdentityResolver,

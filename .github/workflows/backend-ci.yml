@@ -177,6 +177,9 @@ jobs:
           # after the schemas package so the editable one satisfies the
           # client's tckdb-schemas requirement.
           conda run -n tckdb_env python -m pip install -e clients/python
+          # The CHEMKIN and QCSchema adapters, pinned by commit, for the
+          # CHEMKIN round trip and the QCSchema interchange report.
+          conda run -n tckdb_env python -m pip install --no-deps -r backend/requirements-adapters.txt
 
       - name: Lint (ruff)
         working-directory: backend
@@ -547,6 +550,9 @@ jobs:
           # after the schemas package so the editable one satisfies the
           # client's tckdb-schemas requirement.
           conda run -n tckdb_env python -m pip install -e clients/python
+          # The CHEMKIN and QCSchema adapters, pinned by commit, for the
+          # CHEMKIN round trip and the QCSchema interchange report.
+          conda run -n tckdb_env python -m pip install --no-deps -r backend/requirements-adapters.txt
 
       - name: Initialize artifact bucket
         # This step had never run. As `conda run -n tckdb_env python - <<'PY'`

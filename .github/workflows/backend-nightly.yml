@@ -224,6 +224,9 @@ jobs:
           # Same as backend-ci.yml: tests/client_builder_contract/ needs the
           # client, and fails rather than skips on CI without it (#575).
           conda run -n tckdb_env python -m pip install -e clients/python
+          # The CHEMKIN and QCSchema adapters, pinned by commit, for the
+          # CHEMKIN round trip and the QCSchema interchange report.
+          conda run -n tckdb_env python -m pip install --no-deps -r backend/requirements-adapters.txt
 
       - name: Initialize artifact bucket
         # See the twin step in backend-ci.yml: as `conda run python - <<'PY'`
