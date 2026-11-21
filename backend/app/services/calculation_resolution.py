@@ -1135,6 +1135,7 @@ def _persist_irc_result(
                 else (len(payload.points) if payload.points else None)
             ),
             zero_energy_reference_hartree=payload.zero_energy_reference_hartree,
+            reaction_coordinate_unit=payload.reaction_coordinate_unit,
             note=payload.note,
         )
     )
@@ -1227,6 +1228,7 @@ def _persist_path_search_result(
             climbing_image_index=payload.climbing_image_index,
             source_endpoint_count=payload.source_endpoint_count,
             zero_energy_reference_hartree=payload.zero_energy_reference_hartree,
+            path_coordinate_unit=payload.path_coordinate_unit,
             note=payload.note,
         )
     )

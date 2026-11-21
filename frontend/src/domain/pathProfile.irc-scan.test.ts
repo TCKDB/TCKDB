@@ -46,6 +46,19 @@ describe("ircProfile", () => {
         expect(drawn.points[0].coordinate).toBeCloseTo(3.127)
         expect(drawn.xTitle).toContain("reverse leg drawn to the left")
     })
+
+    it("names the recorded unit on the axis, the column and the point", () => {
+        const withUnit = ircProfile({ summary: { ...IRC_SUMMARY, reaction_coordinate_unit: "amu_half_bohr" }, points: SIGNED })
+        expect(withUnit.xTitle).toBe("reaction coordinate, amu½·bohr")
+        expect(withUnit.xColumn).toBe("Reaction coordinate (amu½·bohr)")
+        expect(pointSentence(withUnit, withUnit.points[3])).toBe("Point 2 · forward: reaction coordinate 0.075 amu½·bohr, −1.0 kJ/mol")
+    })
+
+    it("words a step-number coordinate as a step", () => {
+        const steps = ircProfile({ summary: { ...IRC_SUMMARY, reaction_coordinate_unit: "step" }, points: SIGNED.map((p) => ({ ...p, reaction_coordinate: p.point_index })) })
+        expect(steps.xTitle).toBe("reaction coordinate, step number (reverse leg drawn to the left)")
+        expect(pointSentence(steps, steps.points.find((p) => p.index === 3)!)).toBe("Point 3 · forward (forward end): step 3, −180.0 kJ/mol")
+    })
 })
 
 const SCAN: ScanPoints = {

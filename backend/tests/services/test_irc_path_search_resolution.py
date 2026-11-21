@@ -26,6 +26,7 @@ from app.db.models.common import (
     CalculationGeometryRole,
     CalculationType,
     IRCDirection,
+    PathCoordinateUnit,
     PathSearchMethod,
 )
 from app.schemas.fragments.calculation import (
@@ -325,6 +326,53 @@ def test_persist_path_search_gsm_result_persists(db_conn) -> None:
         assert result is not None
         assert result.method is PathSearchMethod.gsm
         assert result.selected_ts_point_index == 1
+
+
+@pytest.mark.parametrize("unit", ["angstrom", None])
+def test_persist_path_search_and_irc_coordinate_units(db_conn, unit) -> None:
+    """A stated coordinate unit is stored; an omitted one is stored as NULL."""
+
+    with Session(db_conn) as session, session.begin():
+        species_entry_id = _create_species_entry(
+            session, inchi_key=_next_inchi_key("PSUNIT")
+        )
+        ps_calc = resolve_and_persist_calculation_with_results(
+            session,
+            CalculationWithResultsPayload(
+                type=CalculationType.path_search,
+                software_release=_SOFTWARE,
+                level_of_theory=_LOT,
+                path_search_result=PathSearchResultPayload(
+                    method=PathSearchMethod.neb,
+                    path_coordinate_unit=unit,
+                    points=[
+                        PathSearchPointPayload(point_index=0, path_coordinate=0.0),
+                        PathSearchPointPayload(point_index=1, path_coordinate=3.759),
+                    ],
+                ),
+            ),
+            species_entry_id=species_entry_id,
+        )
+        irc_calc = resolve_and_persist_calculation_with_results(
+            session,
+            CalculationWithResultsPayload(
+                type=CalculationType.irc,
+                software_release=_SOFTWARE,
+                level_of_theory=_LOT,
+                irc_result=IRCResultPayload(
+                    reaction_coordinate_unit=None if unit is None else "amu_half_bohr",
+                    points=[IRCPointPayload(point_index=0, is_ts=True, reaction_coordinate=0.0)],
+                ),
+            ),
+            species_entry_id=species_entry_id,
+        )
+
+        ps_unit = session.get(CalculationPathSearchResult, ps_calc.id).path_coordinate_unit
+        irc_unit = session.get(CalculationIRCResult, irc_calc.id).reaction_coordinate_unit
+        if unit is None:
+            assert (ps_unit, irc_unit) == (None, None)
+        else:
+            assert (ps_unit, irc_unit) == (PathCoordinateUnit.angstrom, PathCoordinateUnit.amu_half_bohr)
 
 
 def test_path_search_result_dedupes_shared_point_geometry(db_conn) -> None:

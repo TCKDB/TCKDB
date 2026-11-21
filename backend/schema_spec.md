@@ -1130,6 +1130,7 @@ not stability evidence.
 - `ts_point_index`
 - `point_count`
 - `zero_energy_reference_hartree`
+- `reaction_coordinate_unit` (`PathCoordinateUnit`, nullable: unit of every point's `reaction_coordinate`; NULL = not recorded)
 - `note`
 
 `calc_irc_point` fields:
@@ -1229,6 +1230,7 @@ calculation was run.
 - `climbing_image_index`
 - `source_endpoint_count`
 - `zero_energy_reference_hartree`
+- `path_coordinate_unit` (`PathCoordinateUnit`, nullable: unit of every point's `path_coordinate`; NULL = not recorded)
 - `note`
 
 `calc_path_search_point` fields:

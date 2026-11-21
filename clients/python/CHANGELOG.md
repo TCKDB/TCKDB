@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.209.2 - 2026-11-21
+
+The `tckdb-schemas` requirement is widened to `>=0.158,<0.177`, which admits the schemas release whose path-search and IRC results carry a coordinate unit. Such a result is sent as a payload dict, so `path_coordinate_unit` and `reaction_coordinate_unit` pass through unchanged. No client behaviour changed.
+
 ## 0.209.1 - 2026-11-21
 
 No client behaviour changed. `tckdb-client` declares `pydantic>=2.6`, which it imports directly and used to get only through `tckdb-schemas`. The `Documentation` project URL points at https://tckdb.github.io/TCKDB/.

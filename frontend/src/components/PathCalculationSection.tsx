@@ -73,7 +73,7 @@ function IrcBody({ data, calculation }: { data: IrcPoints; calculation: Calculat
         summary.forward_point_count > 0 ? `${summary.forward_point_count} forward` : null,
         summary.reverse_point_count > 0 ? `${summary.reverse_point_count} reverse` : null,
     ].filter(Boolean).join(" · ")
-    const caption = `${profile.points.length} points placed by the reaction coordinate as the program reported it; no unit is stored for it.`
+    const caption = `${profile.points.length} points placed by the reaction coordinate${profile.xUnit ? (profile.xUnitSuffix ? `, in ${profile.xUnit}.` : `, given as a ${profile.xUnit}.`) : " as the program reported it; no unit is stored for it."}`
         + `${saddle ? " The filled point is the saddle point; the ends are labelled by leg." : ""}${noEnergies(profile, "IRC")}`
     return (
         <>

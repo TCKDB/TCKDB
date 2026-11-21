@@ -42,9 +42,13 @@ export type PathProfile = {
     xTitle: string
     /** Column heading for the coordinate in the table. */
     xColumn: string
-    /** Where a point sits, in words: "3.759 along the path". */
+    /** Where a point sits, in words: "3.76 Å along the path". */
     xPhrase: string
     xDecimals: number
+    /** The coordinate's unit as an axis title names it ("Å", "amu½·bohr"), or null when none is recorded. */
+    xUnit: string | null
+    /** The unit as it follows a number (" Å"), or "" when none is recorded or the unit is a fraction or a step. */
+    xUnitSuffix: string
     energyMode: EnergyMode
     yTitle: string
     /** Points that have no energy while others do; they are listed in the table but not drawn. */
@@ -127,6 +131,8 @@ function assemble(kind: PathKind, raw: RawPoint[], labelsOf: (point: RawPoint, o
     /** `{x}` is replaced by the coordinate. */
     xPhrase: string
     xDecimals: number
+    xUnit?: string | null
+    xUnitSuffix?: string
     hasGradients?: boolean
 }): PathProfile {
     const hasCoordinate = raw.length > 0 && raw.every((point) => point.coordinate !== null)
@@ -155,11 +161,40 @@ function assemble(kind: PathKind, raw: RawPoint[], labelsOf: (point: RawPoint, o
         xColumn: axis.xColumn,
         xPhrase: axis.xPhrase,
         xDecimals: axis.xDecimals,
+        xUnit: axis.xUnit ?? null,
+        xUnitSuffix: axis.xUnitSuffix ?? "",
         energyMode: energy.mode,
         yTitle: energy.title,
         undrawnCount: energy.mode === "none" ? 0 : points.length - drawn,
         hasGradients: axis.hasGradients ?? true,
     }
+}
+
+type PathUnitWords = { axis: string; suffix: string; decimals: number }
+
+/** The units a path-search or IRC coordinate is stored in, as an axis title and a number's suffix name them. */
+const PATH_UNIT_WORDS: Readonly<Record<string, PathUnitWords>> = {
+    angstrom: { axis: "Å", suffix: " Å", decimals: 2 },
+    bohr: { axis: "bohr", suffix: " bohr", decimals: 2 },
+    amu_half_bohr: { axis: "amu½·bohr", suffix: " amu½·bohr", decimals: 2 },
+    amu_half_angstrom: { axis: "amu½·Å", suffix: " amu½·Å", decimals: 2 },
+    fraction: { axis: "fraction of the path", suffix: "", decimals: 2 },
+    step: { axis: "step number", suffix: "", decimals: 0 },
+}
+
+/** The recorded unit of a path coordinate, or null when none is recorded. A token this page was not taught is shown as stored. */
+export function pathUnitWords(unit: string | null | undefined): PathUnitWords | null {
+    if (!unit) return null
+    if (Object.hasOwn(PATH_UNIT_WORDS, unit)) return PATH_UNIT_WORDS[unit]
+    const words = unit.replaceAll("_", " ")
+    return { axis: words, suffix: ` ${words}`, decimals: 3 }
+}
+
+/** "3.76 Å along the path", "0.40 of the way along the path", "step 4 along the path", "3.759 along the path". */
+function pathSearchPhrase(unit: string | null | undefined, words: PathUnitWords | null): string {
+    if (unit === "fraction") return "{x} of the way along the path"
+    if (unit === "step") return "step {x} along the path"
+    return `{x}${words?.suffix ?? ""} along the path`
 }
 
 /** A path search's points: x is the stored distance along the path, zero is point 0 unless the read names a reference. */
@@ -180,6 +215,7 @@ export function pathSearchProfile({ summary, points }: PathSearchPoints): PathPr
     const indices = raw.map((point) => point.index)
     const first = indices.length > 1 ? Math.min(...indices) : null
     const last = indices.length > 1 ? Math.max(...indices) : null
+    const unit = pathUnitWords(summary.path_coordinate_unit)
     return assemble("path_search", raw, (point) => [
         ...(point.index === first ? ["start"] : []),
         ...(point.index === last ? ["end"] : []),
@@ -192,11 +228,13 @@ export function pathSearchProfile({ summary, points }: PathSearchPoints): PathPr
             anchor: (ordered) => ordered.find((point) => point.index === first) ?? ordered[0],
             emptyTail: "not deposited for this path",
         },
-        coordinateTitle: "distance along the path, as deposited",
+        coordinateTitle: unit ? `distance along the path, ${unit.axis}` : "distance along the path, as deposited",
         indexTitle: "point number (no distance along the path was deposited)",
-        xColumn: "Along the path",
-        xPhrase: "{x} along the path",
-        xDecimals: 3,
+        xColumn: unit ? `Along the path (${unit.axis})` : "Along the path",
+        xPhrase: pathSearchPhrase(summary.path_coordinate_unit, unit),
+        xDecimals: unit?.decimals ?? 3,
+        xUnit: unit?.axis ?? null,
+        xUnitSuffix: unit?.suffix ?? "",
     })
 }
 
@@ -230,6 +268,8 @@ export function ircProfile({ summary, points }: IrcPoints): PathProfile {
             ...(reverseUnsigned && leg === "reverse" && coordinate !== null ? { drawnAt: -coordinate } : {}),
         }
     })
+    const unit = pathUnitWords(summary.reaction_coordinate_unit)
+    const coordinateTitle = unit ? `reaction coordinate, ${unit.axis}` : "reaction coordinate, as the program reported it"
     const profile = assemble("irc", raw, () => [], {
         reference: finite(summary.zero_energy_reference_hartree),
         words: {
@@ -237,13 +277,13 @@ export function ircProfile({ summary, points }: IrcPoints): PathProfile {
             anchor: (ordered) => ordered.find((point) => point.saddle),
             emptyTail: "not deposited for this IRC",
         },
-        coordinateTitle: reverseUnsigned
-            ? "reaction coordinate, as the program reported it (reverse leg drawn to the left)"
-            : "reaction coordinate, as the program reported it",
+        coordinateTitle: reverseUnsigned ? `${coordinateTitle} (reverse leg drawn to the left)` : coordinateTitle,
         indexTitle: "point number (no reaction coordinate was deposited)",
-        xColumn: "Reaction coordinate",
-        xPhrase: "reaction coordinate {x}",
-        xDecimals: 3,
+        xColumn: unit ? `Reaction coordinate (${unit.axis})` : "Reaction coordinate",
+        xPhrase: summary.reaction_coordinate_unit === "step" ? "step {x}" : `reaction coordinate {x}${unit?.suffix ?? ""}`,
+        xDecimals: summary.reaction_coordinate_unit === "step" ? 0 : 3,
+        xUnit: unit?.axis ?? null,
+        xUnitSuffix: unit?.suffix ?? "",
     })
     // Ends are named by leg: the drawn extremes of each leg, never the saddle point itself.
     const reverse = profile.points.filter((point) => point.leg === "reverse")
@@ -354,6 +394,11 @@ export function coordinateText(profile: PathProfile, value: number | null): stri
     return value === null ? NOT_DEPOSITED : value.toFixed(profile.xDecimals).replace("-", "−")
 }
 
+/** The coordinate followed by its unit when one is recorded: "3.76 Å". */
+export function coordinateWithUnit(profile: PathProfile, value: number | null): string {
+    return value === null ? NOT_DEPOSITED : `${coordinateText(profile, value)}${profile.xUnitSuffix}`
+}
+
 export function energyText(kj: number | null): string {
     return kj === null ? "energy not deposited" : `${relativeKjText(kj)} kJ/mol`
 }
@@ -371,7 +416,7 @@ export function pointSentence(profile: PathProfile, point: PathPoint): string {
     return `${head}: ${whereText(profile, point)}, ${energyText(point.kj)}`
 }
 
-/** "3.759 along the path", "reaction coordinate 1.342". */
+/** "3.76 Å along the path", "reaction coordinate 1.342 amu½·bohr". */
 export function whereText(profile: PathProfile, point: PathPoint): string {
     return profile.hasCoordinate ? profile.xPhrase.replace("{x}", coordinateText(profile, point.coordinate)) : "no coordinate deposited"
 }
@@ -383,7 +428,7 @@ export function pathSearchCaption(profile: PathProfile): string {
     const xs = profile.points.map((point) => point.x)
     const where = profile.hasCoordinate
         ? count > 1
-            ? `${count} ${noun} placed by their stored distance along the path, ${coordinateText(profile, Math.min(...xs))} to ${coordinateText(profile, Math.max(...xs))}; no unit is stored for this distance.`
+            ? `${count} ${noun} placed by their stored distance along the path, ${coordinateWithUnit(profile, Math.min(...xs))} to ${coordinateWithUnit(profile, Math.max(...xs))}${profile.xUnit ? (profile.xUnitSuffix ? "." : `, as a ${profile.xUnit}.`) : "; no unit is stored for this distance."}`
             : `${count} ${noun} at its stored distance along the path.`
         : `${count} ${noun} placed by point number; no distance along the path was deposited.`
     const energy = profile.energyMode === "none"

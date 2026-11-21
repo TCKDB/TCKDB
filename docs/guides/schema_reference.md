@@ -1330,6 +1330,7 @@ the gap.
 | `ts_point_index` | INTEGER | yes | — | — | — | not documented |
 | `point_count` | INTEGER | yes | — | — | — | not documented |
 | `zero_energy_reference_hartree` | FLOAT | yes | — | — | — | not documented |
+| `reaction_coordinate_unit` | PathCoordinateUnit (enum) | yes | — | — | `angstrom`, `bohr`, `amu_half_bohr`, `amu_half_angstrom`, `fraction`, `step` | not documented |
 | `note` | TEXT | yes | — | — | — | not documented |
 
 **Check constraints:**
@@ -1396,6 +1397,7 @@ the gap.
 | `climbing_image_index` | INTEGER | yes | — | — | — | not documented |
 | `source_endpoint_count` | INTEGER | yes | — | — | — | not documented |
 | `zero_energy_reference_hartree` | FLOAT | yes | — | — | — | not documented |
+| `path_coordinate_unit` | PathCoordinateUnit (enum) | yes | — | — | `angstrom`, `bohr`, `amu_half_bohr`, `amu_half_angstrom`, `fraction`, `step` | not documented |
 | `note` | TEXT | yes | — | — | — | not documented |
 
 **Check constraints:**

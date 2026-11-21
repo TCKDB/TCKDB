@@ -161,6 +161,7 @@ converged                       boolean nullable
 n_points                        integer nullable
 selected_ts_point_index         integer nullable
 zero_energy_reference_hartree   float nullable
+path_coordinate_unit            PathCoordinateUnit nullable (unit of every point's path_coordinate)
 note                            text nullable
 ```
 

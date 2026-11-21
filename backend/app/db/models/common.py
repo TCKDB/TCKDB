@@ -1786,6 +1786,25 @@ class CoordinateUnit(str, Enum):
     degree = "degree"
 
 
+class PathCoordinateUnit(str, Enum):
+    """Unit of the coordinate along a reaction path (path search or IRC).
+
+    - ``angstrom`` / ``bohr``: Cartesian arc length.
+    - ``amu_half_bohr`` / ``amu_half_angstrom``: mass-weighted arc length
+      (amu^1/2 times bohr or angstrom), as Gaussian reports an IRC.
+    - ``fraction``: arc length normalised to 0 at the first point and 1 at
+      the last.
+    - ``step``: a step or image counter with no physical dimension.
+    """
+
+    angstrom = "angstrom"
+    bohr = "bohr"
+    amu_half_bohr = "amu_half_bohr"
+    amu_half_angstrom = "amu_half_angstrom"
+    fraction = "fraction"
+    step = "step"
+
+
 class EnergyUnit(str, Enum):
     hartree = "hartree"
     kj_mol = "kj_mol"

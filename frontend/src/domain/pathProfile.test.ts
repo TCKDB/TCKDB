@@ -61,6 +61,30 @@ describe("pathSearchProfile without energies", () => {
         expect(directLabel(profile, profile.points[2])).toBe("2 · picked guess")
         expect(pointSentence(profile, profile.points[2])).toBe("Point 2 (picked guess): 1.000 along the path, energy not deposited")
     })
+
+    it("says no unit is stored when the read records none", () => {
+        expect(profile.xTitle).toBe("distance along the path, as deposited")
+        expect(profile.xColumn).toBe("Along the path")
+        expect(pathSearchCaption(profile)).toContain("0.000 to 1.500; no unit is stored for this distance.")
+    })
+})
+
+describe("pathSearchProfile with a recorded unit", () => {
+    const profile = pathSearchProfile(read([point(0), point(1), point(2, { path_coordinate: 3.759, is_ts_guess: true })], { path_coordinate_unit: "angstrom" }))
+
+    it("names the unit on the axis, the column, the caption and the point", () => {
+        expect(profile.xTitle).toBe("distance along the path, Å")
+        expect(profile.xColumn).toBe("Along the path (Å)")
+        expect(pathSearchCaption(profile)).toContain("placed by their stored distance along the path, 0.00 Å to 3.76 Å.")
+        expect(pointSentence(profile, profile.points[2])).toBe("Point 2 (end, picked guess): 3.76 Å along the path, energy not deposited")
+    })
+
+    it("words a normalised arc length as a fraction of the way", () => {
+        const fraction = pathSearchProfile(read([point(0, { path_coordinate: 0 }), point(1, { path_coordinate: 0.4 }), point(2, { path_coordinate: 1 })], { path_coordinate_unit: "fraction" }))
+        expect(fraction.xTitle).toBe("distance along the path, fraction of the path")
+        expect(pointSentence(fraction, fraction.points[1])).toBe("Point 1: 0.40 of the way along the path, energy not deposited")
+        expect(pathSearchCaption(fraction)).toContain("0.00 to 1.00, as a fraction of the path.")
+    })
 })
 
 describe("markers", () => {
