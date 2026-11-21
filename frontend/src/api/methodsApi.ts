@@ -3,6 +3,7 @@ import { listMetaOf, listRequestEchoSchema, type ListMeta } from "./listEnvelope
 import { pageQuery, type PageRequest } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 import { compositeSchemeSummarySchema, levelOfTheorySchema } from "./scientificSchemas"
+import { levelOfTheoryCatalogueSchema } from "./catalogueApi"
 
 // ---------------------------------------------------------------------------
 // The methods surface. Three read surfaces this client wraps here:
@@ -240,6 +241,8 @@ const lotAvailableSectionsSchema = z.object({
     has_frequency_scale_factors: z.boolean(),
     has_used_by: z.boolean(),
     has_software: z.boolean(),
+    // Answered only with `include=catalogue`; `null` otherwise.
+    has_catalogue: z.boolean().nullable().optional(),
 }).passthrough()
 
 const lotFsfProvenanceSchema = z.object({
@@ -292,6 +295,8 @@ const levelOfTheoryRecordSchema = z.object({
     frequency_scale_factors: z.array(lotFsfGroupSchema).nullable().optional(),
     used_by: z.array(lotUsageSummarySchema).nullable().optional(),
     software: lotSoftwareBreakdownSchema.nullable().optional(),
+    // Present only with `include=catalogue`.
+    catalogue: levelOfTheoryCatalogueSchema.nullable().optional(),
 }).passthrough()
 
 export type LevelOfTheoryRecord = z.infer<typeof levelOfTheoryRecordSchema>
@@ -328,7 +333,7 @@ export type LevelOfTheoryBrowseResult = {
 // Loaders
 // ---------------------------------------------------------------------------
 
-const LEVEL_OF_THEORY_DETAIL_INCLUDES = ["correction_schemes", "frequency_scale_factors", "software", "used_by"]
+const LEVEL_OF_THEORY_DETAIL_INCLUDES = ["catalogue", "correction_schemes", "frequency_scale_factors", "software", "used_by"]
 
 /** The server-side filters the `/methods` index sends. `coreTreatment` is the
  *  API's own `core_treatment` filter: it matches only levels

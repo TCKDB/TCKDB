@@ -1,8 +1,12 @@
 # Changelog
 
-## 0.208.3 - 2026-11-21
+## 0.209.1 - 2026-11-21
 
 The `tckdb-schemas` requirement is widened to `>=0.158,<0.177`, which admits the schemas release whose path-search and IRC results carry a coordinate unit. Such a result is sent as a payload dict, so `path_coordinate_unit` and `reaction_coordinate_unit` pass through unchanged. No client behaviour changed.
+
+## 0.209.0 - 2026-11-21
+
+New typed reads of the method and basis-set catalogue: `browse_methods()` and `get_method()` (`GET /scientific/methods`, `/scientific/methods/{handle}`), `browse_basis_sets()` and `get_basis_set()` (`GET /scientific/basis-sets`, `/scientific/basis-sets/{handle}`). A handle is a catalogue ref or any spelling that keys to an entry; a name containing `/` is reached by its ref. New types `CatalogueCard`, `MethodCatalogueRecord`, `BasisSetCatalogueRecord` and their response aliases.
 
 ## 0.208.2 - 2026-11-14
 

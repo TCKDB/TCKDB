@@ -73,6 +73,7 @@ from app.services.scientific_read.handles import resolve_level_of_theory_handle
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.method_catalogue import CatalogueIndex, load_catalogue_index
 
 # LOT is not reviewable (no SubmissionRecordType entry), so ``review`` is
 # intentionally not a legal token. ``software`` (the LOT-scoped
@@ -80,13 +81,14 @@ from app.services.scientific_read.internal_ids import (
 # "which software (and workflow tool) ran calculations at this level of
 # theory, and how many" -- see ``_software_usage_rows`` /
 # ``_workflow_tool_usage_rows`` below. ``include=all`` expands to
-# ``correction_schemes,frequency_scale_factors,used_by,software`` minus
+# ``correction_schemes,frequency_scale_factors,used_by,software,catalogue`` minus
 # internal_ids per the standard policy.
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "correction_schemes",
     "frequency_scale_factors",
     "used_by",
     "software",
+    "catalogue",
     "internal_ids",
     "all",
 }
@@ -146,6 +148,7 @@ def build_level_of_theory_record(
     lot: LevelOfTheory,
     includes: set[str],
     composite_schemes: Mapping[int, CompositeSchemeSummary] | None = None,
+    catalogue_index: CatalogueIndex | None = None,
     detail: bool = False,
 ) -> ScientificLevelOfTheoryRecord:
     """Project one LevelOfTheory row into the public record shape.
@@ -154,6 +157,8 @@ def build_level_of_theory_record(
         :func:`composite_scheme_summaries` call. ``None`` looks this level up
         alone (the detail route); a search passes it so a page costs one
         statement, not one per record.
+    :param catalogue_index: The catalogue built once for a whole page (``include=catalogue``); ``None`` builds it
+        here when the token is requested.
     :param detail: True for the level's own detail read. Its usage (``used_by``, the usage count, the software rows) is then
         the calculations it rests on as linked evidence: under ``curated`` all but the withheld set, badged. A search row keeps the approved record floor, which is what its eligibility filter lists.
     """
@@ -221,6 +226,21 @@ def build_level_of_theory_record(
     if "software" in includes:
         software_block = _build_software(session, lot.id, software_rows=software_rows, detail=detail)
 
+    catalogue_block = None
+    if "catalogue" in includes:
+        index = catalogue_index if catalogue_index is not None else load_catalogue_index(session)
+        catalogue_block = index.level_catalogue(lot)
+        available.has_catalogue = any(
+            card is not None
+            for card in (
+                catalogue_block.method,
+                catalogue_block.dispersion,
+                catalogue_block.basis,
+                catalogue_block.aux_basis,
+                catalogue_block.cabs_basis,
+            )
+        )
+
     return ScientificLevelOfTheoryRecord(
         level_of_theory=core,
         evidence_summary=evidence,
@@ -229,6 +249,7 @@ def build_level_of_theory_record(
         frequency_scale_factors=fsf_block,
         used_by=used_by_block,
         software=software_block,
+        catalogue=catalogue_block,
     )
 
 

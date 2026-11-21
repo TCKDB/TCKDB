@@ -36,6 +36,8 @@ import type {
 } from "../api/methodsApi"
 import { publicCitationText } from "../domain/literatureCitation"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
+import { CatalogueCard, NotCatalogued } from "../components/CatalogueCard"
+import { CATALOGUE_SLOTS, levelCatalogueSubtitle, slotNoun, type CatalogueSlot } from "../domain/methodCatalogue"
 
 const LEVEL_OF_THEORY_LEDE = ledeText`Method, basis set and other settings.`
 
@@ -65,6 +67,7 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
     const title = baseLabel(lot)
     // Levels sharing a method and basis differ only in these, so the line under the heading states them.
     const stated = qualifiersOf(lot).map(inlineText).join(" · ")
+    const named = levelCatalogueSubtitle(record.catalogue)
     useDocumentTitle("Level of theory", levelLine(lot, new Map([[levelKey(lot), qualifiersOf(lot)]])))
 
     const mapNodes = levelOfTheoryNodes({
@@ -91,7 +94,12 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
                             guide={{ to: "level-of-theory", question: "What is a level of theory?" }}
                             lede={LEVEL_OF_THEORY_LEDE}
                             title={title}
-                            subtitle={stated || undefined}
+                            subtitle={named || stated ? (
+                                <>
+                                    {named && <span className="lot-catalogue-subtitle">{named}</span>}
+                                    {stated && <span className="lot-qualifier-subtitle">{stated}</span>}
+                                </>
+                            ) : undefined}
                             ownRef={{ label: "Level of theory ref", value: lot.level_of_theory_ref }}
                             ownFacts={(
                                 <>
@@ -132,11 +140,45 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
                     </header>
                 )}
             >
+                <CatalogueSection record={record} />
                 <SoftwareSection breakdown={record.software ?? null} available={record.available_sections.has_software} />
                 <CorrectionSchemesSection schemes={record.correction_schemes ?? null} available={record.available_sections.has_correction_schemes} />
                 <FrequencyScaleFactorSection groups={record.frequency_scale_factors ?? null} available={record.available_sections.has_frequency_scale_factors} />
                 <UsageSection rows={record.used_by ?? null} available={record.available_sections.has_used_by} total={record.evidence_summary.calculation_usage_count} />
             </PageShell>
+        </section>
+    )
+}
+
+// The column each catalogue slot reads its spelling from.
+const SLOT_SPELLING: Record<CatalogueSlot, (lot: LevelOfTheoryRecord["level_of_theory"]) => string | null | undefined> = {
+    method: (lot) => lot.method,
+    dispersion: (lot) => lot.dispersion,
+    basis: (lot) => lot.basis,
+    aux_basis: (lot) => lot.aux_basis,
+    cabs_basis: (lot) => lot.cabs_basis,
+}
+
+/** One card per catalogue entry this level's spellings key to; a spelling that keys to none says so. */
+function CatalogueSection({ record }: { record: LevelOfTheoryRecord }) {
+    const catalogue = record.catalogue
+    // Only when the server served the section: a server without it says nothing either way.
+    if (!catalogue) return null
+    const slots = CATALOGUE_SLOTS.map((slot) => ({ slot, card: catalogue[slot] ?? null, spelling: SLOT_SPELLING[slot](record.level_of_theory) ?? null }))
+    const missing = slots.filter((entry) => entry.card === null && entry.spelling)
+    return (
+        <section className="ledger-section" aria-labelledby="lot-catalogue-heading">
+            <SectionHeading id="lot-catalogue-heading" guide={{ to: "method-catalogue", question: "What is the method and basis-set catalogue?" }}>
+                Catalogue
+            </SectionHeading>
+            {slots.some((entry) => entry.card !== null) && (
+                <div className="catalogue-cards">
+                    {slots.map(({ slot, card }) => card && (
+                        <CatalogueCard key={slot} card={card} noun={slotNoun(slot)} headingId={`lot-catalogue-${slot}`} />
+                    ))}
+                </div>
+            )}
+            {missing.map(({ slot, spelling }) => spelling && <NotCatalogued key={slot} noun={slotNoun(slot)} spelling={spelling} />)}
         </section>
     )
 }

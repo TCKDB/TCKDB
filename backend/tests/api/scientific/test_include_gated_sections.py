@@ -283,7 +283,8 @@ def test_the_marker_registry_only_names_declared_sections():
     # 108 after ``effective_settings`` joined the ``parameters`` token of CALCULATION_RECORD_SECTIONS,
     # which marks the field on both the entry record and the concept record.
     # 110 after ``calculation_settings`` on the thermo and statmech records.
-    assert marked == 110, f"the marker registry names {marked} properties"
+    # 111 after ``include=catalogue`` on the level-of-theory record.
+    assert marked == 111, f"the marker registry names {marked} properties"
 
 
 def test_the_hosted_document_marks_the_gated_properties(client):
@@ -306,7 +307,8 @@ def test_the_hosted_document_marks_the_gated_properties(client):
     # ``include=software`` added a fourth. 107 after ``include=statmech`` on the
     # two transition-state records.
     # 110 after ``calculation_settings`` on the thermo and statmech records.
-    assert checked == 110, f"the hosted document carries {checked} markers"
+    # 111 after ``include=catalogue`` on the level-of-theory record.
+    assert checked == 111, f"the hosted document carries {checked} markers"
 
 
 def test_the_marker_is_not_stamped_on_ungated_properties():

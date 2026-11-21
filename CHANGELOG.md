@@ -29,7 +29,14 @@ dataset must never require a code release.
 - **Behaviour:** TCKDB's ORCA log parser states `angstrom` for an NEB path summary with a `Dist.(Ang.)` column and no unit for the NEB-TS table, which has no distance column. ORCA's IRC summary has no coordinate column, so it states none.
 - **Behaviour:** the site labels the path-search and IRC axes and the path facts with the unit when one is recorded ("distance along the path, Å", "3.76 Å along the path") and keeps the "as deposited" wording when none is.
 - **Schema and migration:** new revision `e3b7c1a9d452` on top of `a6fc04f5667e`: enum `path_coordinate_unit` and nullable columns `calc_path_search_result.path_coordinate_unit` and `calc_irc_result.reaction_coordinate_unit`, no default and no backfill. No new environment variable.
-- **Versions:** `tckdb-schemas` 0.176.0, `tckdb-client` 0.208.3.
+- **Versions:** `tckdb-schemas` 0.176.0, `tckdb-client` 0.209.1.
+
+## The method and basis-set catalogue is readable (Unreleased)
+
+- **Behaviour:** `GET /scientific/methods` and `GET /scientific/basis-sets` list the whole catalogue in key order, unpaged (filters: `kind` and `method_family`; `role` and `family`). `GET /scientific/methods/{handle}` and `GET /scientific/basis-sets/{handle}` return one entry and the levels of theory that use it. The handle is the `mcat_`/`bcat_` ref or any spelling that keys to the entry (`gfn2`, `def2tzvp`, `aug-cc-pVTZ/C`), and an unknown handle is a 404 `handle_not_found`. A card carries the entry's key and every key that names it, its short and full name, description, kind or role, family (a method's family and DFT rung are derived from the method-family classification), its references (DOI only when the registry resolved the citation), the stored spellings that key to it, and usage (levels of theory and calculations the read profile shows, derived at read time). Public refs only; nothing is ranked.
+- **Behaviour:** `include=catalogue` on `GET /scientific/level-of-theories/{ref}`, `/search` and `/browse` adds a `catalogue` section with the method, dispersion, basis, aux-basis and CABS cards the level's spellings key to (`null` where a spelling keys to none). With the token, `available_sections.has_catalogue` says whether any does; without it the flag is `null` and the read costs no extra statement.
+- **Schema and migration:** none. No new environment variable.
+- **Versions:** `tckdb-client` 0.209.0 (`browse_methods`, `get_method`, `browse_basis_sets`, `get_basis_set`).
 
 ## A method and basis-set catalogue names what a level of theory's spellings are (Unreleased)
 

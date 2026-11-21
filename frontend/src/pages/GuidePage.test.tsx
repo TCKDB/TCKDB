@@ -17,7 +17,7 @@ describe("GuidePage", () => {
         ])
         expect(headings.slice(10)).toEqual([
             "How lists are ordered", "Geometry sharing", "Energy profile", "Reaction paths", "Transition-state checks", "Level-of-theory identity", "What a level carries",
-            "Correction scheme", "Composite recipe", "Staged optimisation", "How a molecule is drawn", "Relative energies", "Not recorded",
+            "Correction scheme", "Method and basis-set catalogue", "Composite recipe", "Staged optimisation", "How a molecule is drawn", "Relative energies", "Not recorded",
         ])
         expect(container.querySelectorAll("dfn")).toHaveLength(headings.length)
         expect(container.querySelectorAll(".guide-concepts li p")).toHaveLength(headings.length)
