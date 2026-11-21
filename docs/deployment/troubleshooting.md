@@ -99,6 +99,29 @@ your user.
 
 ---
 
+### Everyone shares one rate-limit bucket
+
+**Symptom.** Several people get `429 rate_limit_exceeded` together, as if
+they were one client.
+
+**Cause.** The API sees one address for all of them. Either
+`TRUSTED_PROXY_HEADER` is unset, or the web UI did not believe the
+`X-Real-IP` your proxy sent. The web UI believes it only from its own IPv4
+Docker networks, so a proxy on the host must connect to `127.0.0.1`.
+
+**Fix.** See which networks the web UI trusts:
+
+```bash
+docker compose --env-file .env.selfhosted --env-file .env.db-admin \
+    logs frontend | grep 'accepted from'
+```
+
+Point the proxy at `127.0.0.1:8011`, set `TRUSTED_PROXY_HEADER=X-Real-IP`,
+and run `up -d --wait` again. Images up to 0.2.0 have no such line; they
+pass on any `X-Real-IP`.
+
+---
+
 ## Networking and ports
 
 ### `port is already allocated` / `address already in use`

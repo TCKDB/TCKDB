@@ -102,6 +102,16 @@ jobs:
             sleep 1
           done
           api_old_status
+          # 127.0.0.1 reaches the container from the network's gateway, like
+          # a proxy on the host, so its X-Real-IP was kept above. The runner's
+          # own network address is outside the container's networks, like a
+          # lab machine: its X-Real-IP is replaced with that address.
+          docker exec frontend-smoke cat /etc/nginx/tckdb/real_ip_from.conf \
+            | grep -qx 'set_real_ip_from 172.30.252.0/24;'
+          runner_ip="$(ip -4 route get 1.1.1.1 | sed -n 's/.* src \([0-9.]*\).*/\1/p')"
+          test -n "$runner_ip"
+          curl -fsS -H 'X-Real-IP: 203.0.113.9' "http://${runner_ip}:18080/api/v1/status" \
+            | jq -e --arg ip "$runner_ip" '.headers.x_real_ip == $ip'
 
           # Docker gives the replacement API a different IP. The frontend is
           # intentionally left running: this proves nginx re-resolves Docker
