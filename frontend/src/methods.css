@@ -138,3 +138,124 @@
 .composite-term h3 {
     margin: 0;
 }
+
+/* The catalogue name line under a level of theory's heading, above any qualifiers. */
+.lot-catalogue-subtitle,
+.lot-qualifier-subtitle {
+    display: block;
+}
+
+.lot-catalogue-subtitle {
+    color: var(--ink);
+}
+
+/* "About this method" cards: side by side when there is room, stacked on a phone. */
+.catalogue-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+    gap: var(--s-4);
+    align-items: start;
+}
+
+.catalogue-card {
+    display: grid;
+    gap: var(--s-3);
+    min-width: 0;
+}
+
+.catalogue-card > * {
+    margin: 0;
+}
+
+.catalogue-card-kicker {
+    color: var(--muted);
+}
+
+.catalogue-card-name {
+    display: grid;
+    gap: var(--s-1);
+}
+
+.catalogue-card-full {
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+
+.catalogue-card-description {
+    max-width: var(--measure-prose);
+}
+
+.catalogue-card-references {
+    display: grid;
+    gap: var(--s-1);
+}
+
+.catalogue-card-references-heading {
+    font: var(--type-label-strong-font);
+    letter-spacing: var(--type-label-strong-tracking);
+    color: var(--muted);
+}
+
+.catalogue-reference-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: var(--s-2);
+}
+
+.catalogue-reference {
+    overflow-wrap: anywhere;
+}
+
+.catalogue-reference-title {
+    font-style: italic;
+}
+
+.catalogue-card-footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--s-1) var(--s-3);
+    padding-top: var(--s-2);
+    border-top: 1px solid var(--line-2);
+}
+
+.catalogue-card-usage {
+    color: var(--muted);
+}
+
+.catalogue-not-catalogued {
+    margin: var(--s-2) 0 0;
+    color: var(--muted);
+}
+
+/* The entry page's references: the role beside its articles; stacked on a phone. */
+.catalogue-reference-groups {
+    display: grid;
+    gap: var(--s-3);
+    margin: 0;
+}
+
+.catalogue-reference-groups > div {
+    display: grid;
+    grid-template-columns: minmax(8rem, 12rem) 1fr;
+    gap: var(--s-1) var(--s-4);
+}
+
+.catalogue-reference-groups dt {
+    font: var(--type-label-strong-font);
+    letter-spacing: var(--type-label-strong-tracking);
+    color: var(--muted);
+}
+
+.catalogue-reference-groups dd {
+    margin: 0;
+    min-width: 0;
+}
+
+@media (max-width: 40rem) {
+    .catalogue-reference-groups > div {
+        grid-template-columns: 1fr;
+    }
+}

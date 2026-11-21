@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.16.1 - 2026-11-21
+
+No tool or behaviour changed. The package metadata is ready for PyPI.
+
+- The licence is declared as `license = "MIT"` with `license-files`, and the MIT `LICENSE` ships in the wheel and sdist.
+- `project.urls` point at `https://github.com/TCKDB/TCKDB` and `https://tckdb.github.io/TCKDB/` (they pointed at addresses that do not exist), and add `Repository`, `Issues`, `Source` and `Changelog`.
+- Python 3.13 is listed in the classifiers; the build needs setuptools 77 or later. The sdist leaves out the tests.
+- The README's links are absolute, so they work on PyPI, and it gives `pip install tckdb-mcp`.
+
 ## 0.16.0 - 2026-11-04
 
 The statmech tools take `include=calculation_settings`.

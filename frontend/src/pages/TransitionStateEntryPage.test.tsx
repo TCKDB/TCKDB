@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { cleanup, render, screen, within, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { Link, MemoryRouter, Route, Routes } from "react-router-dom"
@@ -504,6 +504,31 @@ describe("TransitionStateEntryPage", () => {
         expect(trustFact).toContainElement(line as HTMLElement)
         const structureFact = screen.queryByText("Structure assessment")?.closest("div")
         if (structureFact) expect(structureFact).not.toContainElement(line as HTMLElement)
+    })
+
+    it("made under: the trust summary nests no block inside its paragraph and raises no DOM nesting warning", async () => {
+        const errors = vi.spyOn(console, "error").mockImplementation(() => undefined)
+        try {
+            server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+                HttpResponse.json({
+                    record: mockRecord({
+                        trust: {
+                            trust_status: "partial",
+                            evidence: { passed_count: 10, possible_count: 20, rubric: "computed_transition_state", rubric_version: 2 },
+                        },
+                    }),
+                })
+            )))
+            page()
+            await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
+            const card = screen.getByRole("heading", { level: 3, name: "Trust" }).closest("section") as HTMLElement
+            expect(card.querySelector('[data-component="made-under"]')).not.toBeNull()
+            expect(card.querySelectorAll("p p, p div, p section, p ul, p table")).toHaveLength(0)
+            const warnings = errors.mock.calls.map((call) => call.map(String).join(" ")).filter((message) => /validateDOMNesting|cannot be a descendant|cannot contain/.test(message))
+            expect(warnings).toEqual([])
+        } finally {
+            errors.mockRestore()
+        }
     })
 
     it("made under: no line when the server does not name the rubric (an older deployment)", async () => {
