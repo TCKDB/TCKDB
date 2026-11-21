@@ -337,8 +337,8 @@ case "$ACCESS" in
 esac
 if [[ "$ACCESS" == lan || "$ACCESS" == https ]]; then
     image_tag="$(sed -n 's/^TCKDB_IMAGE_TAG=//p' "$RUNTIME_FILE")"
-    if [[ -z "$image_tag" || "$image_tag" == 0.2.0 ]]; then
-        echo "  - this access needs an image newer than 0.2.0; set TCKDB_IMAGE_TAG in $RUNTIME_FILE to the latest release"
+    if [[ "$image_tag" == 0.2.0 ]]; then
+        echo "  - this access needs an image newer than 0.2.0; set TCKDB_IMAGE_TAG in $RUNTIME_FILE to 0.3.0 or later"
     fi
 fi
 [[ "$ACCESS" == local ]] || echo
