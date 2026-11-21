@@ -44,7 +44,10 @@ from tckdb_client.scientific_types import (
     CalculationAnalyticsResponse,
     CalculationDetailResponse,
     CalculationSearchResponse,
+    BasisSetCatalogueDetailResponse,
+    CatalogueBrowseResponse,
     CompositeSchemeDetailResponse,
+    MethodCatalogueDetailResponse,
     ConformerGroupDetailResponse,
     ConformerObservationDetailResponse,
     ConformerRecord,
@@ -5039,6 +5042,69 @@ class TCKDBClient:
             f"/scientific/composite-schemes/{composite_scheme_ref}",
             include=None,
             profile=profile,
+        )
+
+    def browse_methods(
+        self,
+        *,
+        kind: str | None = None,
+        method_family: str | None = None,
+        profile: str | None = None,
+    ) -> CatalogueBrowseResponse:
+        """``GET /scientific/methods`` -- every method and dispersion correction in the catalogue, in key order, unpaged.
+
+        ``kind`` is ``method`` or ``dispersion_correction``; ``method_family`` one of the method families. Each card
+        carries its names, definition, references and usage. Nothing is ranked.
+        """
+
+        return self.request_json(
+            "GET",
+            "/scientific/methods",
+            params={"kind": kind, "method_family": method_family, "profile": profile},
+            authenticated=False,
+        ).data
+
+    def get_method(self, method_handle: str, *, profile: str | None = None) -> MethodCatalogueDetailResponse:
+        """``GET /scientific/methods/{handle}`` -- one catalogue method and the levels of theory that use it.
+
+        The handle is an ``mcat_`` ref or any spelling that keys to the entry (``gfn2``, ``wB97X-D``). An unknown
+        handle is a 404.
+        """
+
+        return self._get_scientific_detail(
+            f"/scientific/methods/{quote(method_handle, safe='')}", include=None, profile=profile
+        )
+
+    def browse_basis_sets(
+        self,
+        *,
+        role: str | None = None,
+        family: str | None = None,
+        profile: str | None = None,
+    ) -> CatalogueBrowseResponse:
+        """``GET /scientific/basis-sets`` -- every basis set in the catalogue, in key order, unpaged.
+
+        ``role`` is ``orbital``, ``auxiliary_correlation``, ``auxiliary_coulomb`` or ``cabs``; ``family`` a family name
+        as written (``Karlsruhe def2``). Nothing is ranked.
+        """
+
+        return self.request_json(
+            "GET",
+            "/scientific/basis-sets",
+            params={"role": role, "family": family, "profile": profile},
+            authenticated=False,
+        ).data
+
+    def get_basis_set(self, basis_set_handle: str, *, profile: str | None = None) -> BasisSetCatalogueDetailResponse:
+        """``GET /scientific/basis-sets/{handle}`` -- one catalogue basis set and the levels of theory that use it.
+
+        The handle is a ``bcat_`` ref or any spelling that keys to the entry (``def2tzvp``). A name that contains ``/``
+        (``aug-cc-pVTZ/C``) cannot be one path segment; pass the ``catalogue_ref`` a card carries. An unknown handle is
+        a 404.
+        """
+
+        return self._get_scientific_detail(
+            f"/scientific/basis-sets/{quote(basis_set_handle, safe='')}", include=None, profile=profile
         )
 
     def get_literature(

@@ -944,6 +944,53 @@ class LevelOfTheoryRecord(TypedDict, total=False):
     software: JSONDict | None
 
 
+class CatalogueCard(TypedDict, total=False):
+    """A method, dispersion correction or basis set in the catalogue.
+
+    ``catalogue_ref`` (``mcat_``/``bcat_``), ``key`` and every identity key that names the entry (``keys``), its
+    names and one definitional ``description``, the articles that define it (``references``; each carries ``doi`` only
+    when the registry resolved it), the stored spellings that key to it (``spellings_seen``) and its ``usage``
+    (levels of theory and calculations). A method card has ``kind``, ``family`` and ``dft_rung``; a basis-set card has
+    ``role`` and ``family``.
+    """
+
+    catalogue_ref: Required[str]
+    key: Required[str]
+    keys: list[str]
+    kind: str
+    role: str
+    family: str | None
+    dft_rung: int | None
+    short_name: str
+    full_name: str
+    description: str
+    references: list[JSONDict]
+    spellings_seen: list[str]
+    usage: JSONDict
+
+
+class CatalogueBrowseResponse(TypedDict):
+    """The whole catalogue (methods or basis sets), in key order, unpaged."""
+
+    request: ScientificRequestEcho
+    review_summary: ReviewStatusSummary
+    records: list[CatalogueCard]
+
+
+class MethodCatalogueRecord(TypedDict):
+    """One method or dispersion correction and the levels of theory that use it."""
+
+    method: CatalogueCard
+    levels: list[JSONDict]
+
+
+class BasisSetCatalogueRecord(TypedDict):
+    """One basis set and the levels of theory that use it."""
+
+    basis_set: CatalogueCard
+    levels: list[JSONDict]
+
+
 class CompositeSchemeRecord(TypedDict):
     """One composite scheme -- the recipe behind a composite level of theory.
 
@@ -1780,6 +1827,8 @@ LevelOfTheoryDetailResponse: TypeAlias = ScientificDetailResponse[
 CompositeSchemeDetailResponse: TypeAlias = ScientificDetailResponse[
     CompositeSchemeRecord
 ]
+MethodCatalogueDetailResponse: TypeAlias = ScientificDetailResponse[MethodCatalogueRecord]
+BasisSetCatalogueDetailResponse: TypeAlias = ScientificDetailResponse[BasisSetCatalogueRecord]
 LiteratureDetailResponse: TypeAlias = ScientificDetailResponse[LiteratureRecord]
 LiteratureRecordsResponse: TypeAlias = ScientificSearchResponse[
     LiteratureLinkedRecord
@@ -1806,7 +1855,13 @@ __all__ = [
     "CalculationDetailResponse",
     "CalculationRecord",
     "CalculationSearchResponse",
+    "BasisSetCatalogueDetailResponse",
+    "BasisSetCatalogueRecord",
+    "CatalogueBrowseResponse",
+    "CatalogueCard",
     "CompositeSchemeDetailResponse",
+    "MethodCatalogueDetailResponse",
+    "MethodCatalogueRecord",
     "CompositeSchemeRecord",
     "CondaExecutionRuntime",
     "ConformerGroupDetailResponse",

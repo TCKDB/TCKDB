@@ -586,6 +586,14 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
         "GET", "/api/v1/scientific/level-of-theories/browse",
         "browse_levels_of_theory", None, None, _NEW_METHOD_TESTS,
     ),
+    # --- Method and basis-set catalogue -------------------------------
+    ("GET", "/api/v1/scientific/methods", "browse_methods", None, None, _NEW_METHOD_TESTS),
+    ("GET", "/api/v1/scientific/methods/{method_handle}", "get_method", None, None, _NEW_METHOD_TESTS),
+    ("GET", "/api/v1/scientific/basis-sets", "browse_basis_sets", None, None, _NEW_METHOD_TESTS),
+    (
+        "GET", "/api/v1/scientific/basis-sets/{basis_set_handle}",
+        "get_basis_set", None, None, _NEW_METHOD_TESTS,
+    ),
     # --- Literature ---------------------------------------------------
     (
         "GET", "/api/v1/scientific/literature/{literature_ref_or_id}",
