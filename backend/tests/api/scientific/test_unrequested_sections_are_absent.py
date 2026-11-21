@@ -777,7 +777,8 @@ def test_the_parametrisation_asserts_its_own_size():
     # 93 after ``include=statmech`` joined TRANSITION_STATE_RECORD_SECTIONS
     # 94 after ``effective_settings`` joined the ``parameters`` token of CALCULATION_RECORD_SECTIONS.
     # 96 after ``calculation_settings`` joined STATMECH_RECORD_SECTIONS and THERMO_RECORD_SECTIONS was declared.
-    assert len(sections_under_test) == 96
+    # 97 after ``catalogue`` joined LEVEL_OF_THEORY_RECORD_SECTIONS.
+    assert len(sections_under_test) == 97
 
 
 # ---------------------------------------------------------------------------
