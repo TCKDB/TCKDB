@@ -5,7 +5,7 @@ import io
 from datetime import datetime
 
 import pytest
-from sqlalchemy import cast, func, select, text
+from sqlalchemy import cast, func, or_, select, text, tuple_
 from sqlalchemy.sql.sqltypes import Text
 
 from app.db.base import Base
@@ -60,11 +60,18 @@ from tests.services.test_artifact_integrity import _SessionProxy
 def _empty_archive_tables(session) -> None:
     # This helper simulates a fresh migrated target. Replica mode is scoped to
     # the test transaction so append-only/accepted-science triggers do not
-    # prevent clearing the source fixture; canonical migration seeds remain.
+    # prevent clearing the source fixture; canonical migration seeds remain and
+    # rows a test added beside them in a preseeded table (a literature row) go.
     session.execute(text("SET LOCAL session_replication_role = replica"))
     for table in reversed(Base.metadata.sorted_tables):
         if table.name not in PRESEEDED_TABLES:
             session.execute(table.delete())
+            continue
+        identity_names, expected = PRESEEDED_TABLES[table.name]
+        identity = [table.c[name] for name in identity_names]
+        session.execute(
+            table.delete().where(or_(~tuple_(*identity).in_(list(expected)), *(c.is_(None) for c in identity)))
+        )
     session.execute(text("SET LOCAL session_replication_role = origin"))
     session.expunge_all()
 

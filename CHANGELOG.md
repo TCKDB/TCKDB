@@ -30,6 +30,26 @@ dataset must never require a code release.
 - **Docs:** the maintainer runbook is `backend/docs/deployment/publishing_python_packages.md` (trusted-publisher values, tag scheme, release order, TestPyPI dry run).
 - **Schema and migration:** none. No new environment variable. No distributed package changed.
 
+## A method and basis-set catalogue names what a level of theory's spellings are (Unreleased)
+
+- **Behaviour:** new curated reference tables say what a stored method, dispersion or basis-set spelling names: `method_catalogue` (22 entries: 20 methods, 2 dispersion corrections) and `basis_set_catalogue` (15 entries), each with a short name, full name, one definitional sentence, and the articles that define it (45 `literature` rows, Crossref-resolved, `title_source = resolved_metadata`, with their authors in order). An existing citation of a seeded DOI is reused, also when its DOI carries a `doi:` prefix; one whose title was not registry-resolved takes the seed's Crossref fields and authors, and a registry-resolved one is left as it stands. `GET /literature` on a fresh database lists these 45 rows. Entries are keyed by the existing identity keys; `*_catalogue_key` lets several keys name one entry, so `gfn2` and `gfn2-xtb` both reach GFN2-xTB. `level_of_theory` and `lot_hash` are unchanged. No read route serves the catalogue yet.
+- **Behaviour:** the seed lives in `backend/app/data/catalogue/` (`methods.yml`, `basis_sets.yml`, `literature.yml`). `backend/scripts/ops/load_method_catalogue.py` compares the database with the seed (dry run by default), `--apply` writes the differences, and `--check` exits 1 when they differ. A second `--apply` changes nothing.
+- **Behaviour:** an archive restore treats the catalogue rows, their literature and its authors as migration seeds, like `reaction_family`.
+- **Schema and migration:** new revision `a6fc04f5667e` on top of `a7c3e1f5b942`: six tables (`method_catalogue`, `method_catalogue_key`, `method_catalogue_literature`, `basis_set_catalogue`, `basis_set_catalogue_key`, `basis_set_catalogue_literature`) and three enums (`catalogue_method_kind`, `basis_set_role`, `catalogue_reference_role`). The upgrade fills them from the seed. The downgrade drops them and keeps the literature and author rows. New public-ref prefixes `mcat_` and `bcat_` (content-derived from the key). No new environment variable. No distributed package changed.
+
+## Public reads and pages carry a literature DOI only when the registry resolved it (Unreleased)
+
+- **Behaviour:** the `doi` of a literature citation embedded in a scientific record (`LiteratureSummary`) and of `GET /scientific/literature/{ref}` (`identifiers.doi`) is served only when the row's metadata was resolved from the DOI registry (`title_source = resolved_metadata`); it is `null` for a depositor-supplied or unrecorded origin. The network CHEMKIN export writes a DOI beside its literature ref under the same rule.
+- **Behaviour:** the site prints a registry-resolved DOI after the citation as a `https://doi.org/<doi>` link. A depositor-typed DOI is still never printed.
+
+## tckdb-chemkin installs and imports from its own wheel (Unreleased)
+
+- **Behaviour:** `tckdb-chemkin` declares `rdkit>=2024.3`, so `pip install tckdb-chemkin` followed by `import tckdb_chemkin` works in a clean environment. Without it the import failed with `ModuleNotFoundError: rdkit`. An environment with conda's RDKit already satisfies the requirement.
+- **Behaviour:** the `tckdb-client` requirement is the window `>=0.208,<0.209`; it was unbounded.
+- **Packaging:** the distribution carries a README (its PyPI description), the MIT `LICENSE` (`license = "MIT"` with `license-files`), authors, classifiers, project URLs and `py.typed`, and the sdist leaves out the tests. The build needs setuptools 77 or later.
+- **Schema and migration:** none. No new environment variable.
+- **Versions:** `tckdb-chemkin` 0.7.5.
+
 ## tckdb_deploy.sh deploys onto any compose project (Unreleased)
 
 - **Behaviour:** the pre-deploy backup runs `pg_dump` as `DB_ADMIN_USER` (from `TCKDB_MIGRATION_ENV_FILE`, else `TCKDB_ENV_FILE`, else the db container's `POSTGRES_USER`) on `DB_NAME` (from `TCKDB_ENV_FILE`, else the container's `POSTGRES_DB`), each defaulting to `tckdb` as before. A stack built from the templates, whose administrator is `tckdb_admin` and appears only in the operator file, no longer fails the backup with `role "tckdb" does not exist`.

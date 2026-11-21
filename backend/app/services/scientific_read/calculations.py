@@ -902,15 +902,7 @@ def _build_literature_summary(
     lit = session.get(Literature, literature_id)
     if lit is None:
         return None
-    return LiteratureSummary(
-        id=lit.id,
-        literature_ref=lit.public_ref,
-        title=getattr(lit, "title", None),
-        title_source=getattr(lit, "title_source", None),
-        year=getattr(lit, "year", None),
-        doi=getattr(lit, "doi", None),
-        isbn=getattr(lit, "isbn", None),
-    )
+    return LiteratureSummary.from_row(lit)
 
 
 # ---------------------------------------------------------------------------
