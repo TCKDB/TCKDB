@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import App from "./App"
 import { bySummaryText } from "./test/disclosureQueries"
 import { conformerReadHandlers } from "./test/conformerReads"
+import { emptyCatalogueHandlers } from "./test/catalogueFixtures"
 import { titleHasKind, type RouteTitleKindKey } from "./test/routeTitleKinds"
 
 const speciesRef = "spc_abcde234567abcde234567abcd"
@@ -25,6 +26,7 @@ const server = setupServer(
     http.get("/api/v1/auth/me", () => new HttpResponse(null, { status: 401 })),
     http.get("/site-config.json", () => new HttpResponse(null, { status: 404 })),
     ...homeCountHandlers,
+    ...emptyCatalogueHandlers(),
 )
 
 const emptyValueSearches = [

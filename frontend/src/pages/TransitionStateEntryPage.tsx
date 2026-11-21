@@ -369,10 +369,10 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                 <>
                                     <p>
                                         <strong>{statusLabel(trust.trust_status)}</strong> · {trust.evidence.passed_count} of {trust.evidence.possible_count} checks passed
-                                        {trust.evidence.rubric && trust.evidence.rubric_version != null && (
-                                            <MadeUnderLine madeUnder={liveMadeUnder(trust.evidence.rubric, trust.evidence.rubric_version)} />
-                                        )}
                                     </p>
+                                    {trust.evidence.rubric && trust.evidence.rubric_version != null && (
+                                        <MadeUnderLine madeUnder={liveMadeUnder(trust.evidence.rubric, trust.evidence.rubric_version)} />
+                                    )}
                                     {trust.structure_assessment && (
                                         <p><span className="tse-pair-label">Structure assessment</span> {structureAssessmentSentence(trust.structure_assessment)}</p>
                                     )}

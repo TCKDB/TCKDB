@@ -5,6 +5,9 @@ import "../conformer-group.css"
 import "../methods.css"
 import { loadLevelOfTheoryBrowse, type CoreTreatmentValue, type LevelOfTheoryRecord } from "../api/methodsApi"
 import { loadSoftwareNames, loadWorkflowToolNames, type VocabEntry } from "../api/vocabApi"
+import { loadBasisSetCatalogue, loadMethodCatalogue, type CatalogueCard } from "../api/catalogueApi"
+import { OrderNote } from "../components/OrderNote"
+import { cardFamilyText, cataloguePath } from "../domain/methodCatalogue"
 import { CompositeSchemeLink } from "../components/CompositeSchemeLink"
 import { LevelLabel } from "../components/LevelLabel"
 import { ListPager } from "../components/ListPager"
@@ -59,14 +62,26 @@ export default function MethodsIndexPage() {
     )
     const softwareState = useLoad((signal) => loadSoftwareNames(undefined, signal))
     const workflowToolState = useLoad((signal) => loadWorkflowToolNames(undefined, signal))
+    const methodCatalogueState = useLoad<CatalogueCard[]>((signal) => loadMethodCatalogue(signal))
+    const basisCatalogueState = useLoad<CatalogueCard[]>((signal) => loadBasisSetCatalogue(signal))
 
     return (
         <section className="conformer-page methods-page">
             <PageShell>
                 <h1 className="t-display-2">Methods</h1>
                 <p className="t-body section-intro">
-                    Levels of theory, software and workflow tools behind deposited calculations.
+                    The method and basis-set catalogue, and the levels of theory, software and workflow tools behind deposited calculations.
                 </p>
+
+                <section className="ledger-section" aria-labelledby="methods-catalogue-heading">
+                    <SectionHeading id="methods-catalogue-heading" guide={{ to: "method-catalogue", question: "What is the method and basis-set catalogue?" }}>Method catalogue</SectionHeading>
+                    <CatalogueTable state={methodCatalogueState} label="Method catalogue" familyHeading="Family" emptyText="The method catalogue has no entries." />
+                </section>
+
+                <section className="ledger-section" aria-labelledby="basis-catalogue-heading">
+                    <SectionHeading id="basis-catalogue-heading">Basis-set catalogue</SectionHeading>
+                    <CatalogueTable state={basisCatalogueState} label="Basis-set catalogue" familyHeading="Family and role" emptyText="The basis-set catalogue has no entries." />
+                </section>
 
                 <section className="ledger-section" aria-labelledby="methods-lot-heading">
                     <SectionHeading id="methods-lot-heading" guide={{ to: "level-of-theory", question: "What is a level of theory?" }}>Levels of theory</SectionHeading>
@@ -212,6 +227,48 @@ function LevelOfTheoryTable({ state, filter }: { state: LoadState<{ records: Lev
                 </tbody>
             </table>
         </div>
+    )
+}
+
+/** A catalogue list in the server's key order: name (linking to the entry's page), full name, family, usage. */
+function CatalogueTable({ state, label, familyHeading, emptyText }: {
+    state: LoadState<CatalogueCard[]>
+    label: string
+    familyHeading: string
+    emptyText: string
+}) {
+    if (state.status === "loading") return <p className="note" role="status">Loading…</p>
+    if (state.status === "error") return <p className="empty-projection" role="alert">The archive service could not load this list. Try again later.</p>
+    const rows = state.data
+    if (rows.length === 0) return <p className="empty-projection">{emptyText}</p>
+    return (
+        <>
+            <OrderNote order="Listed by catalogue key." />
+            <div className="table-scroll">
+                <table className="data-table" aria-label={label}>
+                    <thead>
+                        <tr>
+                            <th scope="col">Name</th>
+                            <th scope="col">Full name</th>
+                            <th scope="col">{familyHeading}</th>
+                            <th scope="col">Levels</th>
+                            <th scope="col">Calculations</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map((card) => (
+                            <tr key={card.catalogue_ref}>
+                                <td data-label="Name"><Link to={cataloguePath(card)}>{card.short_name}</Link></td>
+                                <td data-label="Full name">{card.full_name}</td>
+                                <td data-label={familyHeading}>{cardFamilyText(card)}</td>
+                                <td data-label="Levels" className="num">{card.usage.level_usage_count}</td>
+                                <td data-label="Calculations" className="num">{card.usage.calculation_usage_count}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </>
     )
 }
 
