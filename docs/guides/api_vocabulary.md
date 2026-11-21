@@ -61,10 +61,10 @@ Three things are deliberately absent:
 | Kind of token | Count | Read from |
 | --- | --- | --- |
 | Status, badge and query words | 123 | 28 enums, declared in `backend/app/glossary/declarations.py` |
-| Identifier prefixes | 44 | `backend/app/services/public_refs.py` |
+| Identifier prefixes | 46 | `backend/app/services/public_refs.py` |
 | Trust check names | 174 | `backend/app/services/trust/rubrics.py` |
 | Refusal codes a caller can receive | 374 | `backend/app/api/code_catalogue.py` |
-| **total** | **715** | |
+| **total** | **717** | |
 
 ## How a record is named
 
@@ -77,10 +77,11 @@ There are two kinds of reference, and the difference matters more than it looks:
 
 Nothing in the string says which kind you are holding, which is why this table exists.
 
-### Content-derived prefixes (13)
+### Content-derived prefixes (15)
 
 | Prefix | Names a | Same on every instance? |
 | --- | --- | --- |
+| `bcat_` | basis set catalogue | yes |
 | `cas_` | conformer assignment scheme | yes |
 | `csch_` | composite scheme | yes |
 | `ecs_` | energy correction scheme | yes |
@@ -88,6 +89,7 @@ Nothing in the string says which kind you are holding, which is why this table e
 | `geom_` | geometry | yes |
 | `lit_` | literature | yes |
 | `lot_` | level of theory | yes |
+| `mcat_` | method catalogue | yes |
 | `rxn_` | chem reaction | yes |
 | `soft_` | software | yes |
 | `spc_` | species | yes |

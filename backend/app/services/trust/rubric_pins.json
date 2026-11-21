@@ -16,7 +16,7 @@
       "1": "e358f9d314fc9932a3a041cc928e44dbee95e5b694872a6dbaefcfac0bbf3969"
     },
     "computed_transition_state": {
-      "2": "c80faf4292838fb833e46396c97b2d042adabea3064747719e17643953157cdc"
+      "2": "c2b8238721e3c9dbb848c0bba05d32056e97f8a4aff561f120cc100a2bc78f0f"
     },
     "computed_transport": {
       "1": "13dab1e06c1df4ba078d326f530d3f51a6a790aca3612b319924cde9f2eab786"
@@ -25,10 +25,10 @@
       "1": "90951074d2bcd429547a90f5690bb8d9fb892f1aa170f45ebbe52110766290d8"
     },
     "tckdb_reproducibility": {
-      "1": "53ebdac6ff051e755f588edef1f5c31822bdf6efae6b821d3e2d734f466910bc"
+      "1": "d819c4995e4d882f11c38a431fb1e353cc3062d36dd9db0688d3c4c2e026a61c"
     },
     "tckdb_reproducibility_ts_statmech": {
-      "1": "ef142006d45b0f1f0fa2965bbd31d6e83d4bc568bebbd99943c033a17c94d6a7"
+      "1": "db93e2c2466085c4921093b74373ba164b66a226f5121c472d5ab73f616dd313"
     }
   },
   "unbumped_overrides": [
@@ -487,6 +487,21 @@
       "name": "computed_transition_state",
       "version": 2,
       "reason": "selection filters compare software and workflow-tool names by public ref; the badge task states neither filter, so grading never runs that match"
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "The fingerprint walk reaches app.services.public_refs.PREFIXES, which gained the method and basis-set catalogue prefixes. The software, workflow-tool and literature prefixes these rubrics read are unchanged, so no verdict can change."
+    },
+    {
+      "name": "tckdb_reproducibility",
+      "version": 1,
+      "reason": "The fingerprint walk reaches app.services.public_refs.PREFIXES, which gained the method and basis-set catalogue prefixes. The software, workflow-tool and literature prefixes these rubrics read are unchanged, so no verdict can change."
+    },
+    {
+      "name": "tckdb_reproducibility_ts_statmech",
+      "version": 1,
+      "reason": "The fingerprint walk reaches app.services.public_refs.PREFIXES, which gained the method and basis-set catalogue prefixes. The software, workflow-tool and literature prefixes these rubrics read are unchanged, so no verdict can change."
     }
   ]
 }

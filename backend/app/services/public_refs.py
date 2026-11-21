@@ -68,6 +68,9 @@ PREFIXES: dict[str, str] = {
     # Composite recipe. Content-derived from ``definition_hash``:
     # the same recipe is the same ref on any TCKDB instance.
     "CompositeScheme": "csch",
+    # Method and basis-set catalogue entries. Content-derived from the entry's identity key.
+    "MethodCatalogue": "mcat",
+    "BasisSetCatalogue": "bcat",
     # Events / provenance (opaque)
     "SpeciesEntry": "spe",
     "ReactionEntry": "rxe",
@@ -142,6 +145,8 @@ _CONTENT_DERIVED: set[str] = {
     "FrequencyScaleFactor",
     "EnergyCorrectionScheme",
     "CompositeScheme",
+    "MethodCatalogue",
+    "BasisSetCatalogue",
 }
 
 # Body length (after the ``{prefix}_`` separator). 26 characters matches
@@ -535,6 +540,14 @@ def _canonical_composite_scheme(obj: Any) -> str | None:
     return None
 
 
+def _canonical_method_catalogue(obj: Any) -> str:
+    return f"method_catalogue:key={obj.key}"
+
+
+def _canonical_basis_set_catalogue(obj: Any) -> str:
+    return f"basis_set_catalogue:key={obj.key}"
+
+
 # Dispatch table from class name → canonical-identity extractor.
 # Extractors may return ``None`` to signal "no canonical identity
 # available, fall back to opaque ref" (see ``_canonical_literature`` and
@@ -553,6 +566,8 @@ _CANONICALIZERS: dict[str, Callable[[Any], str | None]] = {
     "FrequencyScaleFactor": _canonical_frequency_scale_factor,
     "EnergyCorrectionScheme": _canonical_energy_correction_scheme,
     "CompositeScheme": _canonical_composite_scheme,
+    "MethodCatalogue": _canonical_method_catalogue,
+    "BasisSetCatalogue": _canonical_basis_set_catalogue,
 }
 
 
