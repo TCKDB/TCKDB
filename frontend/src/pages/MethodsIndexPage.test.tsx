@@ -5,8 +5,9 @@ import { cleanup, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import MethodsIndexPage from "./MethodsIndexPage"
+import { emptyCatalogueHandlers } from "../test/catalogueFixtures"
 
-const server = setupServer()
+const server = setupServer(...emptyCatalogueHandlers())
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
 afterEach(() => { server.resetHandlers(); cleanup() })
 afterAll(() => server.close())
