@@ -3,9 +3,7 @@
   Hand-authored ThermoML 4.0 fixture. Single-component "Ideal gas" Cp
   block whose Property-MethodID carries ONLY sMethodName "STD" (no
   eMethodName, no Prediction). "STD" is itself an observed free-text
-  method string in the pinned archive (see
-  docs/validation/thermoml_cp_pilot_scan.json,
-  free_method_ideal_gas_candidates, DOI 10.1016/j.fluid.2015.06.045) but
+  method string in the pinned archive (DOI 10.1016/j.fluid.2015.06.045) but
   it is deliberately NOT on mapping.py's observed-method-string
   allowlist; it is not unambiguous enough to classify without reading
   the source article, which this importer does not do. The mapper must

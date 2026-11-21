@@ -7,7 +7,7 @@ and what the endpoint refuses to claim.
 
 In plain terms: a species entry can hold many thermo records from different
 sources. Browsing lists them in a fixed display order (review rank, then newest
-deposited; see [`browse_order.md`](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/browse_order.md)). Selection is a
+deposited). Selection is a
 separate, opt-in question: "which of the records can answer this exact
 quantity, and what is the situation among them?" TCKDB carries no ranking of
 one method above another, so the answer never says one eligible record is

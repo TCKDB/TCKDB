@@ -9,7 +9,7 @@ what to use instead.
 Two kinds:
 
 * **Removed** (``browse_parameter_removed``). A browse read lists every matching record in display order and never
-  picks one (``docs/specs/browse_order.md``). ``collapse`` and ``selection_policy`` asked it to pick. "Give me one"
+  picks one. ``collapse`` and ``selection_policy`` asked it to pick. "Give me one"
   is the select endpoints' job, so the refusal says which one.
 * **Renamed** (``parameter_renamed``). The parameter stays but its name described something it never did. The
   refusal names the new spelling.

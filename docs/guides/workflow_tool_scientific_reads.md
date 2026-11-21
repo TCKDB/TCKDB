@@ -83,8 +83,7 @@ and provenance summaries.
 The boundary is intentional:
 
 - **TCKDB backend** owns scientific read/query semantics, filtering,
-  deterministic ranking, provenance summaries, and review/trust state.
-  Documented in `docs/specs/browse_order.md`.
+  deterministic display order, provenance summaries, and review/trust state.
 - **`tckdb-client`** is a thin Python HTTP client. It serializes
   parameters, calls the backend, and returns parsed JSON. It does not
   rank, select, or interpret responses.
@@ -388,7 +387,7 @@ Each record carries:
 
 The search returns every matching record in TCKDB's documented deterministic
 display order (approved first, `under_review` and `not_reviewed` together, then
-newest deposited, then highest id; see [Browse order](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/browse_order.md)).
+newest deposited, then highest id).
 The first record is first in display order, not a scientific preference, and the
 client does not define "best thermo". To get one record under a policy you
 state, call `select_species_thermo`.

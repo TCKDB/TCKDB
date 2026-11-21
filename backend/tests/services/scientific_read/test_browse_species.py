@@ -1131,8 +1131,7 @@ def test_section_id_tokens_are_refused_on_browse(db_session, token):
     These four tokens gate a section whose payload is a bare integer-id
     array (``SpeciesEntrySectionIds.ids``) -- reachable with no
     identifier and no auth on this surface, which is exactly the
-    primary-key-harvest shape ``docs/specs/public_identifier_policy.md``
-    warns about. ``/species/browse`` therefore never accepts them at
+    primary-key-harvest shape public refs exist to prevent. ``/species/browse`` therefore never accepts them at
     all: a token that cannot be requested cannot be leaked by a future
     refactor that forgets to strip it. This replaces the old
     ``test_include_thermo_populates_thermo_summary_with_ids``, which

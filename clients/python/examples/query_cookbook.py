@@ -311,7 +311,7 @@ def recipe_thermo_provenance(
     The thermo response carries a ``provenance`` block. For
     statmech-derived thermo the read service falls back to the
     statmech's own source calculations when the thermo row didn't
-    declare its own (see ``docs/audits/thermo_provenance_geometry_audit.md``).
+    declare its own.
     """
     print(f"\n=== Recipe 3: thermo provenance inspection ===\n  smiles={args.smiles!r}")
     response = client.search_thermo(

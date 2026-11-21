@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Maintainer documents leave the repository (Unreleased)
+
+- **Behaviour:** none. Internal maintainer documents under `docs/` (decision records, plans, research, reviews, internal specs and validation write-ups) are no longer tracked; `.gitignore` and `mkdocs.yml` list their paths. They remain in git history. Published pages, code comments and API descriptions that cited them now state the fact they cited or drop the citation.
+- **Schema and migration:** none. No new environment variable.
+- **Versions:** `tckdb-schemas` 0.176.1, `tckdb-client` 0.209.3, `tckdb-mcp` 0.16.2.
+
 ## Release 0.3.0 is the self-hosting default (Unreleased)
 
 - **Behaviour:** the `selfhost` compose profile and `tckdb_deploy.sh` examples default to the 0.3.0 images (`TCKDB_IMAGE_TAG`). 0.3.0 carries the plain-HTTP lab-network login opt-in and the web UI's `X-Real-IP` handling, so `--access lan` and `--access https` work on the default tag; the env script warns only when `TCKDB_IMAGE_TAG` is set to 0.2.0.

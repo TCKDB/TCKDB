@@ -10,7 +10,7 @@ What is specific to kinetics, and lives here and not in the kernel:
   alternate fits of one candidate, never independent confirmation, and the first is not scientifically superior.
 * **Nothing ranks one determination above another.** TCKDB carries no method-versus-method ranking: one eligible
   determination is a sole eligible candidate, several are incomparable alternatives listed in administrative order
-  (``docs/specs/browse_order.md``), none is no applicable candidate.
+  (review rank, deposition time, id), none is no applicable candidate.
 
 Outcomes and ordering are the kernel's (:mod:`app.services.selection_kernel`).
 """

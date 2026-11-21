@@ -5,8 +5,6 @@ records that include species identity, energy or frequency results
 (whichever the calculation type produces), level of theory, software,
 conformer context (nullable), geometry IDs, validation, and review state
 — so workflow tools can decide reuse without hidden policy.
-
-See docs/specs/species_calculation_search_api.md for the contract.
 """
 
 from __future__ import annotations

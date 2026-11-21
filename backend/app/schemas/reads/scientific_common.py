@@ -3,8 +3,6 @@
 Defined once here, imported by the per-endpoint scientific read modules so the
 fragment shapes (review summary, provenance summary, evidence breakdown,
 temperature coverage, pagination) stay consistent across endpoints.
-
-See docs/specs/browse_order.md for the display order every browse and list read uses.
 """
 
 from __future__ import annotations
@@ -125,7 +123,7 @@ class SelectionPolicy(str, Enum):
     honestly evaluated from the record data alone. See
     ``backend/docs/specs/scientific_product_candidacy.md``.
 
-    ``default``        the display order of ``docs/specs/browse_order.md``.
+    ``default``        the browse display order (review rank, newest deposition, id).
     ``latest``         most recently deposited first.
     ``most_reviewed``  review status first, then most recently deposited.
     """
@@ -391,7 +389,7 @@ class LevelOfTheorySummary(BaseModel):
 
     ``level_of_theory_ref`` is the public stable handle; the
     existing ``level_of_theory_id`` integer stays for the compatibility
-    window. See ``docs/specs/public_identifier_policy.md``.
+    window.
     """
 
     level_of_theory_id: int
@@ -874,7 +872,7 @@ class OrderEcho(BaseModel):
     """The display order of a browse or list response, structured.
 
     ``keys`` are applied in sequence, most significant first. ``kind`` is always ``display_order``; ``statement``
-    says in words that the order is not a scientific preference. See ``docs/specs/browse_order.md``.
+    says in words that the order is not a scientific preference.
     """
 
     kind: Literal["display_order"] = "display_order"

@@ -26,7 +26,6 @@ review-badge, pagination and disclosure-envelope machinery (see
 The path parameter accepts either the integer ``species_entry.id`` or
 a public ref of the form ``spe_…`` (the template name stays
 ``{species_entry_id}``). See
-``docs/specs/public_identifier_policy.md`` and
 ``backend/docs/specs/trust_read_api_current.md``.
 """
 

@@ -112,29 +112,29 @@ nav:
       - Schema reference (generated): guides/schema_reference.md
       - Scientific check register (generated): guides/scientific_check_register.md
 
-# Pages kept in the repository but not published on the site:
-# maintainer notes, design records, plans, reviews, implementation specs,
-# and pages superseded by a published one.
+# Not pages: the build hook and the docs requirements file.
+# The rest are maintainer documents that live outside this repository; a local
+# copy under docs/ stays out of a local build. Same list as .gitignore.
 exclude_docs: |
-  /*.md
+  /hooks/
   /requirements.txt
+  /*.md
   !/index.md
-  adr/
-  audits/
-  decisions/
-  hooks/
-  paper/
-  plans/
-  proposals/
-  research/
-  reviews/
-  roadmaps/
-  specs/
-  validation/
-  deployment/api_containerization_notes.md
-  deployment/frontend-pi.md
-  deployment/self_hosting.md
-  guides/scientific_read_demo_data.md
-  guides/system_flow.md
-  guides/the_story_of_a_datapoint.md
-  start/deployment.md
+  /adr/
+  /audits/
+  /decisions/
+  /paper/
+  /plans/
+  /proposals/
+  /research/
+  /reviews/
+  /roadmaps/
+  /specs/
+  /validation/
+  /deployment/api_containerization_notes.md
+  /deployment/frontend-pi.md
+  /deployment/self_hosting.md
+  /guides/scientific_read_demo_data.md
+  /guides/system_flow.md
+  /guides/the_story_of_a_datapoint.md
+  /start/deployment.md

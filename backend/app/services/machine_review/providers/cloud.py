@@ -1,9 +1,5 @@
 """The cloud machine-review provider: one model call, strictly parsed.
 
-Phase (a) of ``docs/plans/machine_review_llm_implementation.md``. Until this
-module existed the factory validated cloud configuration and then raised
-``NotImplementedError``; this is the call it was standing in for.
-
 **The transport is injected, not imported.** :class:`MachineReviewModelClient`
 is a two-method protocol, and the provider never learns whether the other side
 is an HTTP call, a recorded fixture, or a stub. Three things follow, and all

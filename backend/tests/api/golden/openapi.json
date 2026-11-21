@@ -30550,7 +30550,7 @@
         "type": "object"
       },
       "LevelOfTheorySummary": {
-        "description": "Lightweight LoT shape used in scientific provenance summaries.\n\n``level_of_theory_ref`` is the public stable handle; the\nexisting ``level_of_theory_id`` integer stays for the compatibility\nwindow. See ``docs/specs/public_identifier_policy.md``.",
+        "description": "Lightweight LoT shape used in scientific provenance summaries.\n\n``level_of_theory_ref`` is the public stable handle; the\nexisting ``level_of_theory_id`` integer stays for the compatibility\nwindow.",
         "properties": {
           "aux_basis": {
             "anyOf": [
@@ -34538,7 +34538,7 @@
         "type": "object"
       },
       "NetworkKineticsBatchFitEvaluation": {
-        "description": "One evaluated stored fit within a batch response.\n\n``channel_key`` is depositor-supplied free text (``NetworkChannel`` has\nno public ref — see ``docs/plans/pressure-dependent-network-surface.md``\n§1) but is the identifier already carried on the network detail\nendpoint's ``channels[].channel_key``, so it is what lets a client join\nthis entry back to the channel it rendered from that earlier call.\n``source_state_composition_hash`` / ``sink_state_composition_hash``\nare carried alongside it as the server-computed, non-arbitrary\nanchor — the same pair ``NetworkKineticsChannelContext`` and\n``NetworkChannelSummary`` already expose — for a client that wants a\nsturdier join than depositor text.\n\n``k_units`` / ``tmin_k`` / ``tmax_k`` / ``pmin_bar`` / ``pmax_bar`` are\ncarried per fit, not once at the envelope level, because two fits on\nthe same channel (a Chebyshev and a PLOG) are not guaranteed to share a\nvalidity range or even a rate-unit convention.",
+        "description": "One evaluated stored fit within a batch response.\n\n``channel_key`` is depositor-supplied free text (``NetworkChannel`` has\nno public ref) but is the identifier already carried on the network detail\nendpoint's ``channels[].channel_key``, so it is what lets a client join\nthis entry back to the channel it rendered from that earlier call.\n``source_state_composition_hash`` / ``sink_state_composition_hash``\nare carried alongside it as the server-computed, non-arbitrary\nanchor — the same pair ``NetworkKineticsChannelContext`` and\n``NetworkChannelSummary`` already expose — for a client that wants a\nsturdier join than depositor text.\n\n``k_units`` / ``tmin_k`` / ``tmax_k`` / ``pmin_bar`` / ``pmax_bar`` are\ncarried per fit, not once at the envelope level, because two fits on\nthe same channel (a Chebyshev and a PLOG) are not guaranteed to share a\nvalidity range or even a rate-unit convention.",
         "properties": {
           "channel_key": {
             "title": "Channel Key",
@@ -42510,7 +42510,7 @@
         "type": "object"
       },
       "OrderEcho": {
-        "description": "The display order of a browse or list response, structured.\n\n``keys`` are applied in sequence, most significant first. ``kind`` is always ``display_order``; ``statement``\nsays in words that the order is not a scientific preference. See ``docs/specs/browse_order.md``.",
+        "description": "The display order of a browse or list response, structured.\n\n``keys`` are applied in sequence, most significant first. ``kind`` is always ``display_order``; ``statement``\nsays in words that the order is not a scientific preference.",
         "properties": {
           "keys": {
             "items": {
@@ -56127,7 +56127,7 @@
         "type": "object"
       },
       "SelectionPolicy": {
-        "description": "Named, read-time *administrative* order a ``.../select`` request states (``policy``).\n\nA selection policy makes \"show me one product for this species form\" an\n*explicit, named* choice rather than an implicit one. Every policy is an\nadministrative order over review status and deposition time. None is a\nclaim about which method or result is scientifically better, and none\npersists a curator decision.\n\nPolicies that would require a stored choice (``benchmark_reference``,\n``curator_pick``) are intentionally absent: they need the deferred\nproduct-selection persistence layer, not a read knob, and cannot be\nhonestly evaluated from the record data alone. See\n``backend/docs/specs/scientific_product_candidacy.md``.\n\n``default``        the display order of ``docs/specs/browse_order.md``.\n``latest``         most recently deposited first.\n``most_reviewed``  review status first, then most recently deposited.",
+        "description": "Named, read-time *administrative* order a ``.../select`` request states (``policy``).\n\nA selection policy makes \"show me one product for this species form\" an\n*explicit, named* choice rather than an implicit one. Every policy is an\nadministrative order over review status and deposition time. None is a\nclaim about which method or result is scientifically better, and none\npersists a curator decision.\n\nPolicies that would require a stored choice (``benchmark_reference``,\n``curator_pick``) are intentionally absent: they need the deferred\nproduct-selection persistence layer, not a read knob, and cannot be\nhonestly evaluated from the record data alone. See\n``backend/docs/specs/scientific_product_candidacy.md``.\n\n``default``        the browse display order (review rank, newest deposition, id).\n``latest``         most recently deposited first.\n``most_reviewed``  review status first, then most recently deposited.",
         "enum": [
           "default",
           "latest",
@@ -66148,7 +66148,7 @@
       },
       "ThermoMLUploadResult": {
         "additionalProperties": false,
-        "description": "What ``POST /uploads/thermoml`` wrote, named back to the depositor\nentirely in public refs.\n\nDeliberately carries no database id anywhere, unlike the ``id``/\n``submission_id`` fields on every sibling result above: it follows\n``docs/specs/public_identifier_policy.md`` and the ``public_ref``\nprecedent of the read route for this exact table.",
+        "description": "What ``POST /uploads/thermoml`` wrote, named back to the depositor\nentirely in public refs.\n\nDeliberately carries no database id anywhere, unlike the ``id``/\n``submission_id`` fields on every sibling result above: it names the\nrow by its public ref only, as the read route for this exact table does.",
         "properties": {
           "ambiguous_identity_count": {
             "title": "Ambiguous Identity Count",
@@ -96809,7 +96809,7 @@
     },
     "/api/v1/scientific/calculations/{calculation_ref_or_id}": {
       "get": {
-        "description": "Return one calculation as a scientific/provenance record.\n\nPath handle accepts an integer ``calculation.id`` or a public ref\nof the form ``calc_…``. Wrong-prefix refs return 422\n``handle_type_mismatch``; unknown refs and unknown ids return 404.\nDefault response identifies the row by ``calculation_ref`` only —\ninteger ids surface only when ``include=internal_ids`` is supplied\n*and* the deployment permits it.\n\nHeavy include sections (currently only ``include=results``) appear\nin ``record`` only when the caller opts in, so the default-shape\nresponse stays compact.\n\n``record.provenance.submission_ref`` — which upload created this\ncalculation — is served only to a caller that authenticates (an\n``X-API-Key`` header or a valid session cookie). Anonymous callers\ndo not get the field with a ``null`` value; the key is omitted from\nthe payload entirely. See ``app.services.scientific_read.auth_visibility``.\n\nSee ``docs/specs/public_identifier_policy.md`` and\n``docs/specs/internal_ids_visibility_policy.md``.",
+        "description": "Return one calculation as a scientific/provenance record.\n\nPath handle accepts an integer ``calculation.id`` or a public ref\nof the form ``calc_…``. Wrong-prefix refs return 422\n``handle_type_mismatch``; unknown refs and unknown ids return 404.\nDefault response identifies the row by ``calculation_ref`` only —\ninteger ids surface only when ``include=internal_ids`` is supplied\n*and* the deployment permits it.\n\nHeavy include sections (currently only ``include=results``) appear\nin ``record`` only when the caller opts in, so the default-shape\nresponse stays compact.\n\n``record.provenance.submission_ref`` — which upload created this\ncalculation — is served only to a caller that authenticates (an\n``X-API-Key`` header or a valid session cookie). Anonymous callers\ndo not get the field with a ``null`` value; the key is omitted from\nthe payload entirely. See ``app.services.scientific_read.auth_visibility``.",
         "operationId": "scientific_calculation_detail_api_v1_scientific_calculations__calculation_ref_or_id__get",
         "parameters": [
           {
@@ -100146,7 +100146,7 @@
     },
     "/api/v1/scientific/geometries/{geometry_handle}": {
       "get": {
-        "description": "Return the full coordinate payload for a geometry handle.\n\nPath handle accepts an integer ``geometry.id`` or a public ref of\nthe form ``geom_…``. Wrong-prefix refs return 422\n``handle_type_mismatch``; unknown refs return 404. Default\nresponse identifies the geometry by ``geometry_ref`` only —\ninteger ids surface only when ``include=internal_ids`` is supplied\nand the deployment permits it.\n\n``identity`` (formula / canonical SMILES / InChI key / charge /\nmultiplicity of the owning species or transition-state entry) is\nalways served, unauthenticated included — it names the same\nmolecule the coordinates already describe, nothing more.\n\n``submission_ref`` — which upload produced this geometry — is\nserved only to a caller that authenticates (an ``X-API-Key``\nheader or a valid session cookie). Anonymous callers do not get\nthe field with a ``null`` value; the key is omitted from the\npayload entirely. See\n``app.services.scientific_read.auth_visibility``.\n\nSee ``docs/specs/public_identifier_policy.md`` and\n``docs/specs/internal_ids_visibility_policy.md``.",
+        "description": "Return the full coordinate payload for a geometry handle.\n\nPath handle accepts an integer ``geometry.id`` or a public ref of\nthe form ``geom_…``. Wrong-prefix refs return 422\n``handle_type_mismatch``; unknown refs return 404. Default\nresponse identifies the geometry by ``geometry_ref`` only —\ninteger ids surface only when ``include=internal_ids`` is supplied\nand the deployment permits it.\n\n``identity`` (formula / canonical SMILES / InChI key / charge /\nmultiplicity of the owning species or transition-state entry) is\nalways served, unauthenticated included — it names the same\nmolecule the coordinates already describe, nothing more.\n\n``submission_ref`` — which upload produced this geometry — is\nserved only to a caller that authenticates (an ``X-API-Key``\nheader or a valid session cookie). Anonymous callers do not get\nthe field with a ``null`` value; the key is omitted from the\npayload entirely. See\n``app.services.scientific_read.auth_visibility``.",
         "operationId": "scientific_geometry_detail_api_v1_scientific_geometries__geometry_handle__get",
         "parameters": [
           {
@@ -106137,7 +106137,7 @@
     },
     "/api/v1/scientific/reaction-entries/{reaction_entry_id}/full": {
       "get": {
-        "description": "Composite scientific read for a reaction entry.\n\nPath handle accepts an integer ``reaction_entry.id`` or a public ref\nstarting with ``rxe_``. Joins species, kinetics, transition states,\ncalculations, and review summary into one document. Top-level filters\napply per joined sub-array. Non-TS-backed kinetics surface\nin ``kinetics`` with null TS-chain provenance fields.\nSub-arrays sort deterministically; client-supplied ``sort=`` is\nrejected. See ``docs/specs/browse_order.md`` §Endpoint 5 and\n``docs/specs/public_identifier_policy.md``.",
+        "description": "Composite scientific read for a reaction entry.\n\nPath handle accepts an integer ``reaction_entry.id`` or a public ref\nstarting with ``rxe_``. Joins species, kinetics, transition states,\ncalculations, and review summary into one document. Top-level filters\napply per joined sub-array. Non-TS-backed kinetics surface\nin ``kinetics`` with null TS-chain provenance fields.\nSub-arrays sort deterministically; client-supplied ``sort=`` is\nrejected.",
         "operationId": "reaction_full_api_v1_scientific_reaction_entries__reaction_entry_id__full_get",
         "parameters": [
           {
@@ -106291,7 +106291,7 @@
     },
     "/api/v1/scientific/reaction-entries/{reaction_entry_id}/kinetics": {
       "get": {
-        "description": "Return kinetics records for a reaction entry, sorted by review status, then newest.\n\nPath handle is strictly the reaction-entry resource: an integer\n``reaction_entry.id`` or a public ref starting with ``rxe_``. A\n``chem_reaction.id`` (or any other prefix) returns 422 / 404.\nProvenance keys are always present; TS-chain fields are populated\nonly for TS-backed records. Default sort is review\nstatus, then newest, then id (temperature coverage and evidence are\nreported per record, not ranked). ``sort=`` is rejected (v0). See ``docs/specs/browse_order.md``\n§Endpoint 3 and ``docs/specs/public_identifier_policy.md``.",
+        "description": "Return kinetics records for a reaction entry, sorted by review status, then newest.\n\nPath handle is strictly the reaction-entry resource: an integer\n``reaction_entry.id`` or a public ref starting with ``rxe_``. A\n``chem_reaction.id`` (or any other prefix) returns 422 / 404.\nProvenance keys are always present; TS-chain fields are populated\nonly for TS-backed records. Default sort is review\nstatus, then newest, then id (temperature coverage and evidence are\nreported per record, not ranked). ``sort=`` is rejected (v0).",
         "operationId": "reaction_kinetics_api_v1_scientific_reaction_entries__reaction_entry_id__kinetics_get",
         "parameters": [
           {
@@ -107335,7 +107335,7 @@
     },
     "/api/v1/scientific/reactions/search": {
       "get": {
-        "description": "Discover reaction entries by reactants/products with availability + trust.\n\nRepeated ``reactants=`` and ``products=`` are accepted and preserve list\norder. ``direction=exact`` is rejected (v0). ``sort=`` is rejected (v0).\n\n``match=contains`` (the default) means set containment per role, so\n``?reactants=NN`` returns every reaction with NN among its reactants and\nleaves the product side unconstrained. ``match=exact`` asks for precisely\none equation, both sides, counts included. See\n``docs/specs/browse_order.md`` §Endpoint 2.",
+        "description": "Discover reaction entries by reactants/products with availability + trust.\n\nRepeated ``reactants=`` and ``products=`` are accepted and preserve list\norder. ``direction=exact`` is rejected (v0). ``sort=`` is rejected (v0).\n\n``match=contains`` (the default) means set containment per role, so\n``?reactants=NN`` returns every reaction with NN among its reactants and\nleaves the product side unconstrained. ``match=exact`` asks for precisely\none equation, both sides, counts included.",
         "operationId": "reaction_search_get_api_v1_scientific_reactions_search_get",
         "parameters": [
           {
@@ -108170,7 +108170,7 @@
     },
     "/api/v1/scientific/species-calculations/search": {
       "get": {
-        "description": "Chemistry-first species calculation/conformer search.\n\nCalculation-centered records that include resolved species identity,\nenergy or frequency results (whichever the calculation type\nproduces), level of theory, software, conformer context (when\npresent), geometry IDs, validation, review state, and provenance.\n``include=freq_modes`` adds the per-mode harmonic frequency array.\n\n``record.provenance.submission_ref`` on each result is served only\nto an authenticated caller — see\n``app.services.scientific_read.auth_visibility``.\n\nSee ``docs/specs/species_calculation_search_api.md``.",
+        "description": "Chemistry-first species calculation/conformer search.\n\nCalculation-centered records that include resolved species identity,\nenergy or frequency results (whichever the calculation type\nproduces), level of theory, software, conformer context (when\npresent), geometry IDs, validation, review state, and provenance.\n``include=freq_modes`` adds the per-mode harmonic frequency array.\n\n``record.provenance.submission_ref`` on each result is served only\nto an authenticated caller — see\n``app.services.scientific_read.auth_visibility``.",
         "operationId": "species_calculations_search_get_api_v1_scientific_species_calculations_search_get",
         "parameters": [
           {
@@ -109289,7 +109289,7 @@
     },
     "/api/v1/scientific/species-entries/{species_entry_id}/thermo": {
       "get": {
-        "description": "Return every thermo record for a species entry, in display order.\n\nReview status, then newest deposition, then id (``docs/specs/browse_order.md``). The read never picks one:\n``collapse`` and ``selection_policy`` are refused (422); ``POST .../thermo/select`` answers \"give me one\".\n``coverage_temperature_min_k`` / ``coverage_temperature_max_k`` filter nothing; they set the window each record's\n``temperature_coverage`` is computed against.\n\nPath handle is strictly the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\n``species.id`` (or any other prefix) returns 422 / 404.\n``sort=`` is rejected (v0). See ``docs/specs/browse_order.md``\n§Endpoint 4 and ``docs/specs/public_identifier_policy.md``.",
+        "description": "Return every thermo record for a species entry, in display order.\n\nReview status, then newest deposition, then id. The read never picks one:\n``collapse`` and ``selection_policy`` are refused (422); ``POST .../thermo/select`` answers \"give me one\".\n``coverage_temperature_min_k`` / ``coverage_temperature_max_k`` filter nothing; they set the window each record's\n``temperature_coverage`` is computed against.\n\nPath handle is strictly the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\n``species.id`` (or any other prefix) returns 422 / 404.\n``sort=`` is rejected (v0).",
         "operationId": "species_thermo_api_v1_scientific_species_entries__species_entry_id__thermo_get",
         "parameters": [
           {
@@ -111558,7 +111558,7 @@
     },
     "/api/v1/scientific/species/search": {
       "get": {
-        "description": "Discover species by chemical identity with per-entry trust + availability.\n\nMultiple identifiers AND-combine; inconsistent identifiers return an\nempty result set rather than 422. Client-supplied ``sort=`` is rejected\nwith 422 (``client_sort_not_supported``). See ``docs/specs/browse_order.md``\n§Endpoint 1 for the contract.",
+        "description": "Discover species by chemical identity with per-entry trust + availability.\n\nMultiple identifiers AND-combine; inconsistent identifiers return an\nempty result set rather than 422. Client-supplied ``sort=`` is rejected\nwith 422 (``client_sort_not_supported``).",
         "operationId": "species_search_api_v1_scientific_species_search_get",
         "parameters": [
           {

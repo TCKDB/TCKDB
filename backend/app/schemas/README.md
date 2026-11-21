@@ -17,6 +17,4 @@ Conventions:
   the service layer, never accepted from clients.
 - Never expose internal integer PKs; use public refs (`species_…`).
 
-See [`docs/guides/system_flow.md`](../../../docs/guides/system_flow.md)
-for how a payload flows schema → workflow → service → DB, and
-[`schema_spec.md`](../../schema_spec.md) for field semantics.
+See [`schema_spec.md`](../../schema_spec.md) for field semantics.

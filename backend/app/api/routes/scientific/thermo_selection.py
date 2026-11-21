@@ -1,8 +1,8 @@
 """POST /api/v1/scientific/species-entries/{species_entry_ref}/thermo/select (+ ``/manifest``).
 
 Selection of one species entry's thermo record for the formation enthalpy at
-298.15 K: which records are eligible and, among those, the display order of
-``docs/specs/browse_order.md``. TCKDB ranks no method above another. Read-only: a POST because the request is a structured body, not because anything
+298.15 K: which records are eligible and, among those, the browse display
+order. TCKDB ranks no method above another. Read-only: a POST because the request is a structured body, not because anything
 is written. The ordinary ``GET .../thermo`` browse order is untouched.
 
 The path takes a public ``spe_...`` ref only; an integer id is refused. The request body is a

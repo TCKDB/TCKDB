@@ -1,7 +1,5 @@
 """Service implementation for /api/v1/scientific/species/search.
 
-See docs/specs/browse_order.md for the contract.
-
 Where the work happens
 ----------------------
 A species record is ordered by its *first visible entry in display order*, so review
@@ -147,11 +145,9 @@ _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 #: identifier-free, unauthenticated, whole-corpus listing the same gap
 #: turns ``GET /species/browse?include=all&limit=200`` into a way to
 #: harvest every thermo/statmech/transport/conformer-group primary key in
-#: the archive anonymously, in one request. See
-#: ``docs/specs/public_identifier_policy.md`` (sequential PKs rejected
-#: because they "leak the total count of objects ... and roughly the
-#: upload schedule") and ``internal_ids_visibility_policy.md`` (bare
-#: integer-id arrays are meant to be hidden by default).
+#: the archive anonymously, in one request. Sequential primary keys leak
+#: the total count of objects and roughly the upload schedule, and bare
+#: integer-id arrays are hidden by default.
 #:
 #: Dropping the tokens rather than adding ``"ids"`` to the
 #: deny-list: the deny-list is global, so widening it is a separate,
@@ -729,8 +725,7 @@ def browse_species(
 ) -> ScientificSpeciesBrowseResponse:
     """List species by secondary filter alone — no identifier required.
 
-    See docs/specs/browse_order.md for the sibling
-    ``/species/search`` contract this deliberately mirrors. The two
+    Mirrors the sibling ``/species/search`` contract. The two
     surfaces exist because ``search_species`` rejects an identifier-free
     request (``missing_identifier``) by design: a caller who *knows* what
     they want should get an exact, ref-scoped answer, and relaxing that

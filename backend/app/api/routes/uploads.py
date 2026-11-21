@@ -893,9 +893,8 @@ class ThermoMLUploadResult(BaseModel):
     entirely in public refs.
 
     Deliberately carries no database id anywhere, unlike the ``id``/
-    ``submission_id`` fields on every sibling result above: it follows
-    ``docs/specs/public_identifier_policy.md`` and the ``public_ref``
-    precedent of the read route for this exact table.
+    ``submission_id`` fields on every sibling result above: it names the
+    row by its public ref only, as the read route for this exact table does.
     """
 
     model_config = ConfigDict(extra="forbid")

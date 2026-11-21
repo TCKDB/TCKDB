@@ -7,7 +7,7 @@ from its manifest alone.
 
 TCKDB carries no method-versus-method ranking, so nothing here prefers one candidate to another: one eligible
 candidate is a sole eligible candidate, several are incomparable alternatives listed in administrative order
-(``docs/specs/browse_order.md``), none is no applicable candidate. Outcomes and ordering are the domain-neutral kernel
+(review rank, deposition time, id), none is no applicable candidate. Outcomes and ordering are the domain-neutral kernel
 in :mod:`app.services.selection_kernel`, whose semantics are documented there.
 """
 

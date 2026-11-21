@@ -54,8 +54,7 @@ def reaction_search_get(
     ``match=contains`` (the default) means set containment per role, so
     ``?reactants=NN`` returns every reaction with NN among its reactants and
     leaves the product side unconstrained. ``match=exact`` asks for precisely
-    one equation, both sides, counts included. See
-    ``docs/specs/browse_order.md`` §Endpoint 2.
+    one equation, both sides, counts included.
     """
     reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
     request = caller_input(

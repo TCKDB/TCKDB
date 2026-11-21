@@ -23,8 +23,7 @@ Usage::
         --title "Example kinetics contribution" \\
         --summary "Selected kinetics records from local TCKDB"
 
-The bundle is **not** sent anywhere. Hosted import is not implemented yet
-— see ``docs/roadmaps/local-bundle-export-v0-spec.md``.
+The bundle is **not** sent anywhere.
 """
 
 from __future__ import annotations

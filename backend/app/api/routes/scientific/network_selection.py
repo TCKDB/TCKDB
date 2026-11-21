@@ -1,7 +1,7 @@
 """POST /api/v1/scientific/networks/{network_ref}/kinetics/select (+ ``/manifest``).
 
 Selection among one network's stored pressure-dependent solves, for one stated gas-phase rate-coefficient
-question: which solves are eligible and, among those, the display order of ``docs/specs/browse_order.md``. TCKDB
+question: which solves are eligible and, among those, the browse display order. TCKDB
 ranks no method above another. Read-only: a POST because the request is a structured body, not because anything is
 written. The ordinary network browse and evaluation endpoints are untouched.
 

@@ -202,9 +202,13 @@ Every break is written to `artifact_integrity_event`, which hard-fails the
 owning calculation at read time; investigate before publishing rather than
 shipping a release whose evidence TCKDB cannot produce. The row carries a
 `public_ref` (`aie_…`) and is readable at
-`GET /scientific/artifacts/{sha256}/integrity` (curator or admin). See
-`docs/adr/0014-custody-of-stored-evidence-is-recorded-not-logged.md` for how to
-read it and tell the three causes apart.
+`GET /scientific/artifacts/{sha256}/integrity` (curator or admin). A mismatch
+has three causes: the store returned wrong bytes on this read, the object was
+modified after it was written, or the digest was wrong at ingest. Comparing
+`object_last_modified_at` with `artifact_recorded_at` separates "modified after
+write" from "never stored correctly"; comparing `object_etag` and
+`object_content_length` with the bytes actually read separates both from a
+faulty retrieval, where the object may still be sound.
 
 Re-check one digest by hand with `--sha256 <digest>`. This works even for a
 digest no `calculation_artifact` row references — the `store_artifact` dedup

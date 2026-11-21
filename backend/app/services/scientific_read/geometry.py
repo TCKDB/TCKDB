@@ -104,8 +104,7 @@ def get_geometry(
         raise NotFoundError("geometry not found")
 
     # Hosted abuse-control cap: refuse to materialize huge coordinate
-    # payloads anonymously. See
-    # ``docs/specs/public_read_abuse_controls.md``.
+    # payloads anonymously.
     cap = settings.max_geometry_atoms_public
     if cap and geometry.natoms is not None and geometry.natoms > cap:
         # A relationship code: a supplied geometry's

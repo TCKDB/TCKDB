@@ -15,7 +15,7 @@ Composition order (final response ordering):
    own deposition time (``created_at`` DESC), then its own id DESC. The
    parent entry's review standing and id order nothing: a record is not
    ranked by who its parent is, and records of one entry are not kept
-   together (``docs/specs/browse_order.md``).
+   together.
 4. Paginate the flat list. Every matching record is returned; none is picked.
 
 Non-TS-backed kinetics surface here exactly as in the detail endpoint —

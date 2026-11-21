@@ -83,7 +83,7 @@ _SUPPORTED_STANDARD_STATE = "Pure compound"
 #: this table rejects the row rather than guessing "probably
 #: experimental". Populated from the 15 single-component "Ideal
 #: gas"/"Gas" Cp blocks with no ``eMethodName``/``Prediction`` found by
-#: the archive scan (``docs/validation/thermoml_cp_pilot_scan.json``,
+#: the archive scan (``backend/scripts/validation/thermoml_cp_pilot_scan.py``,
 #: ``free_method_ideal_gas_candidates``), cross-checked against the
 #: pinned archive (``ThermoML.v2020-09-30.tgz``, sha256
 #: ``231161b5e443dc1ae0e5da8429d86a88474cb722016e5b790817bb31c58d7ec2``)

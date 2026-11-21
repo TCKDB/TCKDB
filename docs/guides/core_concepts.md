@@ -241,9 +241,7 @@ Every prefix, and whether it is content-derived or opaque, is listed in
 
 Records may cite one or more `literature` entries (with `author`
 links) when their values were lifted from a paper. DOI/ISBN metadata
-is fetched and cached; see
-`docs/literature_policy.md`
-if present.
+is fetched and cached.
 
 ### Submissions and reviews
 

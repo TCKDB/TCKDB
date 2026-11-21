@@ -1630,8 +1630,7 @@ class TCKDBClient:
     #
     # Thin wrappers over the backend scientific read API. They serialize
     # parameters and return parsed JSON; they do NOT rank, select, or
-    # interpret responses, and they hold no ARC/RMG-specific logic. See
-    # docs/specs/browse_order.md for the response contract.
+    # interpret responses, and they hold no ARC/RMG-specific logic.
 
     def search_species(
         self,

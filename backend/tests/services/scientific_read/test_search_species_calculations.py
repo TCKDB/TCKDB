@@ -898,9 +898,7 @@ def test_sp_calc_with_no_output_geometry_returns_empty_output_geometries(
 # energy.single_point_equivalent — opt energy served as the sp-equivalent
 # ---------------------------------------------------------------------------
 #
-# See docs/specs/species_calculation_search_api.md
-# §"energy.single_point_equivalent" for the full contract; the API-level
-# tests in tests/api/scientific/test_api_opt_energy_as_single_point.py cover
+# The API-level tests in tests/api/scientific/test_api_opt_energy_as_single_point.py cover
 # the same rules end-to-end together with the conformer evidence surface.
 # These service-level tests add the edge cases that need no conformer
 # observation / no lot_id, which the API tests don't exercise.

@@ -3,7 +3,7 @@
 Selection among the stored pressure-dependent solves of one network, for one stated gas-phase rate-coefficient
 question: which channel or declared bundle of outputs, over which temperature and pressure window, in which bath,
 under which state partition, boundaries and regime, with which coefficient meaning. Which solves are eligible, and
-their display order (``docs/specs/browse_order.md``); TCKDB ranks no method above another. A read: nothing is stored, no curator endorsement is created or changed, and the ordinary network
+their display order; TCKDB ranks no method above another. A read: nothing is stored, no curator endorsement is created or changed, and the ordinary network
 browse and evaluation endpoints are untouched. See ``docs/guides/selecting_network_kinetics.md``.
 
 No field here carries a database id. References are public refs (``spe_``, ``nsolve_``) and composition hashes (the

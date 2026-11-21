@@ -1,7 +1,7 @@
 """POST /api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select (+ ``/manifest``).
 
 Selection among one reaction entry's stored rate coefficients, for one stated gas-phase kinetic
-question: which determinations are eligible and, among those, the display order of ``docs/specs/browse_order.md``.
+question: which determinations are eligible and, among those, the browse display order.
 TCKDB ranks no method above another. Read-only: a POST because the request is a structured body, not because anything is written. The
 ordinary ``GET .../kinetics`` browse order is untouched.
 

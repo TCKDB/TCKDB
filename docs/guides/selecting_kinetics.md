@@ -6,7 +6,7 @@ answer means, and what the endpoint refuses to claim.
 
 In plain terms: a reaction entry can hold many kinetics records from different sources, fitted in different forms,
 valid over different temperatures and pressures. Browsing lists them in a fixed display order (review rank, then newest
-deposited; see [`browse_order.md`](https://github.com/TCKDB/TCKDB/blob/main/docs/specs/browse_order.md)). Selection is a separate, opt-in question: "which of the
+deposited). Selection is a separate, opt-in question: "which of the
 records can answer this exact question, and what is the situation among them?" TCKDB carries no ranking of one method
 above another, so the honest answer is "these records answer your question, and none is preferred".
 

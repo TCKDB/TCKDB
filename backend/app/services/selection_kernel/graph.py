@@ -6,7 +6,7 @@ selection can honestly say about the candidates that are eligible for the reques
 * none is eligible: ``no_applicable_candidate``;
 * exactly one is: ``sole_eligible_candidate``, which says it is the only one, not that it is best;
 * several are: ``incomparable_alternatives``. They form one front, listed in the administrative order the request
-  names (review rank, then deposition time, then a unique tie-breaker, ``docs/specs/browse_order.md``). The first
+  names (review rank, then deposition time, then a unique tie-breaker). The first
   record is display order, never a scientific preference.
 """
 

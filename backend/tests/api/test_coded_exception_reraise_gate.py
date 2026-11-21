@@ -49,8 +49,7 @@ wire question, and the wire tests that ask it are named beside each entry.
 
 Staleness, in both directions
 -----------------------------
-``docs/reviews/error_code_coverage_triage.md`` reasoned over call sites it
-could not see, and the sharper form of the lesson is: a set
+A hand-made list reasons over call sites it cannot see, and a set
 of individually-correct behaviours can still have an unheld completeness
 claim. A list that nothing re-checks becomes that. Both directions are
 asserted:

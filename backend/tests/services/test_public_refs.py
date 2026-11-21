@@ -646,9 +646,6 @@ class TestResolveOrCreateScheme:
 #   identity-bearing field values produce the same public_ref.
 # - **Distinctness**: two instances that the resolver/DB would treat as
 #   distinct rows produce different public_refs.
-#
-# See ``docs/audits/public_ref_identity_audit.md`` for the per-class
-# verdict table.
 # ---------------------------------------------------------------------------
 
 

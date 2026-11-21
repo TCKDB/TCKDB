@@ -129,8 +129,7 @@ def get_submission(session: Session, submission_id: int) -> Submission:
 def resolve_submission_ref(session: Session, ref: str) -> Submission:
     """Return the submission a producer path names by its ``sub_`` ref.
 
-    Refs only: a row id is refused (``docs/specs/public_identifier_policy.md``,
-    "Producer write routes"). It resolves and nothing more; the caller applies
+    Refs only: a producer write route refuses a row id. It resolves and nothing more; the caller applies
     its permission check to the returned row.
 
     :raises ValueError: 422 ``invalid_handle`` for a string that is not a

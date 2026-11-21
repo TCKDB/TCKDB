@@ -1,7 +1,6 @@
 """Public reference (handle) generation for hosted TCKDB scientific reads.
 
-Implements the public identifier policy. See
-``docs/specs/public_identifier_policy.md`` for the contract.
+Implements the public identifier policy.
 
 Two ref categories per spec:
 
@@ -625,8 +624,7 @@ def public_refs_by_id(session: Any, model_cls: type, ids: Any) -> dict[int, str]
     """Return ``{row id: public ref}`` for the given rows of *model_cls*.
 
     The producer-facing responses that still carry an integer id use this to
-    name the same row by its ref beside it (the sibling-ref rule in
-    ``docs/specs/public_identifier_policy.md``). One query, whatever the
+    name the same row by its ref beside it (the sibling-ref rule). One query, whatever the
     number of ids; an id with no row, or a row with no ref yet, is left out
     rather than mapped to ``None`` so a caller cannot mistake "absent" for a
     ref.

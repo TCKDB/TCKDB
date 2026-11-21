@@ -1,6 +1,4 @@
 """Service implementation for /api/v1/scientific/reactions/search.
-
-See docs/specs/browse_order.md.
 """
 
 from __future__ import annotations
@@ -113,7 +111,7 @@ def search_reactions(
     Containment is set-based, not multiset; see
     :class:`~app.schemas.reads.scientific_reactions.ReactionMatchMode`.
 
-    Display order (``docs/specs/browse_order.md``): ``review_rank ASC,
+    Display order: ``review_rank ASC,
     created_at DESC, id DESC``. Whether an entry has kinetics or a transition
     state is a filter (``has_kinetics``, ``has_transition_state``), never a
     ranking key. Client-supplied ``sort=`` is rejected.

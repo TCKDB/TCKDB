@@ -59,7 +59,7 @@ LEGAL_INCLUDE_TOKENS = frozenset(
 # backend/app/schemas/reads/scientific_provenance.py::ReviewDetail.
 LEGAL_INCLUDE_REVIEW = frozenset({"summary", "full"})
 
-# Default expansion per docs/specs/mcp_readonly_integration.md §10.8.
+# Default expansion.
 # "Show me everything about this reaction" almost always means these
 # three sub-arrays.
 _DEFAULT_INCLUDE: tuple[str, ...] = ("species", "kinetics", "transition_states")

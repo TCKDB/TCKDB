@@ -72,8 +72,7 @@ class NetworkKineticsBatchFitEvaluation(BaseModel):
     """One evaluated stored fit within a batch response.
 
     ``channel_key`` is depositor-supplied free text (``NetworkChannel`` has
-    no public ref — see ``docs/plans/pressure-dependent-network-surface.md``
-    §1) but is the identifier already carried on the network detail
+    no public ref) but is the identifier already carried on the network detail
     endpoint's ``channels[].channel_key``, so it is what lets a client join
     this entry back to the channel it rendered from that earlier call.
     ``source_state_composition_hash`` / ``sink_state_composition_hash``

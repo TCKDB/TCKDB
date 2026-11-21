@@ -1,7 +1,6 @@
 """Hosted abuse-control caps for public scientific reads.
 
-Covers the limit/offset/geometry/full caps defined in
-``docs/specs/public_read_abuse_controls.md``.
+Covers the hosted limit/offset/geometry/full caps.
 
 What the cap family publishes, and what it must not
 ---------------------------------------------------
@@ -23,9 +22,8 @@ suite would notice if it were lost. The rule on ``Shape`` is:
 ``query_too_expensive`` is the case in this file. Its measured value is
 how many calculation / geometry / artifact rows TCKDB holds for the
 requested record, and a caller who can read that off a cheap refusal has
-a row-counting oracle -- the enumeration exposure
-``docs/specs/public_identifier_policy.md`` rejects integer primary keys
-for. So the count is logged, and its absence is asserted **over the
+a row-counting oracle -- the enumeration exposure that rules out integer
+primary keys as public identifiers. So the count is logged, and its absence is asserted **over the
 whole body**, not only ``context``: ``detail`` is published too, and an
 omission from one and not the other is decorative. Its three siblings
 (``export_all_cap_exceeded``, ``ml_export_all_cap_exceeded``,
@@ -402,9 +400,7 @@ def test_query_too_expensive_publishes_the_cap_but_not_the_row_count(
     Why that matters: with the count published, a caller sets the cap
     low, sweeps every record, and reads TCKDB's holdings profile and
     roughly its upload schedule off a stream of cheap 422s. That is the
-    enumeration exposure ``docs/specs/public_identifier_policy.md``
-    (§"Why this matters", item 3) refuses to leak through primary
-    keys, and it would be worse here: a key leaks the count once, a
+    enumeration exposure that public refs keep out of primary keys, and it would be worse here: a key leaks the count once, a
     countable refusal leaks it per query, forever.
 
     The absence is asserted over the **whole serialized body**, not just

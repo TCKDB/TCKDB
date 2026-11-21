@@ -18,10 +18,8 @@ idempotency_conflict`` via constraint-name mapping.
 
 Why ``idempotency_in_progress`` is not reachable
 ------------------------------------------------
-It is deliberate. ``docs/specs/upload-idempotency-key-spec.md`` lists
-``idempotency_in_progress`` under *Optional* and says "Only implement
-``idempotency_in_progress`` if needed by the chosen approach". It is
-not a milestone to reach; it is a code that some approaches need and
+It is deliberate. ``idempotency_in_progress`` is an optional code. It
+is not a milestone to reach; it is a code that some approaches need and
 others do not, and the approach chosen here — one unique constraint,
 one integrity handler — does not. Nothing scheduled sets the flag.
 

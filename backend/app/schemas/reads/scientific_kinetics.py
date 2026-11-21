@@ -1,7 +1,5 @@
 """Read schemas for /api/v1/scientific/reaction-entries/{id}/kinetics.
 
-See docs/specs/browse_order.md.
-
 Provenance keys are always present. TS-chain fields are populated
 for TS-backed computational kinetics and ``null`` for non-TS-backed records
 (experimental, estimated, imported, fitted, network-derived, literature-derived).
@@ -459,8 +457,8 @@ class KineticsRecord(BaseModel):
 
     kinetics_id: int
     kinetics_ref: str
-    #: Deposition time: when this row was created in TCKDB. The second key of the display order
-    #: (``docs/specs/browse_order.md``), shown so a client can check the order it was served.
+    #: Deposition time: when this row was created in TCKDB. The second key of the display order,
+    #: shown so a client can check the order it was served.
     created_at: datetime
     scientific_origin: ScientificOriginKind
     model_kind: KineticsModelKind

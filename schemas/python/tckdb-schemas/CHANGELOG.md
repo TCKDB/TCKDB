@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.176.1 - 2026-11-21
+
+No schema changed. The producer contract points at `clients/python/docs/uploads_and_idempotency.md` for idempotency keys, in place of a maintainer document that is not in the repository.
+
 ## 0.176.0 - 2026-11-21
 
 New enum `PathCoordinateUnit` (`angstrom`, `bohr`, `amu_half_bohr`, `amu_half_angstrom`, `fraction`, `step`). `PathSearchResultPayload` gains optional `path_coordinate_unit`, the unit of every point's `path_coordinate`; `IRCResultPayload` gains optional `reaction_coordinate_unit`, the unit of every point's `reaction_coordinate`. Omitted, the unit is stored as unknown. A `fraction` unit refuses a coordinate outside [0, 1]; a `step` unit refuses one that is not a whole number. An unknown unit token is refused.

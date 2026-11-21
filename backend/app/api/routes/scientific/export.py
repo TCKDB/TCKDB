@@ -1,4 +1,4 @@
-"""Bulk-export endpoints (docs/specs/bulk_export_design.md §3).
+"""Bulk-export endpoints.
 
 Four curator-gated, streaming exports over the scientific surface. None of them picks a record: the many-record
 formats export every qualifying record, and CHEMKIN (one record per species/reaction) takes the records the request

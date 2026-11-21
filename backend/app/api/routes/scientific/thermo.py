@@ -3,8 +3,7 @@
 The path parameter accepts either the integer
 ``species_entry.id`` or a public ref of the form ``spe_...``. The URL
 template keeps the ``{species_entry_id}`` name for backwards
-compatibility with OpenAPI consumers. See
-``docs/specs/public_identifier_policy.md``.
+compatibility with OpenAPI consumers.
 """
 
 from __future__ import annotations
@@ -80,7 +79,7 @@ def species_thermo(
 ) -> ScientificSpeciesThermoResponse:
     """Return every thermo record for a species entry, in display order.
 
-    Review status, then newest deposition, then id (``docs/specs/browse_order.md``). The read never picks one:
+    Review status, then newest deposition, then id. The read never picks one:
     ``collapse`` and ``selection_policy`` are refused (422); ``POST .../thermo/select`` answers "give me one".
     ``coverage_temperature_min_k`` / ``coverage_temperature_max_k`` filter nothing; they set the window each record's
     ``temperature_coverage`` is computed against.
@@ -88,8 +87,7 @@ def species_thermo(
     Path handle is strictly the species-entry resource: an integer
     ``species_entry.id`` or a public ref starting with ``spe_``. A
     ``species.id`` (or any other prefix) returns 422 / 404.
-    ``sort=`` is rejected (v0). See ``docs/specs/browse_order.md``
-    §Endpoint 4 and ``docs/specs/public_identifier_policy.md``.
+    ``sort=`` is rejected (v0).
     """
     reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
     resolved_species_entry_id = resolve_species_entry_handle(session, species_entry_id)

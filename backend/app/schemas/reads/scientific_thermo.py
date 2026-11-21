@@ -1,6 +1,4 @@
 """Read schemas for /api/v1/scientific/species-entries/{id}/thermo.
-
-See docs/specs/browse_order.md.
 """
 
 from __future__ import annotations
@@ -296,8 +294,8 @@ class ThermoRecord(BaseModel):
 
     thermo_id: int
     thermo_ref: str
-    #: Deposition time: when this row was created in TCKDB. The second key of the display order
-    #: (``docs/specs/browse_order.md``), shown so a client can check the order it was served.
+    #: Deposition time: when this row was created in TCKDB. The second key of the display order,
+    #: shown so a client can check the order it was served.
     created_at: datetime
     scientific_origin: ScientificOriginKind
     model_kind: ThermoModelKindQuery

@@ -156,7 +156,7 @@ def ts_entries(
 ) -> list[TransitionStateEntry]:
     """EVERY transition-state entry of a reaction entry that the profile shows, in DISPLAY order.
 
-    Review rank, then deposition time newest first, then id descending (``docs/specs/browse_order.md``): a listing
+    Review rank, then deposition time newest first, then id descending: a listing
     order, never a pick; all entries are returned. A hidden entry is not in the population, so it is neither listed nor
     named.
     """

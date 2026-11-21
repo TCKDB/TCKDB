@@ -2,7 +2,7 @@
 
 Verifies that selected ``Thermo`` and ``Kinetics`` rows can be turned into
 valid :class:`ContributionBundle` payloads and that missing data fails
-clearly. See ``docs/roadmaps/local-bundle-export-v0-spec.md``.
+clearly.
 """
 
 from __future__ import annotations

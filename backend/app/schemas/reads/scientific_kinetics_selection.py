@@ -2,8 +2,8 @@
 
 Selection among the stored rate coefficients of one reaction entry, for one stated gas-phase
 kinetic question (direction, target, coefficient basis, temperature window, pressure, collider): which
-determinations are eligible for the question and, among those, the display order of
-``docs/specs/browse_order.md``. TCKDB ranks no method above another. A read:
+determinations are eligible for the question and, among those, the browse display
+order. TCKDB ranks no method above another. A read:
 nothing is stored, no curator endorsement is created or changed, and the ordinary kinetics browse order
 (review, then creation time, then id) is untouched. See ``docs/guides/selecting_kinetics.md``.
 

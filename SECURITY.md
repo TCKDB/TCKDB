@@ -42,7 +42,7 @@ In scope:
 
 - authentication and authorization bypass (API keys, sessions, role gates);
 - unauthenticated access to raw artifact bytes, which may embed producer-side
-  paths, usernames, and hostnames (see `docs/adr/0004-*`);
+  paths, usernames, and hostnames;
 - injection, deserialization, and path-traversal issues in the API or the
   ingestion workflows;
 - integrity failures in the release layer — anything that lets a **published**

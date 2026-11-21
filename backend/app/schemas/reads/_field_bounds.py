@@ -2,8 +2,6 @@
 
 Centralized here so every request schema imports the same constants
 and the hosted abuse-control review needs to check only one file.
-See F9 in ``docs/audits/security_public_read_abuse_audit.md`` and
-``docs/specs/public_read_abuse_controls.md``.
 
 Values are deliberately generous — chemical identifiers can be long
 (IUPAC InChI in particular), and the goal is to reject 10 MB query

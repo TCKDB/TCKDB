@@ -117,8 +117,7 @@ def _assert_number_absent_from_body(
     that crossed it, where that value describes the corpus rather than
     the caller's own request. A count of matching records, or of rows a
     table holds, is a fact about how much data exists -- the enumeration
-    exposure ``docs/specs/public_identifier_policy.md`` refuses to leak
-    through primary keys, and worse here because a countable refusal
+    exposure that public refs keep out of primary keys, and worse here because a countable refusal
     leaks it once per query rather than once.
 
     Asserted over the **whole serialized body**, not just ``context``.
@@ -477,9 +476,8 @@ def test_a_composed_search_refuses_a_candidate_set_it_cannot_traverse(
 
     # ``expected_total`` -- how many records in the corpus matched -- is
     # not. A refusal that reports an exact match count turns any filter
-    # into a free census endpoint, which is the enumeration exposure
-    # ``docs/specs/public_identifier_policy.md`` rejects integer primary
-    # keys for. Two pentanes are seeded, so 2 is the measured value; the
+    # into a free census endpoint, which is the enumeration exposure that
+    # rules out integer primary keys as public identifiers. Two pentanes are seeded, so 2 is the measured value; the
     # assertion is over the whole serialized body because ``detail`` is
     # published too and must not carry the count either.
     _assert_number_absent_from_body(body, 2, "how many records matched")

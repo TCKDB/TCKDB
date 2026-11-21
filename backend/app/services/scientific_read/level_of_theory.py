@@ -25,9 +25,6 @@ on text would silently pool two chemically distinct levels of theory that
 happen to render the same string -- exactly the failure to avoid. See ``tests/api/scientific/test_api_level_of_theory.py`` for the
 fixture that pins this (two LOTs sharing method/basis, differing only in
 ``spin_treatment``, only one carrying a scheme).
-
-See ``docs/plans/methods-surface.md`` §5.1-5.2 (``plan-methods-surface-v2``,
-not committed to this repo).
 """
 
 from __future__ import annotations
