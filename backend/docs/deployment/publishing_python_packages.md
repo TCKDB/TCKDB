@@ -7,13 +7,14 @@ the procedure; the workflow is `.github/workflows/publish-python.yml`.
 |---|---|---|
 | `tckdb-schemas` | `schemas/python/tckdb-schemas` | `tckdb_schemas` |
 | `tckdb-client` | `clients/python` | `tckdb_client` |
-| `tckdb-chemkin` | `clients/python/adapters/chemkin` | `tckdb_chemkin` |
-| `tckdb-qcschema` | `clients/python/adapters/qcschema` | `tckdb_qcschema` |
 | `tckdb-mcp` | `integrations/mcp` | `tckdb_mcp` |
 
 The list is `PACKAGES` in `backend/scripts/check_package_version_bump.py`; the
 workflow reads it through `backend/scripts/python_release.py`. `tckdb-backend`
-is not published to PyPI: it ships as the Docker image.
+is not published to PyPI: it ships as the Docker image. The file-format
+adapters `tckdb-chemkin` and `tckdb-qcschema`, and the ARC adapter, are
+published from the [tckdb-adapters](https://github.com/TCKDB/tckdb-adapters)
+repository by its own workflow (`docs/publishing.md` there).
 
 ---
 
@@ -31,7 +32,7 @@ values:
 
 | Field | Value |
 |---|---|
-| PyPI Project Name | `tckdb-schemas`, `tckdb-client`, `tckdb-chemkin`, `tckdb-qcschema`, `tckdb-mcp` (one entry each) |
+| PyPI Project Name | `tckdb-schemas`, `tckdb-client`, `tckdb-mcp` (one entry each) |
 | Owner | `TCKDB` |
 | Repository name | `TCKDB` |
 | Workflow name | `publish-python.yml` |
@@ -51,7 +52,7 @@ to tags matching `tckdb-*-v*`. Neither environment needs a secret.
 A release tag is `<dist-name>-v<version>`, for example `tckdb-client-v0.208.3`.
 The workflow refuses a tag when:
 
-- its name is not one of the five distributions;
+- its name is not one of the three distributions;
 - its version differs from `[project].version` in that package's
   `pyproject.toml` at the tagged commit;
 - the tagged commit is not on `main`.
@@ -78,9 +79,7 @@ image tags (`v*`) are a separate scheme and do not start this workflow.
 
 Because step 1 installs the package with the `tckdb-client` and
 `tckdb-schemas` built from the same commit, a requirement window that does not
-contain those versions fails the run. `tckdb-chemkin` and `tckdb-qcschema`
-hold windows such as `tckdb-client>=0.208,<0.209`; before releasing them, move
-their windows to the in-repository versions, bump them, and merge that first.
+contain those versions fails the run.
 
 ---
 
@@ -90,8 +89,11 @@ Each package must be on PyPI before anything that depends on it is uploaded:
 
 1. `tckdb-schemas`
 2. `tckdb-client`
-3. `tckdb-chemkin`, `tckdb-qcschema`, `tckdb-mcp`, in any order (`tckdb-mcp`
-   depends on neither of the others and may go first).
+3. `tckdb-mcp` depends on neither and may go at any point.
+
+The adapters in tckdb-adapters (`tckdb-adapters-core`, `tckdb-arc`,
+`tckdb-chemkin`, `tckdb-qcschema`) depend on `tckdb-client` and
+`tckdb-schemas`, so they are released after step 2.
 
 Wait until a release is visible on https://pypi.org/project/<name>/ before
 pushing the next tag.
@@ -121,8 +123,7 @@ python -c "import tckdb_client; print(tckdb_client.__version__)"
 ```
 
 For `tckdb-client`, upload `tckdb-schemas` to TestPyPI first: the client's
-schemas requirement has to resolve from TestPyPI too. The same holds for
-`tckdb-chemkin` and `tckdb-qcschema`, which need both.
+schemas requirement has to resolve from TestPyPI too.
 
 ---
 

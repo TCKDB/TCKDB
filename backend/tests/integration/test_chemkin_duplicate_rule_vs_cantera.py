@@ -1,6 +1,6 @@
 """The adapter's DUPLICATE detector agrees with a strict Cantera 3.2 load.
 
-The adapter tests (``clients/python/adapters/chemkin/tests/test_duplicates.py``) skip their
+The adapter tests (``tckdb_chemkin/tests/test_duplicates.py`` in tckdb-adapters) skip their
 Cantera half where Cantera is absent. This module runs in the backend environment, which has
 Cantera 3.2, and checks the same kind of mechanism both ways: the detector reports a problem
 exactly when Cantera refuses the file. Also here: an isotopologue exports and re-imports as
@@ -9,20 +9,13 @@ itself, not merged with the plain species.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
 from rdkit import Chem
 
 from tests._ci_dependency import require_module
 
-# Same adapter wiring as test_chemkin_round_trip_real.py (see the note there).
-_CHEMKIN_ADAPTER = (
-    Path(__file__).resolve().parents[3] / "clients" / "python" / "adapters" / "chemkin"
-)
-if _CHEMKIN_ADAPTER.is_dir() and str(_CHEMKIN_ADAPTER) not in sys.path:
-    sys.path.append(str(_CHEMKIN_ADAPTER))
+# The CHEMKIN importer, from tckdb-adapters (pinned in backend/requirements-adapters.txt).
+require_module("tckdb_chemkin", install="pip install --no-deps -r backend/requirements-adapters.txt")
 
 from tckdb_chemkin.duplicates import duplicate_flag_warnings
 from tckdb_chemkin.identity import IdentityResolver

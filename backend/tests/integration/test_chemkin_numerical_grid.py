@@ -31,16 +31,14 @@ from __future__ import annotations
 
 import json
 import os
-import sys
-from pathlib import Path
 
 import cantera as ct
 import pytest
 
-# Same adapter wiring as test_chemkin_round_trip_real.py (see the note there).
-_CHEMKIN_ADAPTER = Path(__file__).resolve().parents[3] / "clients" / "python" / "adapters" / "chemkin"
-if _CHEMKIN_ADAPTER.is_dir() and str(_CHEMKIN_ADAPTER) not in sys.path:
-    sys.path.append(str(_CHEMKIN_ADAPTER))
+from tests._ci_dependency import require_module
+
+# The CHEMKIN importer, from tckdb-adapters (pinned in backend/requirements-adapters.txt).
+require_module("tckdb_chemkin", install="pip install --no-deps -r backend/requirements-adapters.txt")
 
 from tckdb_chemkin.identity import IdentityResolver
 from tckdb_chemkin.parser import parse_mechanism

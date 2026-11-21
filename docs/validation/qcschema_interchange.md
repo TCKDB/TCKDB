@@ -290,7 +290,7 @@ Reading the table:
 ## Mutations
 
 - **Adapter source edited, then reverted.** `pack_lower_triangle` in
-  `clients/python/adapters/qcschema/tckdb_qcschema/hessian.py` was changed to
+  `tckdb_qcschema/tckdb_qcschema/hessian.py` (now in tckdb-adapters) was changed to
   walk the lower triangle column by column (the transposed packing order).
   - The gate test `test_round_trip_is_exact_and_every_measurement_is_reported`
     went red, with `stored_triangle_exact` and

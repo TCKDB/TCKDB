@@ -315,7 +315,8 @@ builds a thermo block. The CHEMKIN adapter is the one exception, and
 deliberately so: CHEMKIN's NASA-7 thermodynamic format is
 formation-referenced by definition, so that adapter asserts the declaration
 unconditionally rather than asking the depositor to configure it — see
-`clients/python/adapters/chemkin/tckdb_chemkin/payloads.py`. That is not a
+`tckdb_chemkin/tckdb_chemkin/payloads.py` in
+[tckdb-adapters](https://github.com/TCKDB/tckdb-adapters). That is not a
 guess the way it would be for a source whose convention the adapter cannot
 actually know.
 

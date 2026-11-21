@@ -4,7 +4,8 @@
 payloads (energy/gradient/hessian/optimization x QCSchema families v1/v2,
 water at HF/STO-3G, Psi4-via-qcengine + geomeTRIC) emitted by running the
 real ``tckdb_qcschema`` mapper over its own adapter-side fixtures --
-see ``clients/python/adapters/qcschema/scripts/emit_backend_corpus.py``.
+see ``tckdb_qcschema/scripts/emit_backend_corpus.py --tckdb <this checkout>`` in
+tckdb-adapters.
 Mirrors ``test_api_arc_run_fixtures.py``: every case here is one real
 mapped document, posted through the actual upload routes exactly as
 ``tckdb-qcschema import --upload`` would, so a payload the adapter
@@ -133,8 +134,8 @@ def test_corpus_is_not_empty() -> None:
     assert CASES, (
         "no QCSchema backend corpus discovered under "
         "backend/tests/fixtures/qcschema/ -- generate it with "
-        "clients/python/adapters/qcschema/scripts/emit_backend_corpus.py "
-        "(conda env tckdb_qcschema_psi4)."
+        "tckdb-adapters' tckdb_qcschema/scripts/emit_backend_corpus.py "
+        "--tckdb <this checkout> (conda env tckdb_qcschema_psi4)."
     )
     # Exactly the eight route cases: energy/gradient/
     # hessian/optimization x QCSchema families v1/v2. Not "at least 8" --
@@ -380,7 +381,7 @@ def test_no_duplicate_software_rows_across_the_whole_corpus(client, db_session: 
 # one optimization, in one bundle. Each is mapped by the real
 # ``tckdb_qcschema.scan.build_scan_bundle_payload`` together with the
 # optimization the drive(s) started from -- see
-# ``clients/python/adapters/qcschema/scripts/emit_backend_corpus.py``. A
+# ``tckdb_qcschema/scripts/emit_backend_corpus.py`` in tckdb-adapters. A
 # drive becomes a ``scan`` calculation attached to that optimization's
 # conformer, so a case posts to ``/uploads/computed-species`` as one bundle
 # carrying every raw document inline; ``meta.json["drives"]`` pins each scan
@@ -424,7 +425,7 @@ def _load_scan(case: str) -> tuple[dict, dict]:
 def test_scan_corpus_is_exactly_the_four_bundles() -> None:
     assert SCAN_CASES == EXPECTED_SCAN_CASES, (
         f"expected scan corpus {EXPECTED_SCAN_CASES}, found {SCAN_CASES} -- "
-        "regenerate with clients/python/adapters/qcschema/scripts/emit_backend_corpus.py"
+        "regenerate with tckdb-adapters' tckdb_qcschema/scripts/emit_backend_corpus.py --tckdb <this checkout>"
     )
     drive_counts = {case: len(_load_scan(case)[1]["drives"]) for case in SCAN_CASES}
     assert drive_counts == {
