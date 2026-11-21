@@ -249,7 +249,8 @@ class ComputedSpeciesUpload:
     def _build_payload(self) -> dict[str, Any]:
         """Assemble the payload, embedding the artifacts in ``self._inlined``.
 
-        Two invariants underpin determinism (§10, §11 of the spec):
+        Two invariants underpin determinism (§10, §11 of
+        ``clients/python/docs/builder_api_mvp.md``):
 
         - Local keys are minted from ``label`` slugs when present and
           insertion-order indices otherwise. Repeat calls on the same

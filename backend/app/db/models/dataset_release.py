@@ -54,9 +54,7 @@ Three invariants this module exists to protect:
 
 This layer is deliberately **not** the disaster-recovery archive
 (``tckdb.archive``) and **not** a convenience projection
-(``tckdb.export`` NDJSON / CHEMKIN / ML). See
-``backend/docs/specs/dataset_release_and_profiles.md`` §"Three formats, three
-contracts".
+(``tckdb.export`` NDJSON / CHEMKIN / ML).
 """
 
 from __future__ import annotations

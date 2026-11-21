@@ -263,10 +263,11 @@ presentation
 node_modules
 
 # Internal maintainer documents: specs, decision records, plans, research,
-# reviews, audits and validation write-ups. They are kept outside this
-# repository. docs/ holds only the published documentation site (the pages
-# in mkdocs.yml's nav, plus assets/, hooks/, stylesheets/ and requirements.txt).
-# Keep this list in step with exclude_docs in mkdocs.yml.
+# reviews, audits, validation write-ups and the root plan and status notes.
+# They are kept outside this repository. docs/ holds only the published
+# documentation site (the pages in mkdocs.yml's nav, plus assets/, hooks/,
+# stylesheets/ and requirements.txt). Keep the docs/ entries in step with
+# exclude_docs in mkdocs.yml; the last three are outside the docs site.
 /docs/*.md
 !/docs/index.md
 /docs/adr/
@@ -288,6 +289,9 @@ node_modules
 /docs/guides/the_story_of_a_datapoint.md
 /docs/start/deployment.md
 /docs/site/
+/backend/docs/specs/
+/plan.md
+/current_project_status.md
 
 # LibreOffice/OpenOffice lock files
 .~lock.*#

@@ -3,8 +3,7 @@
 Four endpoints — ``/api/v1/scientific/analytics/{kinetics,thermo,statmech,
 calculations}`` — exist so that quantitative dataset construction has a small,
 documented, indexed place to happen, instead of dozens of optional numeric
-filters accreting onto every transactional search. See
-``backend/docs/specs/scientific_analytics_surface.md``.
+filters accreting onto every transactional search.
 
 Three shape rules:
 
@@ -384,7 +383,7 @@ class CalculationAnalyticsRequest(AnalyticsPagingRequest):
     the two diagnostic tables. Supplying such a filter joins that table
     inner, so it also acts as a presence filter — a calculation with no
     frequency result cannot match ``zpe_min_hartree``. That is the intended
-    reading for dataset construction and is stated in the spec rather than
+    reading for dataset construction and is stated here rather than
     left to be discovered.
     """
 

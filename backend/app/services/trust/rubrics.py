@@ -64,7 +64,7 @@ from app.versioning import VersionRegistry
 _TYPES_WITH_OUTPUT_GEOMETRY: frozenset[CalculationType] = frozenset(
     {CalculationType.opt, CalculationType.irc, CalculationType.path_search}
 )
-"""Calculation types that the spec (§9.5) expects to produce an output geometry.
+"""Calculation types expected to produce an output geometry.
 
 ``conf`` and ``sp`` calcs do not produce a separate output geometry (except the
 ``sp`` primary of a one-atom conformer, which carries the atom as its final
@@ -78,7 +78,7 @@ _TYPES_REQUIRING_GEOMETRY_VALIDATION: frozenset[CalculationType] = frozenset(
 )
 """Calculation types where geometry validation is expected to be applicable.
 
-The spec lists "opt or ts"; TS-ness is encoded via ownership
+The expected set is "opt or ts"; TS-ness is encoded via ownership
 (``transition_state_entry_id``) rather than its own ``CalculationType``,
 so we trigger geometry-validation checks for any ``opt`` calc regardless
 of whether the owner is a species or a transition state.
@@ -143,8 +143,8 @@ def _check_output_geometry_present(calc: Calculation) -> EvidenceOutcome:
     """Return passed when an output geometry is present for geometry-producing types.
 
     Not applicable for ``sp``, ``freq``, ``scan``, ``conf`` calculations,
-    matching the spec's note that this check applies only when the calc
-    type produces a geometry (§9.5).
+    because this check applies only when the calc
+    type produces a geometry.
     """
     if calc.type not in _TYPES_WITH_OUTPUT_GEOMETRY:
         return EvidenceOutcome.not_applicable
@@ -257,7 +257,7 @@ def _check_scf_stability_present_if_claimed(calc: Calculation) -> EvidenceOutcom
     """Return passed when SCF stability evidence is attached.
 
     Absence of a ``calc_scf_stability`` row means "not checked", per
-    the model docstring — which the spec accepts as ``not_applicable``
+    the model docstring — which counts as ``not_applicable``
     rather than ``missing``. Producers that *do* attach a row get
     credit for the explicit declaration.
     """
@@ -1783,8 +1783,7 @@ def _check_transport_not_rejected_or_deprecated_if_applicable(
 # transition-state rubric at 5) was discarded with the readers of those versions. Contract of the baseline: an automated
 # geometry-validation ``fail`` is advisory (a ``warning`` outcome on the geometry checks), no longer a hard fail, and
 # the "non hard failed evidence" checks mirror the narrowed hard fail (rejected quality only). A machine review stamped
-# under a different version of a rubric reads stale and is re-planned, never rewritten; see
-# ``backend/docs/specs/automated_trust_layer.md``.
+# under a different version of a rubric reads stale and is re-planned, never rewritten.
 COMPUTED_CALCULATION: EvidenceRubric = EvidenceRubric(
     name="computed_calculation",
     version=1,
@@ -2597,7 +2596,7 @@ def _ts_source_calculations(ts_entry: TransitionStateEntry) -> list[Calculation]
          ``calculation.transition_state_entry_id``.
       2. One dependency hop in both directions, restricted to the roles
          listed in :data:`_TS_CALC_IS_CHILD_ROLES` and
-         :data:`_TS_CALC_IS_PARENT_ROLES` (spec §5.2).
+         :data:`_TS_CALC_IS_PARENT_ROLES`.
     Order is stable: directly-attached calcs first (insertion order, which
     SQLAlchemy preserves from the loaded relationship), then any
     dependency-discovered calcs in the order they are first encountered.
@@ -2656,7 +2655,7 @@ def _ts_source_dependencies_present(ts_entry: TransitionStateEntry) -> bool:
 def _ts_representative_freq_result(ts_entry: TransitionStateEntry, context: TransitionStateTrustContext):
     """Return the deterministically-selected representative freq result.
 
-    Selection rule per spec §8.5: latest ``calculation.created_at`` with
+    Selection rule: latest ``calculation.created_at`` with
     ``calculation.id DESC`` tie-break. Returns ``None`` when no freq calc
     in the source set carries a ``calc_freq_result`` row.
 
@@ -2864,7 +2863,7 @@ def _check_ts_irc_evidence_present(
 ) -> EvidenceOutcome:
     """Return passed when an irc calc is in the source set.
 
-    Per spec §7, missing IRC is **not** a hard fail; this check only
+    Missing IRC is **not** a hard fail; this check only
     records its presence as additive evidence.
     """
     return _bool_outcome(_ts_has_calc_type(ts_entry, CalculationType.irc))
@@ -2876,7 +2875,7 @@ def _check_ts_path_search_evidence_present(
     """Return passed when a path_search calc or a scan child of the TS opt
     is in the source set.
 
-    Per spec §7, missing path-search is **not** a hard fail.
+    Missing path-search is **not** a hard fail.
     """
     if _ts_has_calc_type(ts_entry, CalculationType.path_search):
         return EvidenceOutcome.passed
@@ -2904,7 +2903,7 @@ def _check_ts_source_calculation_lot_present(
 ) -> EvidenceOutcome:
     """Return passed when every source calc resolves to a level_of_theory.
 
-    Per spec §4.3, this is "all-source" semantics: LoT-less source calcs
+    This is "all-source" semantics: LoT-less source calcs
     are meaningless for TS evidence, so any missing LoT fails the check.
     """
     source = _ts_source_calculations(ts_entry)
@@ -3158,7 +3157,7 @@ def _check_ts_review_not_rejected_or_deprecated_if_applicable(
     Mirrors the equivalent ``_check_*_not_rejected_or_deprecated_if_applicable``
     runners on the thermo/statmech/transport rubrics. Wiring the
     ``record_review`` lookup is intentionally deferred to the read-API
-    integration slice (per spec §10 / §14).
+    integration slice.
     """
     return EvidenceOutcome.not_applicable
 

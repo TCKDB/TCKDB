@@ -17,8 +17,6 @@ Composition mirrors the calculations / TS search services:
 6. Sort deterministically (review rank → created_at desc → id desc).
 7. Slice for pagination, then materialize each page row via the
    shared :func:`build_group_record` helper.
-
-See ``backend/docs/specs/scientific_conformer_reads.md``.
 """
 
 from __future__ import annotations

@@ -11,8 +11,6 @@ fields target the **source-calculation** level-of-theory join, same
 as the network search surface. This matches the convention used by
 the network search (where ``method`` is the LoT method) and keeps
 the public API ergonomically aligned.
-
-See ``backend/docs/specs/scientific_network_reads.md``.
 """
 
 from __future__ import annotations
@@ -77,7 +75,7 @@ class NetworkSolveSearchRequest(BaseModel):
     # ``solve_method`` matches NetworkSolve.me_method (free-text ME algorithm).
     solve_method: str | None = Field(default=None, max_length=128)
 
-    # --- T/P envelope filters (overlap semantics, see spec §11.x) --------
+    # --- T/P envelope filters (overlap semantics) -------------------------
     temperature_min: float | None = None
     temperature_max: float | None = None
     pressure_min: float | None = None

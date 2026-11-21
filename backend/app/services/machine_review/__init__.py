@@ -1,7 +1,6 @@
 """Provisional machine-review contract package.
 
-Internal types/contracts only for the future machine-review layer
-(``backend/docs/specs/provisional_machine_review.md``). This package
+Internal types/contracts only for the future machine-review layer. This package
 intentionally contains **no** provider implementation, no persistence, no
 RAG, no public read-API integration, and no submission-workflow wiring. It
 exists so the future direction is type-safe and testable, and so the

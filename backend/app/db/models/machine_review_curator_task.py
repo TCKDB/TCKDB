@@ -1,11 +1,9 @@
 """Machine-review curator task queue ORM model.
 
 ``machine_review_curator_task`` persists **human triage state** over exact,
-mapped, record-level machine-review findings. It is the implementation of the
-"curator task table" design in
-``backend/docs/specs/machine_review_curator_task_queue.md``.
+mapped, record-level machine-review findings.
 
-This table owns exactly one of four orthogonal review axes (spec §2):
+This table owns exactly one of four orthogonal review axes:
 
 * machine-review finding  — advisory signal (what the screener said)
 * ``MachineReviewCuratorTaskState`` — *this table*: has a human handled it?
@@ -13,7 +11,7 @@ This table owns exactly one of four orthogonal review axes (spec §2):
 * ``SubmissionStatus``     — submission lifecycle / moderation
 
 A curator task is a to-do item about a finding, never the finding's verdict.
-Per the non-interference policy (spec §9) a task create/assign/resolve writes
+Per the non-interference policy a task create/assign/resolve writes
 **only** to this table; it must never mutate ``submission.status``,
 ``record_review``, certification, evidence, scientific records, or any public
 ``trust.*`` fragment.
@@ -24,15 +22,15 @@ Notes on design choices baked into the columns:
   :class:`~app.db.models.submission.SubmissionRecordLink` and
   :class:`~app.db.models.record_review.RecordReview`. ``record_id`` is the raw
   internal id; acceptable because this table is admin/curator-private and is
-  never serialised onto a public response (spec §3).
+  never serialised onto a public response.
 * ``machine_review_status`` / ``highest_severity`` / ``findings_count`` are a
   **denormalised advisory snapshot** for cheap queue ranking/filtering — never
-  authoritative (spec §3).
+  authoritative.
 * The enum columns use DB-layer mirrors in :mod:`app.db.models.common`; DB
   models must not import service-layer Pydantic schemas
   (``.claude/rules/schema-rules.md``).
 * No automatic task creation, assignment, or resolution behaviour exists yet —
-  this is model + migration only (spec §6/§14).
+  this is model + migration only.
 """
 
 from __future__ import annotations
@@ -89,7 +87,7 @@ class MachineReviewCuratorTask(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
 
-    # --- identity / addressing (spec §4) -------------------------------------
+    # --- identity / addressing ----------------------------------------------
     submission_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("submission.id", deferrable=True, initially="IMMEDIATE"),
@@ -102,7 +100,7 @@ class MachineReviewCuratorTask(Base, TimestampMixin):
     record_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     finding_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
 
-    # --- workflow state (spec §5) --------------------------------------------
+    # --- workflow state -----------------------------------------------------
     workflow_state: Mapped[MachineReviewCuratorTaskState] = mapped_column(
         SAEnum(MachineReviewCuratorTaskState, name="machine_review_curator_task_state"),
         nullable=False,
@@ -110,7 +108,7 @@ class MachineReviewCuratorTask(Base, TimestampMixin):
         server_default=MachineReviewCuratorTaskState.untriaged.value,
     )
 
-    # --- denormalised advisory snapshot (display/ranking only; spec §3) ------
+    # --- denormalised advisory snapshot (display/ranking only) --------------
     machine_review_status: Mapped[MachineReviewStatus] = mapped_column(
         SAEnum(MachineReviewStatus, name="machine_review_status"),
         nullable=False,
@@ -126,7 +124,7 @@ class MachineReviewCuratorTask(Base, TimestampMixin):
         server_default="1",
     )
 
-    # --- provenance back to the advisory signal (spec §3) --------------------
+    # --- provenance back to the advisory signal -----------------------------
     source_audit_event_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey(
@@ -153,7 +151,7 @@ class MachineReviewCuratorTask(Base, TimestampMixin):
         nullable=False,
     )
 
-    # --- resolution (all three set together for terminal states; spec §7) ----
+    # --- resolution (all three set together for terminal states) -----------
     resolved_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=False), nullable=True
     )
@@ -187,7 +185,7 @@ class MachineReviewCuratorTask(Base, TimestampMixin):
             "finding_fingerprint",
             name="uq_machine_review_curator_task_identity",
         ),
-        # Queue access patterns (spec §10).
+        # Queue access patterns.
         Index(
             "ix_machine_review_curator_task_workflow_state",
             "workflow_state",
@@ -214,7 +212,7 @@ class MachineReviewCuratorTask(Base, TimestampMixin):
             "ix_machine_review_curator_task_source_audit_event_id",
             "source_audit_event_id",
         ),
-        # Resolution consistency (spec §7): terminal states require all three
+        # Resolution consistency: terminal states require all three
         # resolution fields set; open states require all three NULL. Boolean
         # equivalence enforces both directions in one constraint.
         CheckConstraint(

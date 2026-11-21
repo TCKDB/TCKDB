@@ -4,8 +4,7 @@ This module is the durable counterpart to the pure context/currency stack: it
 appends rows to :class:`~app.db.models.record_machine_review.RecordMachineReviewRow`
 and projects them back into the pure
 :class:`~app.services.machine_review.currency.StoredMachineReviewProjection` the
-classifier consumes (policy
-``backend/docs/specs/record_machine_review_policy.md`` §8).
+classifier consumes.
 
 Boundaries kept deliberately tight:
 

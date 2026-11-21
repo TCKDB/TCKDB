@@ -3,8 +3,6 @@
 Records reuse :class:`ScientificFrequencyScaleFactorRecord` from the
 detail endpoint so search and detail callers parse responses with one
 set of code.
-
-See ``backend/docs/specs/scientific_correction_reads.md``.
 """
 
 from __future__ import annotations
@@ -50,7 +48,7 @@ class FrequencyScaleFactorSearchRequest(BaseModel):
 
     Declared fields without an enforceable backing path remain accepted
     by request validation for compatibility, then fail closed with 422
-    ``unsupported_filter`` (see the spec).
+    ``unsupported_filter``.
     """
 
     # --- identity filters -------------------------------------------------

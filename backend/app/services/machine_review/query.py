@@ -5,8 +5,7 @@ This is the **single read path** over the append-only
 later consumers (admin inspection, re-review triggers, eventual public-trust
 projection) build on. It is deliberately read-only and private: nothing here is
 wired into a public scientific read, no ``trust.machine_review`` is emitted, and
-the public ``TrustFragment`` is untouched (policy
-``backend/docs/specs/record_machine_review_policy.md`` §4/§8).
+the public ``TrustFragment`` is untouched.
 
 Boundaries:
 
@@ -15,7 +14,7 @@ Boundaries:
   fields, scientific records, deterministic evidence/trust, or any public
   fragment.
 * **Ordering parity.** Rows are returned newest-first in the *exact*
-  latest-selection order the classifier uses (policy §4): ``reviewed_at`` DESC,
+  latest-selection order the classifier uses: ``reviewed_at`` DESC,
   ``source_audit_event_id`` DESC NULLS LAST, ``id`` DESC NULLS LAST. Persisted
   rows always carry a unique non-null ``id``, so these three keys fully
   determine the order.

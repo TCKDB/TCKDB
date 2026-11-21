@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.177.2 - 2026-11-21
+
+No schema changed. The producer contract's further reading no longer cites a maintainer document that is not in the repository.
+
 ## 0.177.1 - 2026-11-21
 
 No schema changed. The producer contract points at `clients/python/docs/uploads_and_idempotency.md` for idempotency keys, in place of a maintainer document that is not in the repository.

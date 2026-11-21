@@ -4,8 +4,7 @@ Cover the model (insert, multiple rows per record), the row -> :class:`StoredMac
 the currency classification over persisted rows, the append-only write helper,
 and non-interference (the helper writes only to ``record_machine_review``).
 
-No public exposure is involved: this is a private persistence surface
-(``backend/docs/specs/record_machine_review_policy.md`` §8).
+No public exposure is involved: this is a private persistence surface.
 """
 
 from __future__ import annotations

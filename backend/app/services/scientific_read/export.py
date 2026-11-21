@@ -4,7 +4,7 @@ This module is the shared engine behind both export targets (native
 NDJSON and CHEMKIN). It is deliberately HTTP-free so it can be unit
 tested directly against a ``Session``.
 
-Responsibilities (spec §4):
+Responsibilities:
 
 1. **Seed resolution** — turn a :class:`SeedSelection` (explicit reaction
    refs, explicit species refs, a ``reaction_family`` filter, or the
@@ -102,7 +102,7 @@ EXPORT_FORMAT = current_header(EXPORT)
 #: Hard cap on ``all`` exports (guards the "no silent bulk scan" posture).
 DEFAULT_ALL_CAP = 50_000
 
-#: Default trust floor. "approved-class" per the spec — only records whose
+#: Default trust floor, "approved-class": only records whose
 #: review status is at or above ``approved`` are eligible; a lower value is
 #: reported as a gap, not exported.
 DEFAULT_MIN_REVIEW_STATUS = RecordReviewStatus.approved
@@ -117,7 +117,7 @@ def _projection_contract() -> dict:
         "archive_schema": None,
         # Neither a citable release nor a recovery archive. Stated here so the
         # three formats can never be confused by a consumer holding only one
-        # of them (see backend/docs/specs/dataset_release_and_profiles.md).
+        # of them.
         "citable_release": False,
         "distinct_from": {
             "citable_release": current_header(DATASET_RELEASE),
@@ -141,7 +141,7 @@ def _projection_contract() -> dict:
 
 @dataclass
 class SeedSelection:
-    """A bulk-export seed (spec §4). At least one field must be truthy.
+    """A bulk-export seed. At least one field must be truthy.
 
     ``reaction_refs``   explicit ``reaction_entry`` or ``chem_reaction``
                         public refs (a chem-reaction ref expands to all of

@@ -3453,8 +3453,7 @@ class TCKDBClient:
         :param pressure_bar: One or more pressures, bar.
         :param profile: Read profile this read is answered under
             (``curated`` applies the approved floor to the records a list,
-            search, browse, select or export returns and shows linked evidence badged; see
-            ``backend/docs/specs/dataset_release_and_profiles.md``).
+            search, browse, select or export returns and shows linked evidence badged).
             Forwarded like every other typed scientific read method;
             omitted, the server default applies.
         """
@@ -3521,8 +3520,7 @@ class TCKDBClient:
         :param pressure_bar: One or more pressures, bar. Required.
         :param profile: Read profile this read is answered under
             (``curated`` applies the approved floor to the records a list,
-            search, browse, select or export returns and shows linked evidence badged; see
-            ``backend/docs/specs/dataset_release_and_profiles.md``).
+            search, browse, select or export returns and shows linked evidence badged).
             Forwarded like every other typed scientific read method;
             omitted, the server default applies. Rides the query string,
             not the JSON body -- the backend resolves it from a

@@ -16,8 +16,6 @@ Naming notes:
 has no public ref. The same is true of channel-level identity
 filters more broadly; the detail surface already addresses this by
 returning channel context via composition_hash.
-
-See ``backend/docs/specs/scientific_network_reads.md``.
 """
 
 from __future__ import annotations

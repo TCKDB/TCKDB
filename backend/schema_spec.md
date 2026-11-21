@@ -529,8 +529,7 @@ Notes:
 upload event that produced (or attempted to produce) scientific records. The
 planes share the same scientific schema and all attribute records via
 `created_by`; they differ by payload shape and review default, not by whether
-they are auditable. See `backend/docs/specs/ingestion_submission_model.md` for the full
-model.
+they are auditable.
 
 | Plane | Routes | Submission / review on success | Notes |
 |-------|--------|--------------------------------|-------|
@@ -1824,7 +1823,7 @@ Notes:
 ## 11. Curated Release Layer
 
 Five tables that answer "what is *the* TCKDB value?" without writing to the
-science. See `backend/docs/specs/dataset_release_and_profiles.md`.
+science.
 
 ### 11.1 `curation_policy`
 

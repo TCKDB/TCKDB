@@ -2,8 +2,6 @@
 
 Records reuse :class:`ScientificTransportRecord` from the detail
 endpoint via the shared :func:`build_transport_record` helper.
-
-See ``backend/docs/specs/scientific_transport_reads.md``.
 """
 
 from __future__ import annotations

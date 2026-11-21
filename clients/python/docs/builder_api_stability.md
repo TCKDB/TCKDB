@@ -161,7 +161,8 @@ The following are explicitly *not* frozen:
   several records for the same species do so as independent
   submissions, not as a candidate list bundled into one upload.
 - **Artifact upload helpers.** Two-phase artifact uploads via
-  `Calculation.add_artifact(...)` are designed in the spec but not
+  `Calculation.add_artifact(...)` are designed in
+  [`builder_api_mvp.md`](builder_api_mvp.md) but not
   yet implemented. Their API may shift during implementation.
 - **Per-endpoint emission flags.** When backend bundle schemas grow
   the currently-missing `transport` and `species_thermo.source_calculations`

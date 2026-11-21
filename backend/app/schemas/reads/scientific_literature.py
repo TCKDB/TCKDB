@@ -8,8 +8,6 @@ Literature is **not a reviewable record type** (no
 ``SubmissionRecordType.literature``); the response therefore omits a
 review badge on the core block and surfaces only the linked
 scientific records' review state via the inverse records endpoint.
-
-See ``backend/docs/specs/scientific_literature_reads.md``.
 """
 
 from __future__ import annotations

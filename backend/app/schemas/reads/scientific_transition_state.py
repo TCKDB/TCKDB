@@ -10,8 +10,6 @@ The TS concept (``transition_state``) groups one or more candidate
 interpretation. Both detail surfaces share the same per-record
 ``ScientificTransitionStateEntryRecord`` shape so callers can reuse one
 parser across detail, the parent-TS view, and the search surface.
-
-See ``backend/docs/specs/scientific_transition_state_reads.md``.
 """
 
 from __future__ import annotations
@@ -416,7 +414,7 @@ class TransitionStateSaddlePointEvidence(BaseModel):
     == entry.id``) with ``type == freq`` and a ``calc_freq_result`` row,
     picking the latest by ``created_at`` with ``calculation.id`` as the
     tie-break — the same deterministic rule the trust rubric's
-    ``_ts_representative_freq_result`` uses (spec §8.5). That rule agrees
+    ``_ts_representative_freq_result`` uses. That rule agrees
     with this block whenever the representative freq calc is directly
     attached to the entry, which is the common case — but the rubric's own
     source-calculation discovery additionally walks one dependency hop

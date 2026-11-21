@@ -11,8 +11,6 @@ detail endpoint returns the concrete-entry record. The search endpoint
 returns concrete-entry records — same per-record shape as the TS-entry
 detail surface — because entries are the rows that carry status /
 charge / multiplicity / calculation evidence.
-
-See ``backend/docs/specs/scientific_transition_state_reads.md``.
 """
 
 from __future__ import annotations

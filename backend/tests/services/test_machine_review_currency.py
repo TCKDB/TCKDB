@@ -1,7 +1,6 @@
 """Unit tests for the pure machine-review currency classifier.
 
-These prove the current/stale/historical/not_run model from
-``backend/docs/specs/record_machine_review_policy.md`` §2/§3.5/§4: the latest
+These prove the current/stale/historical/not_run model: the latest
 review (by the policy ordering) is current only when all four currency
 dimensions match the active recipe, otherwise stale (with reasons); every
 non-latest review is historical; no reviews means not_run.
@@ -179,7 +178,7 @@ def test_a_stored_version_above_the_current_one_is_stale_too():
 
 
 # --------------------------------------------------------------------------- #
-# Latest-selection ordering (policy §4)
+# Latest-selection ordering
 # --------------------------------------------------------------------------- #
 
 
@@ -243,7 +242,7 @@ def test_non_latest_reviews_are_historical_even_if_their_hash_matches():
 
 
 def test_latest_stale_makes_state_stale_even_if_older_is_current():
-    """State follows the latest review, not the best-matching one (policy §4)."""
+    """State follows the latest review, not the best-matching one."""
     current_old = _review(reviewed_at=_T0, id=1, context_hash="hash_current")
     stale_new = _review(
         reviewed_at=_T0 + timedelta(hours=2), id=2, context_hash="hash_old"

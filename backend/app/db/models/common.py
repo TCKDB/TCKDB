@@ -2101,8 +2101,7 @@ class MachineReviewCuratorTaskState(str, Enum):
     :class:`RecordReviewStatus` (authoritative human review), and
     :class:`SubmissionStatus` (submission lifecycle / moderation). A curator
     task tracks *whether a human has handled a machine finding* — it never
-    approves, rejects, certifies, or otherwise mutates a record. See
-    ``backend/docs/specs/machine_review_curator_task_queue.md`` §2/§5.
+    approves, rejects, certifies, or otherwise mutates a record.
 
     The first three are **open** states (work outstanding); the last three
     are **terminal/resolved** states (see :meth:`is_terminal`).

@@ -8,8 +8,6 @@ Returns public-ref summaries of every scientific record with a
 direct ``literature_id`` FK to the given literature row. Records
 are flattened across types, filtered by review-visibility, ordered
 deterministically, and paginated.
-
-See ``backend/docs/specs/scientific_literature_reads.md``.
 """
 
 from __future__ import annotations

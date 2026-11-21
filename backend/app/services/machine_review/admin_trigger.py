@@ -1,9 +1,7 @@
 """Private admin-only fake machine-review trigger (resolution + recipe + run).
 
 This module is the *service* half of the admin-only "explicitly run fake machine
-review for one record" endpoint (policy
-``backend/docs/specs/record_machine_review_policy.md`` §5.3 — *admin / manual
-re-review triggers*). For a single record it ties three already-tested pieces
+review for one record" endpoint (an *admin / manual re-review trigger*). For a single record it ties three already-tested pieces
 together::
 
     record_type + record_id

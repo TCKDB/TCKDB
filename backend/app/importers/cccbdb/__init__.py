@@ -1,7 +1,6 @@
 """CCCBDB importer package.
 
-See ``backend/docs/specs/cccbdb_importer.md`` for the design spec and
-``backend/app/importers/cccbdb/README.md`` for usage.
+See ``backend/app/importers/cccbdb/README.md`` for usage.
 """
 
 from __future__ import annotations

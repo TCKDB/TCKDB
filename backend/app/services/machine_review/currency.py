@@ -1,7 +1,6 @@
 """Pure current/stale/historical classifier for record-level machine review.
 
-This module implements the currency model from
-``backend/docs/specs/record_machine_review_policy.md`` §2/§3.5/§4: given the
+This module implements the currency model: given the
 machine-review passes recorded for one record, decide which (if any) is the
 **current** one for the record's present deterministic evidence context, which
 is merely the latest but **stale**, and which are **historical**.
@@ -10,14 +9,14 @@ It is **pure**: no database access, no persistence, no provider call, and no
 public exposure. It reads only the projections and active-recipe inputs handed
 to it and returns a frozen classification. It mutates nothing — not scientific
 records, the deterministic evidence/trust layer, nor the human-review layer.
-Staleness is **derived here, at read time** (policy §2): nothing stores a
+Staleness is **derived here, at read time**: nothing stores a
 mutable ``is_current`` flag, so an append-only history never needs back-update.
 
-Currency vs. provenance (policy §3.5). A latest review is *current* only when
+Currency vs. provenance. A latest review is *current* only when
 **all four** currency dimensions match the active recipe:
 
-* ``context_schema_version`` — the hash recipe version (policy §3.4);
-* ``context_hash`` — the digest of the record's current evidence (policy §3);
+* ``context_schema_version`` — the hash recipe version;
+* ``context_hash`` — the digest of the record's current evidence;
 * ``prompt`` — the active machine-review prompt, a name and a version;
 * ``rubric`` — the active rubric for this record, a name and a version.
 
@@ -30,9 +29,9 @@ that is not the active one), not because a hash happened to differ. Stored refs 
 :class:`~app.versioning.StoredVersionRef`, the one type that may hold a 0.
 
 ``provider``/``model`` are deliberately **not** currency dimensions (swapping
-models does not invalidate the evidence a prior review saw, policy §3.5).
+models does not invalidate the evidence a prior review saw).
 
-Latest-selection ordering exactly matches policy §4::
+Latest-selection ordering::
 
     reviewed_at DESC, source_audit_event_id DESC NULLS LAST, id DESC NULLS LAST
 
@@ -57,7 +56,7 @@ from app.versioning import StoredVersionRef
 
 
 class MachineReviewCurrencyState(str, Enum):
-    """Currency classification for a record's machine review (policy §2).
+    """Currency classification for a record's machine review.
 
     The *overall* classification state is derived from the **latest** review:
     ``not_run`` (none exist), ``current`` (latest matches the active recipe), or
@@ -113,7 +112,7 @@ class StoredMachineReviewProjection:
     """Minimal machine-review metadata needed for currency classification.
 
     Mirrors the columns a future append-only ``record_machine_review`` row
-    (policy §8) would carry that are relevant to currency and latest-selection.
+    would carry that are relevant to currency and latest-selection.
     Currency itself is about *which* review is live, not its verdict, so the
     classifier ignores ``status``; it is retained as passthrough provenance (the
     verdict the live review carried) and to mirror the future table's column.
@@ -150,7 +149,7 @@ class MachineReviewCurrencyClassification:
 
     * ``state`` — the overall, latest-derived state (``not_run`` / ``current`` /
       ``stale``); never ``historical`` (the latest review is never historical).
-    * ``active_review`` — the latest review by the policy §4 ordering, or
+    * ``active_review`` — the latest review by the latest-selection ordering, or
       ``None`` when there are no reviews.
     * ``historical_reviews`` — every non-latest review, newest-first; each is
       :attr:`MachineReviewCurrencyState.historical` by definition.
@@ -169,7 +168,7 @@ def _nulls_last_desc_rank(value: int | None) -> tuple[int, int]:
 
     Returns ``(1, value)`` for a real id and ``(0, 0)`` for ``None``. Under one
     ``reverse=True`` (descending) sort a real id ``(1, n)`` always outranks
-    ``None`` ``(0, 0)``, so nulls land last — the policy §4 ``DESC NULLS LAST``
+    ``None`` ``(0, 0)``, so nulls land last — the ``DESC NULLS LAST``
     behavior — without comparing ``int`` against ``None``.
     """
     return (1, value) if value is not None else (0, 0)
@@ -178,7 +177,7 @@ def _nulls_last_desc_rank(value: int | None) -> tuple[int, int]:
 def _latest_ordering_key(
     review: StoredMachineReviewProjection,
 ) -> tuple[datetime, tuple[int, int], tuple[int, int], tuple[int | str, ...]]:
-    """Total, descending-sortable ordering key for latest-selection (policy §4).
+    """Total, descending-sortable ordering key for latest-selection.
 
     Primary: ``reviewed_at``. Then ``source_audit_event_id`` then ``id``, each
     via :func:`_nulls_last_desc_rank` so nulls sort last under ``reverse=True``.
@@ -254,7 +253,7 @@ def classify_machine_review_currency(
     (the caller filters); this function does not re-scope them. Steps:
 
     1. No reviews -> ``not_run`` (nothing to be stale).
-    2. Select the **latest** review by the policy §4 ordering
+    2. Select the **latest** review by the latest-selection ordering
        (``reviewed_at`` DESC, ``source_audit_event_id`` DESC NULLS LAST, ``id``
        DESC NULLS LAST). Every other review is ``historical``, newest-first.
     3. The latest review is **current** iff all four currency dimensions match
@@ -265,7 +264,7 @@ def classify_machine_review_currency(
 
     A stale latest review makes the whole record ``stale`` even when an older,
     historical review's hash still matches — the historical review is never the
-    active candidate (policy §4).
+    active candidate.
     """
     if not reviews:
         return MachineReviewCurrencyClassification(

@@ -30,8 +30,7 @@ already follow for role/type compatibility:
   never blocking -- purely a projection of whatever is linked right now,
   picking the lowest-id calculation per role for display when more than
   one is linked (the same deterministic tie-break the rest of this
-  archive uses, e.g. the statmech provenance-display fallback in
-  ``scientific_product_candidacy.md``).
+  archive uses, e.g. the statmech provenance-display fallback).
 * **R2' -- ensemble-aware multiplicity.** ``opt`` and ``freq`` may repeat
   freely (one pair per conformer is exactly how a multi-conformer
   ensemble product is built). ``sp`` may repeat too, but only when each

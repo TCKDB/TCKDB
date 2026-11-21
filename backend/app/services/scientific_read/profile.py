@@ -1,7 +1,7 @@
 """Curated vs exploratory read profiles for the ``/scientific/*`` surface.
 
 One knob, ``?profile=``, selects which *contract* a scientific read answers
-under. See ``backend/docs/specs/dataset_release_and_profiles.md``.
+under.
 
 Why ``exploratory`` is the default
 ----------------------------------

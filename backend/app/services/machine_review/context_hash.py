@@ -1,10 +1,9 @@
 """Pure, deterministic ``context_hash`` builder for machine-review currency.
 
-This module implements the ``context_hash`` policy from
-``backend/docs/specs/record_machine_review_policy.md`` §3: a stable digest of
+This module implements the ``context_hash`` policy: a stable digest of
 the **compact deterministic evidence context** a machine review saw, used to
 decide whether a stored review is still *current* for the record's present
-evidence (current/stale/historical, that spec §2/§3.5).
+evidence (current/stale/historical).
 
 It is **pure**: it performs no database access, no persistence, no provider
 call, and no public exposure. It mutates nothing — not scientific records, the
@@ -12,24 +11,24 @@ deterministic evidence/trust layer, nor the human-review layer. It builds a
 hash from a typed, already-compact context the caller assembles; it does not
 read raw artifacts or logs itself.
 
-Design choices (policy §3, mirroring :func:`compute_finding_fingerprint`):
+Design choices (mirroring :func:`compute_finding_fingerprint`):
 
 * **Rejection over silent-ignore.** :class:`MachineReviewEvidenceContext` is
   ``extra="forbid"``, so a forbidden input (``provider``, ``model``,
   ``reviewed_at``, ``created_at``, a raw log, a secret, …) raises at
   construction rather than being quietly dropped. The builder therefore cannot
-  receive an excluded field at all. This is documented in the policy spec §3.3.
+  receive an excluded field at all.
 * **Order-insensitivity for set-like inputs.** Check lists, artifact kinds,
   notes, source calculations, and geometry validations are canonicalised
   (sorted) before hashing, so input order never changes the digest.
 * **Schema version folded in.** ``context_schema_version`` is part of the
   hashed payload *and* returned on the digest, so a recipe bump changes the
   hash even for identical inputs — a hash-only comparison can never treat a
-  prior-recipe review as current (policy §3.4).
+  prior-recipe review as current.
 * **Provenance excluded.** ``provider``/``model`` and all timestamps are
-  excluded: the hash is the currency of the *evidence*, not the reviewer
-  (policy §3.3/§3.5). Reviewer-recipe currency (``prompt``,
-  ``rubric``) lives in the currency key, not here.
+  excluded: the hash is the currency of the *evidence*, not the reviewer.
+  Reviewer-recipe currency (``prompt``, ``rubric``) lives in the currency key,
+  not here.
 """
 
 from __future__ import annotations
@@ -43,7 +42,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 #: Version of the context-hash recipe (input set + canonicalisation). Bump this
 #: whenever the hashed inputs or their canonical form change; every prior digest
-#: then differs and prior reviews become stale until re-reviewed (policy §3.4).
+#: then differs and prior reviews become stale until re-reviewed.
 #:
 #: This is 1 like every other TCKDB-owned version. Reviews stamped under an earlier numbering are stale for a *named*
 #: reason that does not depend on this number or on the hash -- their prompt is stored at version 0 and their rubric
@@ -81,8 +80,8 @@ class GeometryValidationContext(BaseModel):
 class MachineReviewEvidenceContext(BaseModel):
     """The compact, deterministic evidence context a machine review saw.
 
-    This is the **included-inputs** contract of policy §3.2, and *only* those
-    inputs. It is ``extra="forbid"`` so the excluded inputs of §3.3 (raw
+    This is the **included-inputs** contract, and *only* those
+    inputs. It is ``extra="forbid"`` so the excluded inputs (raw
     artifacts, full logs, coordinates, secrets, ``provider``/``model``, and any
     timestamp such as ``reviewed_at``/``created_at``) are **rejected** at
     construction — the builder can never hash one. Assembling this object from
@@ -91,20 +90,20 @@ class MachineReviewEvidenceContext(BaseModel):
     hashes what it is given.
 
     ``review_status`` and ``notes`` default to "not part of the context"
-    (``None`` / empty). Per policy §6 the recommended default is to leave
+    (``None`` / empty). The recommended default is to leave
     ``review_status`` out (machine and human review are separate axes); include
     it only when a reviewer prompt genuinely reasons over it.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    # Record identity — pins the context to the exact record (policy §3.2), so
+    # Record identity — pins the context to the exact record, so
     # two different records with identical checks do not collide.
     record_type: str = Field(min_length=1, max_length=128)
     record_ref: str = Field(min_length=1, max_length=256)
 
     # Deterministic evidence rubric: name + version are in the hash on purpose —
-    # a rubric version bump changes the meaning of the check set (policy §3.2).
+    # a rubric version bump changes the meaning of the check set.
     rubric_name: str | None = Field(default=None, max_length=128)
     rubric_version: int | None = None
 
@@ -125,13 +124,13 @@ class MachineReviewEvidenceContext(BaseModel):
         default_factory=tuple
     )
 
-    # Artifact *kinds* present, never contents (policy §3.2). Set-like.
+    # Artifact *kinds* present, never contents. Set-like.
     artifact_kinds: tuple[str, ...] = Field(default_factory=tuple)
 
-    # Included only when explicitly part of the reviewed context (policy §3.2).
+    # Included only when explicitly part of the reviewed context.
     # ``review_status`` / ``is_certified`` are **read-only context inputs** — the
     # human-review snapshot the reviewer saw — never machine-owned outputs.
-    # Per policy §6 a deployment may prefer to leave ``review_status`` out to
+    # A deployment may prefer to leave ``review_status`` out to
     # keep the machine/human axes independent; the field is optional so either
     # posture is expressible.
     review_status: str | None = Field(default=None, max_length=64)
@@ -143,7 +142,7 @@ class MachineReviewEvidenceContext(BaseModel):
 class MachineReviewContextDigest:
     """Result of hashing a :class:`MachineReviewEvidenceContext`.
 
-    Carries both halves the currency check needs (policy §3.4/§3.5): the
+    Carries both halves the currency check needs: the
     ``context_hash`` and the ``context_schema_version`` it was produced under. A
     stored review is comparable to "now" only when both match the active recipe.
     """
@@ -182,14 +181,14 @@ def build_machine_review_context_hash(
     plus ``context_schema_version`` — the same canonicalisation discipline as
     :func:`compute_finding_fingerprint`.
 
-    The excluded inputs of policy §3.3 cannot reach here:
+    The excluded inputs cannot reach here:
     :class:`MachineReviewEvidenceContext` is ``extra="forbid"`` and carries no
     field for raw artifacts/logs/coordinates, secrets, ``provider``/``model``,
     or any timestamp, so those are rejected at construction rather than ignored.
 
     ``context_schema_version`` is folded into the hashed payload, so two
     contexts that are identical except for their schema version hash
-    differently and are never accidentally compared as current (policy §3.4).
+    differently and are never accidentally compared as current.
     """
     payload = {
         "context_schema_version": context_schema_version,

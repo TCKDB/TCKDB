@@ -6,8 +6,6 @@ trigger an unbounded response. The summary projections under the
 calculation detail's heavy includes (``include=scan`` / ``include=irc``
 / ``include=path_search``) carry only result-row aggregates; this
 module is where per-point arrays are exposed.
-
-See ``backend/docs/specs/scientific_calculation_path_includes.md``.
 """
 
 from __future__ import annotations

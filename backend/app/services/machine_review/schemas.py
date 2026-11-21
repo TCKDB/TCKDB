@@ -1,8 +1,7 @@
 """Internal contract schemas for the provisional machine-review layer.
 
 These are **types/contracts only**. They define the vocabulary and output
-shape of the future machine-review layer described in
-``backend/docs/specs/provisional_machine_review.md`` so the direction is
+shape of the future machine-review layer so the direction is
 type-safe and testable before any provider, persistence, or public exposure
 exists.
 
@@ -38,10 +37,10 @@ class MachineReviewStatus(str, Enum):
     :class:`~app.db.models.common.RecordReviewStatus` (human review) and
     :class:`~app.db.models.common.SubmissionPrecheckLabel` (submission
     precheck). Authoritative for *nothing* the deterministic-evidence or
-    human-review layers own; see the spec §2/§4.
+    human-review layers own.
 
-    ``machine_screened_blocking_concern`` from the spec is intentionally
-    **not** defined here: it is reserved/deferred (spec §3, §15 Q1) and must
+    ``machine_screened_blocking_concern`` is intentionally
+    **not** defined here: it is reserved/deferred and must
     only be introduced when a concrete operational distinction from
     ``machine_screened_needs_attention`` is actually wired.
     """
@@ -54,7 +53,7 @@ class MachineReviewStatus(str, Enum):
 
 
 class MachineReviewSeverity(str, Enum):
-    """Severity of a single machine-review finding (spec §8)."""
+    """Severity of a single machine-review finding."""
 
     info = "info"
     warning = "warning"
@@ -62,7 +61,7 @@ class MachineReviewSeverity(str, Enum):
 
 
 class MachineReviewCategory(str, Enum):
-    """Category vocabulary for machine-review findings (spec §8)."""
+    """Category vocabulary for machine-review findings."""
 
     provenance = "provenance"
     units = "units"
@@ -78,7 +77,7 @@ class MachineReviewCategory(str, Enum):
 
 
 class CuratorPriority(str, Enum):
-    """Advisory ordering hint for a future human-review queue (spec §3).
+    """Advisory ordering hint for a future human-review queue.
 
     Pure metadata — it is *not* a state and has no effect on visibility,
     trust, or evidence.
@@ -90,7 +89,7 @@ class CuratorPriority(str, Enum):
 
 
 class MachineReviewFinding(BaseModel):
-    """One advisory finding produced by a machine reviewer (spec §8).
+    """One advisory finding produced by a machine reviewer.
 
     ``record_ref`` and ``evidence_keys`` are **pointers only**: a finding
     cites a record and the deterministic evidence keys it relates to, but
@@ -112,7 +111,7 @@ class MachineReviewFinding(BaseModel):
 
 
 class MachineReviewResult(BaseModel):
-    """Validated structured result of one machine-review pass (spec §8).
+    """Validated structured result of one machine-review pass.
 
     Schema-validated before any persistence: malformed provider output is a
     validation error the caller converts to
@@ -135,14 +134,13 @@ class MachineReviewResult(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# provider output contract (machine_review_provider_contract.md)
+# provider output contract
 # ---------------------------------------------------------------------------
 #
 # The provider payload speaks the machine-review vocabulary natively: a
 # ``status``, a ``curator_priority``, ``recommended_action`` and the full
 # category set. It is identified by a single root marker (``format``: a name and a
-# separate integer version), which the audit adapter requires. See
-# ``machine_review_provider_contract.md`` §3/§4/§7.
+# separate integer version), which the audit adapter requires.
 
 #: Root marker value identifying a machine-review provider payload: the format's
 #: name beside its integer version.

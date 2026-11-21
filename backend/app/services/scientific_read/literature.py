@@ -10,8 +10,6 @@ Literature is not a reviewable record type — there is no
 ``SubmissionRecordType.literature`` — so the response carries no
 review badge for the literature itself. Reviews surface only on the
 linked records under the companion ``/records`` endpoint.
-
-See ``backend/docs/specs/scientific_literature_reads.md``.
 """
 
 from __future__ import annotations

@@ -4,8 +4,8 @@
 explicitly runs **fake** machine review for one record and appends a
 ``record_machine_review`` row only when the active recipe says one is needed
 (``run_not_reviewed`` / ``run_stale``); an already-current record is skipped, so
-re-running an unchanged recipe is idempotent. It is a maintainer/debug surface
-(policy ``record_machine_review_policy.md`` §5.3), **admin-only**, and never
+re-running an unchanged recipe is idempotent. It is a maintainer/debug surface,
+**admin-only**, and never
 public scientific trust: it uses only the fake producer, is not wired into
 uploads or any public read, emits no ``trust.machine_review``, and mutates
 nothing outside ``record_machine_review``.

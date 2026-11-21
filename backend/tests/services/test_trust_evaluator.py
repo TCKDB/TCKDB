@@ -5,8 +5,7 @@ These tests pin the contract of
 per-test rollback transaction in ``conftest.py`` and direct ORM
 inserts; no upload pipeline is exercised.
 
-Each test focuses on one promise from the spec
-(``backend/docs/specs/automated_trust_layer.md``):
+Each test focuses on one promise of the trust layer:
 
 * deterministic label-threshold mapping,
 * hard-fail behaviour for the three structural signals,
@@ -754,7 +753,7 @@ def _add_statmech_torsion(
 
 
 class TestLabelThresholdMapping:
-    """Pin the deterministic mapping documented in spec §6.1."""
+    """Pin the deterministic label-threshold mapping."""
 
     @pytest.mark.parametrize(
         "ratio,all_required_passed,expected",
@@ -813,7 +812,7 @@ class TestRubricRegistry:
 
     def test_rubric_contains_expected_checks(self):
         names = {c.name for c in COMPUTED_CALCULATION.checks}
-        # Spot-check a representative subset of names from spec §9.5.
+        # Spot-check a representative subset of names.
         expected_subset = {
             "calculation_has_owner",
             "calculation_type_present",

@@ -11,9 +11,6 @@ species namespace. The route name is ``structure-search`` (not
 ``/species/search``; the underlying matching algorithm is fundamentally
 different (cartridge ``@>`` / ``tanimoto_sml`` vs. equality on
 ``species`` identity columns).
-
-See ``backend/docs/specs/scientific_structure_search.md`` for the full
-contract.
 """
 
 from __future__ import annotations

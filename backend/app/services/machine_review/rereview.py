@@ -3,8 +3,7 @@
 Given a record's identity, its current deterministic-evidence context, and the
 active reviewer recipe, this service decides **whether a fresh machine review is
 needed** — without calling a provider, running a background job, or appending a
-row. It turns the currency model (policy
-``backend/docs/specs/record_machine_review_policy.md`` §2/§5) into a testable,
+row. It turns the currency model into a testable,
 read-only **plan**, so the trigger policy is provable before any execution slice
 wires it to the fake provider / admin trigger.
 
@@ -25,8 +24,7 @@ required exactly when the currency classifier reports the latest review is not
 ``current`` — i.e. no previous review, or any of the four currency dimensions
 mismatched (``context_schema_version`` / ``context_hash`` / ``prompt`` /
 ``rubric``). ``provider`` / ``model`` are deliberately **not** trigger
-dimensions (policy §3.5), and no ``reviewed_at`` age/TTL trigger is introduced
-(not specified in the policy).
+dimensions, and no ``reviewed_at`` age/TTL trigger is introduced.
 """
 
 from __future__ import annotations

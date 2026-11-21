@@ -6,7 +6,7 @@
 #   GET /api/v1/scientific/releases/{tag}/manifest
 # and its own citation string in `dataset_release.citation_text`. Cite the
 # dataset when you use TCKDB's numbers; cite the software when you use or
-# extend the code. See backend/docs/specs/dataset_release_and_profiles.md.
+# extend the code.
 #
 # `doi:` is intentionally absent. TCKDB does not mint DOIs speculatively — a
 # DOI is not retractable, and the corpus is not yet published. The procedure

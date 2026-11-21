@@ -288,5 +288,4 @@ echoed in the response's `request` block.
 
 A release publishes its selections *and* the full candidate set and
 review history behind them, so a reader can disagree with a TCKDB
-recommendation without privileged access. See
-[`dataset_release_and_profiles.md`](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/specs/dataset_release_and_profiles.md).
+recommendation without privileged access.

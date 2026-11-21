@@ -31,8 +31,8 @@ from app.services.document_formats import REVIEW_POLICY as REVIEW_POLICY_NAME
 #: shipped records, and a count per basis kind.
 MANIFEST_FORMAT: VersionRef = FORMATS.current(DATASET_RELEASE)
 
-#: The *recovery* archive contract, recorded in the manifest purely so a reader can see that it is a different thing
-#: (see ``backend/docs/specs/dataset_release_and_profiles.md``). The same ref as the archive writer's.
+#: The *recovery* archive contract, recorded in the manifest purely so a reader can see that it is a different thing.
+#: The same ref as the archive writer's.
 RECOVERY_ARCHIVE_FORMAT: VersionRef = FORMATS.current(ARCHIVE)
 
 #: The review/trust policy the corpus was curated under: the ``RecordReviewStatus`` vocabulary plus the guarded

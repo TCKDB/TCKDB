@@ -9,8 +9,6 @@ per-point trajectory data behind paginated, abuse-bound URLs:
 - ``GET /scientific/calculations/{calculation_ref_or_id}/irc``
 - ``GET /scientific/calculations/{calculation_ref_or_id}/path-search``
 
-See ``backend/docs/specs/scientific_calculation_path_includes.md``.
-
 Mounted under the same ``/calculations`` prefix as the detail router
 but registered earlier in
 ``app/api/routes/scientific/__init__.py`` so OpenAPI lists the

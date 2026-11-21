@@ -7,8 +7,7 @@ This module is the bridge from **current persistence** —
 (:class:`~app.services.machine_review.read_model.RecordMachineReview`,
 :class:`~app.services.machine_review.read_model.MachineReviewRecordSummary`).
 
-It is **private plumbing only** (spec
-``backend/docs/specs/provisional_machine_review.md`` §5/§6). It performs no
+It is **private plumbing only**. It performs no
 persistence, runs no provider, exposes nothing through any public scientific
 read API, and never mutates submission status, scientific records, the
 deterministic evidence/trust layer, or the human-review layer. Its output is a
@@ -32,7 +31,7 @@ Three responsibilities, kept separate so each is independently testable:
    :func:`~app.services.machine_review.mapping.map_findings_to_submission_records`):
    record-addressed findings map only to the *exact* linked record they name.
    A submission-level result is **never** fanned out across every linked
-   record (spec §6/§13). The mapper is the single source of truth for this.
+   record. The mapper is the single source of truth for this.
 
 3. **Project** (:func:`record_machine_reviews_from_submission_audit_event`):
    each mapped record becomes a

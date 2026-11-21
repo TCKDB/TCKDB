@@ -4,10 +4,9 @@ This is the *write* counterpart to the read-only inspection projection
 (:mod:`app.services.machine_review.inspection`). Given a submission's
 machine-review inspection, it creates or reuses
 :class:`~app.db.models.machine_review_curator_task.MachineReviewCuratorTask`
-rows — the persisted human triage queue designed in
-``backend/docs/specs/machine_review_curator_task_queue.md``.
+rows — the persisted human triage queue.
 
-Boundaries (spec §6/§9, and this slice's non-goals):
+Boundaries:
 
 * **Explicit call only.** Nothing here runs on upload, precheck, or human
   review. A caller (a future admin endpoint or batch job) invokes
@@ -21,7 +20,7 @@ Boundaries (spec §6/§9, and this slice's non-goals):
 * **Caller controls the transaction.** Like the sibling write services
   (e.g. :mod:`app.services.record_review`), this flushes but never commits.
 
-What becomes a task (spec §6):
+What becomes a task:
 
 * Only **exact, mapped, record-level** findings (the ``record_inspections``
   of the projection). Submission-scoped, unmapped, and parse-warning
@@ -64,7 +63,7 @@ from app.services.machine_review.schemas import (
     MachineReviewSeverity,
 )
 
-# Severities that open a curator task (spec §6 "Initial state by severity").
+# Severities that open a curator task.
 # ``info`` is intentionally absent — info findings create no task by default.
 _TASK_OPENING_SEVERITIES: frozenset[MachineReviewSeverity] = frozenset(
     {MachineReviewSeverity.warning, MachineReviewSeverity.critical}
@@ -100,14 +99,14 @@ def compute_finding_fingerprint(
     record_id: int,
     review_context: str | None = None,
 ) -> str:
-    """Stable, derived identity hash for one finding on one record (spec §4).
+    """Stable, derived identity hash for one finding on one record.
 
     The fingerprint is a SHA-256 over a canonical, key-sorted JSON
     serialisation of the **identity-bearing** fields — the fields that make a
     finding "the same concern" rather than "a new concern". It is computed in
     the service layer and never accepted from a client (project convention).
 
-    Deliberately excluded (spec §4):
+    Deliberately excluded:
 
     * ``source_audit_event_id`` — changes on every precheck re-run; including
       it would make each re-run look like a brand-new finding and defeat
@@ -119,7 +118,7 @@ def compute_finding_fingerprint(
     ``review_context`` is an optional stable hash of the projection/finding
     context a caller may fold in; it must itself be free of the excluded
     fields. ``record_id`` is the resolved internal record id (the table is
-    private; spec §3), pinning the finding to the exact record it concerns.
+    private), pinning the finding to the exact record it concerns.
     """
     payload = {
         "severity": finding.severity.value,
@@ -144,7 +143,7 @@ def _resolve_source_audit_event_id(
     A caller may pass one explicitly. Otherwise we attach the submission's
     single machine-review event id when there is exactly one; with zero or
     several events the projection no longer points at a single event, so the
-    (nullable, spec §3) provenance is left ``None`` rather than guessed.
+    (nullable) provenance is left ``None`` rather than guessed.
     """
     if explicit is not None:
         return explicit
@@ -185,7 +184,7 @@ def build_curator_tasks_for_submission(
     task_ids: list[int] = []
     warnings: list[str] = []
 
-    # Diagnostics never become tasks (spec §6). Counted for the caller's report.
+    # Diagnostics never become tasks. Counted for the caller's report.
     skipped_unmapped = len(inspection.unmapped_findings)
 
     for record_inspection in inspection.record_inspections:

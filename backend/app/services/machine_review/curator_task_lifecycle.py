@@ -5,8 +5,7 @@ builds/upserts tasks from an inspection projection. This module owns the
 human-workflow transitions over an existing task: assignment, picking a task
 up for review, resolving it, and (explicitly) reopening it.
 
-Authority boundary (spec
-``backend/docs/specs/machine_review_curator_task_queue.md`` §8/§9):
+Authority boundary:
 
 * These functions mutate **only** the workflow columns of one
   ``machine_review_curator_task`` row — ``workflow_state``, ``assigned_to``,
@@ -17,7 +16,7 @@ Authority boundary (spec
 * In particular, resolving a task as ``resolved_human_reviewed`` records that
   a human review happened *elsewhere*; it does **not** itself write
   ``RecordReviewStatus``. Human review is performed through the authoritative
-  review layer and merely reflected here (spec §8).
+  review layer and merely reflected here.
 
 Transaction & authorization: like the sibling write services
 (:mod:`app.services.record_review`), each function flushes but does not
@@ -167,7 +166,7 @@ def resolve_curator_task(
     terminal state is requested (returns the existing row unchanged, preserving
     the original resolver/note/timestamp); a *different* terminal state is
     rejected. ``resolved_human_reviewed`` does not write ``RecordReviewStatus``
-    — it records that a human review happened elsewhere (spec §7/§8).
+    — it records that a human review happened elsewhere.
     """
     if resolution not in MachineReviewCuratorTaskState.terminal_states():
         raise DomainError(

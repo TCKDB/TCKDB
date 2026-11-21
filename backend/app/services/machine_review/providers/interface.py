@@ -6,9 +6,7 @@ side — adapter, mapping, inspection, curator tasks — already exists). It hol
 * :class:`MachineReviewContext` — a minimal internal context a provider reviews
   over. In this foundation slice it simply wraps/references the existing
   :class:`~app.services.llm_precheck.schemas.LLMPrecheckContext`; the richer
-  context builder described in
-  ``backend/docs/specs/machine_review_real_provider_plumbing.md`` §7 is a later
-  slice and is deliberately *not* built here.
+  context builder is a later slice and is deliberately *not* built here.
 * :class:`MachineReviewProvider` — the provider protocol. Every provider returns
   a validated :class:`~app.services.machine_review.schemas.MachineReviewProviderResult`.
 * :class:`MachineReviewProviderConfigurationError` — raised when a configured
@@ -19,13 +17,13 @@ side — adapter, mapping, inspection, curator tasks — already exists). It hol
 * :func:`machine_review_result_to_details_json` — serialize a validated
   result into the ``submission_audit_event.details_json`` shape the adapter's
   format registry reads. This is the only persistence-edge helper added in this slice;
-  upload/precheck wiring of it is a later integration step (spec §5.2).
+  upload/precheck wiring of it is a later integration step.
 
 Configuration namespace: ``AI_REVIEW_ASSISTANT_MODE`` + ``LLM_PRECHECK_*``
 remains the implementation/config namespace.
 :class:`~app.services.machine_review.schemas.MachineReviewProviderResult` is
 the output contract. ``machine_review`` is the future *public* concept. No
-parallel ``MACHINE_REVIEW_*`` env vars are introduced (spec §4).
+parallel ``MACHINE_REVIEW_*`` env vars are introduced.
 
 No real provider calls, no persistence, no public exposure here.
 """
@@ -56,7 +54,7 @@ class MachineReviewContext(BaseModel):
     :class:`LLMPrecheckContext` so a future provider has the compact submission
     metadata + record refs already assembled by
     :func:`~app.services.llm_precheck.context_builder.build_llm_precheck_context`.
-    The deeper, evidence-rich context builder (spec §7) is a later slice.
+    The deeper, evidence-rich context builder is a later slice.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -183,6 +181,6 @@ def machine_review_result_to_details_json(
     label->status translation. This is the persistence-edge helper for the
     *future* integration step; wiring it into the upload/precheck flow (so a
     provider result lands on a ``submission_audit_event``) is intentionally not
-    part of this foundation slice (spec §5.2).
+    part of this foundation slice.
     """
     return result.model_dump(mode="json")

@@ -120,18 +120,19 @@ def test_the_multi_contributor_licensing_constraint_is_written_down():
     assert "own deposits and nobody else's" in license_data
     assert "upload contract" in license_data
 
+    # Ingestion side: the wire fragment a depositor fills in.
     ingestion = (
-        BACKEND_ROOT / "docs" / "specs" / "ingestion_submission_model.md"
+        REPO_ROOT / "schemas" / "python" / "tckdb-schemas" / "tckdb_schemas" / "rights.py"
     ).read_text()
-    assert "upload contract" in ingestion
+    assert "own deposits and nobody else's" in ingestion
     assert "second contributor" in ingestion
-    assert "not consent" in ingestion
+    assert "upload contract" in ingestion
 
-    release_spec = (
-        BACKEND_ROOT / "docs" / "specs" / "dataset_release_and_profiles.md"
-    ).read_text()
-    assert "own deposits and nobody else's" in release_spec
-    assert "upload contract" in release_spec
+    # Release side: the default a release is cut under.
+    release = (BACKEND_ROOT / "app" / "services" / "release" / "curation.py").read_text()
+    assert "second contributor" in release
+    assert "consent on a third party's behalf" in release
+    assert "LICENSE-DATA" in release
 
 
 def test_citation_file_names_the_data_license_without_faking_a_cff_field():
@@ -198,23 +199,20 @@ def test_known_operational_boundaries_are_recorded_where_a_reader_will_look():
     live somewhere a future maintainer encounters it before rediscovering the
     behaviour and treating it as a defect.
     """
-    spec = (
-        BACKEND_ROOT / "docs" / "specs" / "dataset_release_and_profiles.md"
+    runbook = (
+        BACKEND_ROOT / "docs" / "deployment" / "cutting_a_dataset_release.md"
     ).read_text()
-    assert "Known operational boundaries" in spec
+    assert "Known operational boundaries" in runbook
 
-    # NB6: inline release bytes in the recovery archive, with a revisit trigger.
-    assert "rows.ndjson" in spec
-    assert "blobs/" in spec
-    assert "Trigger for revisiting" in spec or "Revisit when" in spec
+    # Inline release bytes in the recovery archive, with a revisit trigger.
+    assert "rows.ndjson" in runbook
+    assert "blobs/" in runbook
+    assert "$bytes" in runbook
+    assert "Revisit when" in runbook
 
     # The DISABLE TRIGGER / ownership boundary, and where the fix belongs.
-    assert "DISABLE TRIGGER" in spec
-    assert "database_roles.md" in spec
-
-    archive_spec = (BACKEND_ROOT / "docs" / "specs" / "tckdb_archive.md").read_text()
-    assert "$bytes" in archive_spec
-    assert "Revisit when" in archive_spec
+    assert "DISABLE TRIGGER" in runbook
+    assert "database_roles.md" in runbook
 
     roles = (
         BACKEND_ROOT / "docs" / "deployment" / "database_roles.md"
@@ -222,7 +220,7 @@ def test_known_operational_boundaries_are_recorded_where_a_reader_will_look():
     # A reader of the roles doc must learn that the release tables share the
     # posture, not just the accepted-science ones.
     assert "release_selection" in roles
-    assert "dataset_release_and_profiles.md" in roles
+    assert "cutting_a_dataset_release.md" in roles
 
 
 @pytest.mark.parametrize(

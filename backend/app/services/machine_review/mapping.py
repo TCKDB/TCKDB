@@ -1,7 +1,6 @@
 """Pure submission -> record mapping policy for machine-review findings.
 
-This module encodes the **safety policy** from
-``backend/docs/specs/provisional_machine_review.md`` §6/§13 that gates the
+This module encodes the **safety policy** that gates the
 future record-level ``machine_review`` layer: a submission-scoped advisory
 result must **never** automatically become a record-level result, and a
 record-addressed finding must map only to the *exact* linked record it
@@ -11,7 +10,7 @@ The function is deliberately **pure**: it takes the already-validated
 :class:`MachineReviewFinding` set plus a lightweight description of the
 submission's record links, and returns a structured mapping. It performs no
 database access, no persistence, and no public exposure — this slice only
-proves that a safe mapping policy exists (spec §6 Option C "Future").
+proves that a safe mapping policy exists.
 
 Addressing model
 ----------------
@@ -25,12 +24,11 @@ algorithm with the key field swapped; the structures carry ``record_id``
 through as passthrough metadata so a future persistence layer does not have
 to re-resolve it.
 
-Matching precedence (most specific first; the full policy is documented in
-``provisional_machine_review.md`` "Submission-to-record mapping policy"):
+Matching precedence (most specific first):
 
 1. exact ``(record_type, record_ref)`` of a linked record (in the audit path
-   ``record_ref`` is the stringified internal ``record_id``, so the spec's
-   "exact ``record_type`` + ``record_id``" and "exact ``record_type`` +
+   ``record_ref`` is the stringified internal ``record_id``, so the "exact
+   ``record_type`` + ``record_id``" and "exact ``record_type`` +
    ``record_ref``" levels collapse here);
 2. the **single unambiguous** linked record of the finding's ``record_type``,
    used only when the finding carries no ``record_ref``;
@@ -39,7 +37,7 @@ Matching precedence (most specific first; the full policy is documented in
 ``evidence_keys`` are deterministic-evidence citations, never a matching key:
 the mapper does not infer a record from them (that would be guessing).
 
-Policy (spec §6 / §13, and the slice's required decisions):
+Policy:
 
 1. A finding with no ``record_type`` is submission-scoped only -> unmapped.
 2. A finding maps only to a record it unambiguously identifies (precedence
@@ -124,7 +122,7 @@ class UnmappedReason(str, Enum):
 
     Every value is a safety outcome, not an error: the mapper never raises on
     a malformed/over-broad finding, it routes it here so the caller can decide
-    what to surface to an admin (spec: advisory, non-blocking).
+    what to surface to an admin (advisory, non-blocking).
     """
 
     submission_scoped = "submission_scoped"
@@ -244,7 +242,7 @@ def map_findings_to_submission_records(
     finding (no ``record_type``) is never promoted to any record.
 
     ``outcome`` is the reviewer-completion signal for the pass these findings
-    came from (spec §3 "State vs. severity"). It is the *only* event-level input
+    came from. It is the *only* event-level input
     allowed to influence per-record status, and only the non-``completed``
     values do: ``failed`` -> every mapped record is ``machine_review_failed``,
     ``not_performed`` -> ``not_run``. For ``completed`` (the default) each

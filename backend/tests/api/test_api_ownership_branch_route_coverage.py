@@ -38,8 +38,7 @@ nothing new.
 
 What is missing is not another provocation. It is the statement that the
 provocations cover the codes, held against the source of both. That is
-the shape ``tests/scripts/test_read_spec_names_resolve.py`` already uses
-for prose that names symbols, and it is cheap: no database, no requests.
+cheap: no database, no requests.
 
 The branch dimension, which is the one that was actually unwatched
 --------------------------------------------------------------------

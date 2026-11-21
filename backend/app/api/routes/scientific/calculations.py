@@ -5,8 +5,7 @@ Other heavy include sections (dependencies, parameters, constraints,
 artifacts, geometries, geometry_validation, scf_stability, scan, irc,
 path_search) are recognized as legal include tokens but not yet
 expanded — non-empty unimplemented heavy includes are rejected with 422
-``include_not_implemented_yet``. See
-``backend/docs/specs/scientific_calculation_reads.md``.
+``include_not_implemented_yet``.
 """
 
 from __future__ import annotations
@@ -126,7 +125,7 @@ def scientific_calculations_search_get(
     AND-combines the supplied filters and returns calculation records
     in the same shape as the detail endpoint. At least one meaningful
     filter is required; pure pagination/include/review knobs are not
-    enough — see ``backend/docs/specs/scientific_calculation_reads.md``.
+    enough.
     """
     request_obj = caller_input(
         CalculationsSearchRequest,

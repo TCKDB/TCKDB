@@ -18,8 +18,7 @@ above another, so the honest answer is "these records answer your question, and 
   derives a reverse rate, and never assembles additive components. Rates of progress, net forward-minus-reverse rates
   and whole mechanisms are not covered.
 - **Not a recommendation.** A curator or a dataset release recommends records; this endpoint applies no method
-  preference to what is stored. See
-  [`dataset_release_and_profiles.md`](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/specs/dataset_release_and_profiles.md).
+  preference to what is stored.
 
 ## The request
 

@@ -1,8 +1,7 @@
 """Shared private source of truth for the active machine-review recipe.
 
 The *recipe* is the set of currency dimensions a machine review is stamped
-with and compared against (policy
-``backend/docs/specs/record_machine_review_policy.md`` §3.5): the active
+with and compared against: the active
 **prompt** and the active **rubric**, each a
 :class:`~tckdb_schemas.fragments.version.VersionRef` (a stable name and a
 separate integer version). It is deliberately separate from the per-consumer

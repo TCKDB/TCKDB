@@ -9,8 +9,7 @@ TRIGGER``. ``accepted_science_repair_change`` is appended by
 
 They are mapped here so ``Base.metadata`` stays a complete picture of the
 schema and so read paths and tests can query them; there is deliberately no
-service that writes either. See
-``backend/docs/specs/accepted_science_immutability.md``.
+service that writes either.
 """
 
 from __future__ import annotations

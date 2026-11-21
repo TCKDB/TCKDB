@@ -18,8 +18,6 @@ PLOG rows, point triples) are deliberately not inlined under
 (``chebyshev_shape``, ``plog_entry_count``, ``point_count``). A
 live ``/scientific/network-kinetics/{ref}`` endpoint surfaces the full
 payloads under explicit, bounded include tokens.
-
-See ``backend/docs/specs/scientific_network_reads.md``.
 """
 
 from __future__ import annotations

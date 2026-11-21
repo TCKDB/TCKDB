@@ -278,7 +278,7 @@ def test_extrapolation_distance_is_reported_but_does_not_order(db_session):
 
 def test_min_review_status_uses_shallow_kinetics_review(db_session):
     """Approved kinetics record passes filter even if its hypothetical TS calc
-    would not pass — the spec D7 rule is shallow."""
+    would not pass — the rule is shallow."""
     entry = _setup_entry(db_session)
     k_approved = make_kinetics(db_session, reaction_entry=entry)
     k_under = make_kinetics(db_session, reaction_entry=entry, ea_kj_mol=20.0)

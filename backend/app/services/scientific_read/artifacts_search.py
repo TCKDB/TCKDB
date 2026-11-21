@@ -12,8 +12,6 @@ plus an ``ArtifactCalculationContext`` block carrying the owning
 calculation's identity, level-of-theory, software, workflow-tool, and
 review badge. Owner (species/TS entry) and review history are heavy
 optional includes.
-
-See ``backend/docs/specs/scientific_artifact_reads.md``.
 """
 
 from __future__ import annotations
@@ -376,7 +374,7 @@ def _build_record(
     # review history inline on the artifact record (the badge already
     # rides on the calculation context). Reserved for a future
     # extension; the include token is accepted today as a no-op so the
-    # grammar matches the spec's documented surface.
+    # grammar matches the documented surface.
     has_review_history = False
     if "review" in includes:
         # Defer per-event review history to a future surface. Today this

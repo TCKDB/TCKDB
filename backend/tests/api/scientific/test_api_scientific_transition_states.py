@@ -1696,7 +1696,7 @@ def test_search_has_opt_false_narrows_to_entries_without_opt(client, db_session)
 # Trust is wired to the *standalone* TS-entry detail surface only. The
 # parent-TS detail (embedded entries) and the search surface do not expose
 # it, and the default TS-entry response is byte-identical to its pre-trust
-# shape. See ``backend/docs/specs/trust_read_api_current.md``.
+# shape.
 
 
 def _attach_ts_opt(

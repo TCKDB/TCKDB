@@ -1,8 +1,7 @@
 """Tests for ``computed_transition_state_v2``.
 
 These tests pin the contract of the deterministic transition-state
-trust/evidence evaluator (spec:
-``backend/docs/specs/transition_state_trust_rubric.md``). Each test uses
+trust/evidence evaluator. Each test uses
 the per-test rollback transaction in ``conftest.py`` and direct ORM
 inserts; no upload pipeline is exercised.
 """

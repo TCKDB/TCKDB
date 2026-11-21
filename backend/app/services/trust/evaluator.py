@@ -86,7 +86,7 @@ def select_rubric(record_type: str) -> Optional[EvidenceRubric]:
 def _detect_calculation_hard_fail(calc: Calculation) -> Optional[HardFailReason]:
     """Return a hard-fail reason for ``calc`` if a structural failure is present.
 
-    The set is intentionally narrow (per §8 of the spec) — only
+    The set is intentionally narrow — only
     discrete, evidenced failures qualify. Low completeness on its own
     is not a hard fail.
     """

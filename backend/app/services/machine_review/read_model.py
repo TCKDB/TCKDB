@@ -13,7 +13,7 @@ not — and structurally cannot — mutate ``review_status``,
 deterministic check sets, ``hard_fail_reason``, ``trust_status``, any
 scientific record, or ``submission.status``. The output
 (:class:`MachineReviewRecordSummary`) is ``extra="forbid"`` and contains no
-field that could carry a mutation instruction (spec §8/§10).
+field that could carry a mutation instruction.
 
 Why a wrapper type
 ------------------
@@ -24,7 +24,7 @@ The pure mapper (:mod:`app.services.machine_review.mapping`) produces a
 provenance metadata. Selecting the *latest* review means comparing across
 passes, which needs ``reviewed_at`` and the producing ``model``/``provider``.
 :class:`RecordMachineReview` is that lightweight wrapper — it mirrors the
-future ``record_machine_review`` row (spec §6 Option B) without introducing
+future ``record_machine_review`` row without introducing
 any persistence or public schema. Construct one per ``(review pass, record)``;
 :meth:`RecordMachineReview.from_mapped_record` bridges directly from mapper
 output.
@@ -59,7 +59,7 @@ _SEVERITY_RANK: dict[MachineReviewSeverity, int] = {
 class RecordMachineReview:
     """One machine-review pass's result, scoped to a single scientific record.
 
-    Mirrors a future ``record_machine_review`` row (spec §6 Option B) without
+    Mirrors a future ``record_machine_review`` row without
     any persistence: it bundles the findings that one review pass mapped to
     this record with that pass's status and provenance metadata (which
     ``model``/``provider`` produced it, when it ran, which submission triggered
@@ -130,8 +130,8 @@ class RecordMachineReview:
 class MachineReviewRecordSummary(BaseModel):
     """Internal summary of the latest machine-review state for one record.
 
-    This is the shape a future public ``trust.machine_review`` fragment (spec
-    §4/§10) could render, prepared here but **not** exposed: nothing imports
+    This is the shape a future public ``trust.machine_review`` fragment
+    could render, prepared here but **not** exposed: nothing imports
     this into a public response schema, and it is ``extra="forbid"`` so it can
     never carry a provider-supplied mutation payload. It is a projection of the
     single *selected latest* review, never an aggregate across passes.

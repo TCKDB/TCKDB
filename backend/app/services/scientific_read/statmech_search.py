@@ -18,8 +18,6 @@ Composition mirrors the conformer / TS / calculation search services:
 6. Sort deterministically (review rank → created_at desc → id desc).
 7. Slice for pagination, then materialize each page row via the
    shared :func:`build_statmech_record` helper.
-
-See ``backend/docs/specs/scientific_statmech_reads.md``.
 """
 
 from __future__ import annotations

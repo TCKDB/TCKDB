@@ -2128,7 +2128,7 @@ def test_detail_geometry_validation_ordering_is_deterministic(
 
     The schema constrains at most one row per calculation so the list
     has at most one entry; this test still exercises the
-    deterministic-call invariant required by the spec.
+    deterministic-call invariant.
     """
     _, _, calc = _make_species_owned_calc(db_session)
     attach_geometry_validation(db_session, calculation=calc)
@@ -2914,7 +2914,7 @@ def test_detail_include_parameters_ordering_is_deterministic(
     """Order: section ASC NULLS LAST, parameter_index ASC NULLS LAST,
     raw_key ASC, id ASC."""
     _, _, calc = _make_species_owned_calc(db_session)
-    # Insert out of order; check the response order matches the spec.
+    # Insert out of order; check the response order is deterministic.
     _attach_calc_parameter(
         db_session,
         calculation=calc,
@@ -3541,7 +3541,7 @@ def test_detail_include_review_ordering_is_deterministic(
 ):
     """The schema constrains at most one review row per record so the
     list is singleton; this test still exercises the deterministic-call
-    invariant required by the spec."""
+    invariant."""
     _, _, calc = _make_species_owned_calc(db_session)
     set_review(
         db_session,

@@ -5,8 +5,7 @@
 
 Which stored energies, conformer basins or saddles can answer one stated question about one entry, and which of
 them, if any, the evidence orders. A read: nothing is stored, no curator endorsement is created or changed, and the
-ordinary browse order is untouched. See ``backend/docs/specs/structure_selection_decision.md`` for what a decision
-is and is not, and ``docs/guides/selecting_structures.md`` for how to read one.
+ordinary browse order is untouched. See ``docs/guides/selecting_structures.md`` for how to read a decision.
 
 The requests are strict: unknown fields are refused, references are public refs (never a database id), there is no
 sort expression and no pagination (a selection is over the *complete* authorized
@@ -336,7 +335,7 @@ class StructureSelectionIntegrity(BaseModel):
 class StructureSelectionResponse(SelectionStepsAnswer):
     """The outcome of a structure selection and everything it rests on, public refs only.
 
-    ``outcome`` is the selection basis (13 values; see the spec). ``selected_refs`` holds every tied minimum, the
+    ``outcome`` is the selection basis (13 values). ``selected_refs`` holds every tied minimum, the
     qualified determinations, or the selected protocol's cohort id; it is empty where nothing is selected. The
     ``coverage`` block always says it is the caller's authorized population only, never a global-search certificate.
     ``integrity`` carries the manifest checksum: a checksum, not a signature.

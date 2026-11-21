@@ -2,8 +2,6 @@
 
 Records reuse :class:`ScientificFrequencyScaleFactorRecord` from the
 detail endpoint via :func:`build_frequency_scale_factor_record`.
-
-See ``backend/docs/specs/scientific_correction_reads.md``.
 """
 
 from __future__ import annotations

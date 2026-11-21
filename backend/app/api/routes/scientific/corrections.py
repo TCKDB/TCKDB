@@ -18,8 +18,6 @@ Both record types are reference/curation data. They are non-reviewable
 (no entry in ``SubmissionRecordType``); the response envelope still
 carries an empty ``review_summary`` for shape parity with the rest of
 the scientific surface.
-
-See ``backend/docs/specs/scientific_correction_reads.md``.
 """
 
 from __future__ import annotations
@@ -116,8 +114,7 @@ def scientific_frequency_scale_factor_search_get(
 
     AND-combines the supplied filters; at least one meaningful filter
     is required. Explicit ``False`` bool filter values count as
-    meaningful — see
-    ``backend/docs/specs/scientific_correction_reads.md``.
+    meaningful.
     """
     request_obj = caller_input(
         FrequencyScaleFactorSearchRequest,

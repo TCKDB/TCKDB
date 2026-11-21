@@ -1,7 +1,6 @@
 """Deterministic trust / evidence evaluator.
 
-Implements the read-time, code-defined rubrics specified in
-``backend/docs/specs/automated_trust_layer.md``. The evaluator answers
+Implements the read-time, code-defined rubrics. The evaluator answers
 "how much supporting provenance is attached to this record?", **not**
 "is this record scientifically correct?". The metric is therefore named
 ``evidence_completeness`` (never ``quality_score`` or
@@ -9,8 +8,7 @@ Implements the read-time, code-defined rubrics specified in
 
 This package contains the rubric foundation plus the first MVP rubric,
 ``computed_calculation``. Additional rubrics (kinetics, thermo,
-statmech, transport, experimental) land in later slices per
-§14 of the spec.
+statmech, transport, experimental) land in later slices.
 """
 
 from app.services.trust.evaluator import (

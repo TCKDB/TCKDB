@@ -18,7 +18,7 @@ machine-review module is still contracts-only, so its
 ``failed -> machine_review_failed`` / ``not_performed -> not_run`` semantics.
 
 No real LLM provider, no RAG, no migration, and no public ``trust.machine_review``
-exposure is involved. See ``backend/docs/specs/provisional_machine_review.md``.
+exposure is involved.
 """
 
 from __future__ import annotations
@@ -197,7 +197,7 @@ def _precheck_events(db_session: Session, submission_id: int) -> list[Submission
     )
 
 
-# The full set of deterministic trust/evidence fields the spec requires to be
+# The full set of deterministic trust/evidence fields required to be
 # unchanged by an advisory machine-review run. ``EvidenceEvaluation`` carries
 # no timestamps or runtime-generated fields, so nothing is excluded.
 _EVIDENCE_FIELDS = (

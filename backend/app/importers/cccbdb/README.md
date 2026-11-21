@@ -1821,5 +1821,14 @@ inspection but is not promised to satisfy the upload schema.
 
 ### What is persisted
 
-See `backend/docs/specs/cccbdb_importer.md` for what the importer
-persists and what stays as payload JSON.
+- The importer persists none of the thermo, statmech, geometry or
+  molecular-property payloads it builds from `experimental_species` pages;
+  they exist as in-memory results and archived JSON. Values with no
+  destination on the upload schemas (Hf(0 K), experimental vibrational
+  frequencies, experimental ZPE, raw rotational-constant units, per-value
+  reference labels) are kept in `result.external_source` with a matching
+  warning.
+- The database import (`app/services/cccbdb_molecular_property_import.py`,
+  `scripts/cccbdb_import_molecular_property_payloads.py`) accepts only
+  `MolecularPropertyObservationCreate` payloads. It is a dry run unless
+  `--commit` is passed, and requires `--license`.

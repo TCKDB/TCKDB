@@ -23,8 +23,7 @@ better than another.
 - **One quantity.** Gas-phase formation enthalpy at 298.15 K. Heat capacity
   intervals, entropy, coherent H/S/Cp sets and export are not covered.
 - **Not a recommendation.** A curator or a dataset release recommends
-  records; this endpoint applies no method preference to what is stored. See [`dataset_release_and_profiles.md`](https://github.com/TCKDB/TCKDB/blob/main/backend/docs/specs/dataset_release_and_profiles.md)
-  for attributed recommendations.
+  records; this endpoint applies no method preference to what is stored.
 
 ## The request
 

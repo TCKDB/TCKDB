@@ -2,9 +2,9 @@
 
 Exercises ``app/services/machine_review/curator_tasks.py``: building/upserting
 :class:`MachineReviewCuratorTask` rows from a machine-review inspection
-projection. These prove the creation policy (spec §6), the dedup/upsert
-identity (spec §4), the snapshot/refresh behaviour (spec §3/§6), the
-terminal-task guard (spec §5/§7), and the non-interference boundary (spec §9):
+projection. These prove the creation policy, the dedup/upsert identity, the
+snapshot/refresh behaviour, the terminal-task guard, and the non-interference
+boundary:
 the service writes only curator-task rows and never touches submission status,
 record review, or scientific state.
 

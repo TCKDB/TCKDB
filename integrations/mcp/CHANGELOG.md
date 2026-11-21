@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.16.3 - 2026-11-21
+
+No tool or behaviour changed. A docstring no longer points at a spec that is not in the repository.
+
 ## 0.16.2 - 2026-11-21
 
 No tool or behaviour changed. Docstrings and comments no longer cite a maintainer document that is not in the repository.

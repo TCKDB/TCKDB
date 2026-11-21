@@ -14,7 +14,7 @@ Policy choices enforced here (in addition to server-side validation):
   the corresponding ``*_ref`` handles.
 - ``include=internal_ids`` is rejected. The MCP never asks for DB ids.
 - ``include`` defaults to ``["species", "kinetics", "transition_states"]``
-  — the spec-documented default, and the three sub-arrays an agent
+  — the default, and the three sub-arrays an agent
   asking "show me everything about this reaction" almost always wants.
 """
 

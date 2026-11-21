@@ -410,7 +410,6 @@
    "tests/scripts/test_project_imaginary_modes.py": 3,
    "tests/scripts/test_prune_orphan_provenance.py": 2,
    "tests/scripts/test_qcschema_interchange_report.py": 2,
-   "tests/scripts/test_read_spec_names_resolve.py": 4,
    "tests/scripts/test_ruff_format_is_not_a_trap.py": 4,
    "tests/scripts/test_scan_coordinate_conformance_report.py": 3,
    "tests/scripts/test_sdf_enthalpy_reference.py": 1,

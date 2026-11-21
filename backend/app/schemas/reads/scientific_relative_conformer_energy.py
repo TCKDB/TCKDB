@@ -3,8 +3,7 @@
 ``POST /scientific/species-entries/{ref}/conformers/relative-energies`` and its ``/manifest`` download.
 
 How much higher or lower in energy each conformer of one species entry is than a conformer the caller *names*. A
-read: nothing is stored. See ``backend/docs/specs/relative_conformer_energy.md`` for the contract and
-``docs/guides/relative_conformer_energies.md`` for how to read an answer.
+read: nothing is stored. See ``docs/guides/relative_conformer_energies.md`` for how to read an answer.
 
 The request is strict: unknown fields are refused, references are public refs (never a database id), and the four
 scientific choices (the reference conformer, the energy kind, the level and the certificate) have no default, so

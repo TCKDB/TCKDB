@@ -9,8 +9,6 @@ The endpoint flattens every record type with a **direct**
 ``record_type`` discriminator, the record's public ref, and a small
 type-appropriate summary — clients follow the ``endpoint`` URL to
 fetch the full record.
-
-See ``backend/docs/specs/scientific_literature_reads.md``.
 """
 
 from __future__ import annotations

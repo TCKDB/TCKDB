@@ -8,8 +8,6 @@ Three public endpoints:
 
 Search records are at the conformer-group grain and reuse the same
 ``ScientificConformerGroupRecord`` shape as the group detail endpoint.
-
-See ``backend/docs/specs/scientific_conformer_reads.md``.
 """
 
 from __future__ import annotations
@@ -120,8 +118,7 @@ def scientific_conformers_search_get(
     AND-combines the supplied filters and returns conformer-group
     records in the same shape as the group detail endpoint. At least
     one meaningful filter is required; pure pagination / include /
-    review knobs are not enough — see
-    ``backend/docs/specs/scientific_conformer_reads.md``.
+    review knobs are not enough.
     """
     unknown = set(request.query_params.keys()) - _GET_ALLOWED_QS_KEYS
     if unknown:

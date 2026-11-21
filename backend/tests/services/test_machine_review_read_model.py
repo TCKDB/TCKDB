@@ -4,7 +4,7 @@ These prove the read-only projection in
 ``app/services/machine_review/read_model.py``: given zero or more
 machine-review passes whose findings were already mapped to one scientific
 record, compute the *latest* machine-review summary a future public
-``trust.machine_review`` fragment (spec §4/§10) could render — without any
+``trust.machine_review`` fragment could render — without any
 persistence, public exposure, or mutation of scientific/trust state.
 
 The read model under test is pure: tests build
@@ -178,7 +178,7 @@ def test_tie_break_prefers_higher_audit_event_id():
 
     The audit event id dominates the submission_id fallback: here the *lower*
     submission_id carries the *higher* audit event id, and the audit event id
-    decides. This is the spec's "tie-breaker = highest audit event id". The
+    decides: the tie-breaker is the highest audit event id. The
     older event's id is not discarded — it remains on its own review for the
     per-record history.
     """

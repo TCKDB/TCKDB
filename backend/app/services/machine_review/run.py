@@ -313,7 +313,7 @@ def run_machine_review_for_submission(
 
     Off mode is the one outcome with no event. The disabled provider returns
     ``not_run`` without calling anything, and the absence of an event already
-    means exactly that (``optional_llm_precheck.md`` section 13), so writing a
+    means exactly that, so writing a
     row to say "nothing happened" would only add noise a curator reads past.
 
     Every other failure is converted, not raised: ``machine_review_failed``

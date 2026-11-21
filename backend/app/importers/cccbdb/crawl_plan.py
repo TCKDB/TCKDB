@@ -1,7 +1,6 @@
 """Allowlisted CCCBDB URLs for the snapshot archive.
 
-The spec (``backend/docs/specs/cccbdb_importer.md``) restricts
-the importer to an explicit allowlist. No discovered link is followed,
+The importer is restricted to an explicit allowlist. No discovered link is followed,
 no formula is auto-fetched, and no rate-limit-busting expansion is
 performed by the snapshot command.
 

@@ -13,8 +13,7 @@ combination would be a new query plan, and the ones with no supporting index
 would be indistinguishable from the ones with.
 
 So the numeric axes live here instead, on four endpoints whose query shapes are
-finite, written down in ``backend/docs/specs/scientific_analytics_surface.md``,
-and backed by measured index evidence.
+finite and backed by measured index evidence.
 
 Everything happens in SQL
 -------------------------
@@ -36,7 +35,7 @@ traversal with a snapshot watermark (:mod:`app.services.scientific_read.keyset`)
 which is what makes a multi-page dataset build reproducible against a live
 database. The watermark bounds insertions; it does **not** freeze curation, and
 that limitation is documented rather than papered over — see the keyset module
-docstring and the spec.
+docstring.
 
 The read profile
 ----------------

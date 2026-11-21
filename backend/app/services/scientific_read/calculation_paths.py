@@ -8,8 +8,6 @@ behind a paginated, abuse-bound URL. The split keeps the search
 endpoint safe (no fan-out over thousands of points per record) while
 still giving callers a way to fetch the trajectory when they actually
 need it.
-
-See ``backend/docs/specs/scientific_calculation_path_includes.md``.
 """
 
 from __future__ import annotations

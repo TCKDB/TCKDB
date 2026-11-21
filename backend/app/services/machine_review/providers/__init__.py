@@ -8,8 +8,7 @@ factory, and the strict-parse / serialization boundary helpers.
 It performs **no** real online or local model calls, no persistence, no
 upload/precheck wiring, no automatic task creation, and no public exposure.
 Cloud/local modes validate configuration and then raise ``NotImplementedError``
-until the real providers land (spec
-``backend/docs/specs/machine_review_real_provider_plumbing.md``).
+until the real providers land.
 
 Config namespace: ``AI_REVIEW_ASSISTANT_MODE`` + ``LLM_PRECHECK_*`` (no parallel
 ``MACHINE_REVIEW_*`` env vars). Output contract:

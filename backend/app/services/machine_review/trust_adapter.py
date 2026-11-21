@@ -5,8 +5,7 @@ assembled **next to** the deterministic evidence/trust evaluator output —
 without altering, recomputing, or perturbing that output, and without touching
 the public :class:`~app.services.trust.models.TrustFragment` response shape.
 
-It is **private/internal plumbing only** (spec
-``backend/docs/specs/provisional_machine_review.md`` §4/§10). Nothing here is
+It is **private/internal plumbing only**. Nothing here is
 wired into any scientific read route, no ``include=machine_review`` flag is
 added, and the public ``trust`` fragment is unchanged. The envelope this builds
 is a *future-facing projection*, prepared so the direction is type-safe and
@@ -45,7 +44,7 @@ class InternalTrustEnvelopeWithMachineReview(BaseModel):
 
     Mirrors the public :class:`~app.services.trust.models.TrustFragment` field
     set exactly and adds a single ``machine_review`` block beside it. It exists
-    only to demonstrate the future assembly shape (spec §4 sample); no read
+    only to demonstrate the future assembly shape; no read
     route returns it. ``extra="forbid"`` plus ``frozen`` guarantee it can carry
     no provider-supplied mutation payload and cannot be mutated after
     construction.
