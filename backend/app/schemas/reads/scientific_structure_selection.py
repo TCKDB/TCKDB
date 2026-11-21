@@ -335,7 +335,7 @@ class StructureSelectionIntegrity(BaseModel):
 class StructureSelectionResponse(SelectionStepsAnswer):
     """The outcome of a structure selection and everything it rests on, public refs only.
 
-    ``outcome`` is the selection basis (13 values; see the spec). ``selected_refs`` holds every tied minimum, the
+    ``outcome`` is the selection basis (13 values). ``selected_refs`` holds every tied minimum, the
     qualified determinations, or the selected protocol's cohort id; it is empty where nothing is selected. The
     ``coverage`` block always says it is the caller's authorized population only, never a global-search certificate.
     ``integrity`` carries the manifest checksum: a checksum, not a signature.

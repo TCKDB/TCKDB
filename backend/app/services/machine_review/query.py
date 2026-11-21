@@ -14,7 +14,7 @@ Boundaries:
   fields, scientific records, deterministic evidence/trust, or any public
   fragment.
 * **Ordering parity.** Rows are returned newest-first in the *exact*
-  latest-selection order the classifier uses (policy §4): ``reviewed_at`` DESC,
+  latest-selection order the classifier uses: ``reviewed_at`` DESC,
   ``source_audit_event_id`` DESC NULLS LAST, ``id`` DESC NULLS LAST. Persisted
   rows always carry a unique non-null ``id``, so these three keys fully
   determine the order.

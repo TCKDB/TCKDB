@@ -374,7 +374,7 @@ def _build_record(
     # review history inline on the artifact record (the badge already
     # rides on the calculation context). Reserved for a future
     # extension; the include token is accepted today as a no-op so the
-    # grammar matches the spec's documented surface.
+    # grammar matches the documented surface.
     has_review_history = False
     if "review" in includes:
         # Defer per-event review history to a future surface. Today this

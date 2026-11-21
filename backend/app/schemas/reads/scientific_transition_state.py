@@ -414,7 +414,7 @@ class TransitionStateSaddlePointEvidence(BaseModel):
     == entry.id``) with ``type == freq`` and a ``calc_freq_result`` row,
     picking the latest by ``created_at`` with ``calculation.id`` as the
     tie-break — the same deterministic rule the trust rubric's
-    ``_ts_representative_freq_result`` uses (spec §8.5). That rule agrees
+    ``_ts_representative_freq_result`` uses. That rule agrees
     with this block whenever the representative freq calc is directly
     attached to the entry, which is the common case — but the rubric's own
     source-calculation discovery additionally walks one dependency hop

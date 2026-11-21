@@ -1422,7 +1422,7 @@ class CalculationResultSummary(BaseModel):
     branching. Sub-blocks for the other types are ``None``. The result
     summary intentionally omits internal integer ids and heavy point /
     mode arrays — those belong to ``include=scan``, ``include=irc``,
-    ``include=path_search`` (per the spec).
+    ``include=path_search``.
     """
 
     kind: Literal[

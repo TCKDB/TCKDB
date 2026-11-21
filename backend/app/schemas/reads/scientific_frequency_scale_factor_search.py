@@ -48,7 +48,7 @@ class FrequencyScaleFactorSearchRequest(BaseModel):
 
     Declared fields without an enforceable backing path remain accepted
     by request validation for compatibility, then fail closed with 422
-    ``unsupported_filter`` (see the spec).
+    ``unsupported_filter``.
     """
 
     # --- identity filters -------------------------------------------------

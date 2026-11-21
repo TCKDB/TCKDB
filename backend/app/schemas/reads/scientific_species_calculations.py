@@ -81,7 +81,7 @@ from app.schemas.reads.scientific_common import (
 class CalculationRanking(str, Enum):
     """Allowed v0 ranking values for species-calculation search.
 
-    See spec §Ranking semantics. ``lowest_energy`` is only legal when the
+    ``lowest_energy`` is only legal when the
     request also supplies ``calculation_type=sp`` or ``calculation_type=opt``.
     """
 

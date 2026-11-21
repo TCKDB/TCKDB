@@ -248,7 +248,7 @@ def test_ndjson_stream_structure(db_session):
 def test_ndjson_seed_resolved_eagerly_but_records_streamed(db_session):
     # The seed is resolved eagerly (so an invalid seed 422s before the
     # stream starts), but per-record JSON is produced lazily from the
-    # returned iterator — the streaming contract (spec §3).
+    # returned iterator — the streaming contract.
     import collections.abc
 
     with pytest.raises(ValueError, match="export_seed_unresolved"):

@@ -445,8 +445,7 @@ def _enforce_parameter_value_pairs(
 
     Values aren't independently meaningful — without a key the EAV
     EXISTS subquery would have to scan every parameter row. The 422
-    error codes match the spec:
-    ``parameter_value_requires_key`` and
+    error codes are ``parameter_value_requires_key`` and
     ``canonical_parameter_value_requires_key``.
     """
     if request.parameter_value is not None and request.parameter_key is None:

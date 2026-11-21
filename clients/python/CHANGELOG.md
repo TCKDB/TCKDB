@@ -2,7 +2,7 @@
 
 ## 0.210.2 - 2026-11-21
 
-No client behaviour changed. Two docstrings no longer cite a maintainer document that is not in the repository.
+No client behaviour changed. Two docstrings no longer cite a maintainer document that is not in the repository, and a builder docstring and `docs/builder_api_stability.md` name `docs/builder_api_mvp.md` where they said "the spec".
 
 ## 0.210.1 - 2026-11-21
 

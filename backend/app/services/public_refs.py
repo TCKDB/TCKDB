@@ -19,7 +19,7 @@ Two ref categories per spec:
   lowercase, prefixed by record type.
 
 Both forms produce a 26-character body after the prefix to match
-ULID character length. Per the spec, the bodies are URL-safe and
+ULID character length. The bodies are URL-safe and
 case-insensitive (always lowercase).
 
 Public refs are populated at row
@@ -389,7 +389,7 @@ def _canonical_literature(obj: Any) -> str | None:
     content-derived ref — two physically distinct catalog entries can
     share kind/title/year/journal (different volumes, different
     editions, errata, conference repeats). Returning ``None`` signals
-    the dispatcher to fall back to an opaque ref. This matches the spec:
+    the dispatcher to fall back to an opaque ref. The rule:
     content-derived where canonical content exists, opaque otherwise.
     """
     doi = _normalize_doi(obj.doi)

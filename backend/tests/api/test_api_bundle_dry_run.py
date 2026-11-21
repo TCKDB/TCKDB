@@ -4,7 +4,7 @@ POST /api/v1/bundles/dry-run
 
 Covers auth (anonymous/API key/invalid key), thermo + kinetics happy paths,
 schema-validation failure, and a no-mutation guarantee against the tables
-the spec calls out.
+a dry run must not touch.
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ def _load_bundle_dict(filename: str) -> dict:
 
 
 def _no_mutation_counts(session) -> dict[str, int]:
-    """Snapshot every table the spec requires dry-run not to touch."""
+    """Snapshot every table a dry run must not touch."""
     return {
         "species": session.scalar(select(func.count()).select_from(Species)) or 0,
         "species_entry": session.scalar(

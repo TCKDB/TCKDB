@@ -27,10 +27,10 @@ dataset must never require a code release.
 
 ## Backend specs and root plans leave the repository (Unreleased)
 
-- **Behaviour:** none. `backend/docs/specs/`, the root `plan.md` and `current_project_status.md` are no longer tracked; `.gitignore` lists their paths. They remain in git history. Code comments, API descriptions, published pages, `LICENSE-DATA` and `CITATION.cff` that cited them now state the fact they cited or drop the citation. The release runbook (`backend/docs/deployment/cutting_a_dataset_release.md`) gains a "Known operational boundaries" section carrying the two release limits that were recorded only in a spec.
+- **Behaviour:** none. `backend/docs/specs/`, the root `plan.md` and `current_project_status.md` are no longer tracked; `.gitignore` lists their paths. They remain in git history. Code comments, API descriptions, published pages, `LICENSE-DATA` and `CITATION.cff` that cited them now state the fact they cited or drop the citation, including section pointers such as `(spec §3)` and "see the spec". The release runbook (`backend/docs/deployment/cutting_a_dataset_release.md`) gains a "Known operational boundaries" section carrying the two release limits that were recorded only in a spec.
 - **Tests:** the guard that symbol names in the spec documents resolve is removed with the documents it checked. The release-metadata tests now read the licensing constraint and the operational boundaries from tracked files.
 - **Schema and migration:** none. No new environment variable.
-- **Versions:** `tckdb-schemas` 0.177.2, `tckdb-client` 0.210.2.
+- **Versions:** `tckdb-schemas` 0.177.2, `tckdb-client` 0.210.2, `tckdb-mcp` 0.16.3.
 
 ## Maintainer documents leave the repository (Unreleased)
 

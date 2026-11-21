@@ -4,7 +4,7 @@ The record-level ``status`` summarizes the *worst* finding, but the
 non-finding outcomes (the reviewer could not complete, or no review was
 performed) are not expressible as findings. This module turns a completion
 outcome plus the finding set into a single status, deterministically: the
-same inputs always yield the same status (spec §3 "State vs. severity").
+same inputs always yield the same status.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ def derive_machine_review_status(
 ) -> MachineReviewStatus:
     """Derive the single record-level status from an outcome and findings.
 
-    Rules (spec §3), in precedence order:
+    Rules, in precedence order:
 
     * ``outcome is failed``         -> ``machine_review_failed``
     * ``outcome is not_performed``  -> ``not_run``

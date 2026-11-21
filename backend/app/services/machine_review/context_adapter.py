@@ -19,8 +19,8 @@ not ``review_status``, ``trust_status``, ``is_certified``,
 ``evidence_completeness``, the check sets, ``hard_fail_reason``, scientific
 records, nor ``submission.status``. ``review_status`` and ``is_certified`` flow
 through only as **read-only context inputs**, never as machine-owned outputs:
-the machine reviewer never produces or changes them (policy §6; the hash
-context fields are documented as inputs in ``context_hash.py``).
+the machine reviewer never produces or changes them (the hash context
+fields are documented as inputs in ``context_hash.py``).
 
 No public exposure: nothing here is wired into a scientific read, no
 ``trust.machine_review`` is emitted, and the public ``TrustFragment`` is
@@ -78,7 +78,7 @@ def build_machine_review_evidence_context_from_trust(
     Reads the deterministic evidence the public
     :class:`~app.services.trust.models.TrustFragment` carries and projects it,
     **value-for-value**, onto the included-inputs contract
-    :class:`MachineReviewEvidenceContext` (policy §3.2). It preserves the
+    :class:`MachineReviewEvidenceContext`. It preserves the
     evidence exactly — the rubric name + version, the check outcomes (read from
     the fragment's ``checks`` map and split back into the four sets the digest
     contract carries, see :func:`_checks_with_outcome`),
@@ -112,7 +112,7 @@ def build_machine_review_evidence_context_from_trust(
         record_type=record_type,
         record_ref=resolved_ref,
         # Rubric name + integer version, both preserved (as separate fields) so a rubric version bump
-        # changes the digest (policy §3.2).
+        # changes the digest.
         rubric_name=evidence.get("rubric"),
         rubric_version=evidence.get("rubric_version"),
         passed_checks=_checks_with_outcome(evidence.get("checks"), "passed"),
@@ -122,7 +122,7 @@ def build_machine_review_evidence_context_from_trust(
             evidence.get("checks"), "not_applicable"
         ),
         hard_fail_reason=evidence.get("hard_fail_reason"),
-        # Read-only human-review context inputs (policy §6) — observed, not owned.
+        # Read-only human-review context inputs — observed, not owned.
         review_status=trust_fragment.review_status,
         is_certified=trust_fragment.is_certified,
         source_calculations=tuple(source_calculations),

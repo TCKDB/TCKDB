@@ -70,7 +70,7 @@ def test_same_context_produces_same_hash():
 
 
 def test_digest_returns_context_schema_version():
-    """The digest carries the schema version it was produced under (policy §3.4)."""
+    """The digest carries the schema version it was produced under."""
     digest = build_machine_review_context_hash(_context())
     assert isinstance(digest, MachineReviewContextDigest)
     assert digest.context_schema_version == MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION
@@ -265,7 +265,7 @@ def test_record_identity_is_part_of_the_hash():
 
 
 def test_review_status_inclusion_changes_hash_only_when_set():
-    """review_status affects the hash only when explicitly included (policy §6)."""
+    """review_status affects the hash only when explicitly included."""
     # Default (not included) is stable.
     assert _hash(_context()) == _hash(_context(review_status=None))
     # Including it is a distinct context.
@@ -330,7 +330,7 @@ def test_forbidden_fields_are_rejected_at_construction(forbidden):
     """Provenance/volatile/raw inputs cannot enter the context (extra=forbid).
 
     The builder therefore cannot hash one — they are rejected, not ignored
-    (policy §3.3). This is the documented behavior choice.
+    This is the documented behavior choice.
     """
     with pytest.raises(ValidationError):
         _context(**forbidden)

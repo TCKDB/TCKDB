@@ -31,7 +31,7 @@ Three responsibilities, kept separate so each is independently testable:
    :func:`~app.services.machine_review.mapping.map_findings_to_submission_records`):
    record-addressed findings map only to the *exact* linked record they name.
    A submission-level result is **never** fanned out across every linked
-   record (spec §6/§13). The mapper is the single source of truth for this.
+   record. The mapper is the single source of truth for this.
 
 3. **Project** (:func:`record_machine_reviews_from_submission_audit_event`):
    each mapped record becomes a

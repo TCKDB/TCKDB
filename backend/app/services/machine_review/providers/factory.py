@@ -13,7 +13,7 @@ provider:
   :class:`NotImplementedError` — no local call is implemented in this slice.
 * ``test``  -> refuses: the fake provider is test-only and is reached via
   :func:`~app.services.machine_review.providers.fake.build_fake_machine_review_provider`,
-  never through deployment config (spec §3/§5).
+  never through deployment config.
 
 Config validation lives here (the smallest compatible change) rather than in
 :class:`~app.api.config.Settings`: ``Settings`` already rejects an invalid

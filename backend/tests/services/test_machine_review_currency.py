@@ -178,7 +178,7 @@ def test_a_stored_version_above_the_current_one_is_stale_too():
 
 
 # --------------------------------------------------------------------------- #
-# Latest-selection ordering (policy §4)
+# Latest-selection ordering
 # --------------------------------------------------------------------------- #
 
 
@@ -242,7 +242,7 @@ def test_non_latest_reviews_are_historical_even_if_their_hash_matches():
 
 
 def test_latest_stale_makes_state_stale_even_if_older_is_current():
-    """State follows the latest review, not the best-matching one (policy §4)."""
+    """State follows the latest review, not the best-matching one."""
     current_old = _review(reviewed_at=_T0, id=1, context_hash="hash_current")
     stale_new = _review(
         reviewed_at=_T0 + timedelta(hours=2), id=2, context_hash="hash_old"

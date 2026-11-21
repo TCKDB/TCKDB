@@ -594,7 +594,7 @@ function MachineReviewInspectionPage() {
     const [submissionId, setSubmissionId] = useState<number | null>(null)
     const [showRaw, setShowRaw] = useState(false)
     // Maintainer observations are LOCAL ONLY in this slice — not persisted, not
-    // sent anywhere. They are a manual-evaluation scratchpad (see spec §9).
+    // sent anywhere. They are a manual-evaluation scratchpad.
     const [checks, setChecks] = useState<Record<string, boolean>>({})
     const [note, setNote] = useState("")
 

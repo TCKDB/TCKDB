@@ -158,7 +158,7 @@ from app.services.trust import (
     evaluate_loaded_calculation,
 )
 
-# Heavy include sections promised by the spec. Implemented tokens fall
+# Heavy include sections. Implemented tokens fall
 # through to per-section loaders; not-yet-implemented tokens listed in
 # ``_NOT_IMPLEMENTED_INCLUDE_TOKENS`` get a clear ``include_not_implemented_yet``
 # error rather than the generic ``unknown_include_token``.

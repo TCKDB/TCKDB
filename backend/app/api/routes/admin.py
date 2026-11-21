@@ -265,8 +265,7 @@ class AdminMachineReviewRecordInspection(BaseModel):
     ``public_ref``, resolved at read time, ``null`` when the record cannot be
     named (``applied_energy_correction`` has no such column, and the row may
     have been deleted since the review). See :mod:`app.services.record_refs`.
-    ``record_id`` remains the internal id, acceptable on an admin-only surface
-    (spec §3).
+    ``record_id`` remains the internal id, acceptable on an admin-only surface.
 
     The surface carries one identifier of each kind: ``record_id`` for
     the machine, ``record_public_ref`` for the reader. On this surface the
@@ -484,7 +483,7 @@ def run_fake_machine_review_for_record(
 
 _CURATOR_TASK_BASE = "/machine-review/curator-tasks"
 
-# Open workflow states, ordered to land first in the queue (spec §10).
+# Open workflow states, ordered to land first in the queue.
 _OPEN_STATES: tuple[MachineReviewCuratorTaskState, ...] = (
     MachineReviewCuratorTaskState.untriaged,
     MachineReviewCuratorTaskState.needs_curator_review,
@@ -497,7 +496,7 @@ class AdminCuratorTaskResponse(BaseModel):
 
     Distinct from any public scientific schema; carries no public
     ``trust.machine_review``. ``record_id`` is an internal id, acceptable here
-    because the surface is admin-only (spec §3).
+    because the surface is admin-only.
 
     ``record_public_ref`` is the same record's public ref, resolved at read
     time and never stored on the task. A curator working this queue has to get

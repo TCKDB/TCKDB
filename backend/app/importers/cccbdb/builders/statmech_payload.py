@@ -18,7 +18,7 @@ home on the existing schema):
 We deliberately do **not** route experimental vibrational frequencies
 into ``calc_freq_mode``: that table is calculation-scoped and creating
 a placeholder ``Calculation`` row just to host experimental data would
-violate the spec's "no fake calculations" rule.
+violate the "no fake calculations" rule.
 """
 
 from __future__ import annotations

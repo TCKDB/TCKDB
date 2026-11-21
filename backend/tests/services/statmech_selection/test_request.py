@@ -329,7 +329,7 @@ def test_a_standard_state_entropy_needs_no_energy_reference():
 
 
 def test_a_component_claim_accepts_a_temperature_domain_it_does_not_require():
-    """A component is qualified without a temperature (the spec's table says so) and accepts one if it is stated."""
+    """A component is qualified without a temperature and accepts one if it is stated."""
     bare = make(THERMAL, task="vibrational_component", observable=_DROP, conditions=_DROP)
     assert accepts(bare).conditions.temperature_domain_k is None
     stated = make(bare, conditions={"temperature_domain_k": {"min": 300.0, "max": 600.0}})

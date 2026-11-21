@@ -11,11 +11,11 @@ place. There is therefore intentionally **no** uniqueness constraint over
 ``(record_type, record_id)`` — multiple historical rows for the same record are
 the expected shape, and "which is live" is derived at read time by the currency
 classifier (latest by ``reviewed_at`` then ``source_audit_event_id`` then
-``id``), never stored as a mutable flag (policy §2/§4).
+``id``), never stored as a mutable flag.
 
 **Private.** This table is not wired into any public scientific read; no
 ``trust.machine_review`` is emitted and the public ``TrustFragment`` is
-untouched (policy §7 is future work). ``record_id`` is the raw internal id,
+untouched (public exposure is future work). ``record_id`` is the raw internal id,
 acceptable because the table is private — the same addressing as
 :class:`~app.db.models.submission.SubmissionRecordLink` and
 :class:`~app.db.models.machine_review_curator_task.MachineReviewCuratorTask`.
@@ -87,7 +87,7 @@ class RecordMachineReviewRow(Base, TimestampMixin):
     model: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     provider: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
 
-    # --- currency key (policy §3.4/§3.5) -------------------------------------
+    # --- currency key -------------------------------------------------------
     context_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     context_schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
     # The prompt and the rubric are each a stable name beside an integer version,
@@ -127,7 +127,7 @@ class RecordMachineReviewRow(Base, TimestampMixin):
     # append-only, projection-only intent of the table.
 
     __table_args__ = (
-        # Latest-selection access path (policy §4): newest review per record.
+        # Latest-selection access path: newest review per record.
         Index(
             "ix_record_machine_review_record_reviewed_at",
             "record_type",

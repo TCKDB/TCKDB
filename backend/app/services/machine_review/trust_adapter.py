@@ -44,7 +44,7 @@ class InternalTrustEnvelopeWithMachineReview(BaseModel):
 
     Mirrors the public :class:`~app.services.trust.models.TrustFragment` field
     set exactly and adds a single ``machine_review`` block beside it. It exists
-    only to demonstrate the future assembly shape (spec §4 sample); no read
+    only to demonstrate the future assembly shape; no read
     route returns it. ``extra="forbid"`` plus ``frozen`` guarantee it can carry
     no provider-supplied mutation payload and cannot be mutated after
     construction.

@@ -82,7 +82,7 @@ def molecular_formula_expr(smiles_column):
 
 
 def reject_client_sort(sort: str | None) -> None:
-    """Reject any client-supplied sort (v0 rule, per spec §Sort vocabulary).
+    """Reject any client-supplied sort (v0 rule).
 
     Raises ValueError → 422 ``client_sort_not_supported``.
     """

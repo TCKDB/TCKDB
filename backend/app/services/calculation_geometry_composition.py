@@ -320,7 +320,7 @@ def assert_calculation_geometry_composition(
     ``calculation_input_geometry`` or ``calculation_output_geometry`` row calls
     it, on both the producer-explicit branch and the ``geometry_key`` /
     fallback branch. Checking only the explicit branch would leave the second
-    reproduction in the spec open: on the computed-reaction and PDep bundles
+    reproduction open: on the computed-reaction and PDep bundles
     the fallback id is not fixed, and a transition state's calculations resolve
     ``geometry_key`` against a bundle-global map that the wire schema narrows
     for a species' calculations and not for a transition state's.

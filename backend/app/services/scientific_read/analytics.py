@@ -35,7 +35,7 @@ traversal with a snapshot watermark (:mod:`app.services.scientific_read.keyset`)
 which is what makes a multi-page dataset build reproducible against a live
 database. The watermark bounds insertions; it does **not** freeze curation, and
 that limitation is documented rather than papered over — see the keyset module
-docstring and the spec.
+docstring.
 
 The read profile
 ----------------

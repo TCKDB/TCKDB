@@ -37,8 +37,8 @@ from tckdb_schemas.fragments.version import VersionRef
 class EvidenceBadge(str, Enum):
     """Human-facing evidence-completeness label.
 
-    Mirrors §5.4 / §6.1 of the spec. ``hard_failed`` is the only value
-    that may be produced independent of the completeness ratio — it is
+    ``hard_failed`` is the only value that may be produced independent of
+    the completeness ratio — it is
     triggered by a discrete structural failure signal (see
     :class:`HardFailReason`).
     """
@@ -195,8 +195,7 @@ class EvidenceCheckSpec(BaseModel):
     paired with a pure ``runner`` callable that takes the loaded record
     graph and returns an :class:`EvidenceOutcome`. Runners must not
     issue their own database queries — that constraint is what keeps
-    the evaluator deterministic and free of N+1 surprises (see §12 of
-    the spec).
+    the evaluator deterministic and free of N+1 surprises.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True, frozen=True)
@@ -245,7 +244,7 @@ class EvidenceCheckResult(BaseModel):
         """Return True when this check is part of the completeness ratio.
 
         Warning-kind checks and ``not_applicable`` outcomes never
-        contribute weight, matching §5.5 of the spec.
+        contribute weight.
         """
         if self.kind is EvidenceCheckKind.warning:
             return False
@@ -292,7 +291,7 @@ class EvidenceEvaluation(BaseModel):
       excludes ``not_applicable`` and warning-kind checks.
     * ``evidence_completeness`` — ``passed_weight / possible_weight``,
       rounded to four decimals. Never exposed as a percentage by the
-      evaluator (see §6 of the spec).
+      evaluator.
     * ``is_certified`` — always ``False`` for automated evaluations.
       Reserved for curator action (§6.2).
     * ``hard_fail_reason`` — populated only when a structural hard-fail
@@ -386,7 +385,7 @@ class TrustLLMPrecheck(BaseModel):
 
 
 class TrustFragment(BaseModel):
-    """Read-fragment shape per §10.1 of the spec.
+    """Read-fragment shape.
 
     Built from an :class:`EvidenceEvaluation` plus the record's
     :class:`~app.db.models.record_review.RecordReview` row (when
@@ -531,7 +530,7 @@ COMPLETENESS_THRESHOLDS: tuple[tuple[float, EvidenceBadge], ...] = (
     (0.50, EvidenceBadge.partial),
     (0.25, EvidenceBadge.sparse),
 )
-"""Default thresholds per §6.1 of the spec, in descending order.
+"""Default thresholds, in descending order.
 
 ``well_supported`` additionally requires every ``required`` check to
 have passed. Sub-``sparse`` ratios collapse to ``unsupported``.

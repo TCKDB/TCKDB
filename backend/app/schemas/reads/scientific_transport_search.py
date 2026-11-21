@@ -56,7 +56,7 @@ class TransportSearchRequest(BaseModel):
     The ORM ``transport`` row has no ``model_kind`` column; the
     closest model-class signal is ``scientific_origin``
     (computed / experimental / estimated), surfaced here as the
-    ``model_kind`` filter name to match the spec's vocabulary. The
+    ``model_kind`` filter name. The
     public ``ScientificOriginKind`` enum drives the column lookup.
     """
 

@@ -11,8 +11,7 @@ Conformer concepts split three ways:
 - ``conformer_observation`` — provenance / upload row; reviewable;
   carries ``co_…`` ref.
 - ``conformer_selection`` — curation row keyed by selection_kind;
-  **not reviewable** and **has no public ref column today** (see open
-  question 13.1 in the spec). Surfaced via an integer ``conformer_selection_id``
+  **not reviewable** and **has no public ref column today**. Surfaced via an integer ``conformer_selection_id``
   that is policy-gated by the internal-ID visibility helper.
 
 Large JSON blobs (``representative_fingerprint_json``,

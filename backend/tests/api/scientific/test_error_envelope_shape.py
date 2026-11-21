@@ -8,7 +8,7 @@ These tests exist so that the envelope cannot drift back toward the
 older draft ``{"error": {"code", "message", "legal_values"}}`` shape
 without a coordinated, cross-surface change. Adding a new error
 category here is fine; changing the shape is not, without updating
-the spec, the guides, and ``tckdb-client`` together.
+the guides and ``tckdb-client`` together.
 """
 
 from __future__ import annotations

@@ -197,7 +197,7 @@ def _precheck_events(db_session: Session, submission_id: int) -> list[Submission
     )
 
 
-# The full set of deterministic trust/evidence fields the spec requires to be
+# The full set of deterministic trust/evidence fields required to be
 # unchanged by an advisory machine-review run. ``EvidenceEvaluation`` carries
 # no timestamps or runtime-generated fields, so nothing is excluded.
 _EVIDENCE_FIELDS = (

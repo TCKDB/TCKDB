@@ -75,7 +75,7 @@ class NetworkSolveSearchRequest(BaseModel):
     # ``solve_method`` matches NetworkSolve.me_method (free-text ME algorithm).
     solve_method: str | None = Field(default=None, max_length=128)
 
-    # --- T/P envelope filters (overlap semantics, see spec §11.x) --------
+    # --- T/P envelope filters (overlap semantics) -------------------------
     temperature_min: float | None = None
     temperature_max: float | None = None
     pressure_min: float | None = None
