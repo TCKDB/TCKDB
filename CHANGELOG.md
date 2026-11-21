@@ -29,6 +29,11 @@ dataset must never require a code release.
 - **Behaviour:** an archive restore treats the catalogue rows, their literature and its authors as migration seeds, like `reaction_family`.
 - **Schema and migration:** new revision `a6fc04f5667e` on top of `a7c3e1f5b942`: six tables (`method_catalogue`, `method_catalogue_key`, `method_catalogue_literature`, `basis_set_catalogue`, `basis_set_catalogue_key`, `basis_set_catalogue_literature`) and three enums (`catalogue_method_kind`, `basis_set_role`, `catalogue_reference_role`). The upgrade fills them from the seed. The downgrade drops them and keeps the literature and author rows. New public-ref prefixes `mcat_` and `bcat_` (content-derived from the key). No new environment variable. No distributed package changed.
 
+## Public reads and pages carry a literature DOI only when the registry resolved it (Unreleased)
+
+- **Behaviour:** the `doi` of a literature citation embedded in a scientific record (`LiteratureSummary`) and of `GET /scientific/literature/{ref}` (`identifiers.doi`) is served only when the row's metadata was resolved from the DOI registry (`title_source = resolved_metadata`); it is `null` for a depositor-supplied or unrecorded origin. The network CHEMKIN export writes a DOI beside its literature ref under the same rule.
+- **Behaviour:** the site prints a registry-resolved DOI after the citation as a `https://doi.org/<doi>` link. A depositor-typed DOI is still never printed.
+
 ## tckdb-chemkin installs and imports from its own wheel (Unreleased)
 
 - **Behaviour:** `tckdb-chemkin` declares `rdkit>=2024.3`, so `pip install tckdb-chemkin` followed by `import tckdb_chemkin` works in a clean environment. Without it the import failed with `ModuleNotFoundError: rdkit`. An environment with conda's RDKit already satisfies the requirement.
