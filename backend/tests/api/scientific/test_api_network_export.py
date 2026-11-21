@@ -716,7 +716,7 @@ def test_the_request_echo_says_whether_reported_rates_were_asked_for(client, db_
     assert asked["request"]["include_reported"] is True
 
 
-def test_a_literature_doi_is_written_beside_its_ref_in_the_chemkin_annotation(client, db_session, world):
+def _export_with_literature(client, db_session, world, *, title_source):
     from sqlalchemy import select
 
     from app.db.models.literature import Literature
@@ -724,8 +724,27 @@ def test_a_literature_doi_is_written_beside_its_ref_in_the_chemkin_annotation(cl
     solve, det, fit = _reported_world(db_session, world)
     literature = db_session.scalars(select(Literature).where(Literature.id == solve.literature_id)).one()
     literature.doi = "10.1000/example.doi"
+    literature.title_source = title_source
     db_session.flush()
     out = export(client, world, manifest_of(client, world), det, [fit], format="chemkin", include_reported=True).json()
-    text = out["files"]["chem.inp"]
+    return literature, out["files"]["chem.inp"]
+
+
+def test_a_resolved_literature_doi_is_written_beside_its_ref_in_the_chemkin_annotation(client, db_session, world):
+    from app.db.models.common import LiteratureTitleSource
+
+    literature, text = _export_with_literature(
+        client, db_session, world, title_source=LiteratureTitleSource.resolved_metadata
+    )
     assert f"literature {literature.public_ref} doi:10.1000/example.doi]" in text
     assert f"({literature.public_ref} doi:10.1000/example.doi)" in text.splitlines()[0]
+
+
+def test_a_depositor_typed_literature_doi_is_left_out_of_the_chemkin_annotation(client, db_session, world):
+    from app.db.models.common import LiteratureTitleSource
+
+    literature, text = _export_with_literature(
+        client, db_session, world, title_source=LiteratureTitleSource.depositor_supplied
+    )
+    assert f"literature {literature.public_ref}]" in text
+    assert "10.1000/example.doi" not in text
