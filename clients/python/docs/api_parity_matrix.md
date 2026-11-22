@@ -13,8 +13,8 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 |---|---|
 | typed | 132 |
 | raw_only | 109 |
-| not_applicable | 51 |
-| **total** | **292** |
+| not_applicable | 52 |
+| **total** | **293** |
 
 ## Typed coverage
 
@@ -402,6 +402,7 @@ Admin, auth, and curator-internal surface that a producer/consumer client is not
 | `GET /api/v1/species-entries/{species_entry_id}/reviews` | yes | — | — | — | — |
 | `POST /api/v1/species-entries/{species_entry_id}/reviews` | yes | — | — | — | — |
 | `GET /api/v1/submissions/for-review` | yes | — | — | — | — |
+| `GET /api/v1/submissions/machine-review-overview` | yes | — | — | — | — |
 | `POST /api/v1/submissions/{submission_id}/approve` | yes | — | — | — | — |
 | `POST /api/v1/submissions/{submission_id}/reject` | yes | — | — | — | — |
 | `POST /api/v1/submissions/{submission_ref}/rights-attestations` | yes | — | — | — | — |

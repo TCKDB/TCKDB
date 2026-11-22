@@ -442,6 +442,17 @@
             ],
             "title": "Assigned To"
           },
+          "assigned_to_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned To Username"
+          },
           "container_ref": {
             "anyOf": [
               {
@@ -468,9 +479,36 @@
             "title": "Created At",
             "type": "string"
           },
+          "finding": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AdminMachineReviewFindingRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finding_audit_event_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Finding Audit Event Ids",
+            "type": "array"
+          },
           "finding_fingerprint": {
             "title": "Finding Fingerprint",
             "type": "string"
+          },
+          "finding_match": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CuratorTaskFindingMatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "findings_count": {
             "title": "Findings Count",
@@ -547,6 +585,17 @@
               }
             ],
             "title": "Resolved By"
+          },
+          "resolved_by_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved By Username"
           },
           "source_audit_event_id": {
             "anyOf": [
@@ -705,14 +754,94 @@
         "title": "AdminEnergyCorrectionSchemeProvenanceResponse",
         "type": "object"
       },
+      "AdminMachineReviewFindingRead": {
+        "additionalProperties": false,
+        "description": "One finding exactly as the machine reviewer wrote it.\n\n``message``, ``recommended_action`` and ``evidence_keys`` are the reviewer's\nown machine-generated text. ``curator_task_id`` is the curator task whose\nfingerprint is this finding, ``null`` for an ``info`` finding and before\ntasks are built. The record the finding concerns is the enclosing record;\nthe matching key is not published.",
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/MachineReviewCategory"
+          },
+          "curator_task_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Curator Task Id"
+          },
+          "evidence_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence Keys",
+            "type": "array"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "recommended_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Action"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/app__db__models__common__MachineReviewSeverity"
+          }
+        },
+        "required": [
+          "severity",
+          "category",
+          "message"
+        ],
+        "title": "AdminMachineReviewFindingRead",
+        "type": "object"
+      },
       "AdminMachineReviewRecordInspection": {
         "additionalProperties": false,
-        "description": "Admin-only machine-review projection for one linked record.\n\n``record_public_ref`` is the handle a human follows -- the record's own\n``public_ref``, resolved at read time, ``null`` when the record cannot be\nnamed (``applied_energy_correction`` has no such column, and the row may\nhave been deleted since the review). See :mod:`app.services.record_refs`.\n``record_id`` remains the internal id, acceptable on an admin-only surface.\n\nThe surface carries one identifier of each kind: ``record_id`` for\nthe machine, ``record_public_ref`` for the reader. On this surface the\nmatching key is always ``str(record_id)``, so it is not published as a\nsecond row-id-shaped value. A maintainer chasing a\nfinding that did *not* map is served elsewhere -- unmapped findings never\nreach ``record_summaries``, and ``mapping`` already quotes the offending\nref in ``mapping_warnings``.",
+        "description": "Admin-only machine-review projection for one linked record.\n\n``record_public_ref`` is the handle a human follows -- the record's own\n``public_ref``, resolved at read time, ``null`` when the record cannot be\nnamed (``applied_energy_correction`` has no such column, and the row may\nhave been deleted since the review). See :mod:`app.services.record_refs`.\n``container_type`` / ``container_ref`` name the page that shows the record\nwhen it has none of its own, both ``null`` together (see\n:mod:`app.services.record_containers`).\n``record_id`` remains the internal id, acceptable on an admin-only surface.\n\nThe surface carries one identifier of each kind: ``record_id`` for\nthe machine, ``record_public_ref`` for the reader. On this surface the\nmatching key is always ``str(record_id)``, so it is not published as a\nsecond row-id-shaped value. A maintainer chasing a\nfinding that did *not* map is served by ``unmapped_findings`` on the\nenclosing response; those never reach ``record_summaries``.\n\n``all_record_reviews`` holds every review that mapped to this record,\nnewest first.",
         "properties": {
+          "all_record_reviews": {
+            "items": {
+              "$ref": "#/components/schemas/AdminMachineReviewRecordReviewRead"
+            },
+            "title": "All Record Reviews",
+            "type": "array"
+          },
           "all_record_reviews_count": {
             "default": 0,
             "title": "All Record Reviews Count",
             "type": "integer"
+          },
+          "container_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Ref"
+          },
+          "container_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubmissionRecordType"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "latest_summary": {
             "$ref": "#/components/schemas/MachineReviewRecordSummary"
@@ -749,6 +878,210 @@
           "latest_summary"
         ],
         "title": "AdminMachineReviewRecordInspection",
+        "type": "object"
+      },
+      "AdminMachineReviewRecordReviewRead": {
+        "additionalProperties": false,
+        "description": "One machine-review pass over one record (one stored review event).",
+        "properties": {
+          "audit_event_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Event Id"
+          },
+          "curator_priority": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CuratorPriority"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/AdminMachineReviewFindingRead"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "is_latest": {
+            "default": false,
+            "title": "Is Latest",
+            "type": "boolean"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/app__db__models__common__MachineReviewStatus"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "AdminMachineReviewRecordReviewRead",
+        "type": "object"
+      },
+      "AdminMachineReviewRunRead": {
+        "additionalProperties": false,
+        "description": "One stored reviewer run over the whole submission.\n\n``summary`` is the reviewer's own text, or the redacted failure text on a\nfailed run. ``parsed`` is false when the stored payload could not be read;\nthen ``status`` is ``null`` and ``parse_warnings`` says why.",
+        "properties": {
+          "audit_event_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Event Id"
+          },
+          "curator_priority": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CuratorPriority"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "findings_count": {
+            "default": 0,
+            "title": "Findings Count",
+            "type": "integer"
+          },
+          "highest_severity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__db__models__common__MachineReviewSeverity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mapped_findings_count": {
+            "default": 0,
+            "title": "Mapped Findings Count",
+            "type": "integer"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "parse_warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Parse Warnings",
+            "type": "array"
+          },
+          "parsed": {
+            "title": "Parsed",
+            "type": "boolean"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__db__models__common__MachineReviewStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "unmapped_findings_count": {
+            "default": 0,
+            "title": "Unmapped Findings Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "parsed"
+        ],
+        "title": "AdminMachineReviewRunRead",
         "type": "object"
       },
       "AdminMachineReviewRunResponse": {
@@ -823,6 +1156,84 @@
           "audit_event_recorded"
         ],
         "title": "AdminMachineReviewRunResponse",
+        "type": "object"
+      },
+      "AdminMachineReviewUnmappedFindingRead": {
+        "additionalProperties": false,
+        "description": "A finding that did not map to any linked record, and why.\n\n``cited_record_type`` and ``cited_record_ref`` are what the reviewer wrote,\nverbatim: free reviewer text, not a public ref (for a finding addressed by\nrecord id it is that id as text).",
+        "properties": {
+          "audit_event_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Event Id"
+          },
+          "category": {
+            "$ref": "#/components/schemas/MachineReviewCategory"
+          },
+          "cited_record_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cited Record Ref"
+          },
+          "cited_record_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cited Record Type"
+          },
+          "evidence_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence Keys",
+            "type": "array"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/UnmappedReason"
+          },
+          "recommended_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Action"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/app__db__models__common__MachineReviewSeverity"
+          }
+        },
+        "required": [
+          "reason",
+          "severity",
+          "category",
+          "message"
+        ],
+        "title": "AdminMachineReviewUnmappedFindingRead",
         "type": "object"
       },
       "AdminObservationIdentityAttachRequest": {
@@ -964,7 +1375,7 @@
       },
       "AdminSubmissionMachineReviewInspectionResponse": {
         "additionalProperties": false,
-        "description": "Admin-only machine-review inspection response for one submission.\n\nPrivate/debugging shape — intentionally distinct from the public\nscientific ``TrustFragment``. ``record_summaries`` carries one entry per\nlinked record that received at least one mapped machine-review finding;\nsubmission-scoped, unlinked, and sibling findings appear only in the\ndiagnostics counters/warnings, never as a record summary.",
+        "description": "Admin-only machine-review inspection response for one submission.\n\nPrivate/debugging shape — intentionally distinct from the public\nscientific ``TrustFragment``. ``record_summaries`` carries one entry per\nlinked record that received at least one mapped machine-review finding;\nsubmission-scoped, unlinked, and sibling findings appear only in\n``unmapped_findings`` and the diagnostics, never as a record summary.\n``runs`` lists every stored reviewer run, newest first.",
         "properties": {
           "mapping_warnings": {
             "default": [],
@@ -990,6 +1401,13 @@
             "title": "Record Summaries",
             "type": "array"
           },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/AdminMachineReviewRunRead"
+            },
+            "title": "Runs",
+            "type": "array"
+          },
           "source_audit_event_ids": {
             "default": [],
             "items": {
@@ -1001,6 +1419,13 @@
           "submission_id": {
             "title": "Submission Id",
             "type": "integer"
+          },
+          "unmapped_findings": {
+            "items": {
+              "$ref": "#/components/schemas/AdminMachineReviewUnmappedFindingRead"
+            },
+            "title": "Unmapped Findings",
+            "type": "array"
           },
           "unmapped_findings_count": {
             "default": 0,
@@ -17709,6 +18134,24 @@
         "title": "CuratorSummary",
         "type": "object"
       },
+      "CuratorTaskFindingMatch": {
+        "description": "How the finding behind a curator task was recovered (response-side only).\n\n* ``source_audit_event`` -- the fingerprint matched inside the one event the\n  task records as its source.\n* ``submission_audit_events`` -- the task records no source event (or its\n  event does not hold the finding); the fingerprint matched in other\n  machine-review events of the same submission.\n* ``not_found`` -- no stored review of the submission produces this\n  fingerprint.",
+        "enum": [
+          "source_audit_event",
+          "submission_audit_events",
+          "not_found"
+        ],
+        "title": "CuratorTaskFindingMatch",
+        "type": "string"
+      },
+      "CuratorTaskInclude": {
+        "description": "Optional expansions of a curator-task list item (query-side only).",
+        "enum": [
+          "findings"
+        ],
+        "title": "CuratorTaskInclude",
+        "type": "string"
+      },
       "DatasetReleaseStatus": {
         "description": "Lifecycle of a citable dataset release.\n\n``draft``      being assembled; selections may still be appended and no\n               manifest has been frozen. Not served under the curated\n               profile and not citable.\n``published``  the manifest is frozen and checksummed. The release is\n               citable and its bytes are reproducible.\n``withdrawn``  the release was published and later retracted. The row and\n               its manifest are **kept** (a citation must never dangle);\n               the status tells a consumer not to rely on it.",
         "enum": [
@@ -31819,6 +32262,24 @@
         "title": "LookupResultItem",
         "type": "object"
       },
+      "MachineReviewCategory": {
+        "description": "Category vocabulary for machine-review findings.",
+        "enum": [
+          "provenance",
+          "units",
+          "geometry",
+          "kinetics",
+          "thermo",
+          "statmech",
+          "transport",
+          "transition_state_validation",
+          "calculation_parameters",
+          "consistency",
+          "schema_gap"
+        ],
+        "title": "MachineReviewCategory",
+        "type": "string"
+      },
       "MachineReviewCuratorTaskState": {
         "description": "Human triage state over an exact, mapped machine-review finding.\n\nThis is the *fourth* review axis and is intentionally distinct from\n:class:`MachineReviewStatus` (advisory machine output),\n:class:`RecordReviewStatus` (authoritative human review), and\n:class:`SubmissionStatus` (submission lifecycle / moderation). A curator\ntask tracks *whether a human has handled a machine finding* — it never\napproves, rejects, certifies, or otherwise mutates a record.\n\nThe first three are **open** states (work outstanding); the last three\nare **terminal/resolved** states (see :meth:`is_terminal`).",
         "enum": [
@@ -31830,6 +32291,15 @@
           "dismissed_machine_finding"
         ],
         "title": "MachineReviewCuratorTaskState",
+        "type": "string"
+      },
+      "MachineReviewCuratorTaskStateGroup": {
+        "description": "Query-side grouping of :class:`MachineReviewCuratorTaskState`.\n\nNot a column and never stored: ``open`` is every non-terminal state and\n``terminal`` every terminal one, derived from\n:meth:`MachineReviewCuratorTaskState.terminal_states` so the two cannot\ndrift apart.",
+        "enum": [
+          "open",
+          "terminal"
+        ],
+        "title": "MachineReviewCuratorTaskStateGroup",
         "type": "string"
       },
       "MachineReviewOrchestrationStatus": {
@@ -42720,6 +43190,37 @@
         "title": "PaginatedResponse[RecordDeletionSummary]",
         "type": "object"
       },
+      "PaginatedResponse_SubmissionMachineReviewOverviewRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionMachineReviewOverviewRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "skip": {
+            "title": "Skip",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "skip",
+          "limit"
+        ],
+        "title": "PaginatedResponse[SubmissionMachineReviewOverviewRead]",
+        "type": "object"
+      },
       "Pagination": {
         "description": "Echoed pagination block per L5.\n\n``total``     post-filter match count, before page slicing.\n``returned``  actual length of ``records``.\n``mode``      which contract served this page: ``offset`` (random access) or ``cursor`` (stable traversal).\n\nTwo ways to move through a list\n-------------------------------\n``offset`` is random access: \"page N of M\". It is deterministic only for a static corpus. An upload that sorts\nabove the reader's position, or a record that leaves the visible set, shifts every later page, and the reader\nsilently skips or repeats a record. ``next_cursor`` (a field of the response, beside this block) is the stable\ntraversal: pass it back as ``cursor`` for the following page. It is ``null`` on the last page. A cursor pins the\ntraversal to the records that existed when it began; it does not freeze review state. For an immutable, citable\nset read a published dataset release. ``offset`` and ``cursor`` cannot be combined.",
         "properties": {
@@ -48626,6 +49127,59 @@
         "title": "ReviewEligibilityIn",
         "type": "object"
       },
+      "ReviewQueueMachineFindingsRead": {
+        "additionalProperties": false,
+        "description": "What the machine reviewer last said about one record, and the open work on it.\n\n``status`` is ``not_run`` (with zero counts and no ids) when no review has\nmapped a finding to this record: a record is judged only by findings that\nname it, never by a sibling's or the submission's. ``open_task_ids`` are the\ncurator tasks on the record in an open state, sorted.",
+        "properties": {
+          "findings_count": {
+            "default": 0,
+            "title": "Findings Count",
+            "type": "integer"
+          },
+          "highest_severity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__db__models__common__MachineReviewSeverity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "open_task_count": {
+            "default": 0,
+            "title": "Open Task Count",
+            "type": "integer"
+          },
+          "open_task_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Open Task Ids",
+            "type": "array"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/app__db__models__common__MachineReviewStatus"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ReviewQueueMachineFindingsRead",
+        "type": "object"
+      },
       "ReviewQueuePageRead": {
         "additionalProperties": false,
         "description": "One page of the subject-grouped review queue.\n\n``offset``/``limit`` count SUBJECTS. ``subject_total`` and\n``record_total`` are computed over every row matching the filter, not\njust this page -- both are honest counts, never estimates, because\nbuilding this page required reading every matching row to know where\nthe subject boundaries fall. See :func:`app.services.review_queue.\nlist_review_queue`.",
@@ -48745,6 +49299,158 @@
           "participant_index"
         ],
         "title": "ReviewQueueReactionParticipant",
+        "type": "object"
+      },
+      "ReviewQueueRecordRead": {
+        "description": "A queue record: the review row plus its machine-review summary.",
+        "properties": {
+          "actor_may_approve": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether the signed-in reader may approve this record: false when the self-approval rule would refuse them (record_self_approval). Present on the review queue only; null on an approved or rejected row and on every other route.",
+            "title": "Actor May Approve"
+          },
+          "container_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The public handle naming the record given by container_type, resolved at read time. This is what to open to see a record that has no page of its own: an applied_energy_correction cannot be named at all, but 'a correction on species entry spc_...' still says where to look. Null under exactly the conditions container_type is null.",
+            "title": "Container Ref"
+          },
+          "container_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubmissionRecordType"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The record type of the record this one belongs to and is displayed inside, e.g. species_entry for a thermo or statmech, reaction_entry for a kinetics or transition state. Null for any of four reasons, all of them normal answers rather than errors: the record type has no owning parent (species, reaction and network are roots of their own trees); the record itself does not exist; the record names no owner (not reachable for any type, since every owning key is NOT NULL or covered by an exclusive-or constraint); or the owner does not exist. Always null or non-null together with container_ref."
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "first_approved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Approved At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "machine_findings": {
+            "$ref": "#/components/schemas/ReviewQueueMachineFindingsRead"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "record_id": {
+            "title": "Record Id",
+            "type": "integer"
+          },
+          "record_public_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The public handle naming this record, resolved at read time. Null when the record cannot be named: its table has no public_ref column (applied_energy_correction), or the row does not exist. Prefer this over record_id, which is an internal row id and resolves through no public route.",
+            "title": "Record Public Ref"
+          },
+          "record_type": {
+            "$ref": "#/components/schemas/SubmissionRecordType"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "reviewed_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed By"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
+          },
+          "submission_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "record_type",
+          "record_id",
+          "status",
+          "machine_findings"
+        ],
+        "title": "ReviewQueueRecordRead",
         "type": "object"
       },
       "ReviewQueueSubjectChemistry": {
@@ -48896,7 +49602,7 @@
           },
           "records": {
             "items": {
-              "$ref": "#/components/schemas/RecordReviewRead"
+              "$ref": "#/components/schemas/ReviewQueueRecordRead"
             },
             "title": "Records",
             "type": "array"
@@ -64932,6 +65638,182 @@
         "title": "SubmissionKind",
         "type": "string"
       },
+      "SubmissionMachineReviewLatestRunRead": {
+        "description": "The newest machine-review run of a submission, in brief.\n\n``parsed`` is false when the stored payload could not be read; ``status`` is\nthen ``null``. ``highest_severity`` is taken over every finding in the run.",
+        "properties": {
+          "audit_event_id": {
+            "title": "Audit Event Id",
+            "type": "integer"
+          },
+          "findings_count": {
+            "default": 0,
+            "title": "Findings Count",
+            "type": "integer"
+          },
+          "highest_severity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__db__models__common__MachineReviewSeverity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "parsed": {
+            "title": "Parsed",
+            "type": "boolean"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__db__models__common__MachineReviewStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "audit_event_id",
+          "parsed"
+        ],
+        "title": "SubmissionMachineReviewLatestRunRead",
+        "type": "object"
+      },
+      "SubmissionMachineReviewOverviewRead": {
+        "description": "One row of the curator submissions list with its machine-review state.\n\n``title`` is supplied by the depositor: show it only as \"as deposited\",\nnever as the archive's own wording.",
+        "properties": {
+          "created_by": {
+            "title": "Created By",
+            "type": "integer"
+          },
+          "created_by_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Username"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "machine_review": {
+            "$ref": "#/components/schemas/SubmissionMachineReviewStateRead"
+          },
+          "public_ref": {
+            "title": "Public Ref",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SubmissionStatus"
+          },
+          "submission_kind": {
+            "$ref": "#/components/schemas/SubmissionKind"
+          },
+          "submitted_at": {
+            "format": "date-time",
+            "title": "Submitted At",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "id",
+          "public_ref",
+          "status",
+          "submission_kind",
+          "created_by",
+          "submitted_at",
+          "machine_review"
+        ],
+        "title": "SubmissionMachineReviewOverviewRead",
+        "type": "object"
+      },
+      "SubmissionMachineReviewStateRead": {
+        "description": "Machine-review state of one submission: runs, latest run and curator tasks.",
+        "properties": {
+          "latest_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubmissionMachineReviewLatestRunRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "open_task_count": {
+            "title": "Open Task Count",
+            "type": "integer"
+          },
+          "run_count": {
+            "title": "Run Count",
+            "type": "integer"
+          },
+          "task_count": {
+            "title": "Task Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_count",
+          "open_task_count",
+          "task_count"
+        ],
+        "title": "SubmissionMachineReviewStateRead",
+        "type": "object"
+      },
       "SubmissionPrecheckLabel": {
         "description": "Result label for an automated LLM/system precheck pass.",
         "enum": [
@@ -75252,6 +76134,18 @@
         "title": "UncataloguedMethod",
         "type": "object"
       },
+      "UnmappedReason": {
+        "description": "Why a finding was *not* mapped to a record.\n\nEvery value is a safety outcome, not an error: the mapper never raises on\na malformed/over-broad finding, it routes it here so the caller can decide\nwhat to surface to an admin (advisory, non-blocking).",
+        "enum": [
+          "submission_scoped",
+          "missing_record_ref",
+          "ambiguous_record_type",
+          "unknown_record_type",
+          "unlinked_record"
+        ],
+        "title": "UnmappedReason",
+        "type": "string"
+      },
       "UploadJobKind": {
         "enum": [
           "computed_reaction",
@@ -79054,7 +79948,7 @@
     },
     "/api/v1/admin/machine-review/curator-tasks": {
       "get": {
-        "description": "List curator tasks (admin only).\n\nDeterministic ordering: open states first, then highest severity first,\nthen most-recently-updated, with ``id`` as the final tie-break. Filters are\nANDed. Terminal tasks are included; filter on ``workflow_state`` to narrow.",
+        "description": "List curator tasks (admin only).\n\nDeterministic ordering: open states first, then highest severity first,\nthen most-recently-updated, with ``id`` as the final tie-break. Filters are\nANDed, and ``total`` counts under the same filters. Terminal tasks are\nincluded; narrow with ``workflow_state`` (repeatable: any of the given\nstates) or ``state_group`` (``open`` is every non-terminal state).\nContradictory filters give an empty page, not an error.\n\n``include=findings`` fills ``finding``, ``finding_match`` and\n``finding_audit_event_ids`` on every item; without it they stay empty.",
         "operationId": "list_curator_tasks_api_v1_admin_machine_review_curator_tasks_get",
         "parameters": [
           {
@@ -79064,13 +79958,45 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/MachineReviewCuratorTaskState"
+                  "items": {
+                    "$ref": "#/components/schemas/MachineReviewCuratorTaskState"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
               ],
               "title": "Workflow State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state_group",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MachineReviewCuratorTaskStateGroup"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State Group"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "$ref": "#/components/schemas/CuratorTaskInclude"
+              },
+              "title": "Include",
+              "type": "array"
             }
           },
           {
@@ -80659,7 +81585,7 @@
     },
     "/api/v1/admin/submissions/{submission_id}/machine-review-inspection": {
       "get": {
-        "description": "Inspect machine-review projections for one submission (admin only).\n\nLoads the submission (404 if missing), then projects its machine-review\naudit events onto its linked records via the private inspection service.\nNon-machine-review events are ignored. This is read-only: it never mutates\nsubmission status/lifecycle fields, review state, deterministic evidence,\nor scientific records.",
+        "description": "Inspect machine-review projections for one submission (admin only).\n\nLoads the submission (404 if missing), then projects its machine-review\naudit events onto its linked records via the private inspection service.\nEach record lists every review that mapped to it with the reviewer's\nfindings, ``runs`` lists every stored run with the reviewer's summary, and\n``unmapped_findings`` lists what could not be mapped and why.\nNon-machine-review events are ignored. This is read-only: it never mutates\nsubmission status/lifecycle fields, review state, deterministic evidence,\nor scientific records.",
         "operationId": "inspect_submission_machine_review_api_v1_admin_submissions__submission_id__machine_review_inspection_get",
         "parameters": [
           {
@@ -119087,6 +120013,146 @@
           }
         },
         "summary": "List For Review",
+        "tags": [
+          "submissions"
+        ]
+      }
+    },
+    "/api/v1/submissions/machine-review-overview": {
+      "get": {
+        "description": "Submissions with their machine-review state (curator/admin only).\n\nNewest submitted first, ``total`` exact under the filters. ``statuses``\ndefaults to every status, unlike ``/for-review`` (a bare list, no total,\npre-approval statuses only). ``reviewed`` keeps submissions that do (or do\nnot) have a stored machine-review run and ``has_open_tasks`` those that do\n(or do not) have an open curator task. Declared before\n``/{submission_id}`` so the path is not read as an id. Read-only.",
+        "operationId": "machine_review_overview_api_v1_submissions_machine_review_overview_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "statuses",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/SubmissionStatus"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Statuses"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reviewed",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reviewed"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_open_tasks",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Open Tasks"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_SubmissionMachineReviewOverviewRead_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Machine Review Overview",
         "tags": [
           "submissions"
         ]

@@ -41,6 +41,7 @@ EXCLUDED: dict[tuple[str, str], str] = {
     ("GET", "/api/v1/admin/record-deletions"): "an authenticated administrative listing, not the browse surface",
     ("GET", "/api/v1/admin/users"): "an authenticated administrative listing, not the browse surface",
     ("GET", "/api/v1/submissions/for-review"): "an authenticated per-user work queue, not the browse surface",
+    ("GET", "/api/v1/submissions/machine-review-overview"): "an authenticated operations queue, not the browse surface",
     ("GET", "/api/v1/submissions/mine"): "an authenticated per-user work queue, not the browse surface",
     ("GET", "/api/v1/submissions/{submission_id}/audit-events"): "an authenticated per-submission audit trail",
     ("GET", "/api/v1/submissions/{submission_id}/record-links"): "an authenticated per-submission link list",

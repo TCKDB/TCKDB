@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.211.1 - 2026-11-22
+
+No client behaviour changed. The route ledger triages the new curator route `GET /api/v1/submissions/machine-review-overview` as curation workflow.
+
 ## 0.211.0 - 2026-11-22
 
 New `TCKDBClient.delete_record(record_type, public_ref, reason)` deletes one approved record (admin only) through `POST /api/v1/admin/record-deletions` and returns the audit entry the server wrote. `RejectionCode` gains the admin record-deletion codes: `RECORD_DELETED` (410, a read of a ref an admin deleted), `RECORD_DELETION_CITED`, `RECORD_DELETION_IN_PUBLISHED_RELEASE`, `RECORD_DELETION_NOT_APPROVED` and `RECORD_DELETION_TYPE_NOT_SUPPORTED`.
