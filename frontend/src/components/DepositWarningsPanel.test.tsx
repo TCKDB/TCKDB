@@ -128,7 +128,7 @@ describe("DepositWarningsPanel", () => {
             { ...ITEM, depositor_message: "x", retired_at: "2026-10-04T10:00:00", retired_reason: "artifact_attached" },
             { ...ITEM, code: "other", depositor_message: "y", retired_at: "2026-10-05T10:00:00", retired_reason: "some_new_reason" },
         ])} />)
-        expect(screen.getAllByText("Retired")).toHaveLength(2)
+        expect(screen.getAllByText("retired")).toHaveLength(2)
         expect(screen.getByText("2026-10-04, an artifact was attached after the deposit")).toBeInTheDocument()
         expect(screen.getByText("2026-10-05, some new reason")).toBeInTheDocument()
     })

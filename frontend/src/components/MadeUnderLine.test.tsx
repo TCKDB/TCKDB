@@ -21,7 +21,7 @@ describe("MadeUnderLine", () => {
             <MadeUnderLine madeUnder={{ ...base, assessed_version: 1, current_version: 2, state: "stale", stale_reason: "rubric_version" }} />,
         )
         expect(container.querySelector('[data-component="made-under"]')).toHaveAttribute("data-state", "stale")
-        const badge = screen.getByText("Stale")
+        const badge = screen.getByText("stale")
         expect(badge).toHaveClass("value-pill", "made-under-badge-stale")
         expect(screen.getByText(/The current version is 2\. It has not been re-assessed under the current version\./)).toBeVisible()
     })
@@ -30,7 +30,7 @@ describe("MadeUnderLine", () => {
         const { container } = render(
             <MadeUnderLine madeUnder={{ ...base, assessed_version: 0, current_version: 1, state: "stale", stale_reason: "rubric_version" }} />,
         )
-        expect(screen.getByText("Stale")).toBeVisible()
+        expect(screen.getByText("stale")).toBeVisible()
         expect(screen.getByText(/no version recorded/)).toBeVisible()
         expect(container.textContent).not.toMatch(/\bv0\b/)
     })
@@ -38,10 +38,10 @@ describe("MadeUnderLine", () => {
     it("unassessed: a muted Not assessed badge, and it is not the stale badge", () => {
         const { container } = render(<MadeUnderLine madeUnder={{ state: "unassessed" }} />)
         expect(container.querySelector('[data-component="made-under"]')).toHaveAttribute("data-state", "unassessed")
-        const badge = screen.getByText("Not assessed")
+        const badge = screen.getByText("not assessed")
         expect(badge).toHaveClass("value-pill--muted")
         expect(badge).not.toHaveClass("made-under-badge-stale")
-        expect(screen.queryByText("Stale")).toBeNull()
+        expect(screen.queryByText("stale")).toBeNull()
     })
 
     it("inputs_unchecked: no badge, and the line says the inputs were not checked", () => {

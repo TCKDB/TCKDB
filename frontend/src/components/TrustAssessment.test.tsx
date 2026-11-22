@@ -107,7 +107,7 @@ describe("TrustAssessment", () => {
 describe("HardFailFlag", () => {
     it("flags only a hard-failed record", () => {
         const { container, rerender } = render(<HardFailFlag trust={{ trust_status: "hard_failed" }} />)
-        expect(container).toHaveTextContent("Hard failed")
+        expect(container).toHaveTextContent("hard failed")
         rerender(<HardFailFlag trust={{ trust_status: "partial" }} />)
         expect(container).toBeEmptyDOMElement()
     })

@@ -135,13 +135,6 @@ export function ReactionKineticsSection({ kinetics, calculations, transitionStat
                     />
                 ))}
             </div>
-            {typeof evidence === "object" && (
-                <DepositWarningsPanel
-                    warnings={{ record_warnings: [], deposit_warnings: evidence.depositWarnings.deposit_warnings }}
-                    variant="subsection"
-                    headingId="kinetics-deposit-warnings"
-                />
-            )}
             {/* One combined Arrhenius plot (one panel per A_units ORDER
                 FAMILY -- unimolecular/bimolecular/termolecular, so e.g. a
                 cm3_mol_s record and an m3_mol_s record share one panel and
@@ -152,6 +145,13 @@ export function ReactionKineticsSection({ kinetics, calculations, transitionStat
                 Chebyshev/falloff/third-body record is listed there by ref
                 and reason, never plotted. */}
             <ArrheniusChart kinetics={kinetics} recordNumbers={numbers} />
+            {typeof evidence === "object" && (
+                <DepositWarningsPanel
+                    warnings={{ record_warnings: [], deposit_warnings: evidence.depositWarnings.deposit_warnings }}
+                    variant="subsection"
+                    headingId="kinetics-deposit-warnings"
+                />
+            )}
         </>
     )
 }

@@ -16,7 +16,7 @@ describe("ReproducibilityAssessment", () => {
 
     it("shows no grade for a record nobody has assessed", () => {
         render(<ReproducibilityAssessment idBase="thm_1" reproducibility={{ state: "unassessed", grade: null }} />)
-        expect(screen.getByText("Not assessed")).toBeInTheDocument()
+        expect(screen.getByText("not assessed")).toBeInTheDocument()
         expect(document.querySelector(".value-pill:not(.value-pill--muted)")).toBeNull()
         expect(document.querySelector('[data-component="made-under"]')).toHaveAttribute("data-state", "unassessed")
     })

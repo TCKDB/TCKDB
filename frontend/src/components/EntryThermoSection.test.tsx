@@ -1030,7 +1030,7 @@ describe("EntryThermoSection: the reproducibility assessment states what it was 
             made_under: { ...rubric, assessed_version: 1, current_version: 2, state: "stale", stale_reason: "rubric_version" },
         })
         await screen.findByRole("heading", { name: "Reproducibility assessment" })
-        expect(screen.getByText("Stale")).toBeVisible()
+        expect(screen.getByText("stale")).toBeVisible()
         expect(screen.getByText(/The current version is 2\. It has not been re-assessed under the current version\./)).toBeVisible()
     })
 
@@ -1046,8 +1046,8 @@ describe("EntryThermoSection: the reproducibility assessment states what it was 
     it("unassessed: Not assessed, with no grade and no Stale badge", async () => {
         renderWithAssessments({ state: "unassessed", grade: null, made_under: { state: "unassessed" } })
         await screen.findByRole("heading", { name: "Reproducibility assessment" })
-        expect(screen.getByText("Not assessed")).toBeVisible()
-        expect(screen.queryByText("Stale")).toBeNull()
+        expect(screen.getByText("not assessed")).toBeVisible()
+        expect(screen.queryByText("stale")).toBeNull()
     })
 
     it("renders no assessment section when the API served none", async () => {

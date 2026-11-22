@@ -32,7 +32,7 @@ export function TrustBadge({ status }: { status: string }) {
 /** A card header's flag for a hard-failed record, so the numbers below are not read without it. Nothing for any other badge. */
 export function HardFailFlag({ trust }: { trust: { trust_status: string } | null | undefined }) {
     if (trust?.trust_status !== "hard_failed") return null
-    return <span className={ATTENTION_PILL}>Hard failed</span>
+    return <span className={ATTENTION_PILL}>hard failed</span>
 }
 
 /** The first thing a hard-failed record shows: the discrete failure that set the badge. */

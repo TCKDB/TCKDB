@@ -78,7 +78,7 @@ export function describeMadeUnder(m: MadeUnder, kind: MadeUnderKind = "assessmen
         ? "It has not been re-reviewed under the current version."
         : "It has not been re-assessed under the current version."
     if (m.state === "unassessed") {
-        return { state: "unassessed", badge: "Not assessed", sentence: "Not yet assessed under any rubric." }
+        return { state: "unassessed", badge: "not assessed", sentence: "Not yet assessed under any rubric." }
     }
     const assessed = m.assessed_version
     const current = m.current_version
@@ -112,7 +112,7 @@ export function describeMadeUnder(m: MadeUnder, kind: MadeUnderKind = "assessmen
         if (m.stale_reason === "prompt_version") {
             return {
                 state: "stale",
-                badge: "Stale",
+                badge: "stale",
                 sentence:
                     `${did} under ${rubricPhrase(m.rubric)}, version ${assessed}, with a review prompt that is no longer `
                     + "the current one. It has not been re-reviewed since.",
@@ -121,7 +121,7 @@ export function describeMadeUnder(m: MadeUnder, kind: MadeUnderKind = "assessmen
         if (assessed === 0) {
             return {
                 state: "stale",
-                badge: "Stale",
+                badge: "stale",
                 sentence:
                     `${did} under ${rubricPhrase(m.rubric)} (no version recorded). `
                     + `${currentNow} ${notRedone}`,
@@ -130,7 +130,7 @@ export function describeMadeUnder(m: MadeUnder, kind: MadeUnderKind = "assessmen
         if (m.stale_reason === "inputs_changed") {
             return {
                 state: "stale",
-                badge: "Stale",
+                badge: "stale",
                 sentence:
                     `${did} under ${rubricPhrase(m.rubric)}, version ${assessed}, which is still the current version, `
                     + "but the inputs to this assessment have changed since. It has not been re-assessed since.",
@@ -138,7 +138,7 @@ export function describeMadeUnder(m: MadeUnder, kind: MadeUnderKind = "assessmen
         }
         return {
             state: "stale",
-            badge: "Stale",
+            badge: "stale",
             sentence: `${did} under ${rubricPhrase(m.rubric)}, version ${assessed}. ${currentNow} ${notRedone}`,
         }
     }

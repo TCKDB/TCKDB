@@ -270,6 +270,7 @@ function TransportRecordEvidence({ record }: { record: TransportRecord }) {
             idBase={ref}
             noun="transport record"
             recordRef={ref}
+            showReviewStatus={false}
         />
     )
 }

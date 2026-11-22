@@ -1372,7 +1372,7 @@ describe("the rubric a finding's review was made under", () => {
         expect(lines[0]).not.toHaveTextContent(/assess/i)
         expect(lines[1]).toHaveTextContent("Reviewed under rubric computed kinetics (no version recorded)")
         expect(lines[1]).toHaveTextContent("It has not been re-reviewed under the current version.")
-        expect(within(table).getAllByText("Stale")).toHaveLength(1)
+        expect(within(table).getAllByText("stale")).toHaveLength(1)
     })
 
     it("still reads a queue from a server that does not send made_under", async () => {

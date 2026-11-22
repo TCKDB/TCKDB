@@ -26,7 +26,7 @@ describe("describeMadeUnder", () => {
             ...base, assessed_version: 1, current_version: 3, state: "stale", stale_reason: "rubric_version",
         })
         expect(w.state).toBe("stale")
-        expect(w.badge).toBe("Stale")
+        expect(w.badge).toBe("stale")
         expect(w.sentence).toBe(
             "Assessed under rubric TCKDB reproducibility, version 1. The current version is 3. "
             + "It has not been re-assessed under the current version.",
@@ -43,7 +43,7 @@ describe("describeMadeUnder", () => {
             ...base, assessed_version: 0, current_version: 1, state: "stale", stale_reason: "rubric_version",
         })
         expect(w.state).toBe("stale")
-        expect(w.badge).toBe("Stale")
+        expect(w.badge).toBe("stale")
         expect(w.sentence).toBe(
             "Assessed under rubric TCKDB reproducibility (no version recorded). "
             + "The current version is 1. It has not been re-assessed under the current version.",
@@ -55,7 +55,7 @@ describe("describeMadeUnder", () => {
         const w = describeMadeUnder({
             ...base, assessed_version: 1, current_version: 1, state: "stale", stale_reason: "inputs_changed",
         })
-        expect(w.badge).toBe("Stale")
+        expect(w.badge).toBe("stale")
         expect(w.sentence).toContain("still the current version")
         expect(w.sentence).toContain("the inputs to this assessment have changed since")
         expect(w.sentence.endsWith("It has not been re-assessed since.")).toBe(true)
@@ -74,7 +74,7 @@ describe("describeMadeUnder", () => {
     it("unassessed is its own state with its own badge, and is not worded as stale", () => {
         const w = describeMadeUnder({ state: "unassessed", inputs_checked: null })
         expect(w.state).toBe("unassessed")
-        expect(w.badge).toBe("Not assessed")
+        expect(w.badge).toBe("not assessed")
         expect(w.sentence).not.toMatch(/stale|re-assessed/i)
     })
 

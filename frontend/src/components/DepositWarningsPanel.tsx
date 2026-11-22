@@ -51,7 +51,7 @@ function WarningItem({ item }: { item: DepositWarningItem }) {
             </p>
             {retired && (
                 <p className="deposit-warning-retired">
-                    <span className="value-pill value-pill--muted">Retired</span>
+                    <span className="value-pill value-pill--muted">retired</span>
                     <span className="note">
                         {isoDate(item.retired_at as string)}
                         {item.retired_reason ? `, ${retirementReason(item.retired_reason)}` : ""}

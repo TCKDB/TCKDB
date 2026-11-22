@@ -6,7 +6,7 @@ import "../made-under.css"
  * so the reader is told which rubric judged it, at which version, and, when that version is not the current one, that
  * the assessment is stale and why. The wording lives in `domain/madeUnder.ts`; this component only lays it out.
  *
- * A stale assessment carries a "Stale" badge; a record nobody has assessed carries a muted "Not assessed" badge, a
+ * A stale assessment carries a "stale" badge; a record nobody has assessed carries a muted "not assessed" badge, a
  * different thing. `kind="review"` words a stored machine review ("Reviewed under ..."). `data-component="made-under"`
  * and `data-state` mark every instance in the DOM, so a page test can assert that a line came from this component
  * without depending on its copy.

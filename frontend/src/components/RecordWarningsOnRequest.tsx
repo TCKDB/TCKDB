@@ -44,6 +44,9 @@ export function DepositWideWarnings({ children, headingId }: { children: ReactNo
     )
 }
 
+/** Announced to screen readers once the panel renders; hidden on screen because the panel heading says the same. */
+const LOADED = "Deposit warnings loaded."
+
 function LoadedWarnings({ ref_, load, idBase, recordLabel, onStatus }: {
     ref_: string; load: WarningsLoader; idBase: string; recordLabel?: string; onStatus: (text: string) => void
 }) {
@@ -56,7 +59,7 @@ function LoadedWarnings({ ref_, load, idBase, recordLabel, onStatus }: {
     useEffect(() => {
         if (warnings === null) onStatus("Loading deposit warnings.")
         else if (warnings === "unavailable") onStatus("Deposit warnings could not be loaded for this record.")
-        else onStatus(hasOwn ? "Deposit warnings loaded." : "No deposit warnings are recorded for this record.")
+        else onStatus(hasOwn ? LOADED : "No deposit warnings are recorded for this record.")
     }, [warnings, hasOwn, onStatus])
     if (warnings === null || warnings === "unavailable") return null
     const own = { record_warnings: warnings.record_warnings, deposit_warnings: [] }
@@ -82,7 +85,7 @@ export function RecordWarningsOnRequest({ ref_, load, idBase, recordLabel }: { r
                     Show deposit warnings
                 </button>
             )}
-            <p className="note record-warnings-status" role="status" tabIndex={-1} ref={statusRef}>{status}</p>
+            <p className={status === LOADED ? "note record-warnings-status record-warnings-status--loaded" : "note record-warnings-status"} role="status" tabIndex={-1} ref={statusRef}>{status}</p>
             {requested && <LoadedWarnings ref_={ref_} load={load} idBase={idBase} recordLabel={recordLabel} onStatus={setStatus} />}
         </div>
     )
