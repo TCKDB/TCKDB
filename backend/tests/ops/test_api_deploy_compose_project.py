@@ -189,3 +189,82 @@ def _check(tmp_path: Path, systemctl: str, **extra: str) -> list[str]:
     )
     assert result.returncode == 0, result.stderr
     return result.stdout.splitlines()
+
+
+# ---------------------------------------------------------------------------
+# The env file names the project (a self-host bundle's .env.selfhosted)
+# ---------------------------------------------------------------------------
+
+
+def _normalised(calls: list[str], tmp_path: Path) -> list[str]:
+    return [call.replace(str(tmp_path), "TMP") for call in calls]
+
+
+#: Every docker call of a deploy whose env file names no project, on a host
+#: whose db is tckdbv2-db-1, as the script made them before it read the
+#: project from the env file.
+LEGACY_CALLS = [
+    "inspect --type container tckdbv2-db-1",
+    "inspect --type container tckdbv2-db-1 --format {{range .Config.Env}}{{println .}}{{end}}",
+    "inspect --type container tckdbv2-db-1 --format {{range .Config.Env}}{{println .}}{{end}}",
+    "network inspect tckdbv2_default",
+    "exec tckdbv2-db-1 pg_dump -U tckdb -d tckdb -Fc",
+    f"pull --quiet laxzal/tckdb-api:{_base.TAG}",
+    f"inspect laxzal/tckdb-api:{_base.TAG} --format {{{{index .RepoDigests 0}}}}",
+    f"run --rm --network tckdbv2_default --env-file TMP/env -e DB_HOST=db -e DB_PORT=5432 "
+    f"laxzal/tckdb-api:{_base.TAG} alembic upgrade head",
+    "rm -f tckdb-api",
+    "run -d --name tckdb-api --network tckdbv2_default --env-file TMP/env -e DB_HOST=db -e DB_PORT=5432 "
+    "-e TCKDB_INLINE_WORKER=true -p 127.0.0.1:8010:8010 --restart unless-stopped "
+    f"laxzal/tckdb-api:{_base.TAG}",
+]
+
+
+def test_an_env_file_without_a_project_deploys_exactly_as_before(deploy, tmp_path: Path) -> None:
+    result, calls = deploy(**_RESOLVE)
+    assert result.returncode == 0, result.stderr
+    got = _normalised(calls, tmp_path)
+    assert got == LEGACY_CALLS, "\n".join(got)
+
+
+def test_the_env_files_project_selects_its_db_and_network(deploy, tmp_path: Path) -> None:
+    (tmp_path / "env").write_text("COMPOSE_PROJECT_NAME=tckdb\nDB_PASSWORD=x\n")
+    result, calls = deploy(FAKE_PS_DB="c0ffee", **_RESOLVE)
+    assert result.returncode == 0, result.stderr
+    assert "ps -q --filter label=com.docker.compose.project=tckdb --filter label=com.docker.compose.service=db" in calls
+    assert _backup(calls).startswith("exec c0ffee pg_dump ")
+    assert _networks_used(calls) == {"tckdb_default"}
+
+
+def test_the_environments_project_wins_over_the_env_file(deploy, tmp_path: Path) -> None:
+    (tmp_path / "env").write_text("COMPOSE_PROJECT_NAME=tckdb\nDB_PASSWORD=x\n")
+    result, calls = deploy(COMPOSE_PROJECT_NAME="labdb", FAKE_PS_DB="c0ffee", **_RESOLVE)
+    assert result.returncode == 0, result.stderr
+    assert _networks_used(calls) == {"labdb_default"}
+
+
+def test_compose_ps_is_given_the_env_files(deploy, tmp_path: Path) -> None:
+    migration = tmp_path / "owner.env"
+    migration.write_text("DB_OWNER_USER=o\nDB_OWNER_PASSWORD=p\n")
+    result, calls = deploy(
+        MISSING_CONTAINERS="tckdbv2-db-1",
+        FAKE_COMPOSE_DB="beef01",
+        FAKE_PROJECT="tckdb",
+        TCKDB_MIGRATION_ENV_FILE=str(migration),
+        **_RESOLVE,
+    )
+    assert result.returncode == 0, result.stderr
+    assert f"compose --env-file {tmp_path / 'env'} --env-file {migration} ps -q db" in calls
+
+
+def test_a_missing_env_file_names_no_host() -> None:
+    result = subprocess.run(
+        ["bash", str(_base.SCRIPT), _base.TAG],
+        env={"PATH": os.environ["PATH"], "TCKDB_BACKUP_DIR": "/nonexistent"},
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 1
+    assert "TCKDB_ENV_FILE is not set (path to this host's env file)" in result.stderr
+    assert ".env.pi" not in result.stderr

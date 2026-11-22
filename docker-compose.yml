@@ -594,7 +594,7 @@ services:
 
 # `storage` holds the object store and the services that talk to it, and
 # nothing else (#545). Compose names it `<project>_storage`, e.g.
-# `tckdbv2_storage`. The selfhost API is on it; an API container started by
+# `tckdb_storage`. The selfhost API is on it; an API container started by
 # backend/scripts/ops/tckdb_deploy.sh joins it through TCKDB_EXTRA_NETWORKS.
 networks:
   default:

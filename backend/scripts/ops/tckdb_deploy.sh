@@ -64,8 +64,9 @@
 # WHICH DATABASE
 #   TCKDB_DB_CONTAINER / TCKDB_DB_NETWORK name the compose project's `db`
 #   container and the network the API joins. Unset, they are found in order:
-#   COMPOSE_PROJECT_NAME (its `db` service and `<project>_default`); the
-#   container `tckdbv2-db-1` if it exists; `docker compose ps -q db` run here;
+#   COMPOSE_PROJECT_NAME, the environment's else TCKDB_ENV_FILE's (its `db`
+#   service and `<project>_default`); the container `tckdbv2-db-1` if it
+#   exists; `docker compose ps -q db` run here with the env files given;
 #   else `tckdbv2-db-1` / `tckdbv2_default`.
 #   The backup runs pg_dump as DB_ADMIN_USER (TCKDB_MIGRATION_ENV_FILE, else
 #   TCKDB_ENV_FILE, else the db container's POSTGRES_USER) on DB_NAME
@@ -76,7 +77,7 @@
 #   networks the API container joins besides TCKDB_DB_NETWORK. The compose
 #   file keeps the object store on its own `storage` network, so an
 #   API that uses the bundled SeaweedFS needs e.g.
-#       TCKDB_EXTRA_NETWORKS=tckdbv2_storage
+#       TCKDB_EXTRA_NETWORKS=tckdb_storage
 #   Unset (the default) changes nothing. Set, each value is checked before
 #   anything changes (it exists; it is not the DB network, `host`, `none`
 #   or a repeat), and the new container is created, connected and only then
@@ -149,7 +150,7 @@ if [[ "${1:-}" == "--check" ]]; then
     exit 0
 fi
 
-[[ -z "$ENV_FILE" ]] && die "TCKDB_ENV_FILE is not set (path to this host's env file, e.g. .env.pi)"
+[[ -z "$ENV_FILE" ]] && die "TCKDB_ENV_FILE is not set (path to this host's env file)"
 [[ -z "$BACKUP_DIR" ]] && die "TCKDB_BACKUP_DIR is not set (directory to write pre-deploy backups to)"
 
 TAG="${1:-}"
@@ -159,26 +160,36 @@ if [[ "$TAG" == "latest" && "${2:-}" != "--allow-mutable" ]]; then
     die "'latest' moves, so the deployed version would be unanswerable. Pass an immutable tag (sha-<commit> or 0.4.1), or re-run with: $0 latest --allow-mutable"
 fi
 
+# env_value FILE KEY: the last `KEY=value` in FILE without surrounding quotes.
+env_value() {
+    [[ -n "$1" && -f "$1" ]] || return 0
+    sed -n "s/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}$2=//p" "$1" | tail -1 \
+        | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/"
+}
+
 # The compose project's `db` container and default network (see WHICH DATABASE).
 compose_project_of() {
     docker inspect --type container "$1" --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>/dev/null
 }
+PROJECT="${COMPOSE_PROJECT_NAME:-$(env_value "$ENV_FILE" COMPOSE_PROJECT_NAME)}"
 if [[ -z "$DB_CONTAINER" ]]; then
-    if [[ -n "${COMPOSE_PROJECT_NAME:-}" ]]; then
-        DB_CONTAINER="$(docker ps -q --filter "label=com.docker.compose.project=${COMPOSE_PROJECT_NAME}" \
+    if [[ -n "$PROJECT" ]]; then
+        DB_CONTAINER="$(docker ps -q --filter "label=com.docker.compose.project=${PROJECT}" \
             --filter "label=com.docker.compose.service=db" 2>/dev/null | head -1)"
         [[ -n "$DB_CONTAINER" ]] \
-            || die "no running db container in compose project '${COMPOSE_PROJECT_NAME}'; nothing has been changed"
+            || die "no running db container in compose project '${PROJECT}'; nothing has been changed"
     elif docker inspect --type container "$DEFAULT_DB_CONTAINER" >/dev/null 2>&1; then
         DB_CONTAINER="$DEFAULT_DB_CONTAINER"
     else
-        DB_CONTAINER="$(docker compose ps -q db 2>/dev/null | head -1)"
+        compose_env_args=(--env-file "$ENV_FILE")
+        [[ -n "$MIGRATION_ENV_FILE" ]] && compose_env_args+=(--env-file "$MIGRATION_ENV_FILE")
+        DB_CONTAINER="$(docker compose "${compose_env_args[@]}" ps -q db 2>/dev/null | head -1)"
         DB_CONTAINER="${DB_CONTAINER:-$DEFAULT_DB_CONTAINER}"
     fi
 fi
 if [[ -z "$DB_NETWORK" ]]; then
-    if [[ -n "${COMPOSE_PROJECT_NAME:-}" ]]; then
-        DB_NETWORK="${COMPOSE_PROJECT_NAME}_default"
+    if [[ -n "$PROJECT" ]]; then
+        DB_NETWORK="${PROJECT}_default"
     elif [[ "$DB_CONTAINER" == "$DEFAULT_DB_CONTAINER" ]]; then
         DB_NETWORK="$DEFAULT_DB_NETWORK"
     else
@@ -188,12 +199,6 @@ if [[ -z "$DB_NETWORK" ]]; then
     fi
 fi
 
-# env_value FILE KEY: the last `KEY=value` in FILE without surrounding quotes.
-env_value() {
-    [[ -n "$1" && -f "$1" ]] || return 0
-    sed -n "s/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}$2=//p" "$1" | tail -1 \
-        | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/"
-}
 # container_env CONTAINER KEY: KEY from the container's configured environment.
 # The admin is usually in neither env file (the migration file is owner-only),
 # but the postgres image was created with it as POSTGRES_USER.

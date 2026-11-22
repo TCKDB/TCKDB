@@ -22,7 +22,7 @@ RemainAfterExit=yes
 # Name the network if Compose made more than one `storage` network on this
 # host (another project, a test stack): the script refuses to guess. Leave
 # it unset and the script uses the only network Compose labelled `storage`.
-#Environment=TCKDB_STORAGE_NETWORK=tckdbv2_storage
+#Environment=TCKDB_STORAGE_NETWORK=tckdb_storage
 #
 # The container port(s) left open, comma-separated. The default, 9000, is
 # the S3 gateway that docker-proxy forwards to. Widen it only for a forward
