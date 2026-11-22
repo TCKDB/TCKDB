@@ -24,8 +24,8 @@ that directory.
 
 ```bash
 VERSION=0.4.1
-curl -LO https://github.com/TCKDB/TCKDB/releases/download/v$VERSION/tckdb-selfhost-$VERSION.tar.gz
-curl -LO https://github.com/TCKDB/TCKDB/releases/download/v$VERSION/tckdb-selfhost-$VERSION.tar.gz.sha256
+curl -fLO https://github.com/TCKDB/TCKDB/releases/download/v$VERSION/tckdb-selfhost-$VERSION.tar.gz
+curl -fLO https://github.com/TCKDB/TCKDB/releases/download/v$VERSION/tckdb-selfhost-$VERSION.tar.gz.sha256
 sha256sum -c tckdb-selfhost-$VERSION.tar.gz.sha256
 tar xzf tckdb-selfhost-$VERSION.tar.gz
 cd tckdb-selfhost-$VERSION
@@ -41,6 +41,19 @@ carries `tckdb-selfhost-<version>.tar.gz`: the compose file, the env
 templates, the Caddyfile and the scripts, at the same paths as in the
 repository. The application itself comes as published images, whose default
 tag is the bundle's version.
+
+**On a server, use a stable path.** Each release unpacks into its own
+directory, so point a symlink at the current one and use the symlink in
+systemd units, cron jobs and scripts. The example units expect `/opt/tckdb`:
+
+```bash
+sudo tar xzf tckdb-selfhost-$VERSION.tar.gz -C /opt
+sudo ln -sfn /opt/tckdb-selfhost-$VERSION /opt/tckdb
+cd /opt/tckdb
+```
+
+An upgrade then moves the symlink, and nothing that names `/opt/tckdb`
+changes.
 
 **From a git checkout.** Developers can use a clone instead:
 `git clone https://github.com/TCKDB/TCKDB.git && cd TCKDB`, then the same
@@ -320,24 +333,33 @@ the two env files carry over.
 2. Download, check and unpack the new release's bundle beside the old
    directory, as in [Install](#install).
 3. Copy `.env.selfhosted` and `.env.db-admin` from the old directory into the
-   new one. Nothing else carries over. Don't run `tckdb_make_env.sh` in the
-   new directory: it makes new passwords, which the existing database refuses.
+   new one. Don't run `tckdb_make_env.sh` in the new directory: it makes new
+   passwords, which the existing database refuses.
+
+    The env files carry `COMPOSE_PROJECT_NAME`, and that is what makes the new
+    directory use the old volumes: Compose starts every volume name with the
+    project name, which is otherwise the directory's name. Check that
+    `.env.selfhosted` has the line. If it has none (files written before the
+    template set it), the new directory would start on new, empty volumes:
+    add the project that `docker compose ls` shows, such as
+    `COMPOSE_PROJECT_NAME=tckdb` for a clone in `TCKDB/`, before the first
+    `up` there.
+
+    Copy anything else you made or changed by hand as well: `.tckdb_auth.env`
+    (the API key file from [Make an API key](#make-an-api-key)) and any edit
+    to `deploy/caddy/Caddyfile`. The new bundle has its own Caddyfile, so
+    carry an edit over rather than the old file.
+
 4. If `.env.selfhosted` sets `TCKDB_IMAGE_TAG`, delete the line or change it
    to the new release. Unset, the new compose file's default is used, which is
    the bundle's version.
-5. In the new directory, run the `up -d --wait` command again.
+5. With a symlink, point it at the new directory:
+   `sudo ln -sfn /opt/tckdb-selfhost-<new version> /opt/tckdb`.
+6. In the new directory, run the `up -d --wait` command again.
 
 `init` runs the migrations before the new API starts.
 
-The new directory finds the old volumes through `COMPOSE_PROJECT_NAME=tckdb`
-in `.env.selfhosted`: Compose starts every volume name with the project name,
-which is otherwise the directory's name. Without it, the new directory starts
-on new, empty volumes. An env file written before the template set it has no
-such line. Add the project that `docker compose ls` shows, such as
-`COMPOSE_PROJECT_NAME=tckdb` for a clone in `TCKDB/`, before the first `up` in
-the new directory.
-
-**From a git checkout.** Run `git pull`, then steps 4 and 5 in the same
+**From a git checkout.** Run `git pull`, then steps 4 and 6 in the same
 directory.
 
 **Another image.** To run a tag other than the default, set
@@ -347,8 +369,8 @@ the web UI image, so a `sha-` tag must come from a commit that built both. A
 release tag always does. Keep the tag in the env file. Passed only on the
 command line, it reverts to the compose default on the next `up`.
 
-To roll back, run the `up -d --wait` command from the old directory, or set
-the previous tag. If the upgrade ran a migration, restore the database backup
+To roll back, point the symlink back and run the `up -d --wait` command from
+the old directory, or set the previous tag. If the upgrade ran a migration, restore the database backup
 as well.
 
 ## Back up

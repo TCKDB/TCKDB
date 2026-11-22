@@ -143,16 +143,31 @@ The first command asks who should reach TCKDB, writes \`.env.selfhosted\` and
 once, and prints the start command for your answer. Then open
 <http://127.0.0.1:8011> and log in.
 
+On a server, unpack each release under \`/opt\` and point the symlink
+\`/opt/tckdb\` at the one in use; the example systemd units use that path.
+
 ## Upgrade
 
 1. Back up the database and both env files.
-2. Unpack the new release's bundle beside this directory.
+2. Download, check and unpack the new release's bundle beside this directory:
+
+   \`\`\`bash
+   NEW=<new version>
+   curl -fLO https://github.com/TCKDB/TCKDB/releases/download/v\$NEW/tckdb-selfhost-\$NEW.tar.gz
+   curl -fLO https://github.com/TCKDB/TCKDB/releases/download/v\$NEW/tckdb-selfhost-\$NEW.tar.gz.sha256
+   sha256sum -c tckdb-selfhost-\$NEW.tar.gz.sha256
+   tar xzf tckdb-selfhost-\$NEW.tar.gz
+   \`\`\`
+
 3. Copy \`.env.selfhosted\` and \`.env.db-admin\` from this directory into the
    new one. They hold every password and \`COMPOSE_PROJECT_NAME\`, which keeps
-   the same database and file volumes.
+   the same database and file volumes; without that line the new directory
+   starts on new, empty volumes. Copy \`.tckdb_auth.env\` too if you made one,
+   and repeat any edit you made to \`deploy/caddy/Caddyfile\`.
 4. If \`.env.selfhosted\` sets \`TCKDB_IMAGE_TAG\`, change it to the new
    release or delete the line.
-5. Run the same \`up -d --wait\` command from the new directory.
+5. Move the \`/opt/tckdb\` symlink if you use one, then run the same
+   \`up -d --wait\` command from the new directory.
 
 ## Documentation
 

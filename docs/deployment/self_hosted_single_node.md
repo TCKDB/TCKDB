@@ -45,13 +45,23 @@ account such as `pi` or `ubuntu`:
 ```bash
 sudo adduser --system --group --home /var/lib/tckdb tckdb
 sudo usermod -aG docker tckdb
-sudo install -d -o tckdb -g tckdb /opt/tckdb
 ```
 
 ## Install
 
+Each release's bundle unpacks into its own directory under `/opt`, and the
+symlink `/opt/tckdb` names the one in use. The example systemd units and
+every path on this page use the symlink, so an upgrade only moves it.
+
 ```bash
-sudo -u tckdb git clone https://github.com/TCKDB/TCKDB.git /opt/tckdb
+VERSION=0.4.1
+cd "$(mktemp -d)"
+curl -fLO https://github.com/TCKDB/TCKDB/releases/download/v$VERSION/tckdb-selfhost-$VERSION.tar.gz
+curl -fLO https://github.com/TCKDB/TCKDB/releases/download/v$VERSION/tckdb-selfhost-$VERSION.tar.gz.sha256
+sha256sum -c tckdb-selfhost-$VERSION.tar.gz.sha256
+sudo tar xzf tckdb-selfhost-$VERSION.tar.gz -C /opt
+sudo chown -R tckdb:tckdb /opt/tckdb-selfhost-$VERSION
+sudo ln -sfn /opt/tckdb-selfhost-$VERSION /opt/tckdb
 cd /opt/tckdb
 sudo -u tckdb backend/scripts/ops/tckdb_make_env.sh --access cloudflare \
     --domain tckdb.example.org
@@ -207,8 +217,9 @@ queries.
 The example [backup unit and timer](../../examples/deployment/systemd/) run
 `pg_dump` in the `db` container every night at 03:15. They write
 `/var/backups/tckdb/tckdb-YYYY-MM-DD.sql.gz` and delete dumps older than 30
-days. They expect the repository at `/opt/tckdb` and run as `tckdb`; the
-service creates the backup directory for that user.
+days. They expect the install at `/opt/tckdb` (the symlink from
+[Install](#install)) and run as `tckdb`; the service creates the backup
+directory for that user.
 
 ```bash
 sudo cp examples/deployment/systemd/tckdb-backup.service /etc/systemd/system/
@@ -268,9 +279,20 @@ and every non-ASCII string is silently wrong. See
 
 ## Upgrade and roll back
 
-Upgrade as on the [Self-host page](README.md#upgrade): back up, set
-`TCKDB_IMAGE_TAG` in `.env.selfhosted`, run `up -d --wait`. `init` migrates
-before the new API starts. On a database with data, read the
+Upgrade as on the [Self-host page](README.md#upgrade): back up, unpack the
+new bundle under `/opt` and `chown` it to `tckdb`, copy `.env.selfhosted` and
+`.env.db-admin` into it, then move the symlink and run `up -d --wait` as
+`tckdb`:
+
+```bash
+NEW=/opt/tckdb-selfhost-<new version>
+sudo -u tckdb cp -p /opt/tckdb/.env.selfhosted /opt/tckdb/.env.db-admin "$NEW"/
+sudo ln -sfn "$NEW" /opt/tckdb
+cd /opt/tckdb
+sudo -u tckdb docker compose --env-file .env.selfhosted --env-file .env.db-admin up -d --wait
+```
+
+`init` migrates before the new API starts. On a database with data, read the
 [migration runbook](../../backend/docs/deployment/migrations.md) first.
 
 To roll back:
@@ -278,7 +300,8 @@ To roll back:
 1. Stop the ingress so nobody reads a half-upgraded instance:
    `docker compose --env-file .env.selfhosted --env-file .env.db-admin stop cloudflared`
    (or stop your proxy).
-2. Set `TCKDB_IMAGE_TAG` back to the previous tag.
+2. Point `/opt/tckdb` back at the previous release's directory, or set
+   `TCKDB_IMAGE_TAG` back to the previous tag.
 3. If the upgrade ran a migration, [restore](#restore) the last backup.
 4. Run `up -d --wait`, check it, then start the ingress again.
 

@@ -159,6 +159,9 @@ def test_version_file_and_readme(extracted: Path) -> None:
     assert "backend/scripts/ops/tckdb_make_env.sh" in readme
     assert "--env-file .env.selfhosted --env-file .env.db-admin" in readme
     assert ".env.selfhosted" in readme and ".env.db-admin" in readme
+    assert "COMPOSE_PROJECT_NAME" in readme and "/opt/tckdb" in readme
+    curls = [line for line in readme.splitlines() if "curl " in line]
+    assert curls and all("curl -f" in line for line in curls), curls
 
 
 def test_sha256_file_checks(bundle: Path) -> None:
