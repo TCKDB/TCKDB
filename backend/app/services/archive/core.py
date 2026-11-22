@@ -684,6 +684,10 @@ def _remove_target_preseeds(session: Session, tables) -> None:
 
 
 def _repair_sequences(session: Session, tables) -> None:
+    # A deleted record's id stays taken: reads look deleted records up by ``(record_type, record_id)``.
+    deleted_floor = dict(
+        session.execute(text("SELECT record_type::text, max(record_id) FROM record_deletion GROUP BY 1")).all()
+    )
     for table in tables:
         for column in table.primary_key.columns:
             if not isinstance(column.type, (BigInteger, Integer, SmallInteger)):
@@ -695,6 +699,9 @@ def _repair_sequences(session: Session, tables) -> None:
             if sequence is None:
                 continue
             maximum = session.scalar(select(func.max(column)))
+            floor = deleted_floor.get(table.name) if column.name == "id" else None
+            if floor is not None and (maximum is None or floor > maximum):
+                maximum = floor
             if maximum is None:
                 session.execute(
                     text("SELECT setval(CAST(:sequence AS regclass), 1, false)"),
@@ -976,9 +983,15 @@ def restore_archive(
                 # the determinations it carries. Nothing else is opened by it.
                 restoring = ",".join(str(i) for i in sorted({row["determination_id"] for row in rows}))
                 session.execute(text("SELECT set_config('tckdb.structure_determination_writing', :ids, true)"), {"ids": restoring})
+            if table.name == "record_deletion":
+                # The audit names records that are gone, so the insert check that the record exists and was approved
+                # is skipped for this insert only; the rows are stored without a transaction id.
+                session.execute(text("SELECT set_config('tckdb.record_deletion_restoring', 'on', true)"))
             session.execute(table.insert(), rows)
             if table.name == "structure_determination_source":
                 session.execute(text("SELECT set_config('tckdb.structure_determination_writing', '', true)"))
+            if table.name == "record_deletion":
+                session.execute(text("SELECT set_config('tckdb.record_deletion_restoring', '', true)"))
         _repair_sequences(session, tables)
 
     return ArchiveRestoreReport(

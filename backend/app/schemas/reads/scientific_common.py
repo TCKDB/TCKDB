@@ -323,6 +323,9 @@ class SupersessionNotice(BaseModel):
     #: there anything newer than my immediate successor" can read this
     #: instead of walking the chain itself.
     chain_length: int = Field(ge=1)
+    #: Set when an admin deleted the successor: ``superseded_by`` and ``current`` then name the deleted record, whose
+    #: reads answer 410 ``record_deleted``.
+    superseded_by_deleted_at: datetime | None = None
 
 
 # ---------------------------------------------------------------------------

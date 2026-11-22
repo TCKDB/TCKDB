@@ -2143,6 +2143,29 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("reaction_mass_balance_failed", 422, Surface.coded_exception,
             "backend/app/services/reaction_resolution.py",
             shape=Shape.relationship),
+    ApiCode("record_deleted", 410, Surface.coded_exception,
+            "backend/app/services/record_deletion.py",
+            note=(
+                "The public ref named a record an admin deleted. 410 rather than 404: the ref existed and will not "
+                "come back. context carries record_type, public_ref and deleted_at; the admin's free-text reason "
+                "travels only under admin_supplied.reason."
+            )),
+    ApiCode("record_deletion_cited", 409, Surface.coded_exception,
+            "backend/app/services/record_deletion.py",
+            shape=Shape.relationship,
+            note=(
+                "Another record cites the one being deleted. context.cited_by lists each citer's record_type, "
+                "public_ref and the table.column that cites it; a citer with no ref of its own (an applied energy correction) "
+                "is named by the record it belongs to."
+            )),
+    ApiCode("record_deletion_in_published_release", 409, Surface.coded_exception,
+            "backend/app/services/record_deletion.py",
+            shape=Shape.relationship,
+            note="context.releases lists the tag and release_ref of each published release selecting the record."),
+    ApiCode("record_deletion_not_approved", 409, Surface.coded_exception,
+            "backend/app/services/record_deletion.py"),
+    ApiCode("record_deletion_type_not_supported", 422, Surface.coded_exception,
+            "backend/app/services/record_deletion.py"),
     ApiCode("record_has_no_subject", 422, Surface.message_prefix,
             "backend/app/services/release/curation.py"),
     ApiCode("record_not_approved", 422, Surface.message_prefix,

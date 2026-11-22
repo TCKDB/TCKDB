@@ -32,6 +32,7 @@ from app.services.idempotency import (
     IdempotencyConflict,
     InvalidIdempotencyKey,
 )
+from app.services.record_deletion import RecordDeletionError
 from app.workflows.rehearsal import RehearsalContended
 
 logger = logging.getLogger(__name__)
@@ -339,6 +340,14 @@ def _not_found_handler(_request: Request, exc: NotFoundError) -> JSONResponse:
             context=getattr(exc, "context", None),
             fallback_code="resource_not_found",
         ),
+    )
+
+
+def _record_deletion_error_handler(_request: Request, exc: RecordDeletionError) -> JSONResponse:
+    """An admin record deletion refused, or a read of a deleted record (410); the status and code ride on the exception."""
+    return JSONResponse(
+        status_code=exc.status,
+        content=error_envelope(str(exc), code=exc.code, context=exc.context, fallback_code="domain_error"),
     )
 
 
@@ -978,6 +987,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(RecordReviewConflict, _record_review_conflict_handler)  # type: ignore[arg-type]
     app.add_exception_handler(SelfApprovalForbidden, _self_approval_forbidden_handler)  # type: ignore[arg-type]
     app.add_exception_handler(NotFoundError, _not_found_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(RecordDeletionError, _record_deletion_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(DataIntegrityError, _data_integrity_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(NoResultFound, _no_result_found_handler)  # type: ignore[arg-type]
     app.add_exception_handler(IntegrityError, _integrity_error_handler)  # type: ignore[arg-type]

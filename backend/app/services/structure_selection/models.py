@@ -576,6 +576,10 @@ class NormalizedCalculation:
         )
 
 
+#: ``unavailable_reason`` of a source an admin deletion of its calculation removed.
+SOURCE_DELETED = "source_deleted"
+
+
 @dataclass(frozen=True)
 class NormalizedSource:
     """One calculation pinned to one role of a determination.
@@ -589,9 +593,16 @@ class NormalizedSource:
     geometry_ref: str | None
     calculation_ref: str | None
     unavailable_reason: str | None = None
+    #: Set on a source an admin deletion of its calculation removed (``unavailable_reason`` :data:`SOURCE_DELETED`): the
+    #: deleted calculation's ref and the deletion time. Absent from the serialised form otherwise.
+    deleted_calculation_ref: str | None = None
+    deleted_at: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return dict(self.__dict__)
+        out = dict(self.__dict__)
+        if self.deleted_calculation_ref is None:
+            del out["deleted_calculation_ref"], out["deleted_at"]
+        return out
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> NormalizedSource:

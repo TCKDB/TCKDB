@@ -1624,6 +1624,21 @@ class TCKDBClient:
             "/bundles/submit", bundle, idempotency_key=idempotency_key
         )
 
+    def delete_record(self, record_type: str, public_ref: str, reason: str) -> Any:
+        """Delete one approved scientific record (admin only) by POSTing
+        ``{record_type, public_ref, reason}`` to ``/admin/record-deletions``.
+
+        Returns the audit entry the server wrote. The server refuses with
+        ``record_deletion_cited`` (409, ``context.cited_by`` lists what to
+        delete first), ``record_deletion_in_published_release`` (409),
+        ``record_deletion_not_approved`` (409) or ``record_deleted`` (410),
+        each raised as a :class:`TCKDBHTTPError` subclass.
+        """
+        return self.post_json(
+            "/admin/record-deletions",
+            {"record_type": record_type, "public_ref": public_ref, "reason": reason},
+        )
+
     # ------------------------------------------------------------------
     # Scientific read/query methods (/api/v1/scientific/*)
     # ------------------------------------------------------------------

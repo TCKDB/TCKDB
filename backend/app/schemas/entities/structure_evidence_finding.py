@@ -53,6 +53,14 @@ class StructureEvidenceFindingCreate(SchemaBase):
     )
 
 
+class RemovedAdjudication(ORMBaseSchema):
+    """An adjudication removed with the calculation it rested on, by its ref, the deleted calculation's ref and the date."""
+
+    finding_ref: str
+    deleted_calculation_ref: str
+    deleted_at: str
+
+
 class StructureEvidenceFindingRead(ORMBaseSchema):
     """One recorded finding, by public refs only."""
 
@@ -79,6 +87,11 @@ class StructureEvidenceFindingRead(ORMBaseSchema):
         "effect on a selection."
     )
     in_force: bool = Field(description="True when no adjudication has corrected this finding.")
+    removed_adjudications: list[RemovedAdjudication] = Field(
+        default_factory=list,
+        description="Adjudications that settled this finding and were removed when an admin deleted the calculation "
+        "they rested on. The finding is in force again unless another adjudication settles it.",
+    )
     created_at: datetime
 
 

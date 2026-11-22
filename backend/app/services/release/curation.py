@@ -418,12 +418,17 @@ def subject_ids_standing_for(
     return ids
 
 
-def _assert_record_exists(
+def lock_record_for_selection(
     session: Session, *, record_type: SubmissionRecordType, record_id: int
 ) -> None:
+    """Lock the selected record's row, refusing a record that is not there.
+
+    An admin deletion locks the same row before checking that no selection names the record, so a selection appended
+    here either sees the record gone or makes the deletion refuse; it cannot land in between.
+    """
     table = Base.metadata.tables[RECORD_TABLES[record_type]]
     found = session.execute(
-        select(table.c.id).where(table.c.id == record_id)
+        select(table.c.id).where(table.c.id == record_id).with_for_update()
     ).first()
     if found is None:
         raise ReleaseRecordNotFound(
@@ -720,7 +725,7 @@ def add_selection(
     if not rationale.strip():
         raise ReleaseCurationError("rationale_required: a selection needs a reason.")
 
-    _assert_record_exists(session, record_type=record_type, record_id=record_id)
+    lock_record_for_selection(session, record_type=record_type, record_id=record_id)
     _assert_record_is_approved(
         session, record_type=record_type, record_id=record_id
     )
@@ -800,7 +805,7 @@ def supersede_selection(
             "decision. Withdraw it, or select a different candidate."
         )
 
-    _assert_record_exists(
+    lock_record_for_selection(
         session, record_type=superseded.record_type, record_id=record_id
     )
     _assert_record_is_approved(
@@ -856,6 +861,9 @@ def withdraw_selection(
     _assert_not_already_superseded(session, superseded)
     if not rationale.strip():
         raise ReleaseCurationError("rationale_required: a withdrawal needs a reason.")
+    lock_record_for_selection(
+        session, record_type=superseded.record_type, record_id=superseded.record_id
+    )
 
     selection = ReleaseSelection(
         dataset_release_id=release.id,

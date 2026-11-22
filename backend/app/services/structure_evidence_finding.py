@@ -51,6 +51,7 @@ from app.db.models.geometry import Geometry
 from app.db.models.literature import Literature
 from app.db.models.structure_determination import StructureDetermination, StructureEvidenceFinding
 from app.services.public_refs import PREFIXES
+from app.services.record_deletion import removed_adjudications
 from app.services.scientific_read.handles import is_ref_handle
 from app.services.structure_selection.assessment import live_findings
 from app.services.structure_selection.loader import to_finding_facts
@@ -312,6 +313,7 @@ def present_findings(session: Session, rows, subject_ref: str) -> list[dict]:
     """The read form of findings about ``subject_ref``: public refs only, and whether each is still in force."""
     applied = _applied_readings(session, rows, subject_ref)
     ids = {r.id for r in rows}
+    removed = removed_adjudications(session, ids)
     settlers: dict[int, str] = {}
     if ids:
         for superseded_id, settler_ref in session.execute(
@@ -360,6 +362,7 @@ def present_findings(session: Session, rows, subject_ref: str) -> list[dict]:
             "supersedes_finding_ref": by_id.get(r.supersedes_finding_id),
             "settled_by_finding_ref": settlers.get(r.id),
             "in_force": r.id not in settlers,
+            "removed_adjudications": removed.get(r.id, []),
             "created_at": r.created_at,
         }
         for r in rows

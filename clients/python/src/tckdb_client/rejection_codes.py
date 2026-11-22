@@ -284,6 +284,11 @@ class RejectionCode(str, Enum):
     REACTION_HANDLE_CONFLICT = "reaction_handle_conflict"
     REACTION_MASS_BALANCE_FAILED = "reaction_mass_balance_failed"
     REACTION_REVERSIBLE_REQUIRED = "reaction_reversible_required"
+    RECORD_DELETED = "record_deleted"
+    RECORD_DELETION_CITED = "record_deletion_cited"
+    RECORD_DELETION_IN_PUBLISHED_RELEASE = "record_deletion_in_published_release"
+    RECORD_DELETION_NOT_APPROVED = "record_deletion_not_approved"
+    RECORD_DELETION_TYPE_NOT_SUPPORTED = "record_deletion_type_not_supported"
     RECORD_HAS_NO_SUBJECT = "record_has_no_subject"
     RECORD_NOT_APPROVED = "record_not_approved"
     RECORD_NOT_FOUND = "record_not_found"
@@ -638,6 +643,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.REACTION_HANDLE_CONFLICT,
         RejectionCode.REACTION_MASS_BALANCE_FAILED,
         RejectionCode.REACTION_REVERSIBLE_REQUIRED,
+        RejectionCode.RECORD_DELETION_TYPE_NOT_SUPPORTED,
         RejectionCode.RECORD_HAS_NO_SUBJECT,
         RejectionCode.RECORD_NOT_APPROVED,
         RejectionCode.RECORD_REF_NOT_SELECTABLE,
@@ -792,6 +798,9 @@ CONFLICT_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.LAST_ADMIN_DEMOTION,
         RejectionCode.MANIFEST_ALREADY_FROZEN,
         RejectionCode.NETWORK_SOLVE_REPORTED_REQUIRES_LITERATURE,
+        RejectionCode.RECORD_DELETION_CITED,
+        RejectionCode.RECORD_DELETION_IN_PUBLISHED_RELEASE,
+        RejectionCode.RECORD_DELETION_NOT_APPROVED,
         RejectionCode.REFERENCE_CONFLICT,
         RejectionCode.RELEASE_NOT_DRAFT,
         RejectionCode.RELEASE_NOT_PUBLISHED,
@@ -1021,6 +1030,11 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.REACTION_HANDLE_CONFLICT: frozenset({422}),
     RejectionCode.REACTION_MASS_BALANCE_FAILED: frozenset({422}),
     RejectionCode.REACTION_REVERSIBLE_REQUIRED: frozenset({422}),
+    RejectionCode.RECORD_DELETED: frozenset({410}),
+    RejectionCode.RECORD_DELETION_CITED: frozenset({409}),
+    RejectionCode.RECORD_DELETION_IN_PUBLISHED_RELEASE: frozenset({409}),
+    RejectionCode.RECORD_DELETION_NOT_APPROVED: frozenset({409}),
+    RejectionCode.RECORD_DELETION_TYPE_NOT_SUPPORTED: frozenset({422}),
     RejectionCode.RECORD_HAS_NO_SUBJECT: frozenset({422}),
     RejectionCode.RECORD_NOT_APPROVED: frozenset({422}),
     RejectionCode.RECORD_NOT_FOUND: frozenset({404}),

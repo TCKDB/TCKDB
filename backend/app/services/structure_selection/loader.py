@@ -54,6 +54,7 @@ from app.db.models.structure_determination import (
 from app.db.models.transition_state import TransitionStateEntry, TransitionStateValidationEvidence
 from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER
 from app.schemas.reads.scientific_selection_common import ELIGIBILITY_ENTRY_STATUS, ELIGIBILITY_REJECTED_QUALITY
+from app.services.record_deletion import removed_determination_sources
 from app.services.scientific_read.common import (
     evidence_usable_statuses,
     evidence_visible_statuses,
@@ -67,6 +68,7 @@ from app.services.selection_filters import filter_by_provenance
 from app.services.selection_kernel.requested import review_default
 from app.services.structure_selection.bounds import check_candidates, check_nested_rows, traversal_too_deep
 from app.services.structure_selection.models import (
+    SOURCE_DELETED,
     CurvatureFacts,
     EnergyFacts,
     FindingFacts,
@@ -1090,6 +1092,7 @@ def _load_determinations(
                     ),
                 }
             )
+    removed = removed_determination_sources(session, [d.id for d in dets])
     for rank, d in enumerate(dets, start=1):
         sources = tuple(
             NormalizedSource(
@@ -1099,6 +1102,18 @@ def _load_determinations(
                 unavailable_reason=usable_status[s.calculation_id],
             )
             for s in sorted(d.sources, key=lambda x: x.id)
+        ) + tuple(
+            # A source a calculation deletion removed still reads, marked, so a determination never shows fewer
+            # sources than it was made from.
+            NormalizedSource(
+                role=r["role"],
+                geometry_ref=None,
+                calculation_ref=None,
+                unavailable_reason=SOURCE_DELETED,
+                deleted_calculation_ref=r["deleted_calculation_ref"],
+                deleted_at=r["deleted_at"],
+            )
+            for r in removed.get(d.id, [])
         )
         related = list(findings.get(("determination", d.id), []))
         related.extend(findings.get(("geometry", d.evaluated_geometry_id), []))

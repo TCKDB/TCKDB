@@ -140,6 +140,9 @@ class ReleaseSelectionRecord(BaseModel):
     stands: bool
     record_type: str
     record_ref: str | None = None
+    #: Set when an admin has deleted the selected record: ``record_ref`` is then the deleted record's ref, which reads
+    #: answer with 410 ``record_deleted``. The selection row stays as release history.
+    record_deleted_at: str | None = None
     subject_type: str
     subject_ref: str | None = None
     supersedes_selection_ref: str | None = None

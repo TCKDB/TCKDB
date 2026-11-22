@@ -3560,6 +3560,38 @@ Table reaction_participant {
   Note: 'Compressed stoichiometric summary for a reaction graph identity.'
 }
 
+Table record_deletion {
+  id bigint [pk, not null]
+  record_type SubmissionRecordType [not null]
+  record_id bigint [not null]
+  record_public_ref string [not null]
+  subject_type SubmissionRecordType
+  subject_public_ref string
+  subject_chain jsonb [not null, default: '[]'::jsonb']
+  first_approved_at timestamp [not null]
+  reason text [not null]
+  deleted_by bigint [not null, ref: > app_user.id]
+  deleted_at timestamp [not null, default: 'now']
+  snapshot jsonb [not null]
+  xact_id bigint [default: '((pg_current_xact_id())::text)::bigint']
+
+  indexes {
+    deleted_at [name: 'ix_record_deletion_deleted_at']
+    record_public_ref [unique, name: 'uq_record_deletion_record_public_ref']
+    (record_type, record_id) [unique, name: 'uq_record_deletion_record_type']
+  }
+
+  checks {
+    `length(btrim(reason)) > 0` [name: 'ck_record_deletion_reason_nonblank']
+    `jsonb_typeof(snapshot) = 'object'` [name: 'ck_record_deletion_snapshot_is_object']
+    `(subject_type IS NULL) = (subject_public_ref IS NULL)` [name: 'ck_record_deletion_subject_both_or_neither']
+    `jsonb_typeof(subject_chain) = 'array'` [name: 'ck_record_deletion_subject_chain_is_array']
+    `record_type IN ('calculation', 'thermo', 'statmech', 'kinetics', 'transport', 'network', 'network_solve', 'applied_energy_correction', 'transition_state_entry', 'conformer_observation')` [name: 'ck_record_deletion_supported_type']
+  }
+
+  Note: 'One approved record removed by an admin, with a copy of everything removed.'
+}
+
 Table record_machine_review {
   id bigint [pk, not null]
   record_type SubmissionRecordType [not null]
