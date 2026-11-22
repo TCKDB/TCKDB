@@ -33,6 +33,7 @@ dataset must never require a code release.
 - **Behaviour:** each record on `GET /api/v1/record-reviews/queue` carries `machine_findings`: latest status, highest severity, finding count, review time, and the open curator task count and ids.
 - **Behaviour:** new `GET /api/v1/submissions/machine-review-overview` (curator or admin) pages every submission with its run count, latest run, and open and total curator task counts; filters `statuses`, `reviewed`, `has_open_tasks`.
 - **Schema:** no migration. tckdb-client 0.211.1 only updates its route ledger.
+
 ## A one-electron Hartree-Fock energy ignores PNO truncation and core treatment (Unreleased)
 
 - **Behaviour:** the one-electron Hartree-Fock exemption no longer compares `pno_truncation` or `core_treatment`, so a Hartree-Fock energy with neither, or with any value of either, is accepted under a declared level that states them, reported as `one_electron_hf_substitution`. A different `ri_approximation` or `relativistic_hamiltonian` is still `kinetics_energy_level_contradiction`, as is a participant with more than one electron.

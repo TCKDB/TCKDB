@@ -53,8 +53,8 @@ from app.services.machine_review.mapping import UnmappedFinding
 from app.services.machine_review.read_model import (
     MachineReviewRecordSummary,
     RecordMachineReview,
-    _highest_severity,
     build_machine_review_record_summary,
+    highest_severity,
 )
 from app.services.machine_review.schemas import (
     CuratorPriority,
@@ -245,7 +245,7 @@ def project_machine_review_events(
                     findings_count=len(result.findings),
                     mapped_findings_count=sum(len(r.findings) for r in projection.record_reviews),
                     unmapped_findings_count=len(projection.unmapped_findings),
-                    highest_severity=_highest_severity(result.findings),
+                    highest_severity=highest_severity(result.findings),
                     parse_warnings=projection.parse_warnings,
                 )
             )

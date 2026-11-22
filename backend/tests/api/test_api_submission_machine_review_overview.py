@@ -14,17 +14,18 @@ from datetime import datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import event
+from sqlalchemy import event, select
 from sqlalchemy.orm import Session
 
 from app.api.app import create_app
 from app.api.deps import get_db, get_write_db
 from app.db.models.common import (
     MachineReviewCuratorTaskState,
+    SubmissionAuditEventKind,
     SubmissionRecordType,
     SubmissionStatus,
 )
-from app.db.models.submission import Submission
+from app.db.models.submission import Submission, SubmissionAuditEvent
 from app.services.machine_review.schemas import (
     MachineReviewSeverity,
     MachineReviewStatus,
@@ -156,6 +157,31 @@ def test_latest_run_is_the_newest_event_and_null_when_unreviewed(
     assert run["audit_event_id"] == runs[0]["audit_event_id"]
 
 
+def test_latest_run_follows_created_at_before_the_id(
+    client, db_session, login_as, _api_admin_user, _api_curator_user, monkeypatch
+):
+    login_as(_api_admin_user)
+    submission, species = _reviewed_submission(client, db_session, monkeypatch, _api_admin_user)
+    seed.run_review(
+        client, monkeypatch, submission.id,
+        seed.result((seed.finding("species", species.id, severity=MachineReviewSeverity.critical),)),
+    )
+    first, second = db_session.scalars(
+        select(SubmissionAuditEvent)
+        .where(SubmissionAuditEvent.submission_id == submission.id)
+        .where(SubmissionAuditEvent.event_kind == SubmissionAuditEventKind.llm_precheck_recorded)
+        .order_by(SubmissionAuditEvent.id)
+    ).all()
+    first.created_at = second.created_at + timedelta(hours=1)
+    db_session.flush()
+    login_as(_api_curator_user)
+
+    run = _by_id(client.get(_URL).json())[submission.id]["machine_review"]["latest_run"]
+
+    assert run["audit_event_id"] == first.id
+    assert run["highest_severity"] == "warning"
+
+
 def test_a_failed_run_shows_as_failed(
     client, db_session, login_as, _api_admin_user, _api_curator_user, monkeypatch
 ):
@@ -194,7 +220,10 @@ def test_open_task_count_excludes_terminal_tasks(
     task_ids = seed.build_tasks(client, submission.id)["task_ids"]
     assert client.post(
         f"{seed.TASKS_URL}/{task_ids[0]}/resolve",
-        json={"resolution_state": MachineReviewCuratorTaskState.dismissed_machine_finding.value, "resolution_note": "n"},
+        json={
+            "resolution_state": MachineReviewCuratorTaskState.dismissed_machine_finding.value,
+            "resolution_note": "n",
+        },
     ).status_code == 200
     login_as(_api_curator_user)
 

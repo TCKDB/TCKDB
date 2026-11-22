@@ -32,7 +32,7 @@ from app.db.models.common import (
 from app.db.models.machine_review_curator_task import MachineReviewCuratorTask
 from app.db.models.submission import Submission, SubmissionAuditEvent
 from app.services.machine_review.audit_adapter import machine_review_result_from_audit_event
-from app.services.machine_review.read_model import _highest_severity
+from app.services.machine_review.read_model import highest_severity
 from app.services.machine_review.schemas import MachineReviewSeverity, MachineReviewStatus
 
 _IS_REVIEW_EVENT = and_(
@@ -71,7 +71,7 @@ def _latest_run(event: SubmissionAuditEvent) -> OverviewLatestRun:
         reviewed_at=event.created_at,
         parsed=result is not None,
         status=None if result is None else result.status,
-        highest_severity=None if result is None else _highest_severity(result.findings),
+        highest_severity=None if result is None else highest_severity(result.findings),
         findings_count=0 if result is None else len(result.findings),
         model=None if result is None else result.model,
         provider=parsed.provider,

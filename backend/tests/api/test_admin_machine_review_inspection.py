@@ -693,8 +693,9 @@ def test_inspection_findings_link_to_their_curator_tasks(
     submission, (species,) = _species_submission(db_session, _api_admin_user)
     login_as(_api_admin_user)
     warn = seed.finding("species", species.id, message="Warn concern.")
+    crit = seed.finding("species", species.id, severity=MachineReviewSeverity.critical, message="Critical concern.")
     info = seed.finding("species", species.id, severity=MachineReviewSeverity.info, message="Info note.")
-    seed.run_review(client, monkeypatch, submission.id, seed.result((warn, info)))
+    seed.run_review(client, monkeypatch, submission.id, seed.result((warn, crit, info)))
 
     def _ids():
         record = client.get(_url(submission.id)).json()["record_summaries"][0]
@@ -703,14 +704,16 @@ def test_inspection_findings_link_to_their_curator_tasks(
             for f in record["all_record_reviews"][0]["findings"]
         }
 
-    assert _ids() == {"Warn concern.": None, "Info note.": None}  # before the build
+    assert _ids() == {"Warn concern.": None, "Critical concern.": None, "Info note.": None}  # before the build
 
     built = seed.build_tasks(client, submission.id)
 
     ids = _ids()
     assert ids["Info note."] is None
+    assert len(built["task_ids"]) == 2
     assert ids["Warn concern."] == built["task_ids"][0]
-    assert len(built["task_ids"]) == 1
+    assert ids["Critical concern."] == built["task_ids"][1]
+    assert ids["Warn concern."] != ids["Critical concern."]
 
 
 def test_applied_energy_correction_record_names_its_container(
@@ -744,14 +747,17 @@ def test_inspection_reads_write_nothing(
     login_as(_api_admin_user)
     seed.run_review(client, monkeypatch, submission.id, seed.result((seed.finding("species", species.id),)))
     status_before = submission.status
-    events_before = db_session.scalar(
-        select(func.count()).select_from(SubmissionAuditEvent).where(SubmissionAuditEvent.submission_id == submission.id)
-    )
+    def _event_count():
+        return db_session.scalar(
+            select(func.count())
+            .select_from(SubmissionAuditEvent)
+            .where(SubmissionAuditEvent.submission_id == submission.id)
+        )
+
+    events_before = _event_count()
 
     assert client.get(_url(submission.id)).status_code == 200
 
     assert submission.status is status_before
-    assert db_session.scalar(
-        select(func.count()).select_from(SubmissionAuditEvent).where(SubmissionAuditEvent.submission_id == submission.id)
-    ) == events_before
+    assert _event_count() == events_before
     assert db_session.scalar(select(func.count()).select_from(MachineReviewCuratorTask)) == 0
