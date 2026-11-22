@@ -1,12 +1,20 @@
 import vocabulary from "./apiVocabulary.json"
+import { READER_HARD_FAIL_REASON, READER_REVIEW_STATUS, READER_TRUST_STATUS } from "./readerWording"
 
-// The published meaning of each token a record page words from the trust and reproducibility blocks, copied verbatim from
-// the API vocabulary guide (docs/guides/api_vocabulary.md) into `apiVocabulary.json`. `apiVocabulary.parity.test.ts`
-// fails when the copy drifts. A token not in the tables has no meaning here and the page shows it as words only.
+// The meaning of each token a record page words from the trust and reproducibility blocks. The token set is copied from
+// the API vocabulary guide (docs/guides/api_vocabulary.md) into `apiVocabulary.json`, and `apiVocabulary.parity.test.ts`
+// fails when the copy drifts. Review status, trust status and hard-fail reasons are shown in the site's own reader wording
+// (`readerWording.ts`); the other tokens use the guide's sentence. A token not in the tables has no meaning here and the
+// page shows it as words only.
 
 export type VocabularyKind = "reviewStatus" | "trustStatus" | "checkOutcome" | "hardFailReason" | "reproducibilityGrade"
 
-const TABLES: Record<VocabularyKind, Record<string, string>> = vocabulary
+const TABLES: Record<VocabularyKind, Record<string, string>> = {
+    ...vocabulary,
+    reviewStatus: READER_REVIEW_STATUS,
+    trustStatus: READER_TRUST_STATUS,
+    hardFailReason: READER_HARD_FAIL_REASON,
+}
 
 /** A snake_case token as words: `hard_failed` reads "hard failed". */
 export function tokenWords(token: string): string {

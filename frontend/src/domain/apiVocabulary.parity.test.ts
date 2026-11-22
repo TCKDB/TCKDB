@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import vocabulary from "./apiVocabulary.json"
+import { READER_HARD_FAIL_REASON, READER_REVIEW_STATUS, READER_TRUST_STATUS } from "./readerWording"
 
 // The published guide. `import.meta.glob` instead of `node:fs` (no Node types under src/); a match count other than one
 // fails the test rather than passing it with nothing to compare.
@@ -43,4 +44,10 @@ describe("apiVocabulary.json parity with docs/guides/api_vocabulary.md", () => {
             expect(vocabulary[key as keyof typeof vocabulary]).toEqual(parsed)
         })
     }
+
+    it("words every guide token for a reader, and nothing else", () => {
+        expect(Object.keys(READER_REVIEW_STATUS).sort()).toEqual(Object.keys(vocabulary.reviewStatus).sort())
+        expect(Object.keys(READER_TRUST_STATUS).sort()).toEqual(Object.keys(vocabulary.trustStatus).sort())
+        expect(Object.keys(READER_HARD_FAIL_REASON).sort()).toEqual(Object.keys(vocabulary.hardFailReason).sort())
+    })
 })

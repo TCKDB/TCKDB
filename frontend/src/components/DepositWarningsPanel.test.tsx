@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { cleanup, render, screen, within } from "@testing-library/react"
+import { MemoryRouter } from "react-router-dom"
 import { DepositWarningsPanel } from "./DepositWarningsPanel"
 import type { DepositWarningItem, DepositWarnings } from "../api/depositWarningsSchema"
 import { DEPOSITOR_SENTINEL, expectDepositorTextOnlyInNotes, expectNoDepositorText } from "../test/depositorSentinel"
@@ -31,21 +32,44 @@ describe("DepositWarningsPanel", () => {
         expect(screen.queryByText("Deposit warnings")).toBeNull()
     })
 
-    it("shows the message, the field, then the register entry and the code", () => {
+    it("shows the message, then the labelled field and the labelled check code with its register entry", () => {
         render(<DepositWarningsPanel warnings={warnings([ITEM])} recordRef="calc_a" />)
         const item = screen.getByRole("listitem")
         const paragraphs = Array.from(item.querySelectorAll("p")).map((p) => p.textContent)
         expect(paragraphs[0]).toBe("This transition state has no IRC calculation.")
-        expect(paragraphs[1]).toBe("calculations[*]")
-        expect(paragraphs[2]).toBe("Check register entry 19 · missing_irc_for_ts")
+        expect(paragraphs[1]).toBe("Where in the deposit: calculations[*]")
+        expect(paragraphs[2]).toBe("Check code: missing_irc_for_ts · Register entry 19")
         expect(screen.getByRole("heading", { name: "Deposit warnings" })).toBeInTheDocument()
         expect(screen.getByText("This record")).toBeInTheDocument()
     })
 
     it("shows the code alone when there is no register entry", () => {
         render(<DepositWarningsPanel warnings={warnings([{ ...ITEM, register_entry: null }])} />)
-        expect(screen.queryByText(/Check register entry/)).toBeNull()
+        expect(screen.queryByText(/Register entry/)).toBeNull()
         expect(screen.getByText("missing_irc_for_ts")).toBeInTheDocument()
+    })
+
+    it("names another record in words and never prints its ref", () => {
+        const both: DepositWarnings = {
+            record_warnings: [
+                { record_ref: "calc_other", status: "recorded", items: [ITEM] },
+                { record_ref: "calc_a", status: "recorded", items: [ITEM] },
+            ],
+            deposit_warnings: [],
+        }
+        render(<MemoryRouter><DepositWarningsPanel warnings={both} recordRef="calc_a" /></MemoryRouter>)
+        const labels = Array.from(document.querySelectorAll(".deposit-warnings-owner")).map((n) => n.textContent)
+        expect(labels).toEqual(["This record", "Another calculation"])
+        expect(screen.getByRole("link", { name: "Calculation: Another calculation" })).toHaveAttribute("href", "/calculations/calc_other")
+        expect(document.body.textContent).not.toContain("calc_other")
+    })
+
+    it("lists a retired item after the active ones", () => {
+        render(<DepositWarningsPanel warnings={warnings([
+            { ...ITEM, message: "Retired one.", retired_at: "2026-10-04T10:00:00", retired_reason: "artifact_attached" },
+            { ...ITEM, message: "Active one." },
+        ])} />)
+        expect(screen.getAllByRole("listitem").map((li) => li.querySelector(".deposit-warning-message")?.textContent)).toEqual(["Active one.", "Retired one."])
     })
 
     it("says an unrecorded block was added later", () => {
@@ -84,7 +108,11 @@ describe("DepositWarningsPanel", () => {
         expect(Array.from(notes).map((n) => n.textContent)).toEqual([
             `${DEPOSITOR_SENTINEL}_message`, `${DEPOSITOR_SENTINEL}_field`, `${DEPOSITOR_SENTINEL}_supplied`,
         ])
-        expect(screen.getAllByLabelText(/As deposited/).length).toBe(3)
+        // One note with three labelled lines and one origin sentence, not three landmark notes.
+        expect(document.querySelectorAll(".depositor-note")).toHaveLength(1)
+        expect(document.querySelectorAll(".depositor-note aside, aside.depositor-note")).toHaveLength(0)
+        expect(screen.getAllByText(/The warning text as stored when the record was deposited/)).toHaveLength(1)
+        expect(screen.queryByText(/Written by the person who deposited this record/)).toBeNull()
         expectDepositorTextOnlyInNotes()
     })
 

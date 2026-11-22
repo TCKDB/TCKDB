@@ -44,7 +44,7 @@ import { LazyRowBody } from "./LazyRowBody"
 import { LevelLabel } from "./LevelLabel"
 import { SectionHeading } from "./PageSections"
 import { RecordEvidenceBlocks } from "./RecordEvidenceBlocks"
-import { useRecordDepositWarnings } from "../hooks/useRecordDepositWarnings"
+import { DepositWideWarnings } from "./RecordWarningsOnRequest"
 import { SettingsBehindValue, SettingsLegend } from "./EffectiveSettings"
 import { ProductLevelsFact, ProductLevelsTableCells, ProductLevelsTableHead } from "./ProductLevels"
 import { QuantityValue } from "./QuantityValue"
@@ -208,6 +208,7 @@ function StatmechList({ listKey, meta, onPage, linkedNote, response, conformer, 
     return (
         <RecordNumbersProvider refs={records.map((record) => record.statmech.statmech_ref)} offset={pagination.offset}>
         <SettingsStateContext.Provider value={settingsState}>
+            <DepositWideWarnings headingId="statmech-deposit-warnings">
             <section className="ledger-section" aria-labelledby="statmech-heading">
                 <div className="ledger-heading">
                     <p className="eyebrow">Deposited evidence</p>
@@ -240,6 +241,7 @@ function StatmechList({ listKey, meta, onPage, linkedNote, response, conformer, 
                     <SettingsLegend perLevel />
                 )}
             </section>
+            </DepositWideWarnings>
 
             <StatmechLazySection
                 heading="Source calculations"
@@ -531,30 +533,25 @@ function StatmechRecordBody({ record, conformers, sourceCalcsState, frequenciesS
             />
 
             {/* Trust, reproducibility and warnings are this record's own; the group's shared body leaves them to
-                `IdenticalStatmechGroupEvidence`. */}
+                each individual card below. */}
             {showRecordEvidence && <StatmechRecordEvidence record={record} />}
         </>
     )
 }
 
-/** Trust and reproducibility from the list, and this record's deposit warnings from its own by-ref read. */
-function StatmechRecordEvidence({ record, idSuffix = "" }: { record: StatmechRecord; idSuffix?: string }) {
+/** Trust and reproducibility from the list; this record's deposit warnings are read from its own route when the reader asks. */
+function StatmechRecordEvidence({ record }: { record: StatmechRecord }) {
     const ref = record.statmech.statmech_ref
-    const warnings = useRecordDepositWarnings(ref, loadStatmechDepositWarnings)
-    return <RecordEvidenceBlocks trust={record.trust} assessments={record.assessments} warnings={warnings} idBase={`${ref}${idSuffix}`} />
-}
-
-/** The trust, reproducibility and warnings of every record in an identical-values group, each under its own ref. */
-function IdenticalStatmechGroupEvidence({ records }: { records: StatmechRecord[] }) {
     return (
-        <Disclosure summary="Trust, reproducibility and warnings of each record" count={records.length} defaultOpen={records.some((record) => record.trust?.evidence.hard_fail_reason)}>
-            {records.map((record) => (
-                <div key={record.statmech.statmech_ref}>
-                    <p className="deposit-warnings-owner"><span className="data">{record.statmech.statmech_ref}</span></p>
-                    <StatmechRecordEvidence record={record} idSuffix={STATMECH_GROUP_ID_SUFFIX} />
-                </div>
-            ))}
-        </Disclosure>
+        <RecordEvidenceBlocks
+            trust={record.trust}
+            assessments={record.assessments}
+            loadWarnings={{ ref, load: loadStatmechDepositWarnings }}
+            idBase={ref}
+            noun="statmech record"
+            recordRef={ref}
+            showReviewStatus={false}
+        />
     )
 }
 
@@ -727,8 +724,7 @@ function IdenticalStatmechRecordsCard({ records, conformers, sourceCalcsState, f
                 productLevels={sharedProductLevels}
             />
             <IdenticalStatmechGroupRefs records={records} sourceCalcsState={sourceCalcsState} frequenciesState={frequenciesState} />
-            <IdenticalStatmechGroupEvidence records={records} />
-            <Disclosure className="identical-record-group-detail" summary={`Show all ${records.length} records individually`}>
+            <Disclosure className="identical-record-group-detail" summary={`Show all ${records.length} records individually`} defaultOpen={records.some((record) => record.trust?.evidence.hard_fail_reason)}>
                 {records.map((record) => (
                     <SectionErrorBoundary key={record.statmech.statmech_ref} fallback={statmechRecordFallback()}>
                         <StatmechRecordCard record={record} conformers={conformers} sourceCalcsState={sourceCalcsState} frequenciesState={frequenciesState} />

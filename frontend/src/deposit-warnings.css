@@ -2,12 +2,15 @@
  * the note, pill and depositor-note styles it uses are the shared ones. */
 .deposit-warnings-block + .deposit-warnings-block {
     margin-top: var(--s-5);
+    padding-top: var(--s-4);
+    border-top: 1px solid var(--line-2);
 }
 
 .deposit-warnings-owner {
     margin: var(--s-3) 0 0;
-    color: var(--muted);
+    color: var(--ink-2);
     font: var(--type-label-font);
+    font-weight: 600;
     letter-spacing: var(--type-label-tracking);
     text-transform: var(--type-label-transform);
 }
@@ -34,7 +37,7 @@
 
 .deposit-warning .note,
 .deposit-warning .depositor-note {
-    margin-top: .25rem;
+    margin-top: var(--s-1);
     margin-bottom: 0;
 }
 
@@ -42,6 +45,35 @@
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
-    gap: .35rem .75rem;
-    margin: .25rem 0 0;
+    gap: var(--s-2) var(--s-3);
+    margin: var(--s-1) 0 0;
+}
+
+/* A retired warning no longer applies: muted, and listed after the active ones. */
+.deposit-warning--retired {
+    border-left-color: var(--line-2);
+}
+
+.deposit-warning--retired .deposit-warning-message {
+    color: var(--muted);
+}
+
+.record-warnings-request {
+    margin: var(--s-3) 0 0;
+}
+
+.record-warnings-request button {
+    min-height: 24px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent-700);
+    font: var(--type-note-font);
+    text-decoration: underline;
+    text-underline-offset: .15em;
+    cursor: pointer;
+}
+
+.record-warnings-request button:hover {
+    color: var(--accent);
 }

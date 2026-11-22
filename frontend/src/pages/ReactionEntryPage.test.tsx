@@ -1449,6 +1449,17 @@ describe("ReactionEntryPage -- kinetics trust, reproducibility and deposit warni
         expect(url!.searchParams.getAll("include")).toEqual(["trust", "assessments"])
     })
 
+    it("shows the warnings about the deposit as a whole once for the kinetics section", async () => {
+        handleFull(mockFull({ kinetics: [kineticsRecordFixture(undefined)] }))
+        server.use(http.get(KINETICS_ENDPOINT, () => HttpResponse.json({
+            records: [{ ...kineticsRecordFixture(undefined), trust: TRUST, assessments: ASSESSMENTS }],
+            deposit_warnings: [{ submission_ref: "sub_1", items: [{ code: "no_literature", message: "The deposit as a whole carries no literature reference.", field: "literature", check_version: 1 }] }],
+        })))
+        page()
+        expect(await screen.findByText("The deposit as a whole carries no literature reference.")).toBeVisible()
+        expect(screen.getAllByText("About the deposit as a whole")).toHaveLength(1)
+    })
+
     it("says so in one line when the supplementary read fails, and renders the rest of the page", async () => {
         handleFull(mockFull({ kinetics: [kineticsRecordFixture(undefined)] }))
         server.use(http.get(KINETICS_ENDPOINT, () => HttpResponse.json({ detail: "down" }, { status: 500 })))

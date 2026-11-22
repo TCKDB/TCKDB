@@ -379,7 +379,7 @@ function ThermoRecordBody({ record, idSuffix = "", showProvenance = true }: {
             <ModelBlock record={record} idSuffix={idSuffix} />
             <EvidenceCompletenessBlock completeness={record.evidence_completeness ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
             {/* Trust, reproducibility and warnings are this record's own; the group's shared body leaves them to
-                `IdenticalThermoGroupEvidence`, which lists every member's. */}
+                each individual card below. */}
             {showProvenance && <ThermoRecordEvidence record={record} idSuffix={idSuffix} />}
             {showProvenance && (
                 <ProvenanceBlock
@@ -450,6 +450,10 @@ function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: Thermo
     const representative = records[0]
     const numbers = useRecordNumbers()
     const anchorId = `thermo-heading-${representative.thermo_ref}${GROUP_ID_SUFFIX}`
+    const warnings = useContext(ThermoWarningsContext)
+    // A hard failure or a warning on any member opens the individual cards, which carry each record's evidence.
+    const needsAttention = records.some((record) => record.trust?.evidence.hard_fail_reason
+        || warningsForRecord(warnings, record.thermo_ref).record_warnings.some((block) => block.items.length > 0))
     useRegisteredSection(sectionLabel ? anchorId : null, sectionLabel ?? "", 2)
     return (
         <article className="science-record identical-record-group card" aria-labelledby={anchorId}>
@@ -484,8 +488,7 @@ function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: Thermo
                 </dl>
             )}
             <IdenticalThermoGroupRefs records={records} />
-            <IdenticalThermoGroupEvidence records={records} />
-            <Disclosure className="identical-record-group-detail" summary={`Show all ${records.length} records individually`}>
+            <Disclosure className="identical-record-group-detail" summary={`Show all ${records.length} records individually`} defaultOpen={needsAttention}>
                 {records.map((record) => (
                     <SectionErrorBoundary key={record.thermo_ref} fallback={thermoRecordFallback()}>
                         <ThermoRecordCard record={record} sectionLabel={null} />
@@ -823,24 +826,10 @@ function ThermoRecordEvidence({ record, idSuffix = "" }: { record: ThermoRecord;
             assessments={record.assessments}
             warnings={warningsForRecord(warnings, record.thermo_ref)}
             idBase={`${record.thermo_ref}${idSuffix}`}
+            noun="thermo record"
+            recordRef={record.thermo_ref}
+            showReviewStatus={false}
         />
-    )
-}
-
-/** The trust, reproducibility and warnings of every record in an identical-values group, each under its own ref. */
-function IdenticalThermoGroupEvidence({ records }: { records: ThermoRecord[] }) {
-    const warnings = useContext(ThermoWarningsContext)
-    const needsAttention = records.some((record) => record.trust?.evidence.hard_fail_reason
-        || warningsForRecord(warnings, record.thermo_ref).record_warnings.some((block) => block.items.length > 0))
-    return (
-        <Disclosure summary="Trust, reproducibility and warnings of each record" count={records.length} defaultOpen={needsAttention}>
-            {records.map((record) => (
-                <div key={record.thermo_ref}>
-                    <p className="deposit-warnings-owner"><span className="data">{record.thermo_ref}</span></p>
-                    <ThermoRecordEvidence record={record} idSuffix={GROUP_ID_SUFFIX} />
-                </div>
-            ))}
-        </Disclosure>
     )
 }
 

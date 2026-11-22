@@ -206,7 +206,7 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
                 <DepositWarningsPanel
                     warnings={record.depositWarnings}
                     recordRef={network.network_ref}
-                    labelForRef={() => "Network solve"}
+                    labelForRef={(ref) => (record.solves.some((solve) => solve.network_solve_ref === ref) ? "Network solve" : "Another record")}
                     className="ledger-section"
                 />
 

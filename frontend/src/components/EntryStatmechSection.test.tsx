@@ -223,17 +223,33 @@ describe("EntryStatmechSection: trust, reproducibility and deposit warnings", ()
         http.get(ENDPOINT, () => HttpResponse.json(withEvidence())),
     )
 
-    it("shows trust and reproducibility from the list and the by-ref warnings", async () => {
+    it("shows trust and reproducibility from the list, and reads no warnings until the reader asks", async () => {
         handleOthers()
-        server.use(http.get("/api/v1/scientific/statmech/:ref", ({ params }) => HttpResponse.json({
-            record: {},
-            record_warnings: [{ record_ref: params.ref, status: "recorded", items: [{ code: "c", message: `Warning for ${params.ref}.`, field: "statmech[*]", register_entry: 21, check_version: 1 }] }],
-        })))
+        const byRef: string[] = []
+        server.use(http.get("/api/v1/scientific/statmech/:ref", ({ params }) => {
+            byRef.push(String(params.ref))
+            return HttpResponse.json({
+                record: {},
+                record_warnings: [{ record_ref: params.ref, status: "recorded", items: [{ code: "c", message: `Warning for ${params.ref}.`, field: "statmech[*]", register_entry: 21, check_version: 1 }] }],
+                deposit_warnings: [{ submission_ref: "sub_1", items: [{ code: "d", message: "Whole-deposit warning.", field: "literature", check_version: 1 }] }],
+            })
+        }))
         page()
         await screen.findByText("sm_one")
-        expect(await screen.findByText("Warning for sm_one.")).toBeVisible()
         expect(screen.getAllByText("5 of 6 weighted checks passed").length).toBeGreaterThan(0)
         expect(screen.getAllByText("described").length).toBeGreaterThan(0)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        expect(byRef).toEqual([])
+        expect(screen.queryByText("Warning for sm_one.")).toBeNull()
+
+        fireEvent.click(screen.getByRole("button", { name: "Show deposit warnings of statmech record 1" }))
+        expect(await screen.findByText("Warning for sm_one.")).toBeVisible()
+        expect(byRef).toEqual(["sm_one"])
+        // The whole-deposit block is shown once for the section, not inside each record.
+        expect(await screen.findAllByText("Whole-deposit warning.")).toHaveLength(1)
+        fireEvent.click(screen.getByRole("button", { name: "Show deposit warnings of statmech record 2" }))
+        expect(await screen.findByText("Warning for sm_two.")).toBeVisible()
+        expect(screen.getAllByText("Whole-deposit warning.")).toHaveLength(1)
     })
 
     it("says the warnings could not be loaded and still renders the record", async () => {
@@ -241,6 +257,7 @@ describe("EntryStatmechSection: trust, reproducibility and deposit warnings", ()
         server.use(http.get("/api/v1/scientific/statmech/:ref", () => HttpResponse.json({ detail: "down" }, { status: 500 })))
         page()
         await screen.findByText("sm_one")
+        fireEvent.click(screen.getByRole("button", { name: "Show deposit warnings of statmech record 1" }))
         expect((await screen.findAllByText("Deposit warnings could not be loaded for this record.")).length).toBeGreaterThan(0)
         expect(screen.getAllByText("5 of 6 weighted checks passed").length).toBeGreaterThan(0)
     })

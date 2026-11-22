@@ -480,11 +480,10 @@ function RecordOwnLink({ row, subject }: { row: RecordReview; subject: ReviewQue
 
 const isoDate = (value: string) => value.slice(0, 10)
 
-/** Submission, review and first-approval facts of one record row, from the parts the server served. Empty when none is. */
+/** Review and first-approval facts of one record row, from the parts the server served. Empty when none is. */
 function recordRowMeta(row: RecordReview, signedInUserId: number | null): string[] {
     const parts: string[] = []
-    if (row.submission_id !== null) parts.push(`Submission ${row.submission_id}`)
-    const by = row.reviewed_by === null ? null : row.reviewed_by === signedInUserId ? "you" : `user ${row.reviewed_by}`
+    const by = row.reviewed_by === null ? null : row.reviewed_by === signedInUserId ? "you" : "another curator"
     if (row.reviewed_at !== null || by !== null) {
         parts.push(`Reviewed${row.reviewed_at !== null ? ` ${isoDate(row.reviewed_at)}` : ""}${by !== null ? ` by ${by}` : ""}`)
     }

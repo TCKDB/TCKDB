@@ -16,6 +16,7 @@ import { ReviewChip } from "./ReviewChip"
 import { ValueSource } from "./ValueSource"
 import { LiteratureCitation } from "./LiteratureCitation"
 import { RecordEvidenceBlocks } from "./RecordEvidenceBlocks"
+import { DepositWarningsPanel } from "./DepositWarningsPanel"
 import { warningsForRecord } from "../api/depositWarningsSchema"
 import type { ReactionKineticsAssessments } from "../api/reactionKineticsApi"
 
@@ -133,6 +134,13 @@ export function ReactionKineticsSection({ kinetics, calculations, transitionStat
                     />
                 ))}
             </div>
+            {typeof evidence === "object" && (
+                <DepositWarningsPanel
+                    warnings={{ record_warnings: [], deposit_warnings: evidence.depositWarnings.deposit_warnings }}
+                    variant="subsection"
+                    headingId="kinetics-deposit-warnings"
+                />
+            )}
             {/* One combined Arrhenius plot (one panel per A_units ORDER
                 FAMILY -- unimolecular/bimolecular/termolecular, so e.g. a
                 cm3_mol_s record and an m3_mol_s record share one panel and
@@ -326,6 +334,9 @@ function KineticsRecordEvidence({ record, evidence }: { record: ReactionKinetics
             assessments={own.assessments}
             warnings={warningsForRecord(evidence.depositWarnings, record.kinetics_ref)}
             idBase={record.kinetics_ref}
+            noun="kinetics record"
+            recordRef={record.kinetics_ref}
+            showReviewStatus={false}
         />
     )
 }

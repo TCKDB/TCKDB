@@ -247,19 +247,27 @@ describe("EntryTransportSection: trust, reproducibility and deposit warnings", (
         return { ...base, records: base.records.map((record) => ({ ...(record as Record<string, unknown>), trust: TRUST, assessments: ASSESSMENTS })) }
     }
 
-    it("shows trust and reproducibility from the list and the by-ref warnings", async () => {
+    it("shows trust and reproducibility from the list, and reads no warnings until the reader asks", async () => {
+        let reads = 0
         server.use(
             http.get(ENDPOINT, () => HttpResponse.json(withEvidence())),
-            http.get("/api/v1/scientific/transport/trn_one", () => HttpResponse.json({
-                record: {},
-                record_warnings: [{ record_ref: "trn_one", status: "recorded", items: [{ code: "c", message: "Transport warning text.", field: "transport[*]", register_entry: 12, check_version: 1 }] }],
-            })),
+            http.get("/api/v1/scientific/transport/trn_one", () => {
+                reads += 1
+                return HttpResponse.json({
+                    record: {},
+                    record_warnings: [{ record_ref: "trn_one", status: "recorded", items: [{ code: "c", message: "Transport warning text.", field: "transport[*]", register_entry: 12, check_version: 1 }] }],
+                })
+            }),
         )
         page()
         await screen.findByText("trn_one")
-        expect(await screen.findByText("Transport warning text.")).toBeVisible()
         expect(screen.getByText("1 of 5 weighted checks passed")).toBeVisible()
         expect(screen.getByText("auditable")).toBeVisible()
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        expect(reads).toBe(0)
+        fireEvent.click(screen.getByRole("button", { name: "Show deposit warnings of transport record" }))
+        expect(await screen.findByText("Transport warning text.")).toBeVisible()
+        expect(reads).toBe(1)
     })
 
     it("says the warnings could not be loaded and still renders the record", async () => {
@@ -269,6 +277,7 @@ describe("EntryTransportSection: trust, reproducibility and deposit warnings", (
         )
         page()
         await screen.findByText("trn_one")
+        fireEvent.click(screen.getByRole("button", { name: "Show deposit warnings of transport record" }))
         expect(await screen.findByText("Deposit warnings could not be loaded for this record.")).toBeVisible()
         expect(screen.getByText("1 of 5 weighted checks passed")).toBeVisible()
     })
@@ -280,8 +289,9 @@ describe("EntryTransportSection: trust, reproducibility and deposit warnings", (
         )
         page()
         await screen.findByText("trn_one")
-        await new Promise((resolve) => setTimeout(resolve, 50))
-        expect(screen.queryByText("Deposit warnings")).toBeNull()
+        fireEvent.click(screen.getByRole("button", { name: "Show deposit warnings of transport record" }))
+        expect(await screen.findByText("No deposit warnings are recorded for this record.")).toBeVisible()
+        expect(screen.queryByRole("heading", { name: "Deposit warnings" })).toBeNull()
     })
 })
 

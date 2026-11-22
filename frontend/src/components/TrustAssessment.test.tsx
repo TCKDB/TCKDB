@@ -30,16 +30,16 @@ describe("TrustAssessment", () => {
     it("words the badge, the weighted count, the review status and the made-under line", () => {
         render(<TrustAssessment trust={TRUST} headingId="trust-x" />)
         expect(screen.getByText("partial")).toHaveClass("value-pill")
-        expect(screen.getByText(/Evidence completeness of 0\.50 or better/)).toBeInTheDocument()
+        expect(screen.getByText(/At least 50% of the weighted checks passed\./)).toBeInTheDocument()
         expect(screen.getByText("2 of 4 weighted checks passed")).toBeInTheDocument()
         expect(screen.getByText("under review")).toBeInTheDocument()
-        expect(screen.getByText(/A curator has this record open\./)).toBeInTheDocument()
+        expect(screen.getByText("A curator is working on this record now.")).toBeInTheDocument()
         expect(document.querySelector('[data-component="made-under"]')).not.toBeNull()
     })
 
     it("lists every check in served order with its outcome and what the rubric asks", () => {
         render(<TrustAssessment trust={TRUST} headingId="trust-x" />)
-        const rows = Array.from(document.querySelectorAll("tbody tr")).map((tr) => Array.from(tr.querySelectorAll("td")).map((td) => td.textContent))
+        const rows = Array.from(document.querySelectorAll("tbody tr")).map((tr) => Array.from(tr.querySelectorAll("th, td")).map((td) => td.textContent))
         expect(rows.map((row) => row[0])).toEqual([
             "arrhenius parameters complete", "arrhenius units present", "geometry validation not failed for source calculations",
             "irc evidence present", "brand new check",
@@ -65,9 +65,13 @@ describe("TrustAssessment", () => {
         render(<TrustAssessment trust={{ ...TRUST, trust_status: "hard_failed", evidence: { ...TRUST.evidence, hard_fail_reason: "calculation_rejected" } }} headingId="trust-x" />)
         const note = document.querySelector('[data-component="trust-hard-fail"]')!
         expect(note.textContent).toContain("Hard failure: calculation rejected")
-        expect(note.textContent).toContain("a curator marked it unusable")
+        expect(note.textContent).toContain("A curator marked the calculation unusable.")
         const badge = screen.getByText("hard failed")
         expect(note.compareDocumentPosition(badge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it("opens the checks for a hard failure even when every check passed", () => {
+        render(<TrustAssessment trust={{ ...TRUST, trust_status: "hard_failed", evidence: { ...TRUST.evidence, checks: { arrhenius_parameters_complete: "passed" }, hard_fail_reason: "calculation_rejected" } }} headingId="trust-x" />)
         expect(document.querySelector("details")).toHaveAttribute("open")
     })
 
@@ -75,6 +79,22 @@ describe("TrustAssessment", () => {
         render(<TrustAssessment trust={{ ...TRUST, trust_status: "new_status", evidence: { ...TRUST.evidence, hard_fail_reason: "some_new_reason" } }} headingId="trust-x" />)
         expect(screen.getByText("Hard failure: some new reason")).toBeInTheDocument()
         expect(screen.getByText("new status")).toBeInTheDocument()
+    })
+
+    it("makes the check table a named, focusable scroll region with the check name as its row header", () => {
+        render(<TrustAssessment trust={TRUST} headingId="trust-x" recordLabel="statmech record 2" />)
+        const region = screen.getByRole("region", { name: "Every trust check of statmech record 2" })
+        expect(region).toHaveAttribute("tabindex", "0")
+        expect(screen.getByRole("rowheader", { name: "arrhenius units present" })).toBeInTheDocument()
+        expect(screen.getByRole("region", { name: "Trust of statmech record 2" })).toBeInTheDocument()
+    })
+
+    it("marks a missing check and a hard failure in the attention tone, and can leave out the review status", () => {
+        render(<TrustAssessment trust={{ ...TRUST, trust_status: "hard_failed" }} headingId="trust-x" showReviewStatus={false} />)
+        expect(screen.getByText("missing")).toHaveClass("trust-pill-attention")
+        expect(screen.getByText("hard failed")).toHaveClass("trust-pill-attention")
+        expect(screen.getByText("passed")).not.toHaveClass("trust-pill-attention")
+        expect(screen.queryByText("Review status")).toBeNull()
     })
 
     it("never shows the internal record id or certification", () => {

@@ -2068,7 +2068,7 @@ describe("CalculationDetailPage deposit warnings and trust", () => {
         await findLoaded("Frequency")
         const panel = screen.getByRole("region", { name: "Deposit warnings" })
         expect(within(panel).getByText("This transition state has no IRC calculation.")).toBeInTheDocument()
-        expect(within(panel).getByText(/Check register entry 19/)).toBeInTheDocument()
+        expect(within(panel).getByText(/Register entry 19/)).toBeInTheDocument()
         const trust = screen.getByRole("region", { name: "Trust" })
         expect(within(trust).getByText("2 of 4 weighted checks passed")).toBeInTheDocument()
         expect(within(trust).getByText("artifacts present")).toBeInTheDocument()

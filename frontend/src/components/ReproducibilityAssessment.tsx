@@ -9,7 +9,8 @@ import "../trust-assessment.css"
 
 const isoDate = (value: string) => value.slice(0, 10)
 
-export function ReproducibilityAssessment({ reproducibility, idBase }: {
+export function ReproducibilityAssessment({ reproducibility, idBase, recordLabel }: {
+    recordLabel?: string
     reproducibility: Reproducibility | null | undefined
     idBase: string
 }) {
@@ -19,7 +20,7 @@ export function ReproducibilityAssessment({ reproducibility, idBase }: {
     const meaning = meaningOf("reproducibilityGrade", grade)
     const madeUnder = reproducibility.made_under ?? (reproducibility.state === "unassessed" ? { state: "unassessed" } : null)
     return (
-        <section aria-labelledby={id} data-component="reproducibility-assessment">
+        <section aria-labelledby={recordLabel ? undefined : id} aria-label={recordLabel ? `Reproducibility assessment of ${recordLabel}` : undefined} data-component="reproducibility-assessment">
             <h4 className="model-block-heading" id={id}>Reproducibility assessment</h4>
             {grade && (
                 <p className="trust-assessment-line">

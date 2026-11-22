@@ -14,10 +14,18 @@ import "../trust-assessment.css"
 
 type Evidence = TrustFragment["evidence"]
 
+const ATTENTION_PILL = "value-pill trust-pill-attention"
+
 function outcomePill(outcome: string) {
     if (outcome === "passed") return <span className="value-pill">passed</span>
-    if (outcome === "warning") return <span className="value-pill">warning, needs investigation</span>
+    if (outcome === "warning") return <span className={ATTENTION_PILL}>warning, needs investigation</span>
+    if (outcome === "missing") return <span className={ATTENTION_PILL}>missing</span>
     return <span className="value-pill value-pill--muted">{tokenWords(outcome)}</span>
+}
+
+/** The trust badge as a pill: the accent for a supported record, the attention tone for a hard failure. */
+export function TrustBadge({ status }: { status: string }) {
+    return <span className={status === "hard_failed" ? ATTENTION_PILL : "value-pill"}>{tokenWords(status)}</span>
 }
 
 /** The first thing a hard-failed record shows: the discrete failure that set the badge. */
@@ -33,22 +41,26 @@ export function HardFailNote({ reason }: { reason: string | null | undefined }) 
 }
 
 /** One row per check the server reported, in served order: name, outcome, and what the rubric asks. */
-export function TrustChecks({ evidence }: { evidence: Evidence }) {
+export function TrustChecks({ evidence, label = "Every trust check" }: {
+    evidence: Evidence
+    /** Names the table; a page with several records gives each its own. */
+    label?: string
+}) {
     const checks = Object.entries(evidence.checks ?? {})
     if (checks.length === 0) return null
     const attention = Boolean(evidence.hard_fail_reason) || checks.some(([, outcome]) => outcome === "missing")
     return (
         <div className="trust-checks">
             <Disclosure summary="Every check" count={checks.length} defaultOpen={attention}>
-                <div className="table-scroll table-scroll--compact">
-                    <table className="data-table" aria-label="Every trust check">
+                <div className="table-scroll table-scroll--compact" tabIndex={0} role="region" aria-label={label}>
+                    <table className="data-table trust-checks-table">
                         <thead>
                             <tr><th scope="col">Check</th><th scope="col">Outcome</th><th scope="col">What it asks</th></tr>
                         </thead>
                         <tbody>
                             {checks.map(([name, outcome]) => (
                                 <tr key={name}>
-                                    <td data-label="Check">{tokenWords(name)}</td>
+                                    <th scope="row" data-label="Check">{tokenWords(name)}</th>
                                     <td data-label="Outcome">{outcomePill(outcome)}</td>
                                     <td className="trust-check-ask" data-label="What it asks">{checkAsks(evidence.rubric, name) ?? ""}</td>
                                 </tr>
@@ -66,9 +78,13 @@ export function TrustChecks({ evidence }: { evidence: Evidence }) {
  * count, the review status, the rubric it was judged under, and every check. `variant="block"` renders an `<h4>` for use
  * inside a record card; the default is a registered page section.
  */
-export function TrustAssessment({ trust, headingId, variant = "section", className }: {
+export function TrustAssessment({ trust, headingId, variant = "section", className, recordLabel, showReviewStatus = true }: {
     trust: TrustFragment
     headingId: string
+    /** The record this belongs to, for the accessible names of a page that shows several ("statmech record 2"). */
+    recordLabel?: string
+    /** `false` when the card around it already shows the review status. */
+    showReviewStatus?: boolean
     variant?: "section" | "block"
     /** Added beside the component's own class, for the page's section spacing. */
     className?: string
@@ -80,15 +96,15 @@ export function TrustAssessment({ trust, headingId, variant = "section", classNa
     const statusMeaning = meaningOf("trustStatus", trust.trust_status)
     const reviewMeaning = meaningOf("reviewStatus", trust.review_status)
     return (
-        <section aria-labelledby={headingId} className={className ? `trust-assessment ${className}` : "trust-assessment"} data-component="trust-assessment">
+        <section aria-labelledby={recordLabel ? undefined : headingId} aria-label={recordLabel ? `Trust of ${recordLabel}` : undefined} className={className ? `trust-assessment ${className}` : "trust-assessment"} data-component="trust-assessment">
             {heading}
             <HardFailNote reason={evidence.hard_fail_reason} />
             <p className="trust-assessment-line">
-                <span className="value-pill">{tokenWords(trust.trust_status)}</span>
+                <TrustBadge status={trust.trust_status} />
                 {statusMeaning && <span className="note">{statusMeaning}</span>}
             </p>
             <p className="note">{evidence.passed_count} of {evidence.possible_count} weighted checks passed</p>
-            {trust.review_status && (
+            {showReviewStatus && trust.review_status && (
                 <p className="trust-assessment-line">
                     <span className="note">Review status</span>
                     <span className={reviewPillClass(trust.review_status)}>{tokenWords(trust.review_status)}</span>
@@ -98,7 +114,7 @@ export function TrustAssessment({ trust, headingId, variant = "section", classNa
             {evidence.rubric != null && evidence.rubric_version != null && (
                 <MadeUnderLine madeUnder={liveMadeUnder(evidence.rubric, evidence.rubric_version)} />
             )}
-            <TrustChecks evidence={evidence} />
+            <TrustChecks evidence={evidence} label={recordLabel ? `Every trust check of ${recordLabel}` : undefined} />
         </section>
     )
 }

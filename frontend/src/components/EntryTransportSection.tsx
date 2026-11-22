@@ -27,7 +27,7 @@ import { Disclosure } from "./Disclosure"
 import { LazyRowBody } from "./LazyRowBody"
 import { SectionHeading } from "./PageSections"
 import { RecordEvidenceBlocks } from "./RecordEvidenceBlocks"
-import { useRecordDepositWarnings } from "../hooks/useRecordDepositWarnings"
+import { DepositWideWarnings } from "./RecordWarningsOnRequest"
 import { QuantityValue, ROUNDED_NOTE } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
@@ -119,6 +119,7 @@ function TransportList({ listKey, meta, onPage, linkedNote, response }: {
 
     return (
         <RecordNumbersProvider refs={records.map((record) => record.transport.transport_ref)} offset={pagination.offset}>
+            <DepositWideWarnings headingId="transport-deposit-warnings">
             <section className="ledger-section" aria-labelledby="transport-heading">
                 <div className="ledger-heading">
                     <p className="eyebrow">Deposited evidence</p>
@@ -156,6 +157,7 @@ function TransportList({ listKey, meta, onPage, linkedNote, response }: {
                     ))
                 )}
             </section>
+            </DepositWideWarnings>
 
             <TransportLazySection
                 heading="Source calculations"
@@ -255,11 +257,19 @@ function TransportRecordCard({ record }: { record: TransportRecord }) {
     )
 }
 
-/** Trust and reproducibility from the list, and this record's deposit warnings from its own by-ref read. */
+/** Trust and reproducibility from the list; this record's deposit warnings are read from its own route when the reader asks. */
 function TransportRecordEvidence({ record }: { record: TransportRecord }) {
     const ref = record.transport.transport_ref
-    const warnings = useRecordDepositWarnings(ref, loadTransportDepositWarnings)
-    return <RecordEvidenceBlocks trust={record.trust} assessments={record.assessments} warnings={warnings} idBase={ref} />
+    return (
+        <RecordEvidenceBlocks
+            trust={record.trust}
+            assessments={record.assessments}
+            loadWarnings={{ ref, load: loadTransportDepositWarnings }}
+            idBase={ref}
+            noun="transport record"
+            recordRef={ref}
+        />
+    )
 }
 
 function arrayRowState<T>(hasFlag: boolean, data: T[] | null | undefined): "not-present" | "empty" | "populated" {

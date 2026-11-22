@@ -30,7 +30,7 @@ import { RecordStatus } from "../components/RecordStatus"
 import { RefsDisclosure } from "../components/RefsDisclosure"
 import { MadeUnderLine } from "../components/MadeUnderLine"
 import { DepositWarningsPanel } from "../components/DepositWarningsPanel"
-import { HardFailNote, TrustChecks } from "../components/TrustAssessment"
+import { HardFailNote, TrustBadge, TrustChecks } from "../components/TrustAssessment"
 import { TransitionStateStage } from "../components/TransitionStateStage"
 import { ValueLink } from "../components/ValueLink"
 import { liveMadeUnder } from "../domain/madeUnder"
@@ -371,7 +371,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                 <>
                                     <HardFailNote reason={trust.evidence.hard_fail_reason} />
                                     <p>
-                                        <strong>{statusLabel(trust.trust_status)}</strong> · {trust.evidence.passed_count} of {trust.evidence.possible_count} checks passed
+                                        <TrustBadge status={trust.trust_status} /> · {trust.evidence.passed_count} of {trust.evidence.possible_count} checks passed
                                     </p>
                                     {trust.evidence.rubric && trust.evidence.rubric_version != null && (
                                         <MadeUnderLine madeUnder={liveMadeUnder(trust.evidence.rubric, trust.evidence.rubric_version)} />
