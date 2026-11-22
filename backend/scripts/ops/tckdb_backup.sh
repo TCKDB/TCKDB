@@ -1,6 +1,25 @@
 #!/usr/bin/env bash
 # Nightly TCKDB Postgres backup: dump from the db container, gzip, keep 14 days.
 #
+# Dumps database `tckdb` as role `tckdb` from container `tckdbv2-db-1` with
+# `pg_dump --create`, writes $TCKDB_BACKUP_DEST/tckdb_<YYYYmmdd_HHMMSS>.sql.gz,
+# restores it into a scratch database to verify it (see below), then deletes
+# tckdb_*.sql.gz files there older than 14 days. Takes no arguments.
+#
+# USAGE
+#   tckdb_backup.sh
+#   tckdb_backup.sh -h | --help
+#
+# ENVIRONMENT
+#   TCKDB_BACKUP_DEST  required: directory to write backups to (created if
+#                      missing)
+#
+# EXAMPLE
+#   TCKDB_BACKUP_DEST=/srv/tckdb/backups tckdb_backup.sh
+#
+# EXIT CODES
+#   0  written and verified; non-zero otherwise (1 for a failed check).
+#
 # ---------------------------------------------------------------------------
 # WHY --create IS NOT OPTIONAL
 # ---------------------------------------------------------------------------
@@ -33,6 +52,11 @@
 # database's encoding rather than its contents, so it fires even on an empty
 # database and cannot be satisfied by accident.
 set -euo pipefail
+
+usage() { sed -n '2,/^set -euo/p' "$0" | sed '$d; s/^# \{0,1\}//'; }
+for arg in "$@"; do
+    case "$arg" in -h | --help) usage; exit 0 ;; esac
+done
 
 # No default: this script is public, and a path under one
 # operator's home directory would mean every copy of it defaults to that

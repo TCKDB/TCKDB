@@ -26,9 +26,35 @@
 #   --allow-mutable and says so.
 #
 # USAGE
-#   tckdb_deploy.sh sha-<full-commit>       # deploy a pinned build
-#   tckdb_deploy.sh 0.4.0                   # deploy a release
-#   tckdb_deploy.sh --check                 # report what is running vs available
+#   tckdb_deploy.sh <tag>
+#   tckdb_deploy.sh latest --allow-mutable
+#   tckdb_deploy.sh --check
+#
+# ARGUMENTS AND OPTIONS
+#   <tag>             image tag to deploy: sha-<full-commit> or a release
+#   --allow-mutable   second argument, after `latest` only: deploy it anyway
+#   --check           report the running container, its networks, the live
+#                     revision and /status; changes nothing and needs neither
+#                     TCKDB_ENV_FILE nor TCKDB_BACKUP_DIR
+#   -h, --help        show this help
+#
+# ENVIRONMENT
+#   TCKDB_ENV_FILE            required (not for --check): the API's env file
+#   TCKDB_BACKUP_DIR          required (not for --check): directory for the
+#                             pre-deploy database dump
+#   TCKDB_IMAGE_REPO          default laxzal/tckdb-api
+#   TCKDB_CONTAINER           API container name, default tckdb-api
+#   TCKDB_API_PORT            loopback port, default 8010
+#   TCKDB_LOCAL_STATUS_URL    default http://127.0.0.1:<TCKDB_API_PORT>/api/v1/status
+#   TCKDB_DB_CONTAINER, TCKDB_DB_NETWORK, COMPOSE_PROJECT_NAME
+#                             optional; see WHICH DATABASE
+#   TCKDB_EXTRA_NETWORKS      optional; see EXTRA NETWORKS
+#   TCKDB_MIGRATION_ENV_FILE  optional; see MIGRATION CREDENTIALS
+#
+# EXAMPLES
+#   TCKDB_ENV_FILE=/srv/tckdb/.env TCKDB_BACKUP_DIR=/srv/tckdb/backups \
+#       tckdb_deploy.sh 0.4.0
+#   tckdb_deploy.sh --check
 #
 #   This script is for an API container it manages itself, beside a compose
 #   `db`. A stack run with docker-compose.yml's `selfhost` profile upgrades
@@ -67,6 +93,11 @@
 #   anything changes. Owner or admin credentials found in TCKDB_ENV_FILE are
 #   reported, because that file is also the API's.
 set -uo pipefail
+
+usage() { sed -n '2,/^set -uo/p' "$0" | sed '$d; s/^# \{0,1\}//'; }
+for arg in "$@"; do
+    case "$arg" in -h | --help) usage; exit 0 ;; esac
+done
 
 IMAGE_REPO="${TCKDB_IMAGE_REPO:-laxzal/tckdb-api}"
 CONTAINER="${TCKDB_CONTAINER:-tckdb-api}"
