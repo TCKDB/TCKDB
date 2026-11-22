@@ -53,6 +53,7 @@ from app.services.trust.models import (
     EvidenceEvaluation,
     EvidenceOutcome,
 )
+from tests.api import _machine_review_seed as seed
 from tests.services.scientific_read._factories import (
     make_applied_energy_correction,
     make_energy_correction_scheme,
@@ -989,3 +990,256 @@ def test_a_longer_page_of_distinct_containers_does_not_cost_more_queries(
         f"parents and {ten_queries} for 10 rows on 10 distinct parents -- "
         "the container resolve is running per row or per parent"
     )
+
+
+# --------------------------------------------------------------------------- #
+# The finding behind a task, the open-state filter, and usernames
+# --------------------------------------------------------------------------- #
+
+def _seed_two_findings(client, db_session, monkeypatch, admin_id):
+    """One real species, two distinct warning findings on it, run and built."""
+    species = make_species(db_session)
+    submission = seed.new_submission(db_session, admin_id)
+    seed.link(db_session, submission, SubmissionRecordType.species, species.id)
+    first = seed.finding(
+        "species", species.id, message="First concern.", evidence_keys=("e.one",),
+        recommended_action="Act on the first.",
+    )
+    second = seed.finding(
+        "species", species.id, severity=MachineReviewSeverity.critical,
+        category=MachineReviewCategory.geometry, message="Second concern.",
+        evidence_keys=("e.two", "e.three"), recommended_action="Act on the second.",
+    )
+    seed.run_review(client, monkeypatch, submission.id, seed.result((first, second)))
+    built = seed.build_tasks(client, submission.id)
+    assert len(built["task_ids"]) == 2
+    return submission, species, built["task_ids"]
+
+
+def test_task_detail_returns_its_own_finding(
+    client, db_session, login_as, _api_admin_user, monkeypatch
+):
+    login_as(_api_admin_user)
+    submission, _species, task_ids = _seed_two_findings(client, db_session, monkeypatch, _api_admin_user)
+
+    bodies = {tid: client.get(f"{_BASE}/{tid}").json() for tid in task_ids}
+
+    messages = {b["finding"]["message"] for b in bodies.values()}
+    assert messages == {"First concern.", "Second concern."}
+    for tid, body in bodies.items():
+        assert body["finding_match"] == "source_audit_event"
+        assert len(body["finding_audit_event_ids"]) == 1
+        assert body["finding_audit_event_ids"] == [body["source_audit_event_id"]]
+        finding = body["finding"]
+        if finding["message"] == "First concern.":
+            assert finding == {
+                "severity": "warning",
+                "category": "provenance",
+                "message": "First concern.",
+                "evidence_keys": ["e.one"],
+                "recommended_action": "Act on the first.",
+                "curator_task_id": tid,
+            }
+        else:
+            assert finding == {
+                "severity": "critical",
+                "category": "geometry",
+                "message": "Second concern.",
+                "evidence_keys": ["e.two", "e.three"],
+                "recommended_action": "Act on the second.",
+                "curator_task_id": tid,
+            }
+
+
+def test_task_detail_after_rerun_matches_by_fingerprint(
+    client, db_session, login_as, _api_admin_user, monkeypatch
+):
+    login_as(_api_admin_user)
+    species = make_species(db_session)
+    submission = seed.new_submission(db_session, _api_admin_user)
+    seed.link(db_session, submission, SubmissionRecordType.species, species.id)
+    a = seed.finding("species", species.id, message="Repeated concern.")
+    b = seed.finding("species", species.id, message="New concern.", evidence_keys=("e.new",))
+    seed.run_review(client, monkeypatch, submission.id, seed.result((a,)))
+    (task_a,) = seed.build_tasks(client, submission.id)["task_ids"]
+    assert client.get(f"{_BASE}/{task_a}").json()["finding_match"] == "source_audit_event"
+
+    seed.run_review(client, monkeypatch, submission.id, seed.result((a, b)))
+    built = seed.build_tasks(client, submission.id)
+    task_b = next(t for t in built["task_ids"] if t != task_a)
+
+    body_a = client.get(f"{_BASE}/{task_a}").json()
+    assert body_a["source_audit_event_id"] is None
+    assert body_a["finding_match"] == "submission_audit_events"
+    assert body_a["finding"]["message"] == "Repeated concern."
+    assert len(body_a["finding_audit_event_ids"]) == 2
+    assert body_a["finding_audit_event_ids"] == sorted(body_a["finding_audit_event_ids"])
+    body_b = client.get(f"{_BASE}/{task_b}").json()
+    assert body_b["finding"]["message"] == "New concern."
+    assert body_b["finding_match"] == "submission_audit_events"
+    assert body_b["finding_audit_event_ids"] == [max(body_a["finding_audit_event_ids"])]
+
+
+def test_task_with_no_matching_finding_reports_not_found(
+    client, db_session, login_as, _api_admin_user
+):
+    """A hand-made task whose fingerprint no stored review produces is never guessed at."""
+    submission = _new_submission(db_session, _api_admin_user)
+    task = _make_task(db_session, submission.id)
+    login_as(_api_admin_user)
+
+    body = client.get(f"{_BASE}/{task.id}").json()
+
+    assert body["finding"] is None
+    assert body["finding_match"] == "not_found"
+    assert body["finding_audit_event_ids"] == []
+
+
+def test_list_include_findings_and_default_omits_them(
+    client, db_session, login_as, _api_admin_user, monkeypatch
+):
+    login_as(_api_admin_user)
+    submission, _species, task_ids = _seed_two_findings(client, db_session, monkeypatch, _api_admin_user)
+
+    plain = client.get(_BASE, params={"submission_id": submission.id}).json()["items"]
+    assert len(plain) == 2
+    for item in plain:
+        assert item["finding"] is None
+        assert item["finding_match"] is None
+        assert item["finding_audit_event_ids"] == []
+
+    full = client.get(
+        _BASE, params={"submission_id": submission.id, "include": "findings"}
+    ).json()["items"]
+    assert {i["finding"]["message"] for i in full} == {"First concern.", "Second concern."}
+    assert all(i["finding_match"] == "source_audit_event" for i in full)
+
+
+def test_include_unknown_value_is_422(client, login_as, _api_admin_user):
+    login_as(_api_admin_user)
+    assert client.get(_BASE, params={"include": "bogus"}).status_code == 422
+
+
+def test_list_state_group_open_exact_total(client, db_session, login_as, _api_admin_user):
+    submission = _new_submission(db_session, _api_admin_user)
+    for i, state in enumerate((_STATE.untriaged, _STATE.needs_curator_review, _STATE.in_curator_review)):
+        _make_task(db_session, submission.id, workflow_state=state, fingerprint=f"{i + 1:064d}")
+    for i, state in enumerate((_STATE.resolved_no_action, _STATE.dismissed_machine_finding)):
+        _make_task(
+            db_session, submission.id, workflow_state=state,
+            fingerprint=f"{i + 10:064d}", resolved_by=_api_admin_user,
+        )
+    login_as(_api_admin_user)
+
+    body = client.get(_BASE, params={"state_group": "open", "limit": 1}).json()
+
+    assert body["total"] == 3
+    assert len(body["items"]) == 1
+    assert body["items"][0]["workflow_state"] in {"untriaged", "needs_curator_review", "in_curator_review"}
+    everything = client.get(_BASE, params={"state_group": "open", "limit": 50}).json()
+    assert {i["workflow_state"] for i in everything["items"]} == {
+        "untriaged", "needs_curator_review", "in_curator_review",
+    }
+    terminal = client.get(_BASE, params={"state_group": "terminal"}).json()
+    assert terminal["total"] == 2
+
+
+def test_list_multiple_workflow_states_union(client, db_session, login_as, _api_admin_user):
+    submission = _new_submission(db_session, _api_admin_user)
+    _make_task(db_session, submission.id, workflow_state=_STATE.untriaged, fingerprint="1" * 64)
+    _make_task(db_session, submission.id, workflow_state=_STATE.needs_curator_review, fingerprint="2" * 64)
+    _make_task(db_session, submission.id, workflow_state=_STATE.in_curator_review, fingerprint="3" * 64)
+    login_as(_api_admin_user)
+
+    body = client.get(
+        _BASE, params=[("workflow_state", "untriaged"), ("workflow_state", "in_curator_review")]
+    ).json()
+
+    assert body["total"] == 2
+    assert {i["workflow_state"] for i in body["items"]} == {"untriaged", "in_curator_review"}
+    single = client.get(_BASE, params={"workflow_state": "needs_curator_review"}).json()
+    assert single["total"] == 1
+
+
+def test_state_group_and_workflow_state_are_anded(client, db_session, login_as, _api_admin_user):
+    submission = _new_submission(db_session, _api_admin_user)
+    _make_task(db_session, submission.id, workflow_state=_STATE.untriaged, fingerprint="1" * 64)
+    _make_task(
+        db_session, submission.id, workflow_state=_STATE.resolved_no_action,
+        fingerprint="2" * 64, resolved_by=_api_admin_user,
+    )
+    login_as(_api_admin_user)
+
+    body = client.get(
+        _BASE, params={"state_group": "open", "workflow_state": "resolved_no_action"}
+    ).json()
+
+    assert body == {"items": [], "total": 0, "skip": 0, "limit": 50}
+
+
+def test_task_carries_assignee_and_resolver_usernames(
+    client, db_session, login_as, _api_admin_user, _api_curator_user
+):
+    submission = _new_submission(db_session, _api_admin_user)
+    open_task = _make_task(
+        db_session, submission.id, assigned_to=_api_curator_user, fingerprint="1" * 64
+    )
+    done = _make_task(
+        db_session, submission.id, workflow_state=_STATE.resolved_no_action,
+        resolved_by=_api_admin_user, fingerprint="2" * 64,
+    )
+    bare = _make_task(db_session, submission.id, fingerprint="3" * 64)
+    login_as(_api_admin_user)
+
+    by_id = {i["id"]: i for i in client.get(_BASE).json()["items"]}
+
+    assert by_id[open_task.id]["assigned_to_username"] == "testcurator"
+    assert by_id[open_task.id]["resolved_by_username"] is None
+    assert by_id[done.id]["resolved_by_username"] == "testadmin"
+    assert by_id[bare.id]["assigned_to_username"] is None
+    detail = client.get(f"{_BASE}/{open_task.id}").json()
+    assert detail["assigned_to_username"] == "testcurator"
+
+
+def test_include_findings_does_not_cost_more_queries_for_a_longer_page(
+    client, db_session, login_as, _api_admin_user, monkeypatch
+):
+    login_as(_api_admin_user)
+    marker = []
+
+    def _seed(n: int) -> None:
+        for _ in range(n):
+            species = make_species(db_session)
+            submission = seed.new_submission(db_session, _api_admin_user)
+            seed.link(db_session, submission, SubmissionRecordType.species, species.id)
+            seed.run_review(
+                client, monkeypatch, submission.id,
+                seed.result((seed.finding("species", species.id),)),
+            )
+            seed.build_tasks(client, submission.id)
+            marker.append(submission.id)
+
+    def _count() -> tuple[int, int]:
+        statements = 0
+        engine = db_session.connection().engine
+
+        def _before(conn, cursor, statement, parameters, context, executemany):
+            nonlocal statements
+            statements += 1
+
+        event.listen(engine, "before_cursor_execute", _before)
+        try:
+            resp = client.get(_BASE, params={"include": "findings", "limit": 200})
+            assert resp.status_code == 200
+        finally:
+            event.remove(engine, "before_cursor_execute", _before)
+        items = resp.json()["items"]
+        assert all(i["finding"] is not None for i in items)
+        return statements, len(items)
+
+    _seed(2)
+    two_q, two_n = _count()
+    _seed(8)
+    ten_q, ten_n = _count()
+    assert (two_n, ten_n) == (2, 10)
+    assert ten_q == two_q, f"include=findings cost {two_q} statements for 2 tasks and {ten_q} for 10"
