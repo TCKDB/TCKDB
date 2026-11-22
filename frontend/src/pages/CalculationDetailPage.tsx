@@ -38,6 +38,8 @@ import { EvidenceChecklist } from "../components/EvidenceChecklist"
 import { Formula } from "../components/Formula"
 import { LevelLabel } from "../components/LevelLabel"
 import { PageShell } from "../components/PageShell"
+import { DepositWarningsPanel } from "../components/DepositWarningsPanel"
+import { TrustAssessment } from "../components/TrustAssessment"
 import { RecordMap } from "../components/RelationshipMap"
 import { calculationNodes } from "../domain/recordMapNodes"
 import { conformerGroupName } from "../domain/conformerEvidence"
@@ -578,6 +580,10 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                     note="Each outcome is the recorded verdict. More is under Further evidence."
                 />
             </section>
+
+            {calculation.trust && <TrustAssessment trust={calculation.trust} headingId="trust-heading" className="ledger-section" />}
+
+            <DepositWarningsPanel warnings={calculation.depositWarnings} recordRef={core.calculation_ref} className="ledger-section" />
 
             {isPathSearch ? <PathSearchPath calculation={calculation} />
                 : core.type === "irc" ? <IrcPath calculation={calculation} />

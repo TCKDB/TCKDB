@@ -66,10 +66,12 @@ export function TrustChecks({ evidence }: { evidence: Evidence }) {
  * count, the review status, the rubric it was judged under, and every check. `variant="block"` renders an `<h4>` for use
  * inside a record card; the default is a registered page section.
  */
-export function TrustAssessment({ trust, headingId, variant = "section" }: {
+export function TrustAssessment({ trust, headingId, variant = "section", className }: {
     trust: TrustFragment
     headingId: string
     variant?: "section" | "block"
+    /** Added beside the component's own class, for the page's section spacing. */
+    className?: string
 }) {
     const { evidence } = trust
     const heading = variant === "block"
@@ -78,7 +80,7 @@ export function TrustAssessment({ trust, headingId, variant = "section" }: {
     const statusMeaning = meaningOf("trustStatus", trust.trust_status)
     const reviewMeaning = meaningOf("reviewStatus", trust.review_status)
     return (
-        <section aria-labelledby={headingId} className="trust-assessment" data-component="trust-assessment">
+        <section aria-labelledby={headingId} className={className ? `trust-assessment ${className}` : "trust-assessment"} data-component="trust-assessment">
             {heading}
             <HardFailNote reason={evidence.hard_fail_reason} />
             <p className="trust-assessment-line">

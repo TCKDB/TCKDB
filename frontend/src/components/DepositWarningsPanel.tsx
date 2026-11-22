@@ -61,12 +61,14 @@ function WarningItem({ item }: { item: DepositWarningItem }) {
  * `recordRef` is the page's own record: its block is listed first and labelled "This record"; any other record's block is
  * labelled through `labelForRef` (or its ref). `variant="block"` renders an `<h4>` for use inside a record card.
  */
-export function DepositWarningsPanel({ warnings, recordRef, labelForRef, headingId = "deposit-warnings", variant = "section" }: {
+export function DepositWarningsPanel({ warnings, recordRef, labelForRef, headingId = "deposit-warnings", variant = "section", className }: {
     warnings: DepositWarnings
     recordRef?: string
     labelForRef?: (ref: string) => string
     headingId?: string
     variant?: "section" | "block"
+    /** Added beside the panel's own class, for the page's section spacing. */
+    className?: string
 }) {
     if (hasNoWarningItems(warnings)) return null
     const records = warnings.record_warnings.filter((block) => block.items.length > 0)
@@ -77,7 +79,7 @@ export function DepositWarningsPanel({ warnings, recordRef, labelForRef, heading
         ? <h4 className="model-block-heading" id={headingId}>Deposit warnings</h4>
         : <SectionHeading id={headingId}>Deposit warnings</SectionHeading>
     return (
-        <section aria-labelledby={headingId} className="deposit-warnings" data-component="deposit-warnings">
+        <section aria-labelledby={headingId} className={className ? `deposit-warnings ${className}` : "deposit-warnings"} data-component="deposit-warnings">
             {heading}
             {[...own, ...others].map((block, index) => (
                 <div className="deposit-warnings-block" key={`${block.record_ref}-${index}`}>
