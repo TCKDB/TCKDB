@@ -33,6 +33,7 @@ _R17 = 'ThermoML intake: file size, encoding or content support.'
 _R18 = 'A label or symbol outside a controlled vocabulary or not parseable (an element symbol, term symbol, stereo label); input validity.'
 _R19 = "Bibliographic metadata disagreement between a deposit and the DOI's record; not chemistry."
 _R20 = 'Role and calculation-type compatibility (which role a calculation type may take); vocabulary, not chemistry.'
+_R21 = 'Admin record-deletion workflow state (approval, citations, release membership, deleted ref); not a check on a result.'
 
 NOT_SCIENTIFIC: dict[str, str] = {
     'ts_validation_source_calculation_owner_mismatch': 'A guard no request can trip: the request schemas refuse the same mistake earlier with calculation_key_undeclared.',
@@ -253,6 +254,11 @@ NOT_SCIENTIFIC: dict[str, str] = {
     'reaction_handle_conflict': _R02,
     'reaction_reversible_required': 'Reaction payload shape: reversibility not stated.',
     'reaction_reversible_twin': 'An identity split across two deposits, not a check on one deposit.',
+    'record_deleted': _R21,
+    'record_deletion_cited': _R21,
+    'record_deletion_in_published_release': _R21,
+    'record_deletion_not_approved': _R21,
+    'record_deletion_type_not_supported': _R21,
     'record_has_no_subject': _R01,
     'record_not_approved': _R01,
     'record_ref_not_selectable': _R01,

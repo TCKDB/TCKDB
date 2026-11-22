@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.210.3 - 2026-11-22
+
+`RejectionCode` gains the admin record-deletion codes: `RECORD_DELETED` (410, a read of a ref an admin deleted), `RECORD_DELETION_CITED`, `RECORD_DELETION_IN_PUBLISHED_RELEASE`, `RECORD_DELETION_NOT_APPROVED` and `RECORD_DELETION_TYPE_NOT_SUPPORTED`.
+
 ## 0.210.2 - 2026-11-21
 
 No client behaviour changed. Two docstrings no longer cite a maintainer document that is not in the repository, and a builder docstring and `docs/builder_api_stability.md` name `docs/builder_api_mvp.md` where they said "the spec".

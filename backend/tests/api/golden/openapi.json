@@ -42689,6 +42689,37 @@
         "title": "PaginatedResponse[AdminUserResponse]",
         "type": "object"
       },
+      "PaginatedResponse_RecordDeletionSummary_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecordDeletionSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "skip": {
+            "title": "Skip",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "skip",
+          "limit"
+        ],
+        "title": "PaginatedResponse[RecordDeletionSummary]",
+        "type": "object"
+      },
       "Pagination": {
         "description": "Echoed pagination block per L5.\n\n``total``     post-filter match count, before page slicing.\n``returned``  actual length of ``records``.\n``mode``      which contract served this page: ``offset`` (random access) or ``cursor`` (stable traversal).\n\nTwo ways to move through a list\n-------------------------------\n``offset`` is random access: \"page N of M\". It is deterministic only for a static corpus. An upload that sorts\nabove the reader's position, or a record that leaves the visible set, shifts every later page, and the reader\nsilently skips or repeats a record. ``next_cursor`` (a field of the response, beside this block) is the stable\ntraversal: pass it back as ``cursor`` for the following page. It is ``null`` on the last page. A cursor pins the\ntraversal to the records that existed when it began; it does not freeze review state. For an immutable, citable\nset read a published dataset release. ``offset`` and ``cursor`` cannot be combined.",
         "properties": {
@@ -45530,6 +45561,189 @@
           "reason"
         ],
         "title": "ReasonRequest",
+        "type": "object"
+      },
+      "RecordDeletionDetail": {
+        "additionalProperties": false,
+        "description": "A deletion with the JSON copy of every removed row (row ids included: this surface is admin-only).",
+        "properties": {
+          "deleted_at": {
+            "format": "date-time",
+            "title": "Deleted At",
+            "type": "string"
+          },
+          "deleted_by": {
+            "title": "Deleted By",
+            "type": "string"
+          },
+          "first_approved_at": {
+            "format": "date-time",
+            "title": "First Approved At",
+            "type": "string"
+          },
+          "public_ref": {
+            "title": "Public Ref",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "record_type": {
+            "$ref": "#/components/schemas/SubmissionRecordType"
+          },
+          "removed_rows": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Removed Rows",
+            "type": "object"
+          },
+          "snapshot": {
+            "additionalProperties": true,
+            "title": "Snapshot",
+            "type": "object"
+          },
+          "subject_chain": {
+            "items": {
+              "$ref": "#/components/schemas/SubjectRef"
+            },
+            "title": "Subject Chain",
+            "type": "array"
+          },
+          "subject_public_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Public Ref"
+          },
+          "subject_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubmissionRecordType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "record_type",
+          "public_ref",
+          "subject_type",
+          "subject_public_ref",
+          "subject_chain",
+          "first_approved_at",
+          "deleted_at",
+          "deleted_by",
+          "reason",
+          "removed_rows",
+          "snapshot"
+        ],
+        "title": "RecordDeletionDetail",
+        "type": "object"
+      },
+      "RecordDeletionRequest": {
+        "additionalProperties": false,
+        "description": "Why the record is being deleted. Required, and kept in the audit.",
+        "properties": {
+          "reason": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "RecordDeletionRequest",
+        "type": "object"
+      },
+      "RecordDeletionSummary": {
+        "additionalProperties": false,
+        "description": "One deletion as the audit records it. ``reason`` is the admin's own text.",
+        "properties": {
+          "deleted_at": {
+            "format": "date-time",
+            "title": "Deleted At",
+            "type": "string"
+          },
+          "deleted_by": {
+            "title": "Deleted By",
+            "type": "string"
+          },
+          "first_approved_at": {
+            "format": "date-time",
+            "title": "First Approved At",
+            "type": "string"
+          },
+          "public_ref": {
+            "title": "Public Ref",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "record_type": {
+            "$ref": "#/components/schemas/SubmissionRecordType"
+          },
+          "removed_rows": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Removed Rows",
+            "type": "object"
+          },
+          "subject_chain": {
+            "items": {
+              "$ref": "#/components/schemas/SubjectRef"
+            },
+            "title": "Subject Chain",
+            "type": "array"
+          },
+          "subject_public_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Public Ref"
+          },
+          "subject_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubmissionRecordType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "record_type",
+          "public_ref",
+          "subject_type",
+          "subject_public_ref",
+          "subject_chain",
+          "first_approved_at",
+          "deleted_at",
+          "deleted_by",
+          "reason",
+          "removed_rows"
+        ],
+        "title": "RecordDeletionSummary",
         "type": "object"
       },
       "RecordReviewBadge": {
@@ -64381,6 +64595,24 @@
         "title": "StructureSourceRole",
         "type": "string"
       },
+      "SubjectRef": {
+        "additionalProperties": false,
+        "properties": {
+          "public_ref": {
+            "title": "Public Ref",
+            "type": "string"
+          },
+          "record_type": {
+            "$ref": "#/components/schemas/SubmissionRecordType"
+          }
+        },
+        "required": [
+          "record_type",
+          "public_ref"
+        ],
+        "title": "SubjectRef",
+        "type": "object"
+      },
       "SubmissionAIReviewFindingCounts": {
         "description": "Compact counts for AI Review Assistant finding severities.",
         "properties": {
@@ -80002,6 +80234,379 @@
           }
         },
         "summary": "Attach Observation Identity Endpoint",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/record-deletions": {
+      "get": {
+        "description": "The deletion audit, newest first (admin only).",
+        "operationId": "list_record_deletions_api_v1_admin_record_deletions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "record_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/SubmissionRecordType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Record Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_RecordDeletionSummary_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Record Deletions",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/record-deletions/{public_ref}": {
+      "get": {
+        "description": "One deletion, with the JSON copy of the record and every row removed with it (admin only).",
+        "operationId": "get_record_deletion_api_v1_admin_record_deletions__public_ref__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_ref",
+            "required": true,
+            "schema": {
+              "maxLength": 40,
+              "minLength": 1,
+              "title": "Public Ref",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordDeletionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Record Deletion",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/records/{record_type}/{public_ref}": {
+      "delete": {
+        "description": "Delete one approved record and every row it owns (admin only).\n\nRefusals: 409 ``record_deletion_not_approved``, ``record_deletion_in_published_release`` (context lists the\nreleases) and ``record_deletion_cited`` (context lists each citing record's type, public ref and the column that\ncites it); 422 ``record_deletion_type_not_supported``; 404 ``handle_not_found``; 410 ``record_deleted`` when the\nrecord is already gone.",
+        "operationId": "delete_record_api_v1_admin_records__record_type___public_ref__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/SubmissionRecordType"
+            }
+          },
+          {
+            "in": "path",
+            "name": "public_ref",
+            "required": true,
+            "schema": {
+              "maxLength": 40,
+              "minLength": 1,
+              "title": "Public Ref",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordDeletionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordDeletionSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Record",
         "tags": [
           "admin"
         ]

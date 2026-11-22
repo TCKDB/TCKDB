@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 123 | 28 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 46 | `backend/app/services/public_refs.py` |
 | Trust check names | 174 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 374 | `backend/app/api/code_catalogue.py` |
-| **total** | **717** | |
+| Refusal codes a caller can receive | 379 | `backend/app/api/code_catalogue.py` |
+| **total** | **722** | |
 
 ## How a record is named
 
@@ -774,7 +774,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unknown_structure_member_ref` | a thing |
 | `unknown_transition_state_entry_ref` | a thing |
 
-### HTTP 409 (28 codes)
+### HTTP 409 (31 codes)
 
 | Code | Names |
 | --- | --- |
@@ -793,6 +793,9 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `last_admin_demotion` | a thing |
 | `manifest_already_frozen` | a thing |
 | `network_solve_reported_requires_literature` | a thing |
+| `record_deletion_cited` | a relationship — read `context` |
+| `record_deletion_in_published_release` | a relationship — read `context` |
+| `record_deletion_not_approved` | a thing |
 | `reference_conflict` | a relationship — read `context` |
 | `release_not_draft` | a thing |
 | `release_not_published` | a thing |
@@ -807,6 +810,12 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unknown_manifest_schema` | a thing |
 | `username_taken` | a thing |
 
+### HTTP 410 (1 code)
+
+| Code | Names |
+| --- | --- |
+| `record_deleted` | a thing |
+
 ### HTTP 413 (4 codes)
 
 | Code | Names |
@@ -816,7 +825,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `network_export_body_too_large` | a relationship — read `context` |
 | `request_body_too_large` | a relationship — read `context` |
 
-### HTTP 422 (303 codes)
+### HTTP 422 (304 codes)
 
 | Code | Names |
 | --- | --- |
@@ -996,6 +1005,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `reaction_handle_conflict` | a relationship — read `context` |
 | `reaction_mass_balance_failed` | a relationship — read `context` |
 | `reaction_reversible_required` | a thing |
+| `record_deletion_type_not_supported` | a thing |
 | `record_has_no_subject` | a thing |
 | `record_not_approved` | a thing |
 | `record_ref_not_selectable` | a thing |

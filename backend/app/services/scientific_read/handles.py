@@ -53,6 +53,7 @@ from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.transport import Transport
 from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER
 from app.services.public_refs import PREFIXES
+from app.services.record_deletion import raise_if_deleted
 from app.services.scientific_read.hidden_by_default import record_forwarded_ref
 from app.services.species_merge import MERGE_COLUMNS
 
@@ -425,6 +426,8 @@ def resolve_path_handle(
     ).first()
     row_id = found[0] if found is not None else None
     if row_id is None:
+        # A ref an admin deleted answers 410 ``record_deleted`` rather than 404.
+        raise_if_deleted(session, record_type=None, public_ref=ref)
         # The ref is public-by-design, so echoing it back is fine and
         # actually useful for client debugging.
         logger.info(

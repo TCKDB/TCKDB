@@ -25,6 +25,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Admins can delete an approved record (Unreleased)
+
+- **Behaviour:** `DELETE /api/v1/admin/records/{record_type}/{public_ref}` (admin only, body `{"reason": ...}`) deletes one approved calculation, conformer observation, kinetics, network, network solve, statmech, thermo, transition-state entry or transport record, with every row it owns and its review and curation overlay rows. It is refused with 409 `record_deletion_not_approved` for a record never approved, `record_deletion_in_published_release` while a published release selects it, and `record_deletion_cited` (context lists each citing record's type, public ref and column) while another record, a supersession link or a draft release selection cites it; nothing is cascaded. Curators and depositors get 403, anonymous callers 401.
+- **Behaviour:** a detail read of a deleted public ref answers 410 `record_deleted` with the deletion date; the admin's reason is only in `context.admin_supplied.reason`. `GET /api/v1/admin/record-deletions` lists the audit (paginated) and `GET /api/v1/admin/record-deletions/{public_ref}` returns one entry with its JSON copy.
+- **Schema and migration:** new revision `c8e2a4f6b1d3` on top of `e3b7c1a9d452`: append-only table `record_deletion` (who, when, reason, record and subject refs, JSON copy of every removed row). The accepted-science guards, `tckdb_guard_record_review` and the append-only rejecters of the overlay tables allow a DELETE (never an UPDATE) of a record's rows only when the transaction-local setting `tckdb.record_deletion` names it and its `record_deletion` row was written in the same transaction. The downgrade restores the previous function bodies and drops the table. No new environment variable.
+- **Versions:** `tckdb-schemas` 0.177.3, `tckdb-client` 0.210.3.
+
 ## Backend specs and root plans leave the repository (Unreleased)
 
 - **Behaviour:** none. `backend/docs/specs/`, the root `plan.md` and `current_project_status.md` are no longer tracked; `.gitignore` lists their paths. They remain in git history. Code comments, API descriptions, published pages, `LICENSE-DATA` and `CITATION.cff` that cited them now state the fact they cited or drop the citation, including section pointers such as `(spec §3)` and "see the spec". The release runbook (`backend/docs/deployment/cutting_a_dataset_release.md`) gains a "Known operational boundaries" section carrying the two release limits that were recorded only in a spec.

@@ -2809,6 +2809,36 @@ the gap.
 | `name` | TEXT | no | — | — | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 
+### `record_deletion`
+
+**Role:** role not stated on the model
+
+**Purpose:** One approved record removed by an admin, with a copy of everything removed.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `record_type` | SubmissionRecordType (enum) | no | — | — | `species`, `species_entry`, `conformer_group`, `conformer_observation`, `reaction`, `reaction_entry`, `transition_state`, `transition_state_entry`, `calculation`, `statmech`, `thermo`, `kinetics`, `transport`, `network`, `network_solve`, `applied_energy_correction`, `artifact`, `molecular_property_observation` | not documented |
+| `record_id` | BIGINT | no | — | — | — | not documented |
+| `record_public_ref` | VARCHAR(40) | no | — | — | — | not documented |
+| `subject_type` | SubmissionRecordType (enum) | yes | — | — | `species`, `species_entry`, `conformer_group`, `conformer_observation`, `reaction`, `reaction_entry`, `transition_state`, `transition_state_entry`, `calculation`, `statmech`, `thermo`, `kinetics`, `transport`, `network`, `network_solve`, `applied_energy_correction`, `artifact`, `molecular_property_observation` | not documented |
+| `subject_public_ref` | VARCHAR(40) | yes | — | — | — | not documented |
+| `subject_chain` | JSONB | no | []'::jsonb | — | — | not documented |
+| `first_approved_at` | TIMESTAMP WITHOUT TIME ZONE | no | — | — | — | not documented |
+| `reason` | TEXT | no | — | — | — | not documented |
+| `deleted_by` | BIGINT | no | — | app_user.id | — | not documented |
+| `deleted_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+| `snapshot` | JSONB | no | — | — | — | not documented |
+| `xact_id` | BIGINT | no | ((pg_current_xact_id())::text)::bigint | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_record_deletion_reason_nonblank`: `length(btrim(reason)) > 0`
+- `ck_record_deletion_snapshot_is_object`: `jsonb_typeof(snapshot) = 'object'`
+- `ck_record_deletion_subject_both_or_neither`: `(subject_type IS NULL) = (subject_public_ref IS NULL)`
+- `ck_record_deletion_subject_chain_is_array`: `jsonb_typeof(subject_chain) = 'array'`
+- `ck_record_deletion_supported_type`: `record_type IN ('calculation', 'thermo', 'statmech', 'kinetics', 'transport', 'network', 'network_solve', 'applied_energy_correction', 'transition_state_entry', 'conformer_observation')`
+
 ### `record_machine_review`
 
 **Role:** role not stated on the model

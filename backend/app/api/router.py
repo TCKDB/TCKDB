@@ -30,6 +30,7 @@ from app.api.routes import (
     meta,
     networks,
     reactions,
+    record_deletions,
     record_reviews,
     releases_admin,
     software,
@@ -62,6 +63,12 @@ api_router.include_router(meta.router, tags=["meta"])
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(
     admin.router,
+    prefix="/admin",
+    tags=["admin"],
+    dependencies=_write_compat_dependency,
+)
+api_router.include_router(
+    record_deletions.router,
     prefix="/admin",
     tags=["admin"],
     dependencies=_write_compat_dependency,
