@@ -16,6 +16,7 @@ import { ReviewChip } from "./ReviewChip"
 import { ValueSource } from "./ValueSource"
 import { LiteratureCitation } from "./LiteratureCitation"
 import { HardFailFlag } from "./TrustAssessment"
+import { RecordNumbersContext } from "../hooks/useRecordNumbers"
 import { RecordEvidenceBlocks } from "./RecordEvidenceBlocks"
 import { DepositWarningsPanel } from "./DepositWarningsPanel"
 import { warningsForRecord } from "../api/depositWarningsSchema"
@@ -123,6 +124,7 @@ export function ReactionKineticsSection({ kinetics, calculations, transitionStat
     return (
         <>
             <OrderNote order="Listed approved first, then newest deposited first." />
+            <RecordNumbersContext.Provider value={numbers}>
             <div className="kinetics-record-list">
                 {kinetics.map((record) => (
                     <KineticsRecordCard
@@ -135,6 +137,7 @@ export function ReactionKineticsSection({ kinetics, calculations, transitionStat
                     />
                 ))}
             </div>
+            </RecordNumbersContext.Provider>
             {/* One combined Arrhenius plot (one panel per A_units ORDER
                 FAMILY -- unimolecular/bimolecular/termolecular, so e.g. a
                 cm3_mol_s record and an m3_mol_s record share one panel and

@@ -1123,6 +1123,24 @@ describe("ReactionEntryPage -- the References disclosure names every kinetics re
     })
 })
 
+describe("ReactionEntryPage -- evidence regions of several kinetics records", () => {
+    it("names each record's evidence regions by its own number", async () => {
+        const kin = (n: number) => ({ ...(mockFull().kinetics as Array<Record<string, unknown>>)[0], kinetics_ref: `kin_n${n}` })
+        const withTrust = (ref: string) => ({
+            kinetics_ref: ref, scientific_origin: "computed", model_kind: "modified_arrhenius", review: { status: "not_reviewed" },
+            parameters: { A: 1, A_units: "cm3_mol_s", n: 0, Ea_kj_mol: 10 }, is_third_body: false, uncertainty: {},
+            evidence_completeness: { score: 0, max: 9, checklist: {} }, provenance: {},
+            trust: { review_status: "not_reviewed", trust_status: "partial", evidence: { passed_count: 1, possible_count: 2, checks: { arrhenius_parameters_complete: "passed" } } },
+        })
+        server.use(http.get(`/api/v1/scientific/reaction-entries/${ENTRY_REF}/kinetics`, () => HttpResponse.json({ records: [withTrust("kin_n1"), withTrust("kin_n2")], record_warnings: [] })))
+        handleFull(mockFull({ kinetics: [kin(1), kin(2)] }))
+        page()
+        await screen.findAllByText("Model kind")
+        expect(await screen.findByRole("region", { name: "Trust of kinetics record 1" })).toBeInTheDocument()
+        expect(screen.getByRole("region", { name: "Trust of kinetics record 2" })).toBeInTheDocument()
+    })
+})
+
 describe("ReactionEntryPage -- no depositor-typed text", () => {
     it("prints none of the network name, the participants' joined labels, or atom-map and kinetics notes", async () => {
         const base = mockFull()

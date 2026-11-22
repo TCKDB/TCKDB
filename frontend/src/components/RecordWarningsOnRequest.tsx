@@ -79,7 +79,8 @@ export function RecordWarningsOnRequest({ ref_, load, idBase, recordLabel }: { r
         if (requested) statusRef.current?.focus()
     }, [requested])
     const loaded = status === LOADED
-    // The loaded line is visually hidden, so focus moves on to the visible heading it announces.
+    // The loaded line is visually hidden, so focus moves on to the visible heading it announces. The line keeps tabIndex -1
+    // in every state: a browser drops focus from an element the moment it stops being focusable.
     useEffect(() => {
         if (loaded && document.activeElement === statusRef.current) document.getElementById(`deposit-warnings-${idBase}`)?.focus()
     }, [loaded, idBase])
@@ -90,7 +91,7 @@ export function RecordWarningsOnRequest({ ref_, load, idBase, recordLabel }: { r
                     Show deposit warnings
                 </button>
             )}
-            <p className={loaded ? "note record-warnings-status record-warnings-status--loaded" : "note record-warnings-status"} role="status" tabIndex={loaded ? undefined : -1} ref={statusRef}>{status}</p>
+            <p className={loaded ? "note record-warnings-status record-warnings-status--loaded" : "note record-warnings-status"} role="status" tabIndex={-1} ref={statusRef}>{status}</p>
             {requested && <LoadedWarnings ref_={ref_} load={load} idBase={idBase} recordLabel={recordLabel} onStatus={setStatus} />}
         </div>
     )

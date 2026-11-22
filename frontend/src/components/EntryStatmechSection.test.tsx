@@ -276,6 +276,8 @@ describe("EntryStatmechSection: trust, reproducibility and deposit warnings", ()
         await screen.findByText("sm_one")
         fireEvent.click(screen.getByRole("button", { name: "Show deposit warnings of statmech record 1" }))
         await screen.findByText("Warning for sm_one.")
+        // A browser blurs an element that stops being focusable, which jsdom does not do; the status line must stay focusable.
+        for (const line of document.querySelectorAll(".record-warnings-status")) expect(line).toHaveAttribute("tabindex", "-1")
         await waitFor(() => expect(document.activeElement?.tagName).toBe("H4"))
         const focused = document.activeElement as HTMLElement
         expect(focused).toHaveTextContent("Deposit warnings")
