@@ -360,6 +360,108 @@ def test_refuses_any_tckdb_image_name_with_another_default(repo_copy: Path, tmp_
     assert "0.0.2" in result.stderr
 
 
+# ---------------------------------------------------------------------------
+# release-bundle.yml: attaching to a release
+# ---------------------------------------------------------------------------
+
+WORKFLOW = REPO_ROOT / ".github/workflows/release-bundle.yml"
+
+#: A stand-in for `gh release`: a release is a directory of assets under
+#: $GH_RELEASES/<tag>; every call is logged.
+_FAKE_GH = r"""#!/usr/bin/env bash
+echo "$*" >> "$GH_LOG"
+[[ "$1" == release ]] || exit 2
+sub="$2"; tag="$3"; shift 3
+dir="$GH_RELEASES/$tag"
+case "$sub" in
+  view)
+    [[ -d "$dir" ]] || { echo "release not found" >&2; exit 1; }
+    if [[ "$*" == *"--json assets"* ]]; then ls "$dir"; fi
+    exit 0 ;;
+  create) mkdir -p "$dir"; exit 0 ;;
+  download)
+    pattern=""; out="."
+    while [[ $# -gt 0 ]]; do
+      case "$1" in --pattern) pattern="$2"; shift 2 ;; --dir) out="$2"; shift 2 ;; *) shift ;; esac
+    done
+    mkdir -p "$out"; cp "$dir/$pattern" "$out/"; exit 0 ;;
+  upload)
+    for f in "$@"; do [[ "$f" == --* ]] || cp "$f" "$dir/"; done; exit 0 ;;
+esac
+exit 2
+"""
+
+
+def _attach_script() -> str:
+    workflow = yaml.safe_load(WORKFLOW.read_text())
+    [step] = [s for s in workflow["jobs"]["attach"]["steps"] if "run" in s]
+    return step["run"]
+
+
+@pytest.fixture
+def attach(bundle: Path, tmp_path: Path):
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    (bindir / "gh").write_text(_FAKE_GH)
+    (bindir / "gh").chmod(0o755)
+    work = tmp_path / "dist"
+    work.mkdir()
+    for f in (bundle, bundle.with_name(bundle.name + ".sha256")):
+        shutil.copy(f, work / f.name)
+    releases = tmp_path / "releases"
+    releases.mkdir()
+    log = tmp_path / "gh.log"
+
+    def _run() -> tuple[subprocess.CompletedProcess, list[str]]:
+        result = subprocess.run(
+            ["bash", "-eo", "pipefail", "-c", _attach_script()],
+            cwd=work,
+            env={
+                "PATH": f"{bindir}:{os.environ['PATH']}",
+                "GH_LOG": str(log),
+                "GH_RELEASES": str(releases),
+                "TAG": f"v{VERSION}",
+                "NAME": TOP,
+            },
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        return result, log.read_text().splitlines() if log.exists() else []
+
+    _run.releases = releases / f"v{VERSION}"
+    return _run
+
+
+def test_attach_creates_the_release_and_uploads(attach) -> None:
+    result, calls = attach()
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert any(c.startswith(f"release create v{VERSION}") for c in calls)
+    assert sorted(p.name for p in attach.releases.iterdir()) == [f"{TOP}.tar.gz", f"{TOP}.tar.gz.sha256"]
+
+
+def test_attach_reuploads_identical_bytes(attach, bundle: Path) -> None:
+    attach.releases.mkdir()
+    shutil.copy(bundle, attach.releases / bundle.name)
+    shutil.copy(bundle.with_name(bundle.name + ".sha256"), attach.releases / f"{bundle.name}.sha256")
+    result, calls = attach()
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert any(c.startswith(f"release upload v{VERSION}") for c in calls)
+
+
+@pytest.mark.parametrize("asset", ["tarball", "sha256"])
+def test_attach_refuses_to_replace_different_bytes(attach, bundle: Path, asset: str) -> None:
+    attach.releases.mkdir()
+    if asset == "tarball":
+        (attach.releases / bundle.name).write_bytes(b"other bytes")
+    else:
+        (attach.releases / f"{bundle.name}.sha256").write_text(f"{'0' * 64}  {bundle.name}\n")
+    result, calls = attach()
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "differs" in result.stdout + result.stderr
+    assert not any(c.startswith("release upload") for c in calls)
+
+
 def test_builds_outside_git_with_source_date_epoch(repo_copy: Path, tmp_path: Path) -> None:
     script = repo_copy / "backend/scripts/ops/make_selfhost_bundle.sh"
     first = _build(tmp_path / "a", VERSION, script=script, env={"SOURCE_DATE_EPOCH": "1700000000"})

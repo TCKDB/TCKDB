@@ -8,7 +8,9 @@ name: release-bundle
 #
 # backend/scripts/ops/make_selfhost_bundle.sh builds it and refuses a version
 # that disagrees with docker-compose.yml's default image tag or
-# backend/pyproject.toml. The release is created if the tag has none yet.
+# backend/pyproject.toml. The release is created if the tag has none yet. An
+# asset already on the release is replaced only by identical bytes; a
+# different build of the same name fails the job.
 #
 # A manual run (workflow_dispatch) builds the given version at the selected
 # ref and uploads it as a workflow artifact only: no release is touched.
@@ -114,5 +116,18 @@ jobs:
             gh release create "$TAG" --verify-tag --title "$TAG" --generate-notes \
               || gh release view "$TAG" >/dev/null
           fi
-          # --clobber: a re-run of the same tag uploads the same bytes again.
+          # A published asset is replaced only by the same bytes: a re-run of
+          # the tag. Different bytes under a published name would change what
+          # earlier downloads were checked against, so the job fails instead.
+          assets="$(gh release view "$TAG" --json assets --jq '.assets[].name')"
+          mkdir -p published
+          for asset in "$NAME.tar.gz" "$NAME.tar.gz.sha256"; do
+            if grep -qxF "$asset" <<<"$assets"; then
+              gh release download "$TAG" --pattern "$asset" --dir published --clobber
+              if ! cmp -s "published/$asset" "$asset"; then
+                echo "::error::$asset on release $TAG differs from this build; not replacing it"
+                exit 1
+              fi
+            fi
+          done
           gh release upload "$TAG" "$NAME.tar.gz" "$NAME.tar.gz.sha256" --clobber
