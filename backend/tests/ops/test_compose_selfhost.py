@@ -71,8 +71,8 @@ def test_the_worker_reaches_the_bundled_store_by_service_name() -> None:
 
 def test_published_images_share_one_tag() -> None:
     for name in ("init", "tckdb-api", "worker"):
-        assert SERVICES[name]["image"] == "laxzal/tckdb-api:${TCKDB_IMAGE_TAG:-0.4.0}", name
-    assert SERVICES["frontend"]["image"] == "laxzal/tckdb-frontend:${TCKDB_IMAGE_TAG:-0.4.0}"
+        assert SERVICES[name]["image"] == "laxzal/tckdb-api:${TCKDB_IMAGE_TAG:-0.4.1}", name
+    assert SERVICES["frontend"]["image"] == "laxzal/tckdb-frontend:${TCKDB_IMAGE_TAG:-0.4.1}"
 
 
 # ---------------------------------------------------------------------------
@@ -210,6 +210,65 @@ def test_make_env_refuses_to_overwrite(tmp_path: Path) -> None:
     assert forced.returncode == 0
     assert "warning: overwriting" in forced.stderr
     assert (tmp_path / ".env.selfhosted").read_text() != before
+
+
+def _checkout_copy(root: Path) -> Path:
+    """The env script and its templates in a checkout named ``root``."""
+    for rel in (".env.selfhosted.example", ".env.db-admin.example", "backend/scripts/ops/tckdb_make_env.sh"):
+        target = root / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((REPO_ROOT / rel).read_bytes())
+    return root / "backend/scripts/ops/tckdb_make_env.sh"
+
+
+def _run_copy(script: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["bash", str(script), "--yes", *args],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        stdin=subprocess.DEVNULL,
+        env={k: v for k, v in os.environ.items() if k not in {"TCKDB_BOOTSTRAP_PASSWORD", "COMPOSE_PROJECT_NAME"}},
+    )
+
+
+def test_make_env_names_the_compose_project(tmp_path: Path) -> None:
+    script = _checkout_copy(tmp_path / "My Clone.V2")
+    assert _run_copy(script).returncode == 0
+    assert _values(tmp_path / "My Clone.V2" / ".env.selfhosted")["COMPOSE_PROJECT_NAME"] == "tckdb"
+
+
+@pytest.mark.parametrize(
+    ("checkout", "existing", "expected"),
+    [
+        ("My Clone.V2", "", "myclonev2"),
+        ("TCKDB", "", "tckdb"),
+        ("tckdb-selfhost-0.4.1", "", "tckdb-selfhost-041"),
+        ("My Clone.V2", "COMPOSE_PROJECT_NAME=lab\n", "lab"),
+    ],
+    ids=["clone-dir", "tckdb-dir", "bundle-dir", "kept"],
+)
+def test_make_env_force_keeps_the_running_project(tmp_path: Path, checkout, existing, expected) -> None:
+    """--force on an install must not move it to new, empty volumes."""
+    root = tmp_path / checkout
+    script = _checkout_copy(root)
+    (root / ".env.selfhosted").write_text(f"DB_PASSWORD=old\n{existing}")
+    (root / ".env.db-admin").write_text("DB_ADMIN_PASSWORD=old\n")
+    result = _run_copy(script, "--force")
+    assert result.returncode == 0, result.stderr
+    assert _values(root / ".env.selfhosted")["COMPOSE_PROJECT_NAME"] == expected
+    if expected != "tckdb":
+        assert f"COMPOSE_PROJECT_NAME={expected}" in result.stdout
+
+
+def test_make_env_force_lets_set_choose_the_project(tmp_path: Path) -> None:
+    root = tmp_path / "clone"
+    script = _checkout_copy(root)
+    (root / ".env.selfhosted").write_text("DB_PASSWORD=old\n")
+    (root / ".env.db-admin").write_text("DB_ADMIN_PASSWORD=old\n")
+    result = _run_copy(script, "--force", "--set", "COMPOSE_PROJECT_NAME=fresh")
+    assert result.returncode == 0, result.stderr
+    assert _values(root / ".env.selfhosted")["COMPOSE_PROJECT_NAME"] == "fresh"
 
 
 def test_make_env_takes_the_admin_password_from_the_environment(tmp_path: Path) -> None:

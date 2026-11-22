@@ -34,6 +34,7 @@ WHAT COUNTS AS "TRACKED"
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -107,3 +108,88 @@ def test_the_banned_strings_are_not_generic_examples() -> None:
     assert _BANNED_HOSTNAME not in ("tckdb.example.com", "api.tckdb.example.org")
     assert "example" not in _BANNED_HOSTNAME
     assert _BANNED_ADDRESS != "127.0.0.1"
+
+
+# ---------------------------------------------------------------------------
+# The self-host bundle
+# ---------------------------------------------------------------------------
+#
+# Every file make_selfhost_bundle.sh ships goes to hosts that are not the
+# maintainer's, so none may carry one host's env file name, a home directory
+# or the maintainer host's compose project -- except where a script keeps
+# that project as its documented fallback for the host it was written on.
+
+_BUNDLE_SCRIPT = REPO_ROOT / "backend/scripts/ops/make_selfhost_bundle.sh"
+
+#: The maintainer host's compose project, built from parts like the strings above.
+_LEGACY_PROJECT = "tckdb" + "v2"
+
+_DEPLOY = "backend/scripts/ops/tckdb_deploy.sh"
+_BACKUP = "backend/scripts/ops/tckdb_backup.sh"
+
+#: (file, stripped line) pairs allowed to name the legacy project: the db
+#: container and network a script falls back to when no project resolves,
+#: so the host that sets nothing else keeps working, and their documentation.
+_LEGACY_ALLOWED = {
+    (_DEPLOY, f'DEFAULT_DB_CONTAINER="{_LEGACY_PROJECT}-db-1"'),
+    (_DEPLOY, f'DEFAULT_DB_NETWORK="{_LEGACY_PROJECT}_default"'),
+    (_DEPLOY, f"#   service and `<project>_default`); the container `{_LEGACY_PROJECT}-db-1` if it"),
+    (_DEPLOY, f"#   else `{_LEGACY_PROJECT}-db-1` / `{_LEGACY_PROJECT}_default`."),
+    (_BACKUP, f"LEGACY_CONTAINER={_LEGACY_PROJECT}-db-1"),
+    (_BACKUP, f"#   the container `{_LEGACY_PROJECT}-db-1` if it exists; else `docker compose ps -q db`"),
+    (_BACKUP, f"#   run here, given TCKDB_ENV_FILE; else `{_LEGACY_PROJECT}-db-1`."),
+    (_BACKUP, f"#   With only TCKDB_BACKUP_DEST set and `{_LEGACY_PROJECT}-db-1` present, this dumps"),
+    (_BACKUP, f"#   database `tckdb` as role `tckdb` in `{_LEGACY_PROJECT}-db-1`."),
+}
+
+#: One host's env file name, and any home directory but the placeholder.
+_BUNDLE_BANNED = (
+    re.compile(re.escape(".env" + ".pi")),
+    re.compile(r"/home/(?!YOUR_USER/)"),
+)
+
+
+def _bundled_files() -> list[str]:
+    text = _BUNDLE_SCRIPT.read_text()
+    block = re.search(r"^FILES=\(\n(.*?)^\)", text, re.M | re.S)
+    assert block, "make_selfhost_bundle.sh has no FILES=( ... ) list"
+    files = [line.strip() for line in block.group(1).splitlines() if line.strip()]
+    assert "docker-compose.yml" in files and len(files) > 10, files
+    # The script writes the bundle's README.md and VERSION itself.
+    return [*files, "backend/scripts/ops/make_selfhost_bundle.sh"]
+
+
+def _bundle_lines():
+    for rel in _bundled_files():
+        for number, line in enumerate((REPO_ROOT / rel).read_text().splitlines(), start=1):
+            yield rel, number, line
+
+
+def test_bundled_files_name_no_host_env_file_or_home_directory() -> None:
+    hits = [
+        f"{rel}:{number}: {line.strip()}"
+        for rel, number, line in _bundle_lines()
+        if any(pattern.search(line) for pattern in _BUNDLE_BANNED)
+    ]
+    assert not hits, hits
+
+
+def test_bundled_files_name_the_legacy_project_only_as_the_fallback() -> None:
+    hits = [
+        f"{rel}:{number}: {line.strip()}"
+        for rel, number, line in _bundle_lines()
+        if _LEGACY_PROJECT in line and (rel, line.strip()) not in _LEGACY_ALLOWED
+    ]
+    assert not hits, hits
+
+
+def test_every_legacy_allowance_is_still_in_use() -> None:
+    """A stale allowance would let the string back in unnoticed."""
+    present = {(rel, line.strip()) for rel, _, line in _bundle_lines()}
+    assert _LEGACY_ALLOWED <= present, _LEGACY_ALLOWED - present
+
+
+def test_the_bundle_guards_catch_what_they_name() -> None:
+    assert any(p.search("TCKDB_ENV_FILE=" + ".env" + ".pi") for p in _BUNDLE_BANNED)
+    assert any(p.search("/home/" + "calvin/tckdb") for p in _BUNDLE_BANNED)
+    assert not any(p.search("EnvironmentFile=/home/YOUR_USER/.config/x.env") for p in _BUNDLE_BANNED)

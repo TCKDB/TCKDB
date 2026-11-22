@@ -354,7 +354,7 @@ services:
   # ---------------------------------------------------------------------------
   init:
     profiles: ["selfhost"]
-    image: laxzal/tckdb-api:${TCKDB_IMAGE_TAG:-0.4.0}
+    image: laxzal/tckdb-api:${TCKDB_IMAGE_TAG:-0.4.1}
     env_file:
       - .env.selfhosted
       - .env.db-admin
@@ -389,7 +389,7 @@ services:
   # Named `tckdb-api` because the frontend image proxies /api/ to that host.
   tckdb-api:
     profiles: ["selfhost"]
-    image: laxzal/tckdb-api:${TCKDB_IMAGE_TAG:-0.4.0}
+    image: laxzal/tckdb-api:${TCKDB_IMAGE_TAG:-0.4.1}
     env_file:
       - .env.selfhosted
     environment:
@@ -430,7 +430,7 @@ services:
   # lab network. It is the only setting here that moves a port off loopback.
   frontend:
     profiles: ["selfhost"]
-    image: laxzal/tckdb-frontend:${TCKDB_IMAGE_TAG:-0.4.0}
+    image: laxzal/tckdb-frontend:${TCKDB_IMAGE_TAG:-0.4.1}
     ports:
       - "${TCKDB_WEB_BIND:-127.0.0.1}:${TCKDB_WEB_PORT:-8011}:8080"
     healthcheck:
@@ -461,7 +461,7 @@ services:
   # host-side DB_HOST=127.0.0.1 default.
   worker:
     profiles: ["worker"]
-    image: laxzal/tckdb-api:${TCKDB_IMAGE_TAG:-0.4.0}
+    image: laxzal/tckdb-api:${TCKDB_IMAGE_TAG:-0.4.1}
     command: ["python", "-m", "app.workers.upload_worker"]
     environment:
       DB_HOST: db
@@ -594,7 +594,7 @@ services:
 
 # `storage` holds the object store and the services that talk to it, and
 # nothing else (#545). Compose names it `<project>_storage`, e.g.
-# `tckdbv2_storage`. The selfhost API is on it; an API container started by
+# `tckdb_storage`. The selfhost API is on it; an API container started by
 # backend/scripts/ops/tckdb_deploy.sh joins it through TCKDB_EXTRA_NETWORKS.
 networks:
   default:

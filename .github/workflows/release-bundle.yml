@@ -1,0 +1,133 @@
+name: release-bundle
+
+# Attach the self-host install bundle to the GitHub release for a `v*` tag:
+# tckdb-selfhost-<version>.tar.gz (compose file, env templates, Caddyfile and
+# operator scripts) and its .sha256. A self-hoster downloads it instead of
+# cloning the repository. The images it starts are built by
+# build-api-image.yml and build-frontend-image.yml from the same tag.
+#
+# backend/scripts/ops/make_selfhost_bundle.sh builds it and refuses a version
+# that disagrees with docker-compose.yml's default image tag or
+# backend/pyproject.toml. The release is created if the tag has none yet. An
+# asset already on the release is replaced only by identical bytes; a
+# different build of the same name fails the job.
+#
+# A manual run (workflow_dispatch) builds the given version at the selected
+# ref and uploads it as a workflow artifact only: no release is touched.
+#
+# Nothing here pushes to Docker Hub or PyPI.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version to build, such as 0.4.1 (dry run: workflow artifact only)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: release-bundle-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      name: ${{ steps.build.outputs.name }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Resolve the version
+        id: version
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$EVENT" = push ]; then version="${REF_NAME#v}"; else version="${INPUT_VERSION#v}"; fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        id: build
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          backend/scripts/ops/make_selfhost_bundle.sh "$VERSION"
+          echo "name=tckdb-selfhost-$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check the bundle
+        working-directory: dist
+        env:
+          NAME: ${{ steps.build.outputs.name }}
+        run: |
+          set -euo pipefail
+          sha256sum -c "$NAME.tar.gz.sha256"
+          tar -tzvf "$NAME.tar.gz"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.build.outputs.name }}
+          path: |
+            dist/${{ steps.build.outputs.name }}.tar.gz
+            dist/${{ steps.build.outputs.name }}.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  attach:
+    name: Attach to the release
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build.outputs.name }}
+          path: dist
+
+      - name: Create the release if absent, then upload
+        working-directory: dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          NAME: ${{ needs.build.outputs.name }}
+        run: |
+          set -euo pipefail
+          sha256sum -c "$NAME.tar.gz.sha256"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            # Another run may create it between the view and here.
+            gh release create "$TAG" --verify-tag --title "$TAG" --generate-notes \
+              || gh release view "$TAG" >/dev/null
+          fi
+          # A published asset is replaced only by the same bytes: a re-run of
+          # the tag. Different bytes under a published name would change what
+          # earlier downloads were checked against, so the job fails instead.
+          assets="$(gh release view "$TAG" --json assets --jq '.assets[].name')"
+          mkdir -p published
+          for asset in "$NAME.tar.gz" "$NAME.tar.gz.sha256"; do
+            if grep -qxF "$asset" <<<"$assets"; then
+              gh release download "$TAG" --pattern "$asset" --dir published --clobber
+              if ! cmp -s "published/$asset" "$asset"; then
+                echo "::error::$asset on release $TAG differs from this build; not replacing it"
+                exit 1
+              fi
+            fi
+          done
+          gh release upload "$TAG" "$NAME.tar.gz" "$NAME.tar.gz.sha256" --clobber

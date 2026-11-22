@@ -25,6 +25,22 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Release 0.4.1 is the self-hosting default (Unreleased)
+
+- **Behaviour:** the `selfhost` compose profile, the install guide and `tckdb_deploy.sh` examples default to the 0.4.1 images (`TCKDB_IMAGE_TAG`). 0.4.1 is the first release with a self-host bundle attached, and its ops scripts answer `--help` before any check.
+- **Schema and migration:** none; 0.4.1 has no revision after 0.4.0's `c8e2a4f6b1d3`. No new environment variable.
+- **Versions:** `tckdb-backend` 0.4.1.
+
+## Self-hosting installs from a release bundle (Unreleased)
+
+- **Behaviour:** `backend/scripts/ops/make_selfhost_bundle.sh <version>` writes `dist/tckdb-selfhost-<version>.tar.gz` and its `.sha256`: the compose file, both env templates, the Caddyfile, the self-host and operator scripts with their systemd units, `LICENSE`, a `README.md` and a `VERSION` file, under one `tckdb-selfhost-<version>/` directory at their repository paths. It refuses a version that differs from `docker-compose.yml`'s default image tag or `backend/pyproject.toml`, and the same tree gives the same bytes. The workflow `release-bundle.yml` attaches both files to the GitHub release of every `v*` tag, creating the release if absent, and fails rather than replace an asset already there with different bytes; a manual run builds a workflow artifact only.
+- **Behaviour:** the self-host guide installs from the bundle (`curl -f`, `sha256sum -c`, `tar xzf`, then the same two commands); a git clone remains the developer route. On a server each release unpacks under `/opt` behind the symlink `/opt/tckdb`, which the example systemd units use. An upgrade unpacks the new bundle beside the old one, copies `.env.selfhosted` and `.env.db-admin` into it and moves the symlink.
+- **Behaviour:** `tckdb_make_env.sh --force` keeps the compose project the old `.env.selfhosted` ran under: its `COMPOSE_PROJECT_NAME`, else the name Compose derives from the directory, and says so when that is not `tckdb`.
+- **Behaviour:** `tckdb_backup.sh` finds the database the way `tckdb_deploy.sh` does: `TCKDB_DB_CONTAINER`, else the `db` service of `COMPOSE_PROJECT_NAME` (the environment's, else `TCKDB_ENV_FILE`'s), else `tckdbv2-db-1`, else `docker compose ps -q db`; the role and database come from `TCKDB_DB_USER` / `TCKDB_DB_NAME`, the env file, or the container's `POSTGRES_USER` / `POSTGRES_DB`, else `tckdb`. With only `TCKDB_BACKUP_DEST` set and `tckdbv2-db-1` present, it runs the same commands as before.
+- **Behaviour:** `tckdb_deploy.sh` reads `COMPOSE_PROJECT_NAME` from `TCKDB_ENV_FILE` when the environment has none, and passes its env files to `docker compose ps`. An env file without the setting deploys as before. Examples name `tckdb_storage` and `/opt/tckdb`.
+- **Schema and migration:** none.
+- **Environment:** `.env.selfhosted.example` now sets Compose's own `COMPOSE_PROJECT_NAME=tckdb`. Compose starts every container, network and volume name with it, so new installs run as project `tckdb` (`tckdb_tckdb_pgdata`, `tckdb-db-1`) wherever they are unpacked, instead of a project named after the directory. Existing env files are unchanged. `tckdb_backup.sh` gains the optional `TCKDB_ENV_FILE`, `TCKDB_DB_CONTAINER`, `TCKDB_DB_USER` and `TCKDB_DB_NAME`, and reads `COMPOSE_PROJECT_NAME`.
+
 ## Operator scripts answer --help (Unreleased)
 
 - **Behaviour:** `tckdb_deploy.sh`, `tckdb_backup.sh`, `tckdb_alert_check.sh` and `tckdb_ci_watchdog.sh` print their header comment and exit 0 when `--help` or `-h` appears anywhere in the arguments, before reading any environment variable or calling docker, curl or the network. Each header now lists its arguments, every environment variable it reads (required or default) and an example. Other arguments behave as before.
