@@ -33,6 +33,10 @@ usage() { sed -n '2,/^set -euo/p' "$0" | sed '$d; s/^# \{0,1\}//'; }
 die() { echo "error: $*" >&2; exit 1; }
 usage_error() { echo "error: $*" >&2; echo "run with --help for usage" >&2; exit 2; }
 
+for arg in "$@"; do
+    case "$arg" in -h|--help) usage; exit 0 ;; esac
+done
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 OUT_DIR="$REPO_ROOT/dist"
 VERSION=""
@@ -83,7 +87,7 @@ for f in "${FILES[@]}"; do
 done
 
 # The version must be the one the compose file starts and the backend carries.
-compose_tags="$(grep -oE 'laxzal/tckdb-[a-z]+:\$\{TCKDB_IMAGE_TAG:-[^}]*\}' "$REPO_ROOT/docker-compose.yml" \
+compose_tags="$(grep -oE 'laxzal/tckdb[-_][A-Za-z0-9_-]+:\$\{TCKDB_IMAGE_TAG:-[^}]*\}' "$REPO_ROOT/docker-compose.yml" \
     | sed 's/.*:-//; s/}$//' | sort -u)"
 [[ -n "$compose_tags" ]] || die "docker-compose.yml names no TCKDB image with a default tag"
 if [[ "$compose_tags" != "$VERSION" ]]; then

@@ -340,6 +340,26 @@ def test_refuses_when_compose_images_disagree(repo_copy: Path, tmp_path: Path) -
     assert "0.0.1" in result.stderr
 
 
+@pytest.mark.parametrize("image", ["tckdb-api2", "tckdb-upload-worker", "tckdb_web"])
+def test_refuses_any_tckdb_image_name_with_another_default(repo_copy: Path, tmp_path: Path, image: str) -> None:
+    compose = repo_copy / "docker-compose.yml"
+    compose.write_text(
+        compose.read_text().replace(
+            "  worker:\n",
+            f"  extra:\n    image: laxzal/{image}:${{TCKDB_IMAGE_TAG:-0.0.2}}\n  worker:\n",
+            1,
+        )
+    )
+    result = _build(
+        tmp_path / "out",
+        VERSION,
+        script=repo_copy / "backend/scripts/ops/make_selfhost_bundle.sh",
+        env={"SOURCE_DATE_EPOCH": "1700000000"},
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "0.0.2" in result.stderr
+
+
 def test_builds_outside_git_with_source_date_epoch(repo_copy: Path, tmp_path: Path) -> None:
     script = repo_copy / "backend/scripts/ops/make_selfhost_bundle.sh"
     first = _build(tmp_path / "a", VERSION, script=script, env={"SOURCE_DATE_EPOCH": "1700000000"})
