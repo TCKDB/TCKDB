@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { loadEntryStatmech } from "./statmechApi"
+import { loadEntryStatmech, loadStatmechDepositWarnings } from "./statmechApi"
 import { ScientificApiError } from "./scientificTransport"
 
 const server = setupServer()
@@ -109,5 +109,33 @@ describe("statmechRecordSchema's `levels` field", () => {
         const malformed = { energy_source: 42 }
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([minimalRecord({ levels: malformed })]))))
         await expect(loadEntryStatmech(entryRef)).rejects.toThrow(ScientificApiError)
+    })
+})
+
+describe("trust and assessments on the statmech list", () => {
+    it("asks for include=trust and include=assessments and parses both on the record", async () => {
+        let includes: string[] = []
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            includes = new URL(request.url).searchParams.getAll("include")
+            return HttpResponse.json(mockResponse([minimalRecord({
+                trust: { review_status: "approved", trust_status: "partial", evidence: { passed_count: 2, possible_count: 4, checks: { a: "passed" }, hard_fail_reason: null } },
+                assessments: { reproducibility: { state: "unassessed", grade: null, made_under: { state: "unassessed" } } },
+            })]))
+        }))
+        const response = await loadEntryStatmech(entryRef)
+        expect(includes).toEqual(expect.arrayContaining(["trust", "assessments"]))
+        expect(response.records[0].trust?.review_status).toBe("approved")
+        expect(response.records[0].assessments?.reproducibility?.state).toBe("unassessed")
+    })
+
+    it("loadStatmechDepositWarnings reads the by-ref record's warnings with no includes", async () => {
+        let search = "unset"
+        server.use(http.get("/api/v1/scientific/statmech/sm_one", ({ request }) => {
+            search = new URL(request.url).search
+            return HttpResponse.json({ record: minimalRecord(), record_warnings: [{ record_ref: "sm_one", status: "recorded", items: [{ code: "c", message: "m", field: "f", check_version: 1 }] }] })
+        }))
+        const warnings = await loadStatmechDepositWarnings("sm_one")
+        expect(search).toBe("")
+        expect(warnings.record_warnings[0].items[0].code).toBe("c")
     })
 })

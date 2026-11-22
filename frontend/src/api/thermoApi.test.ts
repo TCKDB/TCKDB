@@ -97,3 +97,34 @@ describe("thermo state and 0 K custody", () => {
         expect(response.records[0]).toMatchObject(values)
     })
 })
+
+describe("trust, assessments and deposit warnings on the thermo list", () => {
+    it("asks for include=trust and include=assessments", async () => {
+        let includes: string[] = []
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            includes = new URL(request.url).searchParams.getAll("include")
+            return HttpResponse.json(mockResponse([minimalRecord()]))
+        }))
+        await loadEntryThermo(entryRef)
+        expect(includes).toContain("trust")
+        expect(includes).toContain("assessments")
+    })
+
+    it("reads the trust fragment, the reproducibility assessment and record_warnings as typed fields", async () => {
+        const trust = {
+            review_status: "not_reviewed", trust_status: "hard_failed",
+            evidence: { passed_count: 0, possible_count: 3, checks: { at_least_one_thermo_representation_present: "missing" }, hard_fail_reason: "no_thermo_representation_present" },
+        }
+        const assessments = { reproducibility: { state: "current", grade: "described", assessed_at: "2026-10-01T00:00:00", made_under: { state: "inputs_unchecked", rubric: "reproducibility", assessed_version: 1 } } }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            ...mockResponse([minimalRecord({ trust, assessments })]),
+            record_warnings: [{ record_ref: "thm_one", status: "recorded", items: [{ code: "c", message: "m", field: "f", register_entry: 7, context: null, check_version: 1 }] }],
+        })))
+        const response = await loadEntryThermo(entryRef)
+        expect(response.records[0].trust?.evidence.hard_fail_reason).toBe("no_thermo_representation_present")
+        expect(response.records[0].assessments?.reproducibility?.grade).toBe("described")
+        expect(response.records[0].assessments?.reproducibility?.assessed_at).toBe("2026-10-01T00:00:00")
+        expect(response.record_warnings[0].items[0].register_entry).toBe(7)
+        expect(response.deposit_warnings).toEqual([])
+    })
+})
