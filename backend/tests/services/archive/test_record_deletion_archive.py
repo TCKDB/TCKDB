@@ -15,7 +15,7 @@ from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole, RecordReviewStatus, SubmissionRecordType
 from app.db.models.record_deletion import RecordDeletion
 from app.services.archive import restore_archive, write_archive
-from app.services.record_deletion import delete_approved_record
+from app.services.record_deletion import delete_approved_record, deleted_records
 from app.services.record_review import ensure_record_review, set_record_review_status
 from tests.services.archive.test_archive import _empty_archive_tables
 from tests.services.scientific_read._factories import make_calculation, make_species, make_species_entry, next_inchi_key
@@ -62,3 +62,23 @@ def test_the_audit_survives_an_archive_round_trip_without_its_transaction_id(cli
     response = client.get(f"/api/v1/scientific/calculations/{ref}")
     assert response.status_code == 410
     assert response.json()["code"] == "record_deleted"
+
+
+def test_a_restore_never_reissues_the_id_of_a_deleted_record(client, db_session) -> None:
+    """Deleted ids are looked up by ``(record_type, record_id)``; a reissued id would make a live record read as
+    deleted. The newest calculation is the deleted one, so the restored rows alone would rewind the sequence below it."""
+    entry = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key("ARCSEQ")))
+    make_calculation(db_session, species_entry_id=entry.id)
+    ref, _snapshot = _deleted_calculation(db_session)
+    deleted_id = db_session.scalar(select(RecordDeletion.record_id).where(RecordDeletion.record_public_ref == ref))
+    archive = io.BytesIO()
+    write_archive(db_session, archive)
+    _empty_archive_tables(db_session)
+    restore_archive(db_session, io.BytesIO(archive.getvalue()))
+
+    entry = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key("ARCSEQ2")))
+    fresh = make_calculation(db_session, species_entry_id=entry.id)
+
+    assert fresh.id > deleted_id
+    assert deleted_records(db_session, [(SubmissionRecordType.calculation, fresh.id)]) == {}
+    assert client.get(f"/api/v1/scientific/calculations/{fresh.public_ref}").status_code == 200

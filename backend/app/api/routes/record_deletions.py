@@ -7,9 +7,6 @@
 Admin only: curators and depositors get 403, anonymous callers 401. A record that was never approved is out of scope
 (409 ``record_deletion_not_approved``); the record-review reject flow handles it. See
 :mod:`app.services.record_deletion` for what is removed, what refuses, and how the database allows it.
-
-Deleting a record creates its audit entry, so the operation is a ``POST`` to the audit collection: a ``DELETE`` would
-need a request body for the reason, and some proxies drop the body of a ``DELETE``.
 """
 
 from __future__ import annotations
