@@ -14,12 +14,16 @@ from sqlalchemy.exc import DBAPIError
 from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole, RecordReviewStatus, SubmissionRecordType
 from app.services.record_review import ensure_record_review, set_record_review_status
+from app.services.scientific_record_supersession import supersede_scientific_record
 from tests.services.scientific_read._factories import (
+    attach_dependency,
+    make_calculation,
     make_chem_reaction,
     make_kinetics,
     make_reaction_entry,
     make_species,
     make_species_entry,
+    make_statmech,
     next_inchi_key,
 )
 
@@ -145,3 +149,78 @@ def test_the_audit_is_append_only_and_names_only_an_approved_record(db_session) 
     with pytest.raises(DBAPIError) as raised, db_session.begin_nested():
         _audit(db_session, unapproved, _admin(db_session))
     assert _sqlstate(raised.value) == "23514"
+
+
+def _audit_record(session, record_type: SubmissionRecordType, row, actor: AppUser) -> None:
+    """An audit row for ``row`` and the setting naming it, in the current transaction."""
+    session.execute(
+        text(
+            "INSERT INTO record_deletion (record_type, record_id, record_public_ref, first_approved_at, reason, "
+            "deleted_by, snapshot) VALUES (CAST(:type AS submission_record_type), :id, :ref, now(), 'test', :by, "
+            "'{}'::jsonb)"
+        ),
+        {"type": record_type.value, "id": row.id, "ref": row.public_ref, "by": actor.id},
+    )
+    session.execute(
+        text("SELECT set_config('tckdb.record_deletion', :v, true)"), {"v": f"{record_type.value}:{row.id}"}
+    )
+
+
+def _approve_any(session, record_type: SubmissionRecordType, record_id: int) -> None:
+    curator = AppUser(username=f"guard-curator-{record_type.value}-{record_id}", role=AppUserRole.curator)
+    session.add(curator)
+    session.flush()
+    ensure_record_review(session, record_type=record_type, record_id=record_id)
+    set_record_review_status(
+        session, record_type=record_type, record_id=record_id, status=RecordReviewStatus.approved, actor=curator
+    )
+
+
+def test_a_permit_for_the_parent_does_not_free_the_childs_dependency_edge(db_session) -> None:
+    """The edge belongs to its child; naming the parent for deletion must not let the edge go."""
+    entry = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key("RDGDEP")))
+    parent = make_calculation(db_session, species_entry_id=entry.id)
+    child = make_calculation(db_session, species_entry_id=entry.id)
+    attach_dependency(db_session, parent=parent, child=child)
+    _approve_any(db_session, SubmissionRecordType.calculation, parent.id)
+    _approve_any(db_session, SubmissionRecordType.calculation, child.id)
+    _audit_record(db_session, SubmissionRecordType.calculation, parent, _admin(db_session))
+
+    assert (
+        _refused(db_session, "DELETE FROM calculation_dependency WHERE parent_calculation_id = :id", id=parent.id)
+        == _IMMUTABLE
+    )
+
+
+def test_a_supersession_row_is_deleted_only_under_the_permit_for_one_of_its_records(db_session) -> None:
+    entry = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key("RDGSUP")))
+    old, new = make_statmech(db_session, species_entry=entry), make_statmech(db_session, species_entry=entry)
+    _approve_any(db_session, SubmissionRecordType.statmech, old.id)
+    _approve_any(db_session, SubmissionRecordType.statmech, new.id)
+    curator = AppUser(username="guard-supersession-curator", role=AppUserRole.curator)
+    db_session.add(curator)
+    db_session.flush()
+    supersede_scientific_record(
+        db_session,
+        record_type=SubmissionRecordType.statmech,
+        superseded_record_id=old.id,
+        superseding_record_id=new.id,
+        actor=curator,
+        reason="corrected",
+    )
+    edge = "DELETE FROM scientific_record_supersession WHERE superseding_record_id = :id"
+    rewrite = "UPDATE scientific_record_supersession SET reason = 'x' WHERE superseding_record_id = :id"
+
+    assert _refused(db_session, edge, id=new.id) == _IMMUTABLE
+    unrelated = _kinetics(db_session)
+    with db_session.begin_nested():
+        _audit_record(db_session, SubmissionRecordType.kinetics, unrelated, _admin(db_session))
+        assert _refused(db_session, edge, id=new.id) == _IMMUTABLE
+    with db_session.begin_nested():
+        _audit_record(db_session, SubmissionRecordType.statmech, new, _admin(db_session))
+        assert _refused(db_session, rewrite, id=new.id) == _IMMUTABLE
+        db_session.execute(text(edge), {"id": new.id})
+        assert db_session.execute(
+            text("SELECT count(*) FROM scientific_record_supersession WHERE superseding_record_id = :id"),
+            {"id": new.id},
+        ).scalar() == 0

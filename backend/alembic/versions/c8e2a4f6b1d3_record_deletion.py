@@ -8,7 +8,12 @@ The accepted-science guards, ``tckdb_guard_record_review`` and the append-only r
 tables stand down for a DELETE (never an UPDATE) only when ``tckdb_record_deletion_permits`` holds: the transaction-local
 setting ``tckdb.record_deletion`` names the record as ``<record_type>:<id>`` and a ``record_deletion`` row for it was
 written in the same transaction. Overlay rows of the record's calculation artifacts are covered through their
-calculation.
+calculation. A child row is freed only through the column that owns it (a dependency edge through its child).
+
+The same permit removes the history links that name the record: supersession edges in either direction, structure
+evidence findings about a calculation (and adjudications settling them), and structure-determination sources pinning
+a calculation. ``tckdb_structure_finding_append_only`` and ``tckdb_structure_source_delete_guard`` stand down for those
+rows only.
 
 ``downgrade()`` restores the original function bodies, then drops the table with every audit row in it.
 """
@@ -88,10 +93,39 @@ CREATE FUNCTION public.tckdb_record_deletion_covers_row(p_table text, p_row json
                         SELECT public.tckdb_record_deletion_covers(w.record_type, w.record_id)
                         FROM public.deposit_warning w WHERE w.id = (p_row ->> 'deposit_warning_id')::bigint
                     ), false);
-                WHEN 'software_version_attestation_calculation' THEN
+                WHEN 'software_version_attestation_calculation', 'structure_determination_source' THEN
                     RETURN public.tckdb_record_deletion_permits(
                         'calculation', (p_row ->> 'calculation_id')::bigint
                     );
+                WHEN 'scientific_record_supersession' THEN
+                    RETURN public.tckdb_record_deletion_permits(
+                        (p_row ->> 'record_type')::public.submission_record_type,
+                        (p_row ->> 'superseded_record_id')::bigint
+                    ) OR public.tckdb_record_deletion_permits(
+                        (p_row ->> 'record_type')::public.submission_record_type,
+                        (p_row ->> 'superseding_record_id')::bigint
+                    );
+                WHEN 'structure_evidence_finding' THEN
+                    -- A finding about the calculation, or an adjudication settling one (walked up its chain).
+                    RETURN coalesce((
+                        WITH RECURSIVE chain AS (
+                            SELECT (p_row ->> 'subject_calculation_id')::bigint AS subject_id,
+                                   (p_row ->> 'source_calculation_id')::bigint AS source_id,
+                                   (p_row ->> 'supersedes_finding_id')::bigint AS parent_id,
+                                   1 AS depth
+                            UNION ALL
+                            SELECT f.subject_calculation_id, f.source_calculation_id, f.supersedes_finding_id,
+                                   chain.depth + 1
+                            FROM public.structure_evidence_finding f
+                            JOIN chain ON f.id = chain.parent_id
+                            WHERE chain.depth < 64
+                        )
+                        SELECT bool_or(
+                            public.tckdb_record_deletion_permits('calculation', subject_id)
+                            OR public.tckdb_record_deletion_permits('calculation', source_id)
+                        )
+                        FROM chain
+                    ), false);
                 ELSE
                     RETURN false;
             END CASE;
@@ -173,7 +207,7 @@ CREATE OR REPLACE FUNCTION public.tckdb_guard_accepted_child()
  SET search_path TO 'pg_catalog', 'public'
 AS $function$
         DECLARE record_ids bigint[] := ARRAY[]::bigint[];
-                argument_index integer; record_id bigint;
+                argument_index integer; record_id bigint; owner_column text;
         BEGIN
             FOR argument_index IN 1..TG_NARGS - 1 LOOP
                 IF TG_OP <> 'INSERT' THEN
@@ -190,15 +224,17 @@ AS $function$
                 END IF;
             END LOOP;
             IF TG_OP = 'DELETE' THEN
-                FOR record_id IN
-                    SELECT DISTINCT value FROM unnest(record_ids) AS value WHERE value IS NOT NULL
-                LOOP
-                    IF public.tckdb_record_deletion_permits(
-                        TG_ARGV[0]::public.submission_record_type, record_id
-                    ) THEN
-                        RETURN OLD;
-                    END IF;
-                END LOOP;
+                -- The row is freed only by a deletion of the record that owns it: the single guarded column, or for a
+                -- dependency edge its child. A permit for the parent leaves the child's edge guarded.
+                owner_column := CASE
+                    WHEN TG_NARGS = 2 THEN TG_ARGV[1]
+                    WHEN TG_TABLE_NAME = 'calculation_dependency' THEN 'child_calculation_id'
+                END;
+                IF owner_column IS NOT NULL AND public.tckdb_record_deletion_permits(
+                    TG_ARGV[0]::public.submission_record_type, (to_jsonb(OLD)->>owner_column)::bigint
+                ) THEN
+                    RETURN OLD;
+                END IF;
             END IF;
             FOR record_id IN
                 SELECT DISTINCT value
@@ -231,6 +267,9 @@ CREATE OR REPLACE FUNCTION public.tckdb_guard_accepted_via_child()
 AS $function$
         DECLARE parent_id bigint; record_id bigint;
         BEGIN
+            IF TG_OP = 'DELETE' AND public.tckdb_record_deletion_covers_row(TG_TABLE_NAME, to_jsonb(OLD)) THEN
+                RETURN OLD;
+            END IF;
             FOR parent_id IN
                 SELECT DISTINCT value::bigint
                 FROM unnest(ARRAY[
@@ -375,6 +414,39 @@ AS $function$
                 MESSAGE = 'record_reproducibility_assessment is append-only';
         END;
         $function$;
+
+CREATE OR REPLACE FUNCTION public.tckdb_structure_finding_append_only()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'pg_catalog', 'public'
+AS $function$
+BEGIN
+    IF TG_OP = 'DELETE' AND public.tckdb_record_deletion_covers_row(TG_TABLE_NAME, to_jsonb(OLD)) THEN
+        RETURN OLD;
+    END IF;
+    RAISE EXCEPTION
+        'structure_evidence_finding_is_append_only: a finding cannot be %d. Only an authorized adjudication '
+        'settles an earlier finding.', lower(TG_OP)
+        USING ERRCODE = '23514',
+              HINT = 'Append a finding (or, with authority, an adjudication) instead.';
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.tckdb_structure_source_delete_guard()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'pg_catalog', 'public'
+AS $function$
+BEGIN
+    IF public.tckdb_record_deletion_covers_row(TG_TABLE_NAME, to_jsonb(OLD)) THEN
+        RETURN OLD;
+    END IF;
+    RAISE EXCEPTION
+        'structure_determination_sources_are_pinned_at_creation: a source of determination % cannot be removed',
+        OLD.determination_id
+        USING ERRCODE = '23514';
+END;
+$function$;
 """
 
 # The bodies these functions had before this revision, verbatim from ``pg_get_functiondef`` at e3b7c1a9d452.
@@ -578,6 +650,33 @@ AS $function$
                 MESSAGE = TG_TABLE_NAME || ' is append-only';
         END;
         $function$;
+
+CREATE OR REPLACE FUNCTION public.tckdb_structure_finding_append_only()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'pg_catalog', 'public'
+AS $function$
+BEGIN
+    RAISE EXCEPTION
+        'structure_evidence_finding_is_append_only: a finding cannot be %d. Only an authorized adjudication '
+        'settles an earlier finding.', lower(TG_OP)
+        USING ERRCODE = '23514',
+              HINT = 'Append a finding (or, with authority, an adjudication) instead.';
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.tckdb_structure_source_delete_guard()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'pg_catalog', 'public'
+AS $function$
+BEGIN
+    RAISE EXCEPTION
+        'structure_determination_sources_are_pinned_at_creation: a source of determination % cannot be removed',
+        OLD.determination_id
+        USING ERRCODE = '23514';
+END;
+$function$;
 """
 
 _DROP_PERMIT_FUNCTIONS = r"""

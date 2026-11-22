@@ -10,6 +10,8 @@ a superseded selection would defeat the point of publishing the audit trail.
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session, aliased
 from tckdb_schemas.fragments.version import VersionRef
@@ -38,6 +40,7 @@ from app.schemas.reads.scientific_release import (
     ScientificReleaseManifestResponse,
     ScientificReleaseSelectionsResponse,
 )
+from app.services.record_deletion import deleted_records
 from app.services.release.artifacts import load_selection_state
 from app.services.release.manifest import (
     live_divergence,
@@ -166,6 +169,15 @@ def _refs_by_type(session: Session, pairs: list[tuple]) -> dict[tuple, str]:
         for record_id, ref in found.items():
             out[(record_type, record_id)] = ref
     return out
+
+
+def _record_ref_fields(row: ReleaseSelection, record_refs: dict[tuple, str], deleted: dict) -> dict[str, Any]:
+    """The selected record's ref, and its deletion date when an admin has deleted it (the row is release history)."""
+    key = (row.record_type, row.record_id)
+    deletion = deleted.get(key)
+    if deletion is not None:
+        return {"record_ref": deletion.record_public_ref, "record_deleted_at": encode_scalar(deletion.deleted_at)}
+    return {"record_ref": record_refs.get(key)}
 
 
 def _record_supersessions(
@@ -313,6 +325,7 @@ def _selection_record(
     policy = session.get(CurationPolicy, row.curation_policy_id)
     curator = session.get(AppUser, row.selected_by)
     record_refs = _refs_by_type(session, [(row.record_type, row.record_id)])
+    deleted = deleted_records(session, [(row.record_type, row.record_id)])
     subject_refs = _refs_by_type(session, [(row.subject_type, row.subject_id)])
     record_notices = _record_supersessions(
         session, [(row.record_type, row.record_id)]
@@ -323,7 +336,7 @@ def _selection_record(
         stands=row.id in standing
         and row.action is not ReleaseSelectionAction.withdraw,
         record_type=row.record_type.value,
-        record_ref=record_refs.get((row.record_type, row.record_id)),
+        **_record_ref_fields(row, record_refs, deleted),
         subject_type=row.subject_type.value,
         subject_ref=subject_refs.get((row.subject_type, row.subject_id)),
         supersedes_selection_ref=(
@@ -489,6 +502,7 @@ def get_release_selections(
     # would make the ledger endpoint quadratic in the thing it exists to
     # publish. Scoped to the page, because that is all this response renders.
     record_refs = _refs_by_type(session, [(r.record_type, r.record_id) for r in rows])
+    deleted = deleted_records(session, [(r.record_type, r.record_id) for r in rows])
     subject_refs = _refs_by_type(session, [(r.subject_type, r.subject_id) for r in rows])
     record_notices = _record_supersessions(
         session, [(r.record_type, r.record_id) for r in rows]
@@ -500,7 +514,7 @@ def get_release_selections(
             action=row.action,
             stands=stands_by_id[row.id],
             record_type=row.record_type.value,
-            record_ref=record_refs.get((row.record_type, row.record_id)),
+            **_record_ref_fields(row, record_refs, deleted),
             subject_type=row.subject_type.value,
             subject_ref=subject_refs.get((row.subject_type, row.subject_id)),
             supersedes_selection_ref=by_id.get(row.supersedes_selection_id),

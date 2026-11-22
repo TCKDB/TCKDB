@@ -356,7 +356,9 @@ def test_the_notice_names_records_by_public_ref_only(client, db_session):
         "reason",
         "superseded_at",
         "chain_length",
+        "superseded_by_deleted_at",
     }
+    assert notice["superseded_by_deleted_at"] is None
 
 
 # ---------------------------------------------------------------------------

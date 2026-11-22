@@ -53,7 +53,7 @@ from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.transport import Transport
 from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER
 from app.services.public_refs import PREFIXES
-from app.services.record_deletion import raise_if_deleted
+from app.services.record_deletion import raise_if_deleted, raise_if_deleted_id, record_type_for_model
 from app.services.scientific_read.hidden_by_default import record_forwarded_ref
 from app.services.species_merge import MERGE_COLUMNS
 
@@ -398,6 +398,10 @@ def resolve_path_handle(
             select(*_id_and_marker(model_cls)).where(model_cls.id == row_id)
         ).first()
         if found is None:
+            # A row an admin deleted answers 410 ``record_deleted``, as its ref does.
+            deleted_type = record_type_for_model(model_cls)
+            if deleted_type is not None:
+                raise_if_deleted_id(session, record_type=deleted_type, record_id=row_id)
             # F7/F18: log the integer id server-side so operators can
             # still correlate 404s with traffic; do not echo it back
             # to the public caller. The stable ``handle_not_found``

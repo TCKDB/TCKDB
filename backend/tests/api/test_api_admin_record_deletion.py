@@ -129,16 +129,22 @@ def _with_overlays(session: Session, record_type: SubmissionRecordType, record_i
 
 
 def _delete(client: TestClient, record_type: str, public_ref: str, reason: str = "duplicate of an earlier deposit"):
-    return client.request("DELETE", f"/api/v1/admin/records/{record_type}/{public_ref}", json={"reason": reason})
+    return client.post(
+        "/api/v1/admin/record-deletions",
+        json={"record_type": record_type, "public_ref": public_ref, "reason": reason},
+    )
 
 
 def _count(session: Session, sql: str, **params) -> int:
     return session.execute(text(sql), params).scalar_one()
 
 
-def _references_left(session: Session, record_type: SubmissionRecordType, record_id: int) -> dict[str, int]:
+def _references_left(
+    session: Session, record_type: SubmissionRecordType, record_id: int, *, kept: frozenset[str] = frozenset()
+) -> dict[str, int]:
     """Every row anywhere that still points at the record: each foreign key into its table, each owned-row predicate,
-    and each ``(record_type, record_id)`` column pair."""
+    and each ``(record_type, record_id)`` column pair. ``kept`` names the ``table.column`` keys a caller expects to
+    remain (release history); any other key is a dangling row."""
     left: dict[str, int] = {}
     root = record_type.value
     for table in Base.metadata.sorted_tables:
@@ -182,7 +188,7 @@ def _references_left(session: Session, record_type: SubmissionRecordType, record
         n = _count(session, f"SELECT count(*) FROM {owned.table} WHERE {owned.predicate}", id=record_id)
         if n:
             left[owned.table] = n
-    return left
+    return {key: n for key, n in left.items() if key not in kept}
 
 
 # ---------------------------------------------------------------------------
@@ -207,7 +213,7 @@ def test_admin_deletes_an_approved_kinetics_record_and_nothing_references_it(
     login_as(_api_admin_user)
     response = _delete(client, "kinetics", ref)
 
-    assert response.status_code == 200, response.json()
+    assert response.status_code == 201, response.json()
     body = response.json()
     assert body["record_type"] == "kinetics"
     assert body["public_ref"] == ref
@@ -257,7 +263,7 @@ def test_a_calculation_is_deleted_with_its_children_and_its_artifacts_overlays(
     login_as(_api_admin_user)
     response = _delete(client, "calculation", ref)
 
-    assert response.status_code == 200, response.json()
+    assert response.status_code == 201, response.json()
     assert _references_left(db_session, _RT.calculation, calculation_id) == {}
     assert _references_left(db_session, _RT.artifact, artifact_id) == {}
     # The approved parent the deleted calculation was derived from is untouched.
@@ -275,7 +281,7 @@ def test_a_read_of_a_deleted_ref_answers_410_with_the_reason_only_in_a_marked_fi
     _approve(db_session, _RT.calculation, calculation.id)
     ref = calculation.public_ref
     login_as(_api_admin_user)
-    assert _delete(client, "calculation", ref, reason="Withdrawn by depositor: wrong basis set").status_code == 200
+    assert _delete(client, "calculation", ref, reason="Withdrawn by depositor: wrong basis set").status_code == 201
 
     response = client.get(f"/api/v1/scientific/calculations/{ref}")
 
@@ -399,6 +405,7 @@ def test_a_record_in_a_published_release_is_refused_until_the_release_is_withdra
     kinetics = _kinetics(db_session)
     kinetics_id, ref = kinetics.id, kinetics.public_ref
     release = _release(db_session, status=DatasetReleaseStatus.published, tag="rdel-2026.1")
+    release_ref = release.public_ref
     selection = _select(db_session, release, kinetics, _api_admin_user)
     selection_id, selection_ref = selection.id, selection.public_ref
     login_as(_api_admin_user)
@@ -417,11 +424,22 @@ def test_a_record_in_a_published_release_is_refused_until_the_release_is_withdra
 
     deleted = _delete(client, "kinetics", ref)
 
-    assert deleted.status_code == 200, deleted.json()
-    # A withdrawn release's selection is its history: kept, and copied into the audit.
+    assert deleted.status_code == 201, deleted.json()
+    # A withdrawn release's selection is its history: kept, and copied into the audit. It is the one row allowed to
+    # keep naming the deleted id; anything else left behind fails here.
     assert _count(db_session, "SELECT count(*) FROM release_selection WHERE id = :id", id=selection_id) == 1
+    history = frozenset({"release_selection.record_id"})
+    assert _references_left(db_session, _RT.kinetics, kinetics_id, kept=history) == {}
+    assert set(_references_left(db_session, _RT.kinetics, kinetics_id)) == history
     audit = db_session.scalar(select(RecordDeletion).where(RecordDeletion.record_public_ref == ref))
     assert [row["public_ref"] for row in audit.snapshot["release_selections"]] == [selection_ref]
+
+    # The release still reads, and names the deleted record by its ref and deletion date rather than null.
+    read = client.get(f"/api/v1/scientific/releases/{release_ref}/selections")
+    assert read.status_code == 200, read.json()
+    (row,) = [r for r in read.json()["records"] if r["selection_ref"] == selection_ref]
+    assert row["record_ref"] == ref
+    assert row["record_deleted_at"] == audit.deleted_at.isoformat()
 
 
 def test_a_standing_draft_selection_is_a_citation(client, db_session, login_as, _api_admin_user) -> None:
@@ -441,8 +459,8 @@ def test_a_standing_draft_selection_is_a_citation(client, db_session, login_as, 
 def test_the_audit_is_listed_newest_first_and_read_with_its_copy(client, db_session, login_as, _api_admin_user) -> None:
     first, second = _kinetics(db_session).public_ref, _kinetics(db_session).public_ref
     login_as(_api_admin_user)
-    assert _delete(client, "kinetics", first).status_code == 200
-    assert _delete(client, "kinetics", second).status_code == 200
+    assert _delete(client, "kinetics", first).status_code == 201
+    assert _delete(client, "kinetics", second).status_code == 201
 
     listing = client.get("/api/v1/admin/record-deletions", params={"limit": 1})
     assert listing.status_code == 200

@@ -61,7 +61,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
-from sqlalchemy import literal, select
+from sqlalchemy import literal, literal_column, null, select, text, union_all
 from sqlalchemy.orm import Session, aliased
 
 from app.db.models.calculation import Calculation
@@ -168,15 +168,22 @@ def fetch_supersession_notices(
             walk.c.depth < _MAX_CHAIN_DEPTH,
         )
     )
+    live = select(
+        walk.c.origin_id,
+        walk.c.cursor_id,
+        walk.c.successor_id,
+        walk.c.reason,
+        walk.c.superseded_at,
+        walk.c.depth,
+        null().label("deleted_ref"),
+        null().label("deleted_at"),
+    )
+    # Edges an admin deletion removed, from the copy in its audit row, at depth 0. Same statement, so a page still
+    # costs two.
     rows = session.execute(
-        select(
-            walk.c.origin_id,
-            walk.c.cursor_id,
-            walk.c.successor_id,
-            walk.c.reason,
-            walk.c.superseded_at,
-            walk.c.depth,
-        ).order_by(walk.c.origin_id, walk.c.depth)
+        union_all(live, _deleted_successor_edges(record_type, ids)).order_by(
+            literal_column("origin_id"), literal_column("depth")
+        )
     ).all()
     if not rows:
         return {}
@@ -186,10 +193,23 @@ def fetch_supersession_notices(
     # immediate successor and the edge's own reason/timestamp.
     heads: dict[int, tuple[int, int]] = {}
     immediate: dict[int, tuple[int, str, Any]] = {}
-    for origin_id, cursor_id, successor_id, reason, superseded_at, depth in rows:
+    deleted: dict[int, SupersessionNotice] = {}
+    for origin_id, cursor_id, successor_id, reason, superseded_at, depth, deleted_ref, deleted_at in rows:
+        if depth == 0:
+            deleted[origin_id] = SupersessionNotice(
+                superseded_by=deleted_ref,
+                current=deleted_ref,
+                reason=reason,
+                superseded_at=superseded_at,
+                chain_length=1,
+                superseded_by_deleted_at=deleted_at,
+            )
+            continue
         heads[origin_id] = (cursor_id, depth)
         if depth == 1:
             immediate[origin_id] = (successor_id, reason, superseded_at)
+    if not immediate:
+        return deleted
 
     wanted = {head_id for head_id, _ in heads.values()}
     wanted.update(successor_id for successor_id, _, _ in immediate.values())
@@ -217,7 +237,41 @@ def fetch_supersession_notices(
             superseded_at=superseded_at,
             chain_length=chain_length,
         )
-    return notices
+    # A live edge outranks one a deletion removed (a record re-superseded after its successor was deleted).
+    return {**deleted, **notices}
+
+
+def _deleted_successor_edges(record_type: SubmissionRecordType, ids: list[int]):
+    """Supersession edges whose successor an admin deleted, from the copy in the ``record_deletion`` row.
+
+    The notice names the deleted successor by its ref, as both ``superseded_by`` and ``current`` (nothing past it can
+    be followed), with ``superseded_by_deleted_at`` set.
+    """
+    return (
+        select(
+            literal_column("(e ->> 'superseded_record_id')::bigint").label("origin_id"),
+            literal_column("d.record_id").label("cursor_id"),
+            literal_column("d.record_id").label("successor_id"),
+            literal_column("e ->> 'reason'").label("reason"),
+            literal_column("(e ->> 'created_at')::timestamp").label("superseded_at"),
+            literal(0).label("depth"),
+            literal_column("d.record_public_ref").label("deleted_ref"),
+            literal_column("d.deleted_at").label("deleted_at"),
+        )
+        .select_from(
+            text(
+                "record_deletion d CROSS JOIN LATERAL jsonb_array_elements("
+                "coalesce(d.snapshot -> 'history' -> 'scientific_record_supersession', '[]'::jsonb)) AS e"
+            )
+        )
+        .where(
+            text(
+                "d.record_type = CAST(:deleted_type AS submission_record_type) "
+                "AND (e ->> 'superseding_record_id')::bigint = d.record_id "
+                "AND (e ->> 'superseded_record_id')::bigint = ANY(:deleted_ids)"
+            ).bindparams(deleted_type=record_type.value, deleted_ids=list(ids))
+        )
+    )
 
 
 __all__ = [

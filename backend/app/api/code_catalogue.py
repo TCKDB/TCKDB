@@ -2155,7 +2155,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
             shape=Shape.relationship,
             note=(
                 "Another record cites the one being deleted. context.cited_by lists each citer's record_type, "
-                "public_ref (null where the citer has none) and the table.column that cites it."
+                "public_ref and the table.column that cites it; a citer with no ref of its own (an applied energy correction) "
+                "is named by the record it belongs to."
             )),
     ApiCode("record_deletion_in_published_release", 409, Surface.coded_exception,
             "backend/app/services/record_deletion.py",

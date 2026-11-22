@@ -1,12 +1,15 @@
 """Admin deletion of approved scientific records, and the deletion audit.
 
-    DELETE /api/v1/admin/records/{record_type}/{public_ref}
+    POST   /api/v1/admin/record-deletions
     GET    /api/v1/admin/record-deletions
     GET    /api/v1/admin/record-deletions/{public_ref}
 
 Admin only: curators and depositors get 403, anonymous callers 401. A record that was never approved is out of scope
 (409 ``record_deletion_not_approved``); the record-review reject flow handles it. See
 :mod:`app.services.record_deletion` for what is removed, what refuses, and how the database allows it.
+
+Deleting a record creates its audit entry, so the operation is a ``POST`` to the audit collection: a ``DELETE`` would
+need a request body for the reason, and some proxies drop the body of a ``DELETE``.
 """
 
 from __future__ import annotations
@@ -31,10 +34,12 @@ router = APIRouter(route_class=ServerFaultRoute)
 
 
 class RecordDeletionRequest(BaseModel):
-    """Why the record is being deleted. Required, and kept in the audit."""
+    """Which approved record to delete, and why. The reason is required and kept in the audit."""
 
     model_config = ConfigDict(extra="forbid")
 
+    record_type: SubmissionRecordType
+    public_ref: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=40)]
     reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)]
 
 
@@ -93,11 +98,9 @@ def _summary(deletion: RecordDeletion, username: str) -> dict[str, Any]:
     }
 
 
-@router.delete("/records/{record_type}/{public_ref}", response_model=RecordDeletionSummary)
+@router.post("/record-deletions", response_model=RecordDeletionSummary, status_code=201)
 def delete_record(
     body: RecordDeletionRequest,
-    record_type: SubmissionRecordType,
-    public_ref: str = Path(..., min_length=1, max_length=40),
     admin: AppUser = Depends(require_admin),
     session: Session = Depends(get_write_db, scope="function"),
 ) -> RecordDeletionSummary:
@@ -109,7 +112,7 @@ def delete_record(
     record is already gone.
     """
     deletion = delete_approved_record(
-        session, record_type=record_type, public_ref=public_ref, reason=body.reason, actor=admin
+        session, record_type=body.record_type, public_ref=body.public_ref, reason=body.reason, actor=admin
     )
     return RecordDeletionSummary(**_summary(deletion, admin.username))
 

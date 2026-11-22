@@ -137,6 +137,11 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
     ("GET", "/api/v1/readyz", "readyz", None, None, _NEW_METHOD_TESTS),
     ("GET", "/api/v1/status", "status", None, None, _NEW_METHOD_TESTS),
     ("GET", "/api/v1/meta", "get_meta", None, None, _NEW_METHOD_TESTS),
+    # --- Admin ---------------------------------------------------------
+    (
+        "POST", "/api/v1/admin/record-deletions", "delete_record", None, None,
+        "tests/test_record_deletion.py",
+    ),
     ("GET", "/api/v1/auth/me", "me", None, None, "tests/test_client.py"),
     # --- Contribution bundles ---------------------------------------
     (
@@ -944,6 +949,8 @@ _NOT_APPLICABLE: tuple[tuple[str, str, str], ...] = tuple(
             "GET",
             "/api/v1/admin/submissions/{submission_id}/machine-review-inspection",
         ),
+        ("GET", "/api/v1/admin/record-deletions"),
+        ("GET", "/api/v1/admin/record-deletions/{public_ref}"),
         ("GET", "/api/v1/admin/users"),
         ("PATCH", "/api/v1/admin/users/{user_id}/role"),
     )

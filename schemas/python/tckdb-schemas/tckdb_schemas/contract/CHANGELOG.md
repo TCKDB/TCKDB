@@ -2,7 +2,7 @@
 
 ## 0.177.3 - 2026-11-22
 
-No schema changed. The producer contract lists the admin-only `DELETE /api/v1/admin/records/{record_type}/{public_ref}` route, and the refusal-code list gains `record_deleted` (410) and the four `record_deletion_*` codes.
+No schema changed. The producer contract lists the admin-only `POST /api/v1/admin/record-deletions` route, and the refusal-code list gains `record_deleted` (410) and the four `record_deletion_*` codes.
 
 ## 0.177.2 - 2026-11-21
 

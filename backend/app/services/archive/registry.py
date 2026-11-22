@@ -245,6 +245,10 @@ EXCLUDED_TABLES: Mapping[str, str] = {
         "would import a storage incident the restoring cluster never had"
     ),
     "idempotency_record": "ephemeral HTTP retry state",
+    "record_deletion": (
+        "deployment-local audit of admin deletions, keyed on a cluster transaction id; the deleted rows it copies "
+        "are not in the archive either"
+    ),
     "upload_job": "ephemeral worker queue state",
     "user_session": "authentication session state",
 }

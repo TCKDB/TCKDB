@@ -1,7 +1,7 @@
 """The deletion inventory in :mod:`app.services.record_deletion` covers every foreign key it has to.
 
 A foreign key into a deletable record's table, or into a table one owns, is either the key a row is owned through, a
-link between two rows of one record, or a citation. A new one that is none of these fails here: unclassified, it would
+link between two rows of one record, a history link removed with the record, or a citation. A new one that is none of these fails here: unclassified, it would
 either make the delete fail on a foreign-key error or, worse, be silently skipped by the citation check.
 """
 
@@ -16,6 +16,7 @@ from app.db.models.common import SubmissionRecordType
 from app.services.record_deletion import (
     CITATIONS,
     DELETABLE_RECORD_TYPES,
+    HISTORY_LINKS,
     INTERNAL_LINKS,
     OVERLAY_ROWS,
     OWNED_ROWS,
@@ -45,6 +46,8 @@ def _classified(table: str, columns: frozenset[str], referred: str) -> bool:
         return True
     if any((table, column, referred) in INTERNAL_LINKS for column in columns):
         return True
+    if any(link.table == table and (column, referred) in link.links for link in HISTORY_LINKS for column in columns):
+        return True
     return any(c.table == table and c.cites == referred and c.column in columns for c in CITATIONS)
 
 
@@ -63,6 +66,8 @@ def test_every_foreign_key_into_a_deletable_record_is_classified() -> None:
 def test_the_classifier_can_say_no() -> None:
     assert not _classified("thermo", frozenset({"species_entry_id"}), "kinetics")
     assert _classified("kinetics_source_calculation", frozenset({"calculation_id"}), "calculation")
+    assert _classified("structure_evidence_finding", frozenset({"subject_calculation_id"}), "calculation")
+    assert not _classified("structure_evidence_finding", frozenset({"subject_geometry_id"}), "calculation")
 
 
 def test_every_inventory_entry_names_a_real_column() -> None:
@@ -71,6 +76,7 @@ def test_every_inventory_entry_names_a_real_column() -> None:
         names.extend((owned.table, owned.owner[0]) for owned in rows if owned.owner)
     names.extend((citation.table, citation.column) for citation in CITATIONS)
     names.extend((table, column) for table, column, _referred in INTERNAL_LINKS)
+    names.extend((link.table, column) for link in HISTORY_LINKS for column, _referred in link.links)
     missing = sorted(f"{table}.{column}" for table, column in names if table not in _TABLES or column not in _TABLES[table].c)
     assert missing == []
     stale = sorted(
@@ -89,8 +95,9 @@ def test_every_table_keyed_by_record_type_is_deleted_or_deliberately_kept() -> N
         if isinstance(column.type, SAEnum) and column.type.enum_class is SubmissionRecordType
     }
     direct_overlays = {overlay.table for overlay in OVERLAY_ROWS if overlay.parent is None}
+    history = {link.table for link in HISTORY_LINKS}
     assert polymorphic, "the scan must find the record_type columns"
-    assert polymorphic - direct_overlays - POLYMORPHIC_NOT_DELETED == set()
+    assert polymorphic - direct_overlays - history - POLYMORPHIC_NOT_DELETED == set()
     assert direct_overlays <= polymorphic
 
 

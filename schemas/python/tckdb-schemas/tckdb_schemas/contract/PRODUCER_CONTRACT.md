@@ -234,7 +234,7 @@ The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verb
 
 ### 0.177.3 - 2026-11-22
 
-No schema changed. The producer contract lists the admin-only `DELETE /api/v1/admin/records/{record_type}/{public_ref}` route, and the refusal-code list gains `record_deleted` (410) and the four `record_deletion_*` codes.
+No schema changed. The producer contract lists the admin-only `POST /api/v1/admin/record-deletions` route, and the refusal-code list gains `record_deleted` (410) and the four `record_deletion_*` codes.
 
 ### 0.177.2 - 2026-11-21
 
@@ -10096,7 +10096,7 @@ Every write route of the live application that the rule left out, with the reaso
 | `POST /api/v1/admin/machine-review/records/{record_type}/{record_id}/run-fake` | role-gated to admin |
 | `POST /api/v1/admin/machine-review/run-for-submission/{submission_id}` | role-gated to admin |
 | `POST /api/v1/admin/observations/{observation_ref}/identity` | role-gated to curator or admin |
-| `DELETE /api/v1/admin/records/{record_type}/{public_ref}` | role-gated to admin |
+| `POST /api/v1/admin/record-deletions` | role-gated to admin |
 | `PATCH /api/v1/admin/users/{user_id}/role` | role-gated to admin |
 | `POST /api/v1/auth/api-keys` | account and session management, not scientific content |
 | `DELETE /api/v1/auth/api-keys/{key_id}` | account and session management, not scientific content |

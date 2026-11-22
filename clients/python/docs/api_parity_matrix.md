@@ -11,10 +11,10 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 
 | Classification | Operations |
 |---|---|
-| typed | 131 |
+| typed | 132 |
 | raw_only | 109 |
-| not_applicable | 49 |
-| **total** | **289** |
+| not_applicable | 51 |
+| **total** | **292** |
 
 ## Typed coverage
 
@@ -22,6 +22,7 @@ A first-class client method exists for these operations.
 
 | Operation | raw HTTP | typed client | iterator | example | contract test |
 |---|---|---|---|---|---|
+| `POST /api/v1/admin/record-deletions` | yes | `delete_record` | — | — | `tests/test_record_deletion.py` |
 | `GET /api/v1/auth/me` | yes | `me` | — | — | `tests/test_client.py` |
 | `POST /api/v1/bundles/dry-run` | yes | `bundle_dry_run` | — | `examples/submit_bundle.py` | `tests/test_client.py` |
 | `POST /api/v1/bundles/submit` | yes | `bundle_submit` | — | `examples/submit_bundle.py` | `tests/test_client.py` |
@@ -367,6 +368,8 @@ Admin, auth, and curator-internal surface that a producer/consumer client is not
 | `POST /api/v1/admin/machine-review/curator-tasks/{task_id}/start-review` | yes | — | — | — | — |
 | `POST /api/v1/admin/machine-review/records/{record_type}/{record_id}/run-fake` | yes | — | — | — | — |
 | `POST /api/v1/admin/machine-review/run-for-submission/{submission_id}` | yes | — | — | — | — |
+| `GET /api/v1/admin/record-deletions` | yes | — | — | — | — |
+| `GET /api/v1/admin/record-deletions/{public_ref}` | yes | — | — | — | — |
 | `GET /api/v1/admin/submissions/{submission_id}/machine-review-inspection` | yes | — | — | — | — |
 | `GET /api/v1/admin/users` | yes | — | — | — | — |
 | `PATCH /api/v1/admin/users/{user_id}/role` | yes | — | — | — | — |
