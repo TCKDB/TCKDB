@@ -16,7 +16,7 @@
 # USAGE
 #   backend/scripts/ops/make_selfhost_bundle.sh [options] VERSION
 #
-#   VERSION is the release, such as 0.4.0 (a leading v is dropped). It must
+#   VERSION is the release, such as 0.4.1 (a leading v is dropped). It must
 #   equal the default image tag of every TCKDB image in docker-compose.yml
 #   and the version in backend/pyproject.toml.
 #
@@ -45,10 +45,10 @@ while [[ $# -gt 0 ]]; do
         *) [[ -z "$VERSION" ]] || usage_error "one VERSION only, got '$VERSION' and '$1'"; VERSION="$1"; shift ;;
     esac
 done
-[[ -n "$VERSION" ]] || usage_error "VERSION is required, such as 0.4.0"
+[[ -n "$VERSION" ]] || usage_error "VERSION is required, such as 0.4.1"
 VERSION="${VERSION#v}"
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]] \
-    || usage_error "VERSION must be a release such as 0.4.0, got '$VERSION'"
+    || usage_error "VERSION must be a release such as 0.4.1, got '$VERSION'"
 
 # Every file the bundle carries, relative to the repository root. Keep in step
 # with ALLOWED in backend/tests/ops/test_selfhost_bundle.py.

@@ -22,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version to build, such as 0.4.0 (dry run: workflow artifact only)"
+        description: "Release version to build, such as 0.4.1 (dry run: workflow artifact only)"
         required: true
         type: string
 

@@ -36,7 +36,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tckdb-backend"
-version = "0.4.0"
+version = "0.4.1"
 description = "FastAPI backend for the TCKDB scientific database (thermochemistry / kinetics with provenance)."
 requires-python = ">=3.13"
 # The repository ships an MIT LICENSE at its root; this metadata states the

@@ -25,6 +25,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Release 0.4.1 is the self-hosting default (Unreleased)
+
+- **Behaviour:** the `selfhost` compose profile, the install guide and `tckdb_deploy.sh` examples default to the 0.4.1 images (`TCKDB_IMAGE_TAG`). 0.4.1 is the first release with a self-host bundle attached, and its ops scripts answer `--help` before any check.
+- **Schema and migration:** none; 0.4.1 has no revision after 0.4.0's `c8e2a4f6b1d3`. No new environment variable.
+- **Versions:** `tckdb-backend` 0.4.1.
+
 ## Self-hosting installs from a release bundle (Unreleased)
 
 - **Behaviour:** `backend/scripts/ops/make_selfhost_bundle.sh <version>` writes `dist/tckdb-selfhost-<version>.tar.gz` and its `.sha256`: the compose file, both env templates, the Caddyfile, the self-host and operator scripts with their systemd units, `LICENSE`, a `README.md` and a `VERSION` file, under one `tckdb-selfhost-<version>/` directory at their repository paths. It refuses a version that differs from `docker-compose.yml`'s default image tag or `backend/pyproject.toml`, and the same tree gives the same bytes. The workflow `release-bundle.yml` attaches both files to the GitHub release of every `v*` tag, creating the release if absent; a manual run builds a workflow artifact only.

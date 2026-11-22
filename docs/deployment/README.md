@@ -23,7 +23,7 @@ Run these in order. After the `cd`, every command on this page runs from
 that directory.
 
 ```bash
-VERSION=0.4.0
+VERSION=0.4.1
 curl -LO https://github.com/TCKDB/TCKDB/releases/download/v$VERSION/tckdb-selfhost-$VERSION.tar.gz
 curl -LO https://github.com/TCKDB/TCKDB/releases/download/v$VERSION/tckdb-selfhost-$VERSION.tar.gz.sha256
 sha256sum -c tckdb-selfhost-$VERSION.tar.gz.sha256
@@ -342,7 +342,7 @@ directory.
 
 **Another image.** To run a tag other than the default, set
 `TCKDB_IMAGE_TAG=<tag>` in `.env.selfhosted` and run `up -d --wait`. The tag
-is a release such as `0.4.0` or `sha-<commit>`. One tag names both the API and
+is a release such as `0.4.1` or `sha-<commit>`. One tag names both the API and
 the web UI image, so a `sha-` tag must come from a commit that built both. A
 release tag always does. Keep the tag in the env file. Passed only on the
 command line, it reverts to the compose default on the next `up`.
