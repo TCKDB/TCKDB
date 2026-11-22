@@ -155,7 +155,7 @@ docker compose --env-file .env.selfhosted --env-file .env.db-admin \
     --profile selfhost up -d --wait
 ```
 
-Options 2 and 3 need release 0.3.0 or newer, the default. With 0.2.0 the API
+Options 2 and 3 need release 0.3.0 or newer; the default tag is. With 0.2.0 the API
 refuses the plain-HTTP cookie setting and does not start, and the web UI passes
 on any `X-Real-IP` a client sends.
 
@@ -205,7 +205,7 @@ docker compose --env-file .env.selfhosted --env-file .env.db-admin \
     --profile selfhost --profile caddy up -d --wait
 ```
 
-Options 2 and 3 need release 0.3.0 or newer, the default.
+Options 2 and 3 need release 0.3.0 or newer; the default tag is.
 
 The `caddy` profile adds [Caddy](https://caddyserver.com/) with
 `deploy/caddy/Caddyfile`. On first start it gets a certificate for the
@@ -304,7 +304,7 @@ passwords, which the existing database refuses.
 1. [Back up](#back-up) first.
 2. Update the checkout with `git pull`.
 3. Set the image tag in `.env.selfhosted`: `TCKDB_IMAGE_TAG=<tag>`, where the
-   tag is a release such as `0.3.0` or `sha-<commit>`. One tag names both the
+   tag is a release such as `0.4.0` or `sha-<commit>`. One tag names both the
    API and the web UI image, so a `sha-` tag must come from a commit that
    built both. A release tag always does.
 4. Run the `up -d --wait` command again.

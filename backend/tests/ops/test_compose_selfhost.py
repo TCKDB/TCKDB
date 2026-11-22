@@ -71,8 +71,8 @@ def test_the_worker_reaches_the_bundled_store_by_service_name() -> None:
 
 def test_published_images_share_one_tag() -> None:
     for name in ("init", "tckdb-api", "worker"):
-        assert SERVICES[name]["image"] == "laxzal/tckdb-api:${TCKDB_IMAGE_TAG:-0.3.0}", name
-    assert SERVICES["frontend"]["image"] == "laxzal/tckdb-frontend:${TCKDB_IMAGE_TAG:-0.3.0}"
+        assert SERVICES[name]["image"] == "laxzal/tckdb-api:${TCKDB_IMAGE_TAG:-0.4.0}", name
+    assert SERVICES["frontend"]["image"] == "laxzal/tckdb-frontend:${TCKDB_IMAGE_TAG:-0.4.0}"
 
 
 # ---------------------------------------------------------------------------
