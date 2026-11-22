@@ -46,7 +46,9 @@
 #   --force                overwrite existing files. Every password is
 #                          regenerated, so use it only before the first start
 #                          or with a fresh database volume: the roles keep the
-#                          old passwords (see .env.db-admin.example)
+#                          old passwords (see .env.db-admin.example). Keeps
+#                          the compose project the old file ran under
+#                          (COMPOSE_PROJECT_NAME, else this directory's name)
 #   -y, --yes              do not ask; use flags and defaults
 #   -h, --help             show this help
 #
@@ -105,6 +107,17 @@ for file in "$RUNTIME_FILE" "$ADMIN_FILE"; do
     [[ $FORCE -eq 1 ]] || die "$file already exists; nothing written (pass --force to overwrite it)"
     echo "warning: overwriting $file with new passwords; a database volume provisioned with the old ones will refuse them" >&2
 done
+
+# Compose starts every volume name with the project name. Regenerated files
+# keep the project the install runs under (its own setting, else the name
+# Compose derives from this directory), or the next `up` finds empty volumes.
+keep_project=""
+if [[ -e "$RUNTIME_FILE" ]]; then
+    keep_project="$(sed -n 's/^COMPOSE_PROJECT_NAME=//p' "$RUNTIME_FILE" | tail -n 1)"
+    if [[ -z "$keep_project" ]]; then
+        keep_project="$(basename "$REPO_ROOT" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-' | sed 's/^[-_]*//')"
+    fi
+fi
 
 interactive=0
 [[ $ASSUME_YES -eq 0 && -t 0 ]] && interactive=1
@@ -253,6 +266,7 @@ case "$ACCESS" in
         [[ -n "$tunnel_token" ]] && set_key "$runtime" CLOUDFLARED_TUNNEL_TOKEN "$tunnel_token" ;;
 esac
 set_key "$runtime" COMPOSE_PROFILES "$profiles"
+[[ -n "$keep_project" ]] && set_key "$runtime" COMPOSE_PROJECT_NAME "$keep_project"
 
 # Browsers drop a Secure cookie served over plain HTTP from anything but
 # localhost, which breaks browser login.
@@ -306,6 +320,10 @@ install -m 600 "$admin" "$ADMIN_FILE"
 echo "wrote $RUNTIME_FILE (API runtime settings)"
 echo "wrote $ADMIN_FILE (database owner/admin credentials; never give it to the API)"
 [[ -n "$cookie_note" ]] && echo "note: $cookie_note"
+if [[ -n "$keep_project" && "$keep_project" != tckdb ]] \
+        && grep -qx "COMPOSE_PROJECT_NAME=$keep_project" "$RUNTIME_FILE"; then
+    echo "note: kept the compose project this install runs under, COMPOSE_PROJECT_NAME=$keep_project, so its volumes stay in use"
+fi
 echo
 echo "administrator: $ADMIN_USER"
 if [[ $password_generated -eq 1 ]]; then
