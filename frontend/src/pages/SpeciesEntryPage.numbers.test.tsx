@@ -149,7 +149,8 @@ function handlers(options: Options = {}) {
         }),
         http.get(`/api/v1/scientific/species-entries/${entryRef}/statmech`, ({ request }) => {
             // Only the plain list counts: a record's on-demand sections are their own reads.
-            if (options.counts && !new URL(request.url).searchParams.has("include")) options.counts.statmech += 1
+            // The eager list asks only for trust and assessments; a section refetch adds a heavier token.
+            if (options.counts && new URL(request.url).searchParams.getAll("include").every((token) => token === "trust" || token === "assessments")) options.counts.statmech += 1
             return HttpResponse.json({
                 review_summary: summary, records: stat,
                 pagination: { offset: 0, limit: 50, returned: stat.length, total: stat.length },

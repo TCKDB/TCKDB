@@ -1018,7 +1018,9 @@ describe("EntryThermoSection: the reproducibility assessment states what it was 
             state: "current", grade: "rerunnable",
             made_under: { ...rubric, assessed_version: 1, current_version: 1, state: "current" },
         })
-        await screen.findByRole("heading", { name: "Reproducibility assessment: rerunnable" })
+        await screen.findByRole("heading", { name: "Reproducibility assessment" })
+        expect(screen.getByText("rerunnable")).toHaveClass("value-pill")
+        expect(screen.getByText(/complete enough to attempt a rerun/)).toBeVisible()
         expect(document.querySelector('[data-component="made-under"]')).toHaveAttribute("data-state", "current")
     })
 
@@ -1027,7 +1029,7 @@ describe("EntryThermoSection: the reproducibility assessment states what it was 
             state: "stale", grade: "described",
             made_under: { ...rubric, assessed_version: 1, current_version: 2, state: "stale", stale_reason: "rubric_version" },
         })
-        await screen.findByRole("heading", { name: "Reproducibility assessment: described" })
+        await screen.findByRole("heading", { name: "Reproducibility assessment" })
         expect(screen.getByText("Stale")).toBeVisible()
         expect(screen.getByText(/The current version is 2\. It has not been re-assessed under the current version\./)).toBeVisible()
     })
@@ -1037,7 +1039,7 @@ describe("EntryThermoSection: the reproducibility assessment states what it was 
             state: "stale", grade: "described",
             made_under: { ...rubric, assessed_version: 0, current_version: 1, state: "stale", stale_reason: "rubric_version" },
         })
-        await screen.findByRole("heading", { name: "Reproducibility assessment: described" })
+        await screen.findByRole("heading", { name: "Reproducibility assessment" })
         expect(screen.getByText(/no version recorded/)).toBeVisible()
     })
 
@@ -1052,6 +1054,43 @@ describe("EntryThermoSection: the reproducibility assessment states what it was 
         renderWithAssessments(undefined)
         await screen.findByText("thm_alpha")
         expect(screen.queryByRole("heading", { name: /Reproducibility assessment/ })).toBeNull()
+    })
+})
+
+describe("EntryThermoSection: trust and deposit warnings per record", () => {
+    const TRUST = {
+        review_status: "not_reviewed", trust_status: "partial",
+        evidence: { passed_count: 1, possible_count: 3, rubric: "computed_thermo", rubric_version: 1, checks: { freq_source_present: "missing" }, hard_fail_reason: null },
+    }
+    const item = (message: string) => ({ code: "c", message, field: "thermo[*]", register_entry: 8, check_version: 1 })
+
+    it("asks for trust and shows each record's own trust and its own warnings only", async () => {
+        const [alpha, beta] = mockRecords()
+        let includes: string[] = []
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            includes = new URL(request.url).searchParams.getAll("include")
+            return HttpResponse.json({
+                ...mockResponse({ records: [{ ...alpha, trust: TRUST }, beta] }),
+                record_warnings: [{ record_ref: alpha.thermo_ref, status: "recorded", items: [item("Alpha has a warning.")] }],
+                deposit_warnings: [{ items: [item("The whole deposit has one.")] }],
+            })
+        }))
+        page()
+        await screen.findByText(alpha.thermo_ref)
+        expect(includes).toEqual(expect.arrayContaining(["trust", "assessments"]))
+        expect(screen.getAllByText("Alpha has a warning.")).toHaveLength(1)
+        expect(screen.getAllByText("The whole deposit has one.")).toHaveLength(1)
+        expect(screen.getAllByText("1 of 3 weighted checks passed")).toHaveLength(1)
+        const card = screen.getByText("Alpha has a warning.").closest("article") as HTMLElement
+        expect(card).toHaveTextContent(alpha.thermo_ref)
+    })
+
+    it("shows no warnings heading when none are served", async () => {
+        const [alpha] = mockRecords()
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [alpha] }))))
+        page()
+        await screen.findByText(alpha.thermo_ref)
+        expect(screen.queryByText("Deposit warnings")).toBeNull()
     })
 })
 

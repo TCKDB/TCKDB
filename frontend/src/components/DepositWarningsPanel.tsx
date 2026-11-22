@@ -59,14 +59,14 @@ function WarningItem({ item }: { item: DepositWarningItem }) {
 /**
  * The deposit warnings of a record page or of one record's block. Renders nothing when no block carries an item.
  * `recordRef` is the page's own record: its block is listed first and labelled "This record"; any other record's block is
- * labelled through `labelForRef` (or its ref). `variant="block"` renders an `<h4>` for use inside a record card.
+ * labelled through `labelForRef` (or its ref). `variant="block"` renders an `<h4>` for use inside a record card, `"subsection"` an `<h3>` registered under the section above.
  */
 export function DepositWarningsPanel({ warnings, recordRef, labelForRef, headingId = "deposit-warnings", variant = "section", className }: {
     warnings: DepositWarnings
     recordRef?: string
     labelForRef?: (ref: string) => string
     headingId?: string
-    variant?: "section" | "block"
+    variant?: "section" | "subsection" | "block"
     /** Added beside the panel's own class, for the page's section spacing. */
     className?: string
 }) {
@@ -77,7 +77,7 @@ export function DepositWarningsPanel({ warnings, recordRef, labelForRef, heading
     const deposit = warnings.deposit_warnings.filter((block) => block.items.length > 0)
     const heading = variant === "block"
         ? <h4 className="model-block-heading" id={headingId}>Deposit warnings</h4>
-        : <SectionHeading id={headingId}>Deposit warnings</SectionHeading>
+        : <SectionHeading id={headingId} subsection={variant === "subsection"}>Deposit warnings</SectionHeading>
     return (
         <section aria-labelledby={headingId} className={className ? `deposit-warnings ${className}` : "deposit-warnings"} data-component="deposit-warnings">
             {heading}
