@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" class="tk-svg" viewBox="0 0 400 572" role="img" aria-labelledby="tk-install-title tk-install-desc">
 <title id="tk-install-title">Installing TCKDB with Docker Compose</title>
-<desc id="tk-install-desc">Five steps. 1, clone the repository. 2, run tckdb_make_env.sh, which asks five questions and generates every password. 3, run docker compose up: the database and SeaweedFS start, then init sets up roles, runs migrations and creates the first admin, then the API and the web UI start. 4, open the web UI at 127.0.0.1:8011 and log in as the admin, or mint an API key. 5, run the check script.</desc>
+<desc id="tk-install-desc">Five steps. 1, download the release bundle and unpack it. 2, run tckdb_make_env.sh, which asks five questions and generates every password. 3, run docker compose up: the database and SeaweedFS start, then init sets up roles, runs migrations and creates the first admin, then the API and the web UI start. 4, open the web UI at 127.0.0.1:8011 and log in as the admin, or mint an API key. 5, run the check script.</desc>
 <style>
 .tk-svg{color:var(--md-default-fg-color,#1f2328);font-family:var(--md-text-font-family,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif)}
 .tk-svg text{fill:currentColor}
@@ -23,9 +23,9 @@
 <path class="tk-rail" d="M22 436V490" marker-end="url(#tk-install-arrow)"/>
 <rect class="tk-box" x="46" y="10" width="346" height="74" rx="8"/>
 <circle class="tk-num" cx="22" cy="36" r="14"/><text class="tk-numtxt" x="22" y="41" text-anchor="middle">1</text>
-<text class="tk-h" x="60" y="33">Clone the repository</text>
-<text class="tk-c" x="60" y="53">git clone …/TCKDB.git &amp;&amp; cd TCKDB</text>
-<text class="tk-d" x="60" y="72">Needs Git, and Docker with Compose.</text>
+<text class="tk-h" x="60" y="33">Download the release bundle</text>
+<text class="tk-c" x="60" y="53">curl -LO …/tckdb-selfhost-….tar.gz</text>
+<text class="tk-d" x="60" y="72">Unpack and cd in. Needs Docker with Compose.</text>
 <rect class="tk-box" x="46" y="102" width="346" height="74" rx="8"/>
 <circle class="tk-num" cx="22" cy="128" r="14"/><text class="tk-numtxt" x="22" y="133" text-anchor="middle">2</text>
 <text class="tk-h" x="60" y="125">Make the env files</text>

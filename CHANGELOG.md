@@ -25,6 +25,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Self-hosting installs from a release bundle (Unreleased)
+
+- **Behaviour:** `backend/scripts/ops/make_selfhost_bundle.sh <version>` writes `dist/tckdb-selfhost-<version>.tar.gz` and its `.sha256`: the compose file, both env templates, the Caddyfile, the self-host and operator scripts with their systemd units, `LICENSE`, a `README.md` and a `VERSION` file, under one `tckdb-selfhost-<version>/` directory at their repository paths. It refuses a version that differs from `docker-compose.yml`'s default image tag or `backend/pyproject.toml`, and the same tree gives the same bytes. The workflow `release-bundle.yml` attaches both files to the GitHub release of every `v*` tag, creating the release if absent; a manual run builds a workflow artifact only.
+- **Behaviour:** the self-host guide installs from the bundle (`curl`, `sha256sum -c`, `tar xzf`, then the same two commands); a git clone remains the developer route. An upgrade unpacks the new bundle beside the old one and copies `.env.selfhosted` and `.env.db-admin` into it.
+- **Behaviour:** `.env.selfhosted.example` sets Compose's `COMPOSE_PROJECT_NAME=tckdb`, so env files written by `tckdb_make_env.sh` keep the same volumes in a new bundle directory. Existing env files are unchanged.
+- **Schema and migration:** none. No new environment variable.
+
 ## Operator scripts answer --help (Unreleased)
 
 - **Behaviour:** `tckdb_deploy.sh`, `tckdb_backup.sh`, `tckdb_alert_check.sh` and `tckdb_ci_watchdog.sh` print their header comment and exit 0 when `--help` or `-h` appears anywhere in the arguments, before reading any environment variable or calling docker, curl or the network. Each header now lists its arguments, every environment variable it reads (required or default) and an example. Other arguments behave as before.

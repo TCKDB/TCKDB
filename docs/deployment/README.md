@@ -1,7 +1,8 @@
 # Self-host TCKDB
 
-Run your own TCKDB with Docker. Three commands give you the database, the
-object store, the API and the web UI, with every password generated for you.
+Run your own TCKDB with Docker. A download and two commands give you the
+database, the object store, the API and the web UI, with every password
+generated for you.
 
 <figure class="tk-figure">
 --8<-- "assets/install-flow.svg"
@@ -9,7 +10,7 @@ object store, the API and the web UI, with every password generated for you.
 
 ## What you need
 
-- Git, `bash` and `openssl`.
+- `curl`, `bash` and `openssl`.
 - Docker Engine or Docker Desktop with Compose v2. Check with `docker compose version`.
 - A 64-bit machine, x86_64 or arm64. The images are built for both, so a
   Raspberry Pi 4 or 5 on a 64-bit OS works.
@@ -18,22 +19,33 @@ object store, the API and the web UI, with every password generated for you.
 
 ## Install
 
-Run these in order. After `cd TCKDB`, every command on this page runs from
-the repository root.
+Run these in order. After the `cd`, every command on this page runs from
+that directory.
 
 ```bash
-git clone https://github.com/TCKDB/TCKDB.git
-cd TCKDB
+VERSION=0.4.0
+curl -LO https://github.com/TCKDB/TCKDB/releases/download/v$VERSION/tckdb-selfhost-$VERSION.tar.gz
+curl -LO https://github.com/TCKDB/TCKDB/releases/download/v$VERSION/tckdb-selfhost-$VERSION.tar.gz.sha256
+sha256sum -c tckdb-selfhost-$VERSION.tar.gz.sha256
+tar xzf tckdb-selfhost-$VERSION.tar.gz
+cd tckdb-selfhost-$VERSION
 backend/scripts/ops/tckdb_make_env.sh
 docker compose --env-file .env.selfhosted --env-file .env.db-admin \
     --profile selfhost up -d --wait
 ```
 
-`make selfhost` does the last two in one go. It runs the env script only if
-the env files are missing.
+On macOS, check the download with `shasum -a 256 -c` instead of `sha256sum -c`.
 
-**1. Clone.** Gets the compose file, the env templates and the scripts. The
-application itself comes as published images.
+**1. Download the bundle.** Each [release](https://github.com/TCKDB/TCKDB/releases)
+carries `tckdb-selfhost-<version>.tar.gz`: the compose file, the env
+templates, the Caddyfile and the scripts, at the same paths as in the
+repository. The application itself comes as published images, whose default
+tag is the bundle's version.
+
+**From a git checkout.** Developers can use a clone instead:
+`git clone https://github.com/TCKDB/TCKDB.git && cd TCKDB`, then the same
+two commands. There `make selfhost` does both in one go, running the env
+script only if the env files are missing.
 
 **2. Make the env files.** `tckdb_make_env.sh` asks a few questions. Press
 Enter to take the default:
@@ -72,7 +84,7 @@ It will not overwrite existing files unless you pass `--force`.
 
 `--wait` returns when everything is healthy. The first start downloads the
 images. With the images already downloaded, the stack is healthy about 50
-seconds after `git clone`.
+seconds after unpacking the bundle.
 
 The stack refuses to start while a secret is empty or still a `change-me`
 placeholder.
@@ -301,20 +313,43 @@ passwords, which the existing database refuses.
 
 ## Upgrade
 
+Each release has its own bundle. The data stays in the Compose volumes, and
+the two env files carry over.
+
 1. [Back up](#back-up) first.
-2. Update the checkout with `git pull`.
-3. Set the image tag in `.env.selfhosted`: `TCKDB_IMAGE_TAG=<tag>`, where the
-   tag is a release such as `0.4.0` or `sha-<commit>`. One tag names both the
-   API and the web UI image, so a `sha-` tag must come from a commit that
-   built both. A release tag always does.
-4. Run the `up -d --wait` command again.
+2. Download, check and unpack the new release's bundle beside the old
+   directory, as in [Install](#install).
+3. Copy `.env.selfhosted` and `.env.db-admin` from the old directory into the
+   new one. Nothing else carries over. Don't run `tckdb_make_env.sh` in the
+   new directory: it makes new passwords, which the existing database refuses.
+4. If `.env.selfhosted` sets `TCKDB_IMAGE_TAG`, delete the line or change it
+   to the new release. Unset, the new compose file's default is used, which is
+   the bundle's version.
+5. In the new directory, run the `up -d --wait` command again.
 
-`init` runs the migrations before the new API starts. Keep the tag in the env
-file. Passed only on the command line, it reverts to the compose default on
-the next `up`.
+`init` runs the migrations before the new API starts.
 
-To roll back, set the previous tag. If the upgrade ran a migration, restore
-the database backup as well.
+The new directory finds the old volumes through `COMPOSE_PROJECT_NAME=tckdb`
+in `.env.selfhosted`: Compose starts every volume name with the project name,
+which is otherwise the directory's name. Without it, the new directory starts
+on new, empty volumes. An env file written before the template set it has no
+such line. Add the project that `docker compose ls` shows, such as
+`COMPOSE_PROJECT_NAME=tckdb` for a clone in `TCKDB/`, before the first `up` in
+the new directory.
+
+**From a git checkout.** Run `git pull`, then steps 4 and 5 in the same
+directory.
+
+**Another image.** To run a tag other than the default, set
+`TCKDB_IMAGE_TAG=<tag>` in `.env.selfhosted` and run `up -d --wait`. The tag
+is a release such as `0.4.0` or `sha-<commit>`. One tag names both the API and
+the web UI image, so a `sha-` tag must come from a commit that built both. A
+release tag always does. Keep the tag in the env file. Passed only on the
+command line, it reverts to the compose default on the next `up`.
+
+To roll back, run the `up -d --wait` command from the old directory, or set
+the previous tag. If the upgrade ran a migration, restore the database backup
+as well.
 
 ## Back up
 
