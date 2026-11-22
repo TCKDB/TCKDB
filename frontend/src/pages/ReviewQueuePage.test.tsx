@@ -1985,3 +1985,31 @@ describe("ReviewQueuePage -- no depositor-typed text", () => {
         expectNoAdversarialText()
     })
 })
+
+describe("ReviewQueuePage -- when a record was submitted and reviewed", () => {
+    const rowText = async () => (await screen.findByText("spe_h2o")).closest(".review-subject")!.textContent ?? ""
+
+    it("shows the submission, the review date by the signed-in curator, and the first approval", async () => {
+        meIs(curator)
+        queueIs([subject([record({ submission_id: 7, reviewed_by: 1, reviewed_at: "2026-10-02T08:00:00Z", first_approved_at: "2026-10-03T09:30:00Z" })])])
+        renderPage()
+        expect(await rowText()).toContain("Submission 7 · Reviewed 2026-10-02 by you · First approved 2026-10-03")
+    })
+
+    it("names another reviewer as a user number", async () => {
+        meIs(curator)
+        queueIs([subject([record({ submission_id: null, reviewed_by: 9, reviewed_at: "2026-10-02T08:00:00Z" })])])
+        renderPage()
+        const text = await rowText()
+        expect(text).toContain("Reviewed 2026-10-02 by user 9")
+        expect(text).not.toContain("Submission")
+    })
+
+    it("adds nothing when none of the facts is served", async () => {
+        meIs(curator)
+        queueIs([subject([record({ submission_id: null })])])
+        renderPage()
+        const text = await rowText()
+        expect(text).not.toMatch(/Submission|Reviewed|First approved/)
+    })
+})

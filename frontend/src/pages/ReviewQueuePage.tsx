@@ -478,6 +478,20 @@ function RecordOwnLink({ row, subject }: { row: RecordReview; subject: ReviewQue
     )
 }
 
+const isoDate = (value: string) => value.slice(0, 10)
+
+/** Submission, review and first-approval facts of one record row, from the parts the server served. Empty when none is. */
+function recordRowMeta(row: RecordReview, signedInUserId: number | null): string[] {
+    const parts: string[] = []
+    if (row.submission_id !== null) parts.push(`Submission ${row.submission_id}`)
+    const by = row.reviewed_by === null ? null : row.reviewed_by === signedInUserId ? "you" : `user ${row.reviewed_by}`
+    if (row.reviewed_at !== null || by !== null) {
+        parts.push(`Reviewed${row.reviewed_at !== null ? ` ${isoDate(row.reviewed_at)}` : ""}${by !== null ? ` by ${by}` : ""}`)
+    }
+    if (row.first_approved_at !== null) parts.push(`First approved ${isoDate(row.first_approved_at)}`)
+    return parts
+}
+
 export default function ReviewQueuePage() {
     useDocumentTitle("Record review")
     const { state } = useAuth()
@@ -707,6 +721,7 @@ export default function ReviewQueuePage() {
                 : options[0]
         const canSubmit = chosen !== undefined
         const cls = statusClass(row.status)
+        const meta = recordRowMeta(row, state.status === "signed-in" ? state.user.id : null)
         return (
             <li key={rowId} className="review-record-row">
                 <div className="review-record-row-line">
@@ -717,6 +732,9 @@ export default function ReviewQueuePage() {
                         <RecordOwnLink row={row} subject={subject} />
                         {row.note && (
                             <span className="review-record-note">{row.note}</span>
+                        )}
+                        {meta.length > 0 && (
+                            <span className="review-record-note">{meta.join(" · ")}</span>
                         )}
                     </div>
                     <div className="review-record-row-right">
