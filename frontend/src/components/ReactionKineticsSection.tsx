@@ -15,7 +15,8 @@ import { OrderNote } from "./OrderNote"
 import { ReviewChip } from "./ReviewChip"
 import { ValueSource } from "./ValueSource"
 import { LiteratureCitation } from "./LiteratureCitation"
-import { RecordEvidenceBlocks, warningsForRecord } from "./RecordEvidenceBlocks"
+import { RecordEvidenceBlocks } from "./RecordEvidenceBlocks"
+import { warningsForRecord } from "../api/depositWarningsSchema"
 import type { ReactionKineticsAssessments } from "../api/reactionKineticsApi"
 
 /** What the supplementary kinetics read gave: still loading, failed, or the answer by kinetics ref. */

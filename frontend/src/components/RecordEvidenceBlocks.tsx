@@ -27,8 +27,3 @@ export function RecordEvidenceBlocks({ trust, assessments, warnings, idBase }: {
         </>
     )
 }
-
-/** The part of a list response's warnings that is about one record (never another record's, never the whole-deposit blocks). */
-export function warningsForRecord(warnings: DepositWarnings, recordRef: string): DepositWarnings {
-    return { record_warnings: warnings.record_warnings.filter((block) => block.record_ref === recordRef), deposit_warnings: [] }
-}
