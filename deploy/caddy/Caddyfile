@@ -1,11 +1,6 @@
 # HTTPS in front of the TCKDB web UI, for the `caddy` compose profile.
-#
-# The values come from .env.selfhosted through docker-compose.yml:
-#   TCKDB_DOMAIN      the domain name this server answers to (required)
-#   TCKDB_ACME_EMAIL  contact address for the certificate authority (optional)
-#   TCKDB_TLS         `internal` for Caddy's own certificate authority (testing)
-# The compose entrypoint turns these into TCKDB_CADDY_TLS, the name of one of
-# the snippets below, and never leaves it empty.
+# Settings come from .env.selfhosted; the compose entrypoint sets
+# TCKDB_CADDY_TLS to the name of one of the snippets below.
 
 # Let's Encrypt, no contact address.
 (tls_acme) {
@@ -26,8 +21,8 @@
 
 	encode zstd gzip
 
-	# The web UI passes /api/ on to the API. X-Real-IP is replaced, never
-	# appended to, so a client cannot choose the address the API rate-limits.
+	# Replace X-Real-IP, never append, so a client cannot pick the address
+	# the API rate-limits.
 	reverse_proxy frontend:8080 {
 		header_up X-Real-IP {remote_host}
 	}
