@@ -212,6 +212,40 @@ function groupRow(table: HTMLElement, position: number): HTMLElement {
     return cell.closest("tr") as HTMLElement
 }
 
+describe("EntryStatmechSection: trust, reproducibility and deposit warnings", () => {
+    const TRUST = { review_status: "approved", trust_status: "mostly_supported", evidence: { passed_count: 5, possible_count: 6, rubric: "computed_statmech", rubric_version: 1, checks: { external_symmetry_present: "passed" } } }
+    const ASSESSMENTS = { reproducibility: { state: "current", grade: "described", made_under: { state: "inputs_unchecked", rubric: "reproducibility", assessed_version: 1, current_version: 1 } } }
+    const withEvidence = () => {
+        const base = mockResponse()
+        return { ...base, records: base.records.map((record) => ({ ...record, trust: TRUST, assessments: ASSESSMENTS })) }
+    }
+    const handleOthers = () => server.use(
+        http.get(ENDPOINT, () => HttpResponse.json(withEvidence())),
+    )
+
+    it("shows trust and reproducibility from the list and the by-ref warnings", async () => {
+        handleOthers()
+        server.use(http.get("/api/v1/scientific/statmech/:ref", ({ params }) => HttpResponse.json({
+            record: {},
+            record_warnings: [{ record_ref: params.ref, status: "recorded", items: [{ code: "c", message: `Warning for ${params.ref}.`, field: "statmech[*]", register_entry: 21, check_version: 1 }] }],
+        })))
+        page()
+        await screen.findByText("sm_one")
+        expect(await screen.findByText("Warning for sm_one.")).toBeVisible()
+        expect(screen.getAllByText("5 of 6 weighted checks passed").length).toBeGreaterThan(0)
+        expect(screen.getAllByText("described").length).toBeGreaterThan(0)
+    })
+
+    it("says the warnings could not be loaded and still renders the record", async () => {
+        handleOthers()
+        server.use(http.get("/api/v1/scientific/statmech/:ref", () => HttpResponse.json({ detail: "down" }, { status: 500 })))
+        page()
+        await screen.findByText("sm_one")
+        expect((await screen.findAllByText("Deposit warnings could not be loaded for this record.")).length).toBeGreaterThan(0)
+        expect(screen.getAllByText("5 of 6 weighted checks passed").length).toBeGreaterThan(0)
+    })
+})
+
 describe("EntryStatmechSection", () => {
     it("renders every deposited record independently, without merging or picking one", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
@@ -403,7 +437,7 @@ describe("EntryStatmechSection", () => {
         // `frequencies` now (every card's own `FrequenciesBlock` shows it
         // by default) -- `torsions` is not, it still waits for
         // its own disclosure to be opened.
-        await waitFor(() => expect(requestedIncludeSets).toEqual([[], ["source_calculations"], ["frequencies"], ["calculation_settings"]]))
+        await waitFor(() => expect(requestedIncludeSets).toEqual([["trust", "assessments"], ["source_calculations"], ["frequencies"], ["calculation_settings"]]))
 
         const section = screen.getByText("Torsions").closest("details") as HTMLDetailsElement
         expect(section.open).toBe(false)
@@ -411,7 +445,7 @@ describe("EntryStatmechSection", () => {
 
         fireEvent.click(screen.getByText("Torsions"))
         await within(section).findByText("Torsions loaded.")
-        expect(requestedIncludeSets).toEqual([[], ["source_calculations"], ["frequencies"], ["calculation_settings"], ["torsions"]])
+        expect(requestedIncludeSets).toEqual([["trust", "assessments"], ["source_calculations"], ["frequencies"], ["calculation_settings"], ["torsions"]])
     })
 
     it("shares one fetch across every record's disclosure for the same token, and never merges one record's rows into another's", async () => {

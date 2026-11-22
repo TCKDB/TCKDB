@@ -9,6 +9,7 @@ import "../conformer-group.css"
 import "../entry-science.css"
 import {
     loadEntryTransportSection,
+    loadTransportDepositWarnings,
     readTransportSectionField,
     type TransportListResponse,
     type TransportRecord,
@@ -25,6 +26,8 @@ import type { PageRequest } from "../domain/paging"
 import { Disclosure } from "./Disclosure"
 import { LazyRowBody } from "./LazyRowBody"
 import { SectionHeading } from "./PageSections"
+import { RecordEvidenceBlocks } from "./RecordEvidenceBlocks"
+import { useRecordDepositWarnings } from "../hooks/useRecordDepositWarnings"
 import { QuantityValue, ROUNDED_NOTE } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
@@ -246,9 +249,17 @@ function TransportRecordCard({ record }: { record: TransportRecord }) {
                 {" · "}Literature:{" "}
                 {record.literature ? <LiteratureCitation literature={record.literature} /> : "not recorded"}
             </p>
+            <TransportRecordEvidence record={record} />
             <RefsDisclosure refs={[{ label: "Transport record", value: core.transport_ref }, ...supersessionRefs(record.supersession)]} />
         </article>
     )
+}
+
+/** Trust and reproducibility from the list, and this record's deposit warnings from its own by-ref read. */
+function TransportRecordEvidence({ record }: { record: TransportRecord }) {
+    const ref = record.transport.transport_ref
+    const warnings = useRecordDepositWarnings(ref, loadTransportDepositWarnings)
+    return <RecordEvidenceBlocks trust={record.trust} assessments={record.assessments} warnings={warnings} idBase={ref} />
 }
 
 function arrayRowState<T>(hasFlag: boolean, data: T[] | null | undefined): "not-present" | "empty" | "populated" {

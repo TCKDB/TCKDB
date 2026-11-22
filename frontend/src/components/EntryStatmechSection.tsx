@@ -13,6 +13,7 @@ import "../conformer-group.css"
 import "../entry-science.css"
 import {
     loadEntryStatmechSection,
+    loadStatmechDepositWarnings,
     readStatmechSectionField,
     type StatmechListResponse,
     type StatmechRecord,
@@ -42,6 +43,8 @@ import { Disclosure } from "./Disclosure"
 import { LazyRowBody } from "./LazyRowBody"
 import { LevelLabel } from "./LevelLabel"
 import { SectionHeading } from "./PageSections"
+import { RecordEvidenceBlocks } from "./RecordEvidenceBlocks"
+import { useRecordDepositWarnings } from "../hooks/useRecordDepositWarnings"
 import { SettingsBehindValue, SettingsLegend } from "./EffectiveSettings"
 import { ProductLevelsFact, ProductLevelsTableCells, ProductLevelsTableHead } from "./ProductLevels"
 import { QuantityValue } from "./QuantityValue"
@@ -526,7 +529,32 @@ function StatmechRecordBody({ record, conformers, sourceCalcsState, frequenciesS
                 fsf={record.frequency_scale_factor}
                 productLevels={productLevels}
             />
+
+            {/* Trust, reproducibility and warnings are this record's own; the group's shared body leaves them to
+                `IdenticalStatmechGroupEvidence`. */}
+            {showRecordEvidence && <StatmechRecordEvidence record={record} />}
         </>
+    )
+}
+
+/** Trust and reproducibility from the list, and this record's deposit warnings from its own by-ref read. */
+function StatmechRecordEvidence({ record, idSuffix = "" }: { record: StatmechRecord; idSuffix?: string }) {
+    const ref = record.statmech.statmech_ref
+    const warnings = useRecordDepositWarnings(ref, loadStatmechDepositWarnings)
+    return <RecordEvidenceBlocks trust={record.trust} assessments={record.assessments} warnings={warnings} idBase={`${ref}${idSuffix}`} />
+}
+
+/** The trust, reproducibility and warnings of every record in an identical-values group, each under its own ref. */
+function IdenticalStatmechGroupEvidence({ records }: { records: StatmechRecord[] }) {
+    return (
+        <Disclosure summary="Trust, reproducibility and warnings of each record" count={records.length} defaultOpen={records.some((record) => record.trust?.evidence.hard_fail_reason)}>
+            {records.map((record) => (
+                <div key={record.statmech.statmech_ref}>
+                    <p className="deposit-warnings-owner"><span className="data">{record.statmech.statmech_ref}</span></p>
+                    <StatmechRecordEvidence record={record} idSuffix={STATMECH_GROUP_ID_SUFFIX} />
+                </div>
+            ))}
+        </Disclosure>
     )
 }
 
@@ -699,6 +727,7 @@ function IdenticalStatmechRecordsCard({ records, conformers, sourceCalcsState, f
                 productLevels={sharedProductLevels}
             />
             <IdenticalStatmechGroupRefs records={records} sourceCalcsState={sourceCalcsState} frequenciesState={frequenciesState} />
+            <IdenticalStatmechGroupEvidence records={records} />
             <Disclosure className="identical-record-group-detail" summary={`Show all ${records.length} records individually`}>
                 {records.map((record) => (
                     <SectionErrorBoundary key={record.statmech.statmech_ref} fallback={statmechRecordFallback()}>
