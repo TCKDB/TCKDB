@@ -976,9 +976,15 @@ def restore_archive(
                 # the determinations it carries. Nothing else is opened by it.
                 restoring = ",".join(str(i) for i in sorted({row["determination_id"] for row in rows}))
                 session.execute(text("SELECT set_config('tckdb.structure_determination_writing', :ids, true)"), {"ids": restoring})
+            if table.name == "record_deletion":
+                # The audit names records that are gone, so the insert check that the record exists and was approved
+                # is skipped for this insert only; the rows are stored without a transaction id.
+                session.execute(text("SELECT set_config('tckdb.record_deletion_restoring', 'on', true)"))
             session.execute(table.insert(), rows)
             if table.name == "structure_determination_source":
                 session.execute(text("SELECT set_config('tckdb.structure_determination_writing', '', true)"))
+            if table.name == "record_deletion":
+                session.execute(text("SELECT set_config('tckdb.record_deletion_restoring', '', true)"))
         _repair_sequences(session, tables)
 
     return ArchiveRestoreReport(

@@ -176,6 +176,37 @@ def _approve_any(session, record_type: SubmissionRecordType, record_id: int) -> 
     )
 
 
+def test_a_restored_audit_row_has_no_transaction_id_and_never_permits_a_delete(db_session) -> None:
+    """An archive restore writes the audit with ``xact_id`` NULL; even in its own transaction it opens nothing."""
+    kinetics = _kinetics(db_session)
+    with db_session.begin_nested():
+        db_session.execute(text("SELECT set_config('tckdb.record_deletion_restoring', 'on', true)"))
+        _audit(db_session, kinetics, _admin(db_session))
+        db_session.execute(text("SELECT set_config('tckdb.record_deletion_restoring', '', true)"))
+        assert db_session.execute(
+            text("SELECT xact_id FROM record_deletion WHERE record_public_ref = :ref"), {"ref": kinetics.public_ref}
+        ).scalar_one() is None
+        _name(db_session, kinetics)
+        assert _refused(db_session, "DELETE FROM kinetics WHERE id = :id", id=kinetics.id) == _IMMUTABLE
+
+
+def test_the_restore_setting_is_what_lets_an_audit_row_name_a_missing_record(db_session) -> None:
+    """Outside a restore the insert check still refuses an audit row for a record that is not there."""
+    admin = _admin(db_session)
+    insert = (
+        "INSERT INTO record_deletion (record_type, record_id, record_public_ref, first_approved_at, reason, "
+        "deleted_by, snapshot) VALUES ('kinetics', -1, 'kin_gone', now(), 'restored', :by, '{}'::jsonb)"
+    )
+    with pytest.raises(DBAPIError) as raised, db_session.begin_nested():
+        db_session.execute(text(insert), {"by": admin.id})
+    assert _sqlstate(raised.value) == "23514"
+    with db_session.begin_nested():
+        db_session.execute(text("SELECT set_config('tckdb.record_deletion_restoring', 'on', true)"))
+        db_session.execute(text(insert), {"by": admin.id})
+        db_session.execute(text("SELECT set_config('tckdb.record_deletion_restoring', '', true)"))
+    assert _refused(db_session, "DELETE FROM record_deletion WHERE record_public_ref = 'kin_gone'") == _IMMUTABLE
+
+
 def test_a_permit_for_the_parent_does_not_free_the_childs_dependency_edge(db_session) -> None:
     """The edge belongs to its child; naming the parent for deletion must not let the edge go."""
     entry = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key("RDGDEP")))

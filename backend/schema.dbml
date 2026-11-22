@@ -3573,7 +3573,7 @@ Table record_deletion {
   deleted_by bigint [not null, ref: > app_user.id]
   deleted_at timestamp [not null, default: 'now']
   snapshot jsonb [not null]
-  xact_id bigint [not null, default: '((pg_current_xact_id())::text)::bigint']
+  xact_id bigint [default: '((pg_current_xact_id())::text)::bigint']
 
   indexes {
     deleted_at [name: 'ix_record_deletion_deleted_at']

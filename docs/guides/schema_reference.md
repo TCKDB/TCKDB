@@ -2829,7 +2829,7 @@ the gap.
 | `deleted_by` | BIGINT | no | — | app_user.id | — | not documented |
 | `deleted_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `snapshot` | JSONB | no | — | — | — | not documented |
-| `xact_id` | BIGINT | no | ((pg_current_xact_id())::text)::bigint | — | — | not documented |
+| `xact_id` | BIGINT | yes | ((pg_current_xact_id())::text)::bigint | — | — | not documented |
 
 **Check constraints:**
 

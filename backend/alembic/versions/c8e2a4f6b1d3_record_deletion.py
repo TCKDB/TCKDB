@@ -15,6 +15,9 @@ evidence findings about a calculation (and adjudications settling them), and str
 a calculation. ``tckdb_structure_finding_append_only`` and ``tckdb_structure_source_delete_guard`` stand down for those
 rows only.
 
+An archive restore inserts audit rows under the transaction-local setting ``tckdb.record_deletion_restoring``,
+which skips the check that the named record exists and was approved and stores ``xact_id`` as NULL.
+
 ``downgrade()`` restores the original function bodies, then drops the table with every audit row in it.
 """
 
@@ -141,6 +144,12 @@ CREATE FUNCTION public.tckdb_validate_record_deletion() RETURNS trigger
             IF NOT public.tckdb_is_accepted_science_type(NEW.record_type) THEN
                 RAISE EXCEPTION USING ERRCODE = '22023',
                     MESSAGE = 'record_deletion names a record type outside accepted science';
+            END IF;
+            IF coalesce(current_setting('tckdb.record_deletion_restoring', true), '') = 'on' THEN
+                -- An archive restore re-creates the audit of records that are already gone. The transaction id it
+                -- came from belongs to another cluster, so it is dropped: a NULL never permits a delete.
+                NEW.xact_id := NULL;
+                RETURN NEW;
             END IF;
             BEGIN
                 EXECUTE format('SELECT public_ref FROM public.%I WHERE id = $1 FOR UPDATE', NEW.record_type::text)
@@ -723,7 +732,7 @@ def upgrade() -> None:
             "xact_id",
             sa.BigInteger(),
             server_default=sa.text("((pg_current_xact_id())::text)::bigint"),
-            nullable=False,
+            nullable=True,
         ),
         sa.CheckConstraint(
             "record_type IN ('calculation', 'thermo', 'statmech', 'kinetics', "

@@ -161,6 +161,9 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "reaction_entry_structure_participant",
         "reaction_family",
         "reaction_participant",
+        # The permanent audit of admin deletions, with a JSON copy of every removed row. Restored through
+        # ``tckdb.record_deletion_restoring``; its transaction id is not carried (see EXCLUDED_COLUMNS).
+        "record_deletion",
         "record_machine_review",
         "record_reproducibility_assessment",
         "record_review",
@@ -245,10 +248,6 @@ EXCLUDED_TABLES: Mapping[str, str] = {
         "would import a storage incident the restoring cluster never had"
     ),
     "idempotency_record": "ephemeral HTTP retry state",
-    "record_deletion": (
-        "deployment-local audit of admin deletions, keyed on a cluster transaction id; the deleted rows it copies "
-        "are not in the archive either"
-    ),
     "upload_job": "ephemeral worker queue state",
     "user_session": "authentication session state",
 }
@@ -262,6 +261,9 @@ EXCLUDED_COLUMNS: Mapping[str, Mapping[str, str]] = {
     },
     "submission": {
         "upload_job_id": "references excluded ephemeral worker queue state",
+    },
+    "record_deletion": {
+        "xact_id": "a transaction id of the source cluster; restored as NULL, which never permits a delete",
     },
 }
 

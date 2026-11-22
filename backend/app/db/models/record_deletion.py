@@ -66,11 +66,12 @@ class RecordDeletion(Base):
     deleted_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), server_default=func.now(), nullable=False)
     #: ``{"record": {...}, "owned": {table: [rows]}, "overlays": {table: [rows]}, "release_selections": [rows]}``.
     snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    #: The transaction that wrote the row; the guards honour it only there.
-    xact_id: Mapped[int] = mapped_column(
+    #: The transaction that wrote the row; the guards honour it only there. NULL on a row an archive restore
+    #: re-created: a transaction id from another cluster must never permit a delete here.
+    xact_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         server_default=text("((pg_current_xact_id())::text)::bigint"),
-        nullable=False,
+        nullable=True,
     )
 
     actor: Mapped["AppUser"] = relationship(foreign_keys=[deleted_by])
