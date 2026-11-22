@@ -632,3 +632,28 @@ describe("ConformerObservationPage -- depositor text", () => {
         expectNoAdversarialText()
     })
 })
+
+describe("ConformerObservationPage deposit warnings", () => {
+    const ITEM = { code: "conformer_note", message: "The conformer carries a note.", field: "conformers[*]", register_entry: 4, check_version: 1 }
+
+    it("shows the panel from the envelope", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => HttpResponse.json({
+            record: mockRecord(),
+            record_warnings: [{ record_ref: "co_one", status: "recorded", items: [ITEM] }],
+        })))
+        page()
+        const panel = await screen.findByRole("region", { name: "Deposit warnings" })
+        expect(within(panel).getByText("The conformer carries a note.")).toBeVisible()
+        expect(within(panel).getByText("This record")).toBeVisible()
+    })
+
+    it("shows no panel when every block is empty", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => HttpResponse.json({
+            record: mockRecord(),
+            record_warnings: [{ record_ref: "co_one", status: "not_recorded", items: [] }],
+        })))
+        page()
+        await screen.findByRole("heading", { name: "Review history" })
+        expect(screen.queryByText("Deposit warnings")).toBeNull()
+    })
+})
