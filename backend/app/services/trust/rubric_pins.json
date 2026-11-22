@@ -16,7 +16,7 @@
       "1": "bdeb32a190ad747f7cbac566285e6a44f6f9d1aff6ca1abe40bdc920afe76f93"
     },
     "computed_transition_state": {
-      "2": "b9ef788aa38bea8ec06db394fc817943fa700ec70227bb92208d889e04235663"
+      "2": "8d2a975f66dcacfdcd8d744101e62d27fde6b602da7f292f66cef85323bd35b5"
     },
     "computed_transport": {
       "1": "5e9bb07ec88201552d890532cb85c50ea43ff2e32f61f92421028104f765797d"
@@ -552,6 +552,11 @@
       "name": "computed_transition_state",
       "version": 2,
       "reason": "method_family_classification version 2 adds gfn2, wb97xd3 and mrci+davidson to the table. The closure reaches the table only through filter_by_provenance's method_family and DFT-rung filters, which the structure loader never passes, so no stored or read-time verdict changes."
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "Verdicts change only for a transition state whose structure determination lost a source to an admin record deletion."
     }
   ]
 }
