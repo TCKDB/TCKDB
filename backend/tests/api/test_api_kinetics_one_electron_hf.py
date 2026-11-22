@@ -2,7 +2,7 @@
 
 ORCA refuses every correlated method for one electron, and for one electron every correlation term is zero. A kinetics
 energy link matches a declared correlated level when the participant has exactly one electron (stored SMILES and
-charge), its method is Hartree-Fock in any spin form, and every other identity field equals the declared level's.
+charge), its method is Hartree-Fock in any spin form, and every other identity field but PNO truncation and core treatment equals the declared level's.
 The substitution is reported as ``one_electron_hf_substitution``. Each test names the condition it protects.
 """
 
@@ -539,3 +539,107 @@ def test_a_declared_hartree_fock_level_is_not_a_correlated_level(db_session):
     atom = _level(db_session, "2", method="hf", basis="cc-pvtz-f12", spin_treatment=SpinTreatment.unrestricted)
     energies = [_energy(db_session, "[H]", 2, atom), _energy(db_session, "[H][H]", 1, declared)]
     assert kinetics_one_electron_hf_substitutions(energies, declared) == []
+
+
+# ---------------------------------------------------------------------------
+# PNO truncation and core treatment do not act on a Hartree-Fock energy
+# ---------------------------------------------------------------------------
+
+_PNO = {"pno_truncation": "normal"}
+
+
+@pytest.mark.parametrize(
+    ("declared_extra", "atom_extra"),
+    [
+        ({"pno_truncation": "normal"}, {}),
+        ({"core_treatment": "frozen_core"}, {}),
+        ({"pno_truncation": "normal", "core_treatment": "frozen_core"}, {}),
+        ({"pno_truncation": "normal"}, {"pno_truncation": "tight"}),
+        ({}, {"pno_truncation": "normal"}),
+    ],
+)
+def test_a_hydrogen_atom_at_hf_ignores_correlation_only_qualifiers(client, declared_extra, atom_extra):
+    declared = {**_F12, **declared_extra}
+    resp = client.post(
+        _REACTION,
+        json=_bundle(declared, left_level={**_HF, **atom_extra}, product_level=dict(declared)),
+    )
+    assert resp.status_code == 201, resp.text[:800]
+    (warning,) = _hf_codes(resp)
+    assert len(warning["context"]["energy_calculation_refs"]) == 1
+
+
+def test_a_plain_dlpno_level_with_a_default_pno_threshold_accepts_the_hf_atom(client):
+    declared = {"method": "DLPNO-CCSD(T)", "basis": "cc-pVTZ", "aux_basis": "cc-pVTZ/C", **_PNO}
+    atom = {"method": "hf", "basis": "cc-pVTZ", "aux_basis": "cc-pVTZ/C"}
+    resp = client.post(_REACTION, json=_bundle(declared, left_level=atom, product_level=dict(declared)))
+    assert resp.status_code == 201, resp.text[:800]
+    (warning,) = _hf_codes(resp)
+    assert warning["context"]["cabs_singles_absent"] is False
+
+
+def test_standalone_hf_atom_without_pno_is_found_under_a_pno_declared_level(client):
+    declared = {**_F12, **_PNO}
+    _deposit(client, "[H]", 2, _HF)
+    _deposit(client, "[H][H]", 1, declared)
+    resp = client.post(_STANDALONE, json=_standalone(declared))
+    assert resp.status_code == 201, resp.text[:800]
+    assert len(_hf_codes(resp)) == 1
+
+
+def test_is_one_electron_hf_substitute_ignores_pno_and_core(db_session):
+    from app.db.models.common import CoreTreatment, PnoTruncation
+    from app.services.calculation_levels import (
+        is_one_electron_hf_substitute,
+        kinetics_energy_level_violation,
+        kinetics_level_fields_match,
+    )
+
+    declared = _level(
+        db_session, "1", **_DECLARED_ROW, pno_truncation=PnoTruncation.normal, core_treatment=CoreTreatment.frozen_core
+    )
+    hf = _level(db_session, "2", **{**_DECLARED_ROW, "method": "hf"})
+    assert is_one_electron_hf_substitute(declared, hf) is True
+    assert kinetics_level_fields_match(declared, hf) is False
+    energies = [_energy(db_session, "[H]", 2, hf), _energy(db_session, "[H][H]", 1, declared)]
+    assert kinetics_energy_level_violation(energies, declared) is None
+
+
+@pytest.mark.parametrize(
+    "atom_extra", [{"ri_approximation": "rijcosx"}, {"relativistic_hamiltonian": "dkh2"}], ids=["ri", "relativistic"]
+)
+def test_a_hydrogen_atom_at_hf_differing_in_ri_or_relativistic_is_still_refused(client, atom_extra):
+    declared = {**_F12, **_PNO}
+    resp = client.post(_REACTION, json=_bundle(declared, left_level={**_HF, **atom_extra}, product_level=declared))
+    _assert_refused(resp)
+
+
+def test_a_declared_ri_approximation_missing_on_the_hf_atom_is_still_refused(client):
+    declared = {**_F12, **_PNO, "ri_approximation": "rij"}
+    resp = client.post(_REACTION, json=_bundle(declared, left_level=dict(_HF), product_level=declared))
+    _assert_refused(resp)
+
+
+def test_ri_and_relativistic_differences_are_not_substitutes(db_session):
+    from app.db.models.common import RelativisticHamiltonian, RiApproximation
+    from app.services.calculation_levels import is_one_electron_hf_substitute
+
+    declared = _level(db_session, "1", **_DECLARED_ROW)
+    ri = _level(db_session, "2", **{**_DECLARED_ROW, "method": "hf"}, ri_approximation=RiApproximation.rijcosx)
+    rel = _level(
+        db_session, "3", **{**_DECLARED_ROW, "method": "hf"}, relativistic_hamiltonian=RelativisticHamiltonian.dkh2
+    )
+    assert is_one_electron_hf_substitute(declared, ri) is False
+    assert is_one_electron_hf_substitute(declared, rel) is False
+
+
+def test_a_correlated_participant_differing_only_in_pno_is_still_refused(client):
+    declared = {**_F12, **_PNO}
+    resp = client.post(_REACTION, json=_bundle(declared, left_level=dict(declared), product_level=dict(_F12)))
+    _assert_refused(resp)
+
+
+def test_a_two_electron_participant_at_hf_without_pno_is_still_refused(client):
+    declared = {**_F12, **_PNO}
+    resp = client.post(_REACTION, json=_bundle(declared, left_level=dict(declared), product_level=dict(_HF)))
+    _assert_refused(resp)

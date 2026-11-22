@@ -25,6 +25,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A one-electron Hartree-Fock energy ignores PNO truncation and core treatment (Unreleased)
+
+- **Behaviour:** the one-electron Hartree-Fock exemption no longer compares `pno_truncation` or `core_treatment`, so a Hartree-Fock energy with neither, or with any value of either, is accepted under a declared level that states them, reported as `one_electron_hf_substitution`. A different `ri_approximation` or `relativistic_hamiltonian` is still `kinetics_energy_level_contradiction`, as is a participant with more than one electron.
+- **Schema and migration:** none. No new environment variable.
+
 ## Config files carry short comments (Unreleased)
 
 - **Behaviour:** none. `docker-compose.yml`, both env templates, the Caddyfile and the shipped systemd units keep only the comments an operator needs at that line; no key, value, default or message changed. The deployment guide now notes `DB_MAX_CONNECTIONS`.
