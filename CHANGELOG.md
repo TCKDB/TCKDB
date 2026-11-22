@@ -25,6 +25,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Release 0.4.0 is the self-hosting default (Unreleased)
+
+- **Behaviour:** the `selfhost` compose profile and `tckdb_deploy.sh` examples default to the 0.4.0 images (`TCKDB_IMAGE_TAG`). 0.4.0 adds admin deletion of approved records with an append-only audit.
+- **Schema and migration:** none in this change; 0.4.0 includes revision `c8e2a4f6b1d3` (record deletion audit). No new environment variable.
+- **Versions:** `tckdb-backend` 0.4.0.
+
 ## Admins can delete an approved record (Unreleased)
 
 - **Behaviour:** `POST /api/v1/admin/record-deletions` (admin only, body `{record_type, public_ref, reason}`, 201) deletes one approved calculation, conformer observation, kinetics, network, network solve, statmech, thermo, transition-state entry or transport record, with every row it owns and its review and curation overlay rows. It is refused with 409 `record_deletion_not_approved` for a record never approved, `record_deletion_in_published_release` while a published release selects it, and `record_deletion_cited` while another record or a draft release selection cites it; `context.cited_by` lists each citer's type, public ref and column, naming the record a ref-less citer (an applied energy correction) belongs to. Nothing is cascaded. A record already deleted answers 410 `record_deleted`. Curators and depositors get 403, anonymous callers 401.

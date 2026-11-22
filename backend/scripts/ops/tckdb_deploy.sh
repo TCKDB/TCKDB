@@ -20,14 +20,14 @@
 #   every time, regardless of whether a migration turns out to be pending.
 #
 # PINNING
-#   Deploy an immutable tag -- `sha-<commit>` or a release such as `0.3.0`.
+#   Deploy an immutable tag -- `sha-<commit>` or a release such as `0.4.0`.
 #   `latest` moves, so a host running it cannot answer "which code is this?",
 #   and two hosts running it may differ. Passing `latest` requires
 #   --allow-mutable and says so.
 #
 # USAGE
 #   tckdb_deploy.sh sha-<full-commit>       # deploy a pinned build
-#   tckdb_deploy.sh 0.3.0                   # deploy a release
+#   tckdb_deploy.sh 0.4.0                   # deploy a release
 #   tckdb_deploy.sh --check                 # report what is running vs available
 #
 #   This script is for an API container it manages itself, beside a compose
@@ -122,10 +122,10 @@ fi
 [[ -z "$BACKUP_DIR" ]] && die "TCKDB_BACKUP_DIR is not set (directory to write pre-deploy backups to)"
 
 TAG="${1:-}"
-[[ -z "$TAG" ]] && die "usage: $0 <tag>|--check   (tag e.g. sha-<commit> or 0.3.0)"
+[[ -z "$TAG" ]] && die "usage: $0 <tag>|--check   (tag e.g. sha-<commit> or 0.4.0)"
 
 if [[ "$TAG" == "latest" && "${2:-}" != "--allow-mutable" ]]; then
-    die "'latest' moves, so the deployed version would be unanswerable. Pass an immutable tag (sha-<commit> or 0.3.0), or re-run with: $0 latest --allow-mutable"
+    die "'latest' moves, so the deployed version would be unanswerable. Pass an immutable tag (sha-<commit> or 0.4.0), or re-run with: $0 latest --allow-mutable"
 fi
 
 # The compose project's `db` container and default network (see WHICH DATABASE).
