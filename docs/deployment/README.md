@@ -290,7 +290,62 @@ tailscale serve --bg 8011
 `https://<machine name>.<tailnet name>.ts.net`. Use that address as the
 public URL. Leave `TRUSTED_PROXY_HEADER` unset. Check from another tailnet
 device with `curl -i https://<machine name>.<tailnet name>.ts.net/api/v1/health`.
-`tailscale funnel --bg 8011` opens the same address to the whole internet.
+To give people outside your tailnet the same private access, share the
+machine with them from the admin console (Machines → the machine → Share).
+They need a Tailscale account and see only that machine.
+
+**Tailscale Funnel.** Opens the same `.ts.net` address to the whole
+internet. Visitors need no Tailscale, the address does not change when the
+server restarts, and no port is opened. Every record is then readable by
+anyone with the address: reading needs no account. Job files, deposits and
+review still need a login.
+
+1. Install Tailscale on the server and sign in:
+
+    ```bash
+    curl -fsSL https://tailscale.com/install.sh | sh
+    sudo tailscale up
+    ```
+
+2. In the Tailscale admin console, on the DNS page, turn on MagicDNS and
+   HTTPS certificates.
+
+3. Find the machine's address:
+
+    ```bash
+    tailscale status --json | python3 -c \
+        "import json,sys; print(json.load(sys.stdin)['Self']['DNSName'].rstrip('.'))"
+    ```
+
+4. Make the env files with that address and start TCKDB:
+
+    ```bash
+    backend/scripts/ops/tckdb_make_env.sh --public-url https://<machine>.<tailnet>.ts.net \
+        --mode hosted_public
+    docker compose --env-file .env.selfhosted --env-file .env.db-admin \
+        --profile selfhost up -d --wait
+    ```
+
+5. Open it to the internet:
+
+    ```bash
+    sudo tailscale funnel --bg 8011
+    tailscale funnel status
+    ```
+
+    The first time, the command prints a link to allow Funnel for this
+    machine. Open it, allow Funnel, and run the command again.
+
+6. Check from a device outside the tailnet, such as a phone on mobile data:
+   `curl -i https://<machine>.<tailnet>.ts.net/api/v1/health`.
+
+The public name can take a few minutes to resolve after Funnel is turned
+on. The first request also makes Tailscale fetch the certificate, and a
+browser that connects during that fetch reports a TLS error
+(`SSL_ERROR_INTERNAL_ERROR_ALERT` in Firefox); reload. Funnel serves HTTPS
+on port 443 only. The server must stay on: when it is off, the address
+does not answer. `sudo tailscale funnel reset` closes public access and
+leaves TCKDB running.
 
 ### Your own proxy
 
