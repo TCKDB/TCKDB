@@ -9,6 +9,7 @@ import { bySummaryText } from "../test/disclosureQueries"
 import { ADVERSARIAL, expectDepositorTextOnlyInNotes, expectNoAdversarialText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 import { rankingWords, textOf } from "../test/rankingWords"
 import { titleHasKind } from "../test/routeTitleKinds"
+import { resetAllRequestCaches } from "../api/requestCache"
 
 const ENTRY_REF = "tse_aq5ktxlu27nvul3hmdwpuyuz4e"
 
@@ -1905,5 +1906,51 @@ describe("TransitionStateEntryPage -- depositor text only in a note", () => {
         expect(note).toHaveTextContent(planted.byKey.note[0])
         expectDepositorTextOnlyInNotes()
         expectNoAdversarialText()
+    })
+})
+
+describe("TransitionStateEntryPage -- deposit warnings and the full check list", () => {
+    const TRUST = {
+        review_status: "not_reviewed",
+        trust_status: "partial",
+        evidence: {
+            passed_count: 3, possible_count: 6, rubric: "computed_transition_state", rubric_version: 2,
+            checks: { charge_present: "passed", irc_evidence_present: "missing" }, hard_fail_reason: null,
+        },
+    }
+    const serve = (body: Record<string, unknown>) =>
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => HttpResponse.json(body)))
+
+    it("lists every check beside the existing trust card and keeps its wording", async () => {
+        serve({ record: mockRecord({ trust: TRUST }) })
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
+        expect(screen.getByText(/3 of 6 checks passed/)).toBeVisible()
+        expect(screen.getByText("Every check")).toBeInTheDocument()
+        expect(screen.getByText("irc evidence present")).toBeInTheDocument()
+        expect(screen.getByText("charge present")).toBeInTheDocument()
+    })
+
+    it("shows the hard-failure reason inside the trust card", async () => {
+        serve({ record: mockRecord({ trust: { ...TRUST, trust_status: "hard_failed", evidence: { ...TRUST.evidence, hard_fail_reason: "ts_entry_status_rejected" } } }) })
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
+        expect(screen.getByText("Hard failure: ts entry status rejected")).toBeInTheDocument()
+    })
+
+    it("shows the warnings panel only when there are items", async () => {
+        serve({
+            record: mockRecord(),
+            record_warnings: [{ record_ref: ENTRY_REF, status: "recorded", items: [{ code: "missing_irc_for_ts", message: "No IRC.", field: "calculations[*]", register_entry: 19, check_version: 1 }] }],
+        })
+        const first = page()
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
+        expect(screen.getByRole("region", { name: "Deposit warnings" })).toBeInTheDocument()
+        first.unmount()
+        resetAllRequestCaches()
+        serve({ record: mockRecord(), record_warnings: [{ record_ref: ENTRY_REF, status: "recorded", items: [] }] })
+        page()
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
+        expect(screen.queryByText("Deposit warnings")).toBeNull()
     })
 })
