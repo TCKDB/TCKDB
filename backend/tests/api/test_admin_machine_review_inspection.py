@@ -197,6 +197,8 @@ def test_admin_submission_machine_review_inspection_empty_when_no_machine_review
         "submission_id": submission.id,
         "record_summaries": [],
         "unmapped_findings_count": 0,
+        "unmapped_findings": [],
+        "runs": [],
         "mapping_warnings": [],
         "parse_warnings": [],
         "source_audit_event_ids": [],

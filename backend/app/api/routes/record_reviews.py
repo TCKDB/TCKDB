@@ -25,16 +25,26 @@ from app.api.deps import (
 from app.api.errors import not_found
 from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser
-from app.db.models.common import RecordReviewStatus, SubmissionRecordType
+from app.db.models.common import (
+    MachineReviewSeverity,
+    MachineReviewStatus,
+    RecordReviewStatus,
+    SubmissionRecordType,
+)
 from app.db.models.record_review import RecordReview
 from app.schemas.entities.record_review import (
     RecordReviewRead,
     RecordReviewSetStatusRequest,
+    ReviewQueueMachineFindingsRead,
     ReviewQueuePageRead,
     ReviewQueueReactionEquation,
     ReviewQueueReactionParticipant,
+    ReviewQueueRecordRead,
     ReviewQueueSubjectChemistry,
     ReviewQueueSubjectRead,
+)
+from app.services.machine_review.record_findings_summary import (
+    summarize_machine_findings_for_records,
 )
 from app.services.record_containers import (
     RecordContainer,
@@ -82,6 +92,19 @@ def _read(
             "container_type": container.container_type if container else None,
             "container_ref": container.container_ref if container else None,
         }
+    )
+
+
+def _machine_findings_read(found) -> ReviewQueueMachineFindingsRead:
+    return ReviewQueueMachineFindingsRead(
+        status=MachineReviewStatus(found.status.value),
+        highest_severity=(
+            None if found.highest_severity is None else MachineReviewSeverity(found.highest_severity.value)
+        ),
+        findings_count=found.findings_count,
+        reviewed_at=found.reviewed_at,
+        open_task_count=found.open_task_count,
+        open_task_ids=list(found.open_task_ids),
     )
 
 
@@ -178,6 +201,12 @@ def list_review_queue_page(
             for row in subject.rows
         },
     )
+    # One bulk read for the whole page, never per row: the summary projects each
+    # submission's stored reviews once and a per-row call would redo that.
+    machine_findings = summarize_machine_findings_for_records(
+        session,
+        [(row.record_type, row.record_id) for subject in result.subjects for row in subject.rows],
+    )
     subjects = [
         ReviewQueueSubjectRead(
             subject_type=subject.subject_type,
@@ -225,17 +254,23 @@ def list_review_queue_page(
                 else None
             ),
             records=[
-                _read(
-                    row,
-                    result.refs.get((row.record_type, row.record_id)),
-                    result.containers.get((row.record_type, row.record_id)),
-                ).model_copy(
-                    update={
+                ReviewQueueRecordRead.model_validate(
+                    {
+                        **dict(
+                            _read(
+                                row,
+                                result.refs.get((row.record_type, row.record_id)),
+                                result.containers.get((row.record_type, row.record_id)),
+                            )
+                        ),
                         "actor_may_approve": (
                             None
                             if row.status in _NO_APPROVE_FLAG
                             else not refused[(row.record_type, row.record_id)]
-                        )
+                        ),
+                        "machine_findings": _machine_findings_read(
+                            machine_findings[(row.record_type, row.record_id)]
+                        ),
                     }
                 )
                 for row in subject.rows

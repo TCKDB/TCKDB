@@ -108,6 +108,9 @@ def run_review(client, monkeypatch, submission_id: int, fixed: MachineReviewProv
     resp = client.post(f"{RUN_URL}/{submission_id}")
     assert resp.status_code == 200, resp.text
     assert resp.json()["audit_event_recorded"] is True
+    # A real request gets a fresh session; the harness shares one, whose loaded
+    # ``submission.audit_events`` would not see the event just written.
+    client._db_session.expire_all()
     return resp.json()
 
 
