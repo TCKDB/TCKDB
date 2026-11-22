@@ -34,9 +34,10 @@ from app.api.deps import (
     get_write_db,
     require_curator_or_admin,
 )
+from app.api.routes._pagination import PaginatedResponse
 from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser, AppUserRole
-from app.db.models.common import SubmissionStatus
+from app.db.models.common import MachineReviewSeverity, MachineReviewStatus, SubmissionStatus
 from app.db.models.submission import Submission
 from app.db.models.submission_rights import SubmissionRightsAttestation
 from app.schemas.entities.submission import (
@@ -48,10 +49,16 @@ from app.schemas.entities.submission import (
     SubmissionAIReviewSummaryRead,
     SubmissionApproveRequest,
     SubmissionAuditEventRead,
+    SubmissionMachineReviewLatestRunRead,
+    SubmissionMachineReviewOverviewRead,
+    SubmissionMachineReviewStateRead,
     SubmissionRead,
     SubmissionRecordLinkRead,
     SubmissionRejectRequest,
     SubmissionSupersedeRequest,
+)
+from app.services.machine_review.submission_overview import (
+    list_submission_machine_review_overview,
 )
 from app.services.rights import (
     RightsAttestationError,
@@ -158,6 +165,83 @@ def list_for_review(
     """List submissions awaiting curator review (curator/admin only)."""
     rows = list_submissions_for_review(session, statuses=statuses, offset=offset, limit=limit)
     return [SubmissionRead.model_validate(r) for r in rows]
+
+
+@router.get(
+    "/machine-review-overview",
+    response_model=PaginatedResponse[SubmissionMachineReviewOverviewRead],
+)
+def machine_review_overview(
+    statuses: list[SubmissionStatus] | None = Query(default=None),
+    reviewed: bool | None = None,
+    has_open_tasks: bool | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_db),
+    _curator: AppUser = Depends(require_curator_or_admin),
+) -> PaginatedResponse[SubmissionMachineReviewOverviewRead]:
+    """Submissions with their machine-review state (curator/admin only).
+
+    Newest submitted first, ``total`` exact under the filters. ``statuses``
+    defaults to every status, unlike ``/for-review`` (a bare list, no total,
+    pre-approval statuses only). ``reviewed`` keeps submissions that do (or do
+    not) have a stored machine-review run and ``has_open_tasks`` those that do
+    (or do not) have an open curator task. Declared before
+    ``/{submission_id}`` so the path is not read as an id. Read-only.
+    """
+    rows, total = list_submission_machine_review_overview(
+        session,
+        statuses=statuses,
+        reviewed=reviewed,
+        has_open_tasks=has_open_tasks,
+        offset=offset,
+        limit=limit,
+    )
+    return PaginatedResponse(
+        items=[
+            SubmissionMachineReviewOverviewRead(
+                id=r.submission.id,
+                public_ref=r.submission.public_ref,
+                status=r.submission.status,
+                submission_kind=r.submission.submission_kind,
+                title=r.submission.title,
+                created_by=r.submission.created_by,
+                created_by_username=r.created_by_username,
+                submitted_at=r.submission.submitted_at,
+                machine_review=SubmissionMachineReviewStateRead(
+                    run_count=r.run_count,
+                    latest_run=(
+                        None
+                        if r.latest_run is None
+                        else SubmissionMachineReviewLatestRunRead(
+                            audit_event_id=r.latest_run.audit_event_id,
+                            reviewed_at=r.latest_run.reviewed_at,
+                            parsed=r.latest_run.parsed,
+                            status=(
+                                None
+                                if r.latest_run.status is None
+                                else MachineReviewStatus(r.latest_run.status.value)
+                            ),
+                            highest_severity=(
+                                None
+                                if r.latest_run.highest_severity is None
+                                else MachineReviewSeverity(r.latest_run.highest_severity.value)
+                            ),
+                            findings_count=r.latest_run.findings_count,
+                            model=r.latest_run.model,
+                            provider=r.latest_run.provider,
+                        )
+                    ),
+                    open_task_count=r.open_task_count,
+                    task_count=r.task_count,
+                ),
+            )
+            for r in rows
+        ],
+        total=total,
+        skip=offset,
+        limit=limit,
+    )
 
 
 # ---------------------------------------------------------------------------

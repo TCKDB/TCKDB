@@ -50,11 +50,11 @@ from app.services.literature_resolution import resolve_or_create_literature
 from app.services.machine_review import (
     CuratorTaskFindingResolution,
     MachineReviewCategory,
+    MachineReviewFinding,
     MachineReviewOrchestrationStatus,
     MachineReviewRecordSummary,
     MachineReviewReReviewDecision,
     MachineReviewReReviewExecutionStatus,
-    MachineReviewFinding,
     MachineReviewRunInspection,
     RecordMachineReview,
     SubmissionMachineReviewInspection,
@@ -73,9 +73,9 @@ from app.services.machine_review import (
     select_latest_machine_review_for_record,
     start_curator_task_review,
 )
-from app.services.machine_review.schemas import CuratorPriority
 from app.services.machine_review.made_under import machine_review_made_under
 from app.services.machine_review.run import run_machine_review_for_submission
+from app.services.machine_review.schemas import CuratorPriority
 from app.services.observation_identity_attach import attach_observation_identity
 from app.services.record_containers import (
     RecordContainer,

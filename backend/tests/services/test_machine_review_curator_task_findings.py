@@ -11,14 +11,15 @@ import pytest
 from sqlalchemy import event
 
 from app.db.models.common import (
+    CuratorTaskFindingMatch,
+    SubmissionKind,
+    SubmissionRecordType,
+)
+from app.db.models.common import (
     MachineReviewSeverity as DBSeverity,
 )
 from app.db.models.common import (
     MachineReviewStatus as DBStatus,
-)
-from app.db.models.common import (
-    SubmissionKind,
-    SubmissionRecordType,
 )
 from app.db.models.machine_review_curator_task import MachineReviewCuratorTask
 from app.services.machine_review import (
@@ -38,7 +39,6 @@ from app.services.machine_review.schemas import (
     MachineReviewSeverity,
     MachineReviewStatus,
 )
-from app.db.models.common import CuratorTaskFindingMatch
 from app.services.submission import (
     create_submission,
     link_record,
