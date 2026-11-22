@@ -1258,9 +1258,9 @@ def is_one_electron_hf_substitute(declared: LevelOfTheory, linked: LevelOfTheory
 
     ``linked`` has method key ``hf``; ``declared`` is classified ``wavefunction`` or ``multireference`` and is not
     ``hf`` (a density functional, a composite recipe or an unclassified method gets no exemption); every other
-    identity field but spin treatment, PNO truncation and core treatment agrees (neither qualifier
-    changes a Hartree-Fock energy). The caller adds the one-electron condition: with one electron every correlation
-    term is zero, and ORCA refuses correlated methods there (ORCA 6 "no electrons to correlate").
+    identity field but spin treatment, PNO truncation and core treatment agrees (neither qualifier changes a
+    Hartree-Fock energy). The caller adds the one-electron condition: with one electron every correlation term is zero,
+    and ORCA refuses correlated methods there (ORCA 6 "no electrons to correlate").
     """
     from app.chemistry.method_families import MethodFamily, classify_method
     from app.services.calculation_resolution import spin_agnostic_level_key

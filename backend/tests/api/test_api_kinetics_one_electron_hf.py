@@ -2,7 +2,8 @@
 
 ORCA refuses every correlated method for one electron, and for one electron every correlation term is zero. A kinetics
 energy link matches a declared correlated level when the participant has exactly one electron (stored SMILES and
-charge), its method is Hartree-Fock in any spin form, and every other identity field but PNO truncation and core treatment equals the declared level's.
+charge), its method is Hartree-Fock in any spin form, and every other identity field but PNO truncation and core
+treatment equals the declared level's.
 The substitution is reported as ``one_electron_hf_substitution``. Each test names the condition it protects.
 """
 
