@@ -1,7 +1,8 @@
 import { z } from "zod"
 import { publicStateLabel } from "../domain/participantFacets"
 import { recordReviewSchema, entryFacetFields } from "./scientificSchemas"
-import { loadEntryThermo } from "./thermoApi"
+import { loadEntryThermoPresence } from "./thermoApi"
+import { depositWarningsEnvelopeShape, emptyDepositWarnings, mergeDepositWarnings, pickDepositWarnings, type DepositWarnings } from "./depositWarningsSchema"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
 /**
@@ -167,6 +168,7 @@ const reviewStatusSummarySchema = z.object({
 }).passthrough()
 
 const networkDetailResponseSchema = z.object({
+    ...depositWarningsEnvelopeShape,
     review_summary: reviewStatusSummarySchema,
     record: z.object({
         network: networkCoreSchema,
@@ -206,6 +208,7 @@ const channelBarrierSchema = z.object({
 }).passthrough()
 
 const solveDetailResponseSchema = z.object({
+    ...depositWarningsEnvelopeShape,
     record: z.object({
         network_solve: z.object({ network_solve_ref: z.string() }).passthrough(),
         state_energies: z.array(stateEnergySchema).nullable().optional(),
@@ -246,6 +249,8 @@ export type NetworkStateEnergy = z.infer<typeof stateEnergySchema>
 export type NetworkChannelBarrier = z.infer<typeof channelBarrierSchema>
 
 export type NetworkFullRecord = {
+    /** The network read's deposit warnings merged with the solve read's; empty when the solve is absent or unavailable. */
+    depositWarnings: DepositWarnings
     network: z.infer<typeof networkCoreSchema>
     review_summary: z.infer<typeof reviewStatusSummarySchema>
     software_release: z.infer<typeof softwareReleaseSummarySchema> | null
@@ -331,7 +336,7 @@ export async function loadNetworkEntry(
 
     const [thermoResults, reactionResults, solveDetail] = await Promise.all([
         Promise.all(speciesEntryRefs.map(async (entryRef) => {
-            const thermo = await loadEntryThermo(entryRef, signal)
+            const thermo = await loadEntryThermoPresence(entryRef, signal)
             return [entryRef, thermo.records.length > 0] as const
         })),
         Promise.all(reactionEntryRefs.map(async (entryRef) => {
@@ -363,6 +368,10 @@ export async function loadNetworkEntry(
     ])
 
     return {
+        depositWarnings: mergeDepositWarnings(
+            pickDepositWarnings(detail),
+            solveDetail.status === "ok" ? pickDepositWarnings(solveDetail.detail) : emptyDepositWarnings(),
+        ),
         network: record.network,
         review_summary: detail.review_summary,
         software_release: record.software_release ?? null,

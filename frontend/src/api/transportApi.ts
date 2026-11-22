@@ -3,6 +3,8 @@ import { levelOfTheorySchema } from "./scientificSchemas"
 import { listRequestEchoSchema, paginationSchema } from "./listEnvelope"
 import { pageQuery, parsePagedRef, type PageRequest } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
+import { pickDepositWarnings, depositWarningsEnvelopeSchema, type DepositWarnings } from "./depositWarningsSchema"
+import { assessmentsSchema, trustFragmentSchema } from "./trustSchema"
 
 // ---------------------------------------------------------------------------
 // Shape notes (from
@@ -142,6 +144,9 @@ const transportRecordSchema = z.object({
     available_sections: availableSectionsSchema,
     source_calculations: z.array(sourceCalculationSummarySchema).nullable().optional(),
     review_history: z.array(reviewEntrySchema).nullable().optional(),
+    // `include=trust` and `include=assessments` (requested by `loadEntryTransportWithSources`).
+    trust: trustFragmentSchema.nullable().optional(),
+    assessments: assessmentsSchema.nullable().optional(),
 }).passthrough()
 
 const reviewStatusSummarySchema = z.object({
@@ -214,6 +219,19 @@ export async function loadEntryTransportWithSources(
     onRateLimited?: (retryAfterSeconds: number) => void,
 ): Promise<TransportListResponse> {
     const { ref, request } = parsePagedRef(entryRef)
-    const payload = await requestScientificJson(buildEndpoint(ref, ["source_calculations"], request), signal, onRateLimited)
+    const payload = await requestScientificJson(buildEndpoint(ref, ["source_calculations", "trust", "assessments"], request), signal, onRateLimited)
     return parseScientificResponse(transportListResponseSchema, payload, "transport")
+}
+
+/**
+ * The deposit warnings of one transport record. The entry-scoped list carries none, so this reads
+ * `GET /scientific/transport/{ref}` with no include tokens and keeps only the envelope's warnings.
+ */
+export async function loadTransportDepositWarnings(
+    transportRef: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<DepositWarnings> {
+    const payload = await requestScientificJson(`/api/v1/scientific/transport/${encodeURIComponent(transportRef)}`, signal, onRateLimited)
+    return pickDepositWarnings(parseScientificResponse(depositWarningsEnvelopeSchema, payload, "transport"))
 }

@@ -3,6 +3,8 @@ import { levelOfTheorySchema, recordReviewSchema } from "./scientificSchemas"
 import { listMetaOf, listRequestEchoSchema, paginationSchema, type ListMeta } from "./listEnvelope"
 import { pageQuery, type PageRequest } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
+import { depositWarningsEnvelopeShape, pickDepositWarnings, type DepositWarnings } from "./depositWarningsSchema"
+import { trustFragmentSchema } from "./trustSchema"
 
 /**
  * `GET /scientific/transition-state-entries/{ref}` --
@@ -183,23 +185,14 @@ const structureAssessmentSchema = z.object({
     refusal_code: z.string().nullable().optional(),
 }).passthrough()
 
-const trustSchema = z.object({
-    trust_status: z.string(),
-    evidence: z.object({
-        passed_count: z.number(),
-        possible_count: z.number(),
-        // The rubric that judged the entry and its integer version (`EvidenceEvaluation.rubric`/`rubric_version`).
-        // Evaluated at read time, so always the version in force. Optional so an older deployment still renders.
-        rubric: z.string().optional(),
-        rubric_version: z.number().optional(),
-        checks: z.record(z.string(), z.string()).optional(),
-    }).passthrough(),
+const trustSchema = trustFragmentSchema.extend({
     structure_assessment: structureAssessmentSchema.nullable().optional(),
-}).passthrough()
+})
 
 export type StructureAssessment = z.infer<typeof structureAssessmentSchema>
 
 const responseSchema = z.object({
+    ...depositWarningsEnvelopeShape,
     record: z.object({
         transition_state_entry: entryCoreSchema,
         // null under `profile=curated` when the owning transition state is rejected or deprecated: the entry is shown, its owner is not named.
@@ -217,21 +210,23 @@ const responseSchema = z.object({
     }).passthrough(),
 }).passthrough()
 
-export type TransitionStateEntryRecord = z.infer<typeof responseSchema>["record"]
+export type TransitionStateEntryRecord = z.infer<typeof responseSchema>["record"] & { depositWarnings: DepositWarnings }
 
 export async function loadTransitionStateEntry(ref: string, signal?: AbortSignal): Promise<TransitionStateEntryRecord> {
     const query = new URLSearchParams()
     for (const include of ["calculations", "geometries", "review", "trust", "validation_evidence"]) query.append("include", include)
     const endpoint = `/api/v1/scientific/transition-state-entries/${encodeURIComponent(ref)}?${query}`
     const payload = await requestScientificJson(endpoint, signal)
-    return parseScientificResponse(responseSchema, payload, "transition state entry").record
+    const parsed = parseScientificResponse(responseSchema, payload, "transition state entry")
+    return { ...parsed.record, depositWarnings: pickDepositWarnings(parsed) }
 }
 
 /** The entry with only its geometries (`include=geometries`), for a picture. */
 export async function loadTransitionStateGeometries(ref: string, signal?: AbortSignal): Promise<TransitionStateEntryRecord> {
     const endpoint = `/api/v1/scientific/transition-state-entries/${encodeURIComponent(ref)}?include=geometries`
     const payload = await requestScientificJson(endpoint, signal)
-    return parseScientificResponse(responseSchema, payload, "transition state entry").record
+    const parsed = parseScientificResponse(responseSchema, payload, "transition state entry")
+    return { ...parsed.record, depositWarnings: pickDepositWarnings(parsed) }
 }
 
 // ---------------------------------------------------------------------------

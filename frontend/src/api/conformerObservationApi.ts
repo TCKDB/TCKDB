@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { depositWarningsEnvelopeShape, pickDepositWarnings, type DepositWarnings } from "./depositWarningsSchema"
 import {
     calculationSummarySchema,
     geometrySummarySchema,
@@ -99,7 +100,9 @@ const siblingObservationSchema = z.object({
 
 export type ConformerObservationSibling = z.infer<typeof siblingObservationSchema>
 
+/** The record plus the envelope's deposit warnings (a client-only key). */
 export interface ConformerObservation {
+    depositWarnings: DepositWarnings
     conformer_observation: z.infer<typeof observationCoreSchema>
     // null under `profile=curated` when the group is rejected or deprecated: the observation is shown, its basin is not named.
     conformer_group: z.infer<typeof conformerGroupContextSchema> | null
@@ -114,7 +117,7 @@ export interface ConformerObservation {
     review_history?: z.infer<typeof reviewEntrySchema>[] | null
 }
 
-const observationRecordSchema: z.ZodType<ConformerObservation> = z.object({
+const observationRecordSchema: z.ZodType<Omit<ConformerObservation, "depositWarnings">> = z.object({
     conformer_observation: observationCoreSchema,
     conformer_group: conformerGroupContextSchema.nullable(),
     species: speciesContextSchema,
@@ -130,7 +133,8 @@ const observationRecordSchema: z.ZodType<ConformerObservation> = z.object({
 
 const response = z.object({
     record: observationRecordSchema,
-})
+    ...depositWarningsEnvelopeShape,
+}).passthrough()
 
 export async function loadConformerObservation(
     ref: string,
@@ -143,5 +147,6 @@ export async function loadConformerObservation(
     }
     const endpoint = `/api/v1/scientific/conformer-observations/${encodeURIComponent(ref)}?${query}`
     const payload = await requestScientificJson(endpoint, signal, onRateLimited)
-    return parseScientificResponse(response, payload, "conformer observation").record
+    const parsed = parseScientificResponse(response, payload, "conformer observation")
+    return { ...parsed.record, depositWarnings: pickDepositWarnings(parsed) }
 }

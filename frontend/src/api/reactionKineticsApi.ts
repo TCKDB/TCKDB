@@ -4,6 +4,7 @@ import { listRequestEchoSchema, paginationSchema } from "./listEnvelope"
 import { kineticsRecordSchema, type ReactionKineticsRecord } from "./reactionEntryApi"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 import { pageQuery, parsePagedRef } from "../domain/paging"
+import { depositWarningsEnvelopeShape, pickDepositWarnings, type DepositWarnings } from "./depositWarningsSchema"
 
 /** `GET /scientific/kinetics/search?reaction_ref`: every kinetics record of every deposited version of one reaction. */
 const searchSchema = z.object({
@@ -31,4 +32,37 @@ export const loadReactionKineticsPage: Loader<ReactionKineticsEntry> = async (pa
 /** Every kinetics record of one reaction, walked up to the cap. */
 export function loadReactionKinetics(reactionRef: string, control: WalkControl): Promise<AllPages<ReactionKineticsEntry>> {
     return walk(reactionRef, loadReactionKineticsPage, control)
+}
+
+const assessmentsListSchema = z.object({
+    ...depositWarningsEnvelopeShape,
+    records: z.array(kineticsRecordSchema),
+}).passthrough()
+
+/** What `GET /reaction-entries/{ref}/kinetics?include=trust&include=assessments` says about each record, by `kinetics_ref`. */
+export type ReactionKineticsAssessments = {
+    byKineticsRef: Map<string, { trust: ReactionKineticsRecord["trust"]; assessments: ReactionKineticsRecord["assessments"] }>
+    depositWarnings: DepositWarnings
+}
+
+/**
+ * One supplementary read per reaction entry: trust, reproducibility and deposit warnings for its kinetics records. The
+ * `/full` read the page is built from carries trust at most, and never warnings. Records the list does not return are
+ * simply absent from the map; callers say so rather than borrow a sibling's values.
+ */
+export async function loadReactionEntryKineticsAssessments(
+    entryRef: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<ReactionKineticsAssessments> {
+    const query = new URLSearchParams()
+    query.append("include", "trust")
+    query.append("include", "assessments")
+    query.set("limit", "200")
+    const payload = await requestScientificJson(`/api/v1/scientific/reaction-entries/${encodeURIComponent(entryRef)}/kinetics?${query}`, signal, onRateLimited)
+    const parsed = parseScientificResponse(assessmentsListSchema, payload, "kinetics")
+    return {
+        byKineticsRef: new Map(parsed.records.map((record) => [record.kinetics_ref, { trust: record.trust, assessments: record.assessments }])),
+        depositWarnings: pickDepositWarnings(parsed),
+    }
 }
