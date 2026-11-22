@@ -1,0 +1,39 @@
+/* `components/TrustAssessment.tsx` and `ReproducibilityAssessment.tsx`. Design tokens only; pills, notes, the disclosure
+ * and the data table are the shared ones. */
+.trust-assessment-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .35rem .75rem;
+    margin: var(--s-3) 0 0;
+}
+
+.trust-assessment-line .note {
+    margin: 0;
+}
+
+.trust-hard-fail {
+    margin: var(--s-3) 0 0;
+    padding: var(--s-3) var(--s-4);
+    border: 1px solid var(--warning);
+    border-left-width: 3px;
+    border-radius: 4px;
+}
+
+.trust-hard-fail-title {
+    margin: 0;
+    color: var(--ink);
+    font: var(--type-ui-font);
+}
+
+.trust-hard-fail .note {
+    margin: .25rem 0 0;
+}
+
+.trust-checks {
+    margin-top: var(--s-3);
+}
+
+.trust-check-ask {
+    color: var(--muted);
+}
