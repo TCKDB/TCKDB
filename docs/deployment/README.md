@@ -478,6 +478,8 @@ together with a fresh volume.
   first start.
 - `TCKDB_API_PORT`, `TCKDB_WEB_PORT`, `DB_PORT` and `S3_PORT` move the
   loopback ports. `TCKDB_HTTP_PORT` and `TCKDB_HTTPS_PORT` move Caddy's.
+- `DB_MAX_CONNECTIONS` sets Postgres's `max_connections` (default 200). A new
+  value takes effect only after `up -d --force-recreate db`, not a restart.
 - Uploads are processed inside the API by default. To run a separate upload
   worker from the same image, set `TCKDB_INLINE_WORKER=false` and add
   `--profile worker` to the `up` command.

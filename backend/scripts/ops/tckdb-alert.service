@@ -1,42 +1,21 @@
 [Unit]
 Description=TCKDB health check with ntfy push on state change
-# Do not fight the network coming up after a reboot.
 After=network-online.target
 Wants=network-online.target
 
-# When the checker itself fails, say so. Without this a broken checker is
-# indistinguishable from a healthy deployment: both produce silence. See
-# tckdb-alert-failed.service, and TCKDB_DEADMAN_URL in the script for the
-# case this cannot cover (the whole host going away).
+# Pushes an alert when this checker itself fails.
 OnFailure=tckdb-alert-failed.service
 
 [Service]
 Type=oneshot
-# oneshot + Type=oneshot means systemd runs it, waits, records the exit code,
-# and stops. The timer decides when. This is the unix cron model with better
-# logging: `journalctl -u tckdb-alert` shows every run and its output.
 
-# Set these for your deployment. EnvironmentFile keeps the secret topic out of
-# the unit file, which is world-readable.
-#
-# No leading `-` here, and that asymmetry with tckdb-alert-failed.service is
-# deliberate. This unit cannot do its job without the topic, so a missing file
-# SHOULD stop it and fire OnFailure=; the OnFailure unit needs the `-` because
-# it is the thing that has to survive that exact failure in order to report it.
+# Holds TCKDB_NTFY_TOPIC (a secret). No leading `-`: a missing file must fail
+# this unit so OnFailure= fires.
 EnvironmentFile=/home/YOUR_USER/.config/tckdb-alert.env
 ExecStart=/opt/tckdb/backend/scripts/ops/tckdb_alert_check.sh
 
-# The script exits 1 when the deployment is unhealthy. That is information,
-# not a unit failure -- without this, systemd marks the unit failed and the
-# journal fills with noise about the checker rather than about TCKDB.
-#
-# This is only safe because the script does not let 1 mean two things. bash
-# exits 1 when it dies on an unbound variable, so treating 1 as success would
-# hide an accidental death partway through the script, and OnFailure= would
-# never fire for it -- the one class of failure that produces no push of its
-# own. tckdb_alert_check.sh reports 2 for any exit taken before a verdict
-# exists, and 2 is deliberately absent from this list.
-# Do not add it.
+# 1 means "unhealthy", reported by the script. Never add 2: that is the
+# script dying before a verdict, which must fail the unit.
 SuccessExitStatus=0 1
 
 User=YOUR_USER

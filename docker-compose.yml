@@ -1,62 +1,6 @@
-# ============================================================================
-# TCKDB - canonical Docker Compose stack
-#
-# One file, two deployment scenarios, five services. Picks between them via
-# `--env-file` and `--profile`:
-#
-#   Local developer machine
-#   -----------------------
-#       cp .env.example .env                  # one-time; edit DB_PASSWORD etc.
-#       docker compose up -d db seaweedfs     # core services
-#       docker compose --profile worker up -d # add the upload worker
-#
-#   Self-hosted single-node server, from the published images
-#   ---------------------------------------------------------
-#       backend/scripts/ops/tckdb_make_env.sh       # one-time; writes both env files
-#       docker compose --env-file .env.selfhosted --env-file .env.db-admin \
-#           --profile selfhost up -d                # or: make selfhost
-#   Add `--profile caddy` for HTTPS on ports 80/443 with a domain name, or
-#   `--profile cloudflare` for a Cloudflare Tunnel. tckdb_make_env.sh prints
-#   the command for the access it was given.
-#
-#   Self-hosted, API run outside compose
-#   ------------------------------------
-#       docker compose --env-file .env.selfhosted --env-file .env.db-admin up -d db seaweedfs
-#       docker compose --env-file .env.selfhosted --profile cloudflare up -d
-#
-# Conventions baked in
-# --------------------
-#   * Non-secret identifiers (DB_USER, DB_NAME, DB_PORT, S3_ACCESS_KEY) have
-#     soft defaults so first-time devs can boot without bikeshedding.
-#   * Local development may reuse DB_* for the bootstrap administrator.
-#     Hosted deployments supply DB_ADMIN_* from a separate operator-only
-#     env file; the API receives only the restricted DB_* runtime account.
-#   * Secrets (DB_PASSWORD, S3_SECRET_KEY) are REQUIRED via `${VAR:?...}`.
-#     Compose fails fast if they are unset. SEAWEEDFS_JWT_KEY is required
-#     too, but checked by the seaweedfs container when it starts (it exits
-#     78 without one), so a stack that runs only MinIO does not need it.
-#   * Published ports bind to 127.0.0.1 only, with two exceptions: the web
-#     UI binds to TCKDB_WEB_BIND (default 127.0.0.1), and `caddy` publishes
-#     80 and 443 on every interface. Postgres, the object store and the API
-#     port are never reachable from the LAN or public internet. Loopback is
-#     enough because the API reaches them either from the host or, in the
-#     `selfhost` profile, over the compose networks.
-#     backend/tests/ops/test_compose_reachability.py holds every other
-#     service to loopback.
-#   * Bridge networking for the data plane; `network_mode: host` only for
-#     `cloudflared`, which must dial the host-side API at 127.0.0.1:8010.
-#     The object store is on a second network, `storage`, that only the
-#     services talking to it join (see the seaweedfs service, #545).
-#   * Optional services live behind profiles so `docker compose config`
-#     and `docker compose up -d db seaweedfs` ignore them by default.
-#     MinIO is one of them (`--profile minio`), for deployments that
-#     already run it.
-#
-# Image arch note: informaticsmatters/rdkit-cartridge-debian publishes
-# both linux/amd64 and linux/arm64, so the same file runs on x86_64
-# servers and on arm64 (Raspberry Pi) without changes. So does
-# chrislusf/seaweedfs.
-# ============================================================================
+# TCKDB Docker Compose stack. How to start it: docs/deployment/README.md.
+# Every published port binds to 127.0.0.1, except the web UI (TCKDB_WEB_BIND)
+# and Caddy (80 and 443 on every interface).
 
 services:
   db:
@@ -65,51 +9,15 @@ services:
       POSTGRES_USER: ${DB_ADMIN_USER:-${DB_USER:-tckdb}}
       POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD:-${DB_PASSWORD:?DB_PASSWORD must be set (copy .env.example to .env or pass --env-file)}}
       POSTGRES_DB: ${DB_NAME:-tckdb_dev}
-      # Pin the cluster's encoding at initdb time.
-      #
-      # Without this, the encoding a new deployment gets is whatever the base
-      # image's locale happens to imply -- and with no locale set that is
-      # SQL_ASCII, a cluster that stores bytes and validates nothing. This
-      # deployment has already lost an upload to exactly that (see
-      # docs/deployment/troubleshooting.md), and the failure is delayed
-      # arbitrarily: everything works until the first non-ASCII character
-      # arrives, which may be months after the volume was created and long
-      # after anyone would connect the two.
-      #
-      # LANG is what initdb reads for its default locale; --encoding=UTF8 is
-      # then consistent with it and the two cannot disagree. This applies at
-      # volume creation ONLY -- an existing cluster is untouched, by design,
-      # because changing a live cluster's encoding is a dump and restore.
+      # UTF8 cluster. Applies only when the volume is first created.
       LANG: C.UTF-8
       POSTGRES_INITDB_ARGS: "--encoding=UTF8"
-    # Raise max_connections above Postgres's default of 100.
-    #
-    # A single 8-worker run of the test suite peaks at about 35 client
-    # backends: each xdist worker owns its own database, its own engine pool
-    # and an `alembic upgrade head`. Three concurrent runs therefore sit at
-    # the default limit and four are past it -- and this repository is worked
-    # on by several agents at once against one local server. What that looks
-    # like is not "the pool is full": it is tens to hundreds of failures
-    # reading `connection is bad` and `sorry, too many clients already`,
-    # scattered across unrelated tests, in a suite that passes serially. It
-    # has twice been read as a defect in `main`.
-    #
-    # 200 is a limit, not an allocation. Postgres reserves roughly 400 bytes
-    # of shared memory per connection *slot*; the real cost is per *live*
-    # connection, and a deployment that holds five connections holds five
-    # whether the ceiling is 100 or 200. So this is safe on the Raspberry Pi
-    # deployment that shares this file, and DB_MAX_CONNECTIONS lets a host
-    # with less memory pin it lower.
-    #
-    # Changing this on an existing deployment needs the container recreated
-    # (`docker compose up -d --force-recreate db`), not just restarted --
-    # max_connections is a postmaster-start parameter.
+    # A changed DB_MAX_CONNECTIONS needs `up -d --force-recreate db`, not a restart.
     command:
       - postgres
       - -c
       - max_connections=${DB_MAX_CONNECTIONS:-200}
-    # Loopback-only publication. NEVER change to "${DB_PORT}:5432" or
-    # "0.0.0.0:5432" - that exposes Postgres on the LAN.
+    # Loopback only; never publish Postgres on 0.0.0.0.
     ports:
       - "127.0.0.1:${DB_PORT:-5432}:5432"
     volumes:
@@ -126,101 +34,14 @@ services:
         max-size: "10m"
         max-file: "5"
 
-  # S3-compatible artifact store. SeaweedFS is the default TCKDB ships
-  # (#541); MinIO was, until MinIO withdrew its public images. TCKDB is a
-  # plain S3 client, so this service is optional: point S3_ENDPOINT_URL at
-  # AWS S3 or any other S3-compatible service and do not start it.
-  #
-  # `weed mini` runs master, volume, filer and S3 gateway in one process.
-  # The S3 gateway listens on 9000, the port MinIO used, so S3_ENDPOINT_URL
-  # values written for MinIO still point at the store. Telemetry, WebDAV,
-  # the admin UI and the Iceberg and Lance endpoints are off; nothing here
-  # uses them.
-  #
-  # The side door, and how it is shut (#545). `weed mini` also runs a filer
-  # (8888), a master (9333) and a volume server (9340), each with a gRPC
-  # port beside it (18888, 19333, 19340; the S3 gateway has 19000), and
-  # out of the box none of them asks for credentials. Measured on 4.47,
-  # from another container with no credentials: objects read and written
-  # through seaweedfs:8888, raw data on :9340, the master growing volumes on
-  # request -- and, over gRPC with `weed shell`, an object deleted
-  # (`fs.rm`) and the bucket's whole collection deleted
-  # (`collection.delete -apply`). Three layers close it:
-  #
-  # 1. Network isolation, which closes gRPC to other containers.
-  #    `seaweedfs` is on the `storage` network ONLY. Nothing on `default`
-  #    (db, anything else started in this project) can reach any SeaweedFS
-  #    port, gRPC included. Only services that talk to the store join
-  #    `storage`: the worker and the selfhost `tckdb-api` here, and an API
-  #    container that tckdb_deploy.sh connects when TCKDB_EXTRA_NETWORKS
-  #    names this network. The API already holds S3
-  #    credentials that can delete every object, so reaching gRPC gives it
-  #    nothing it does not have; that is why isolation, rather than gRPC
-  #    mTLS (which needs certificate files), is the chosen fix.
-  # 2. HTTP lockdown, for whatever does share the network:
-  #    * JWT signing -- the filer and the volume server refuse to read or
-  #      write file content without a JWT (401 "wrong jwt"). The four
-  #      WEED_JWT_* keys are derived inside the container from one secret,
-  #      SEAWEEDFS_JWT_KEY, with a different suffix per role, by the
-  #      entrypoint wrapper below.
-  #    * WEED_GUARD_WHITE_LIST -- the master and volume server admin API
-  #      (/vol/grow, /col/delete, /dir/assign, which hands out write JWTs,
-  #      /dir/lookup, /dir/status) answers 401 to any address not listed.
-  #      `127.0.0.1` is this container's own loopback; `@` is the peer name
-  #      SeaweedFS gives its in-process gRPC over a unix socket, without
-  #      which the master cannot create volumes (measured).
-  #    * -ip=127.0.0.1 -- the components address one another on loopback,
-  #      so their own HTTP comes from a whitelisted address. -ip.bind=0.0.0.0
-  #      keeps every port listening where it was.
-  #
-  # What the HTTP layer does NOT cover: the gRPC ports, which a container on
-  # the `storage` network can still use destructively (SeaweedFS secures
-  # gRPC only with mTLS). Only join `storage` from something you would
-  # trust with the S3 secret key.
-  #
-  # 3. A host firewall rule, for the one route the network does not close
-  #    (#548). Docker bridge addresses are routable from the host's own
-  #    network namespace, so a local process or a host-network container
-  #    (cloudflared) could otherwise reach every SeaweedFS port, gRPC
-  #    included. backend/scripts/ops/tckdb_storage_hostfw.sh, run at boot
-  #    by tckdb-storage-hostfw.service, rejects new TCP from the host to
-  #    the `storage` subnet except to 9000 (docker-proxy's S3 forward).
-  #    Install it on every Linux host that runs this service: see
-  #    docs/deployment/self_hosted_single_node.md, "Closing the object
-  #    store to the host".
-  #
-  # Readable without credentials, on purpose:
-  # the volume server's /status and the master's status page (GET /), which
-  # the API reads for free space when S3_SEAWEEDFS_MASTER_URL is set. No
-  # SeaweedFS port other than 9000 on loopback is published, and none may be.
-  #
-  # None of this touches stored data: a volume written without these
-  # settings reads back unchanged with them, and after removing them again.
-  #
-  # SEAWEEDFS_JWT_KEY is checked when the container starts, not when Compose
-  # reads this file, so a MinIO-only stack (`--profile minio up db minio`)
-  # does not need it. Started without it (or with fewer than 16 characters)
-  # the container exits 78 and says why, rather than running an open store:
-  # a `${VAR:-}` default with the suffixes appended would have produced
-  # well-known keys such as ".volume-write".
-  #
-  # S3_BUCKET is passed so `weed mini` creates the artifact bucket on
-  # start (it reads that variable; existing buckets are left alone).
-  #
-  # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY become SeaweedFS's admin
-  # identity -- the same S3_ACCESS_KEY / S3_SECRET_KEY the API signs with,
-  # the way MINIO_ROOT_USER / MINIO_ROOT_PASSWORD were. They are not
-  # optional in effect: measured, SeaweedFS started without them accepts
-  # every request, signed or anonymous.
-  #
-  # Pinned by digest (release 4.47, multi-arch: linux/amd64 and
-  # linux/arm64): an unpinned upstream tag is how MinIO's publishing change
-  # became this repository's outage.
+  # S3 artifact store (optional: S3_ENDPOINT_URL can point at any S3 service).
+  # Its internal ports take no credentials. Keep it on the `storage` network
+  # only, publish nothing but 9000 on loopback, and install the host firewall
+  # (docs/deployment/storage-firewall.md).
   seaweedfs:
     image: chrislusf/seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
-    # A wrapper around the image's own /entrypoint.sh, which still does the
-    # ownership fix and drops to the `seaweed` user. `$$` defers expansion to
-    # the container's shell; the key never appears in the compose model.
+    # Refuses to start without SEAWEEDFS_JWT_KEY (16+ characters), which signs
+    # the tokens the filer and volume server require.
     entrypoint:
       - /bin/sh
       - -c
@@ -252,21 +73,15 @@ services:
       S3_BUCKET: ${S3_BUCKET:-tckdb-artifacts}
       SEAWEEDFS_JWT_KEY: ${SEAWEEDFS_JWT_KEY:-}
       WEED_GUARD_WHITE_LIST: "127.0.0.1,@"
-    # `storage` only; see "The side door" above. Do not add `default`.
+    # `storage` only. Do not add `default`.
     networks:
       - storage
-    # The S3 API is loopback-only, like every other published port here.
     ports:
       - "127.0.0.1:${S3_PORT:-9000}:9000"
     volumes:
       - tckdb_seaweedfs:/data
     restart: unless-stopped
-    # Healthy only when both hold: a signed ListBuckets with these
-    # credentials succeeds (the S3 gateway answers), and an unsigned
-    # request is refused with 403 (auth is actually on -- SeaweedFS
-    # started without keys accepts everything). `$$` defers expansion to
-    # the container's shell, so the secret is not baked into the
-    # healthcheck definition.
+    # Healthy only if a signed request succeeds and an unsigned one gets 403.
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS -o /dev/null --aws-sigv4 aws:amz:us-east-1:s3 --user \"$$AWS_ACCESS_KEY_ID:$$AWS_SECRET_ACCESS_KEY\" http://127.0.0.1:9000/ && test $$(curl -s -o /dev/null -w %{http_code} http://127.0.0.1:9000/) = 403"]
       interval: 30s
@@ -279,20 +94,9 @@ services:
         max-size: "10m"
         max-file: "5"
 
-  # MinIO, for deployments that already run it. Behind the `minio` profile,
-  # so it starts only when asked for:
-  #     docker compose --profile minio up -d db minio
-  #
-  # Kept because TCKDB still supports MinIO and an existing deployment's
-  # artifacts live in the `tckdb_minio` volume. Moving them to SeaweedFS is
-  # a verified copy: backend/docs/deployment/migrating_minio_to_seaweedfs.md.
-  # Until you have done it, keep using this service rather than starting
-  # `seaweedfs` on an empty volume. Both publish 127.0.0.1:9000, so starting
-  # both fails loudly on the port rather than silently switching the API to
-  # an empty store; the runbook shows how to run both during the copy.
-  #
-  # MinIO no longer publishes images: `minio/minio` resolves only on a host
-  # that already has it pulled.
+  # MinIO, only for a deployment that already stores its artifacts in it.
+  # The image is no longer published. Moving to SeaweedFS:
+  # backend/docs/deployment/migrating_minio_to_seaweedfs.md.
   minio:
     profiles: ["minio"]
     image: minio/minio
@@ -300,14 +104,9 @@ services:
     environment:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY:-tckdb}
       MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?S3_SECRET_KEY must be set (copy .env.example to .env or pass --env-file)}
-    # `default` so an API still addressing minio:9000 there keeps working;
-    # `storage` so a container on the storage network (the API once
-    # connected, the MinIO-to-SeaweedFS copy tool) reaches both stores.
     networks:
       - default
       - storage
-    # Both the S3 API (9000) and the admin console (9001) are loopback-
-    # only. The console is never exposed to the tunnel.
     ports:
       - "127.0.0.1:${S3_PORT:-9000}:9000"
       - "127.0.0.1:${S3_CONSOLE_PORT:-9001}:9001"
@@ -325,33 +124,10 @@ services:
         max-size: "10m"
         max-file: "5"
 
-  # ---------------------------------------------------------------------------
-  # Self-hosting from the published images: `--profile selfhost`.
-  #
-  #     backend/scripts/ops/tckdb_make_env.sh
-  #     docker compose --env-file .env.selfhosted --env-file .env.db-admin \
-  #         --profile selfhost up -d
-  #
-  # `init` refuses empty or change-me secrets, provisions the database
-  # roles, migrates, checks the roles and creates the first admin, then
-  # exits; the API starts only after it succeeds. Every step is idempotent,
-  # so it runs on every `up`. The API gets .env.selfhosted only; the owner
-  # and admin credentials in .env.db-admin reach `init` and nothing else.
-  # Both services address Postgres and the object store by service name,
-  # overriding the host-side DB_HOST / DB_PORT / S3_ENDPOINT_URL in the env
-  # file.
-  #
-  # This profile uses the bundled SeaweedFS. An external S3 store (AWS, an
-  # existing MinIO) needs a host-run API or backend/scripts/ops/tckdb_deploy.sh.
-  #
-  # TCKDB_IMAGE_TAG picks the release: a version or `sha-<commit>`. Upgrade
-  # by re-running `up -d` with a new tag; `init` migrates before the API
-  # restarts.
-  #
-  # `init` checks that the roles and grants are in place, not their
-  # passwords: changing a DB password in the env files later needs the
-  # matching ALTER ROLE ... PASSWORD (see .env.db-admin.example).
-  # ---------------------------------------------------------------------------
+  # --- selfhost profile: the API and web UI from the published images ---
+
+  # Checks the secrets, sets up the database roles, migrates and creates the
+  # first admin, then exits. Runs on every `up`; the API waits for it.
   init:
     profiles: ["selfhost"]
     image: laxzal/tckdb-api:${TCKDB_IMAGE_TAG:-0.4.1}
@@ -361,8 +137,6 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: "5432"
-    # apply runs only while the role check fails: it refuses once approval
-    # history exists.
     command:
       - sh
       - -ec
@@ -386,7 +160,7 @@ services:
         condition: service_healthy
     restart: "no"
 
-  # Named `tckdb-api` because the frontend image proxies /api/ to that host.
+  # The web UI proxies /api/ to the host name `tckdb-api`; keep the name.
   tckdb-api:
     profiles: ["selfhost"]
     image: laxzal/tckdb-api:${TCKDB_IMAGE_TAG:-0.4.1}
@@ -396,13 +170,11 @@ services:
       DB_HOST: db
       DB_PORT: "5432"
       S3_ENDPOINT_URL: http://seaweedfs:9000
-    # `storage` to reach the object store, which is on no other network.
     networks:
       - default
       - storage
     ports:
       - "127.0.0.1:${TCKDB_API_PORT:-8010}:8010"
-    # The image has no curl, and its Python is not on the default PATH.
     healthcheck:
       test: ["CMD", "/opt/conda/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/api/v1/health', timeout=4)"]
       interval: 15s
@@ -423,11 +195,7 @@ services:
         max-size: "10m"
         max-file: "5"
 
-  # The web interface: nginx serves the app and proxies /api/ to tckdb-api.
-  #
-  # TCKDB_WEB_BIND is the host address the port is published on. 127.0.0.1
-  # (the default) keeps it on this machine; a LAN address opens it to the
-  # lab network. It is the only setting here that moves a port off loopback.
+  # Web UI. TCKDB_WEB_BIND set to a LAN address opens it to the lab network.
   frontend:
     profiles: ["selfhost"]
     image: laxzal/tckdb-frontend:${TCKDB_IMAGE_TAG:-0.4.1}
@@ -448,17 +216,8 @@ services:
         max-size: "10m"
         max-file: "5"
 
-  # Optional standalone upload worker.
-  #
-  # Activate with:
-  #     docker compose --profile worker up -d
-  #
-  # Alternatively, set TCKDB_INLINE_WORKER=true in the API process to run
-  # the worker inline (simpler, but shares CPU). It runs the published API
-  # image, like the selfhost profile.
-  # It runs on the bridge network and reaches Postgres via the `db`
-  # service name, so its DB_HOST is hardcoded - it must not pick up the
-  # host-side DB_HOST=127.0.0.1 default.
+  # Optional upload worker (`--profile worker`). Set TCKDB_INLINE_WORKER=false
+  # in .env.selfhosted when you run it.
   worker:
     profiles: ["worker"]
     image: laxzal/tckdb-api:${TCKDB_IMAGE_TAG:-0.4.1}
@@ -469,14 +228,11 @@ services:
       DB_USER: ${DB_USER:-tckdb}
       DB_PASSWORD: ${DB_PASSWORD:-}
       DB_NAME: ${DB_NAME:-tckdb_dev}
-      # The bundled store by service name, like the DB, so jobs with
-      # artifacts can be processed.
       S3_ENDPOINT_URL: http://seaweedfs:9000
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-tckdb}
       S3_SECRET_KEY: ${S3_SECRET_KEY:-}
       S3_BUCKET: ${S3_BUCKET:-tckdb-artifacts}
       TCKDB_INLINE_WORKER: "false"
-    # `storage` to reach the object store, which is on no other network.
     networks:
       - default
       - storage
@@ -490,29 +246,8 @@ services:
         max-size: "10m"
         max-file: "5"
 
-  # HTTPS with a domain name - OPTIONAL ingress: `--profile caddy`.
-  #
-  # Caddy answers on 80 and 443 for TCKDB_DOMAIN, gets a Let's Encrypt
-  # certificate for it on first start, and passes every request to the web UI
-  # over the compose network. The domain needs a DNS record pointing at this
-  # host, and 80 and 443 must reach it from the internet for the certificate
-  # to be issued. TCKDB_ACME_EMAIL, if set, is given to the certificate
-  # authority. TCKDB_TLS=internal uses Caddy's own certificate authority
-  # instead, which browsers do not trust; it is for testing.
-  #
-  # Caddy sets X-Real-IP to the address it received the request from,
-  # replacing any value the client sent; the API reads it with
-  # TRUSTED_PROXY_HEADER=X-Real-IP. Certificates live in `tckdb_caddy_data`.
-  #
-  # TCKDB_CADDY_TLS names the Caddyfile snippet that holds the tls setting:
-  # TCKDB_TLS when set, else `acme_email` when TCKDB_ACME_EMAIL is set, else
-  # `acme`. Compose renders the last case as an empty value, which Caddy's
-  # `{$VAR:default}` does not replace (it applies only to an unset variable),
-  # so the entrypoint fills it in.
-  #
-  # A refused start waits a minute before exiting, so a missing domain does
-  # not fill the log with restarts; the healthcheck fails meanwhile, which is
-  # what `up --wait` reports.
+  # HTTPS for TCKDB_DOMAIN (`--profile caddy`). The domain's DNS record must
+  # point at this host, and 80 and 443 must be reachable for the certificate.
   caddy:
     profiles: ["caddy"]
     image: caddy:2.11.9-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
@@ -558,26 +293,8 @@ services:
         max-size: "10m"
         max-file: "5"
 
-  # Cloudflare Tunnel - OPTIONAL ingress.
-  #
-  # Sits behind the `cloudflare` profile, so it is NOT started by
-  # default. Bring it up with:
-  #     docker compose --env-file .env.selfhosted --profile cloudflare up -d cloudflared
-  #
-  # The token is provisioned out-of-band via `cloudflared tunnel create`
-  # + Cloudflare Zero Trust dashboard and injected as CLOUDFLARED_TUNNEL_TOKEN
-  # in .env.selfhosted. The tunnel forwards only the public hostname ->
-  # 127.0.0.1:8011 (the web UI, which passes /api/ on) or 127.0.0.1:8010
-  # (the API alone). Postgres and the object store (and the MinIO console,
-  # where MinIO runs) are not part of any ingress rule.
-  #
-  # `network_mode: host` so the tunnel can reach the loopback ports
-  # without piercing a Docker bridge. Do NOT also run cloudflared as a
-  # host-side systemd unit at the same time - pick one or the other.
-  #
-  # The token uses a `:-` default (not `:?`) because Compose interpolates
-  # variables even when the profile is inactive; the runtime check happens
-  # when cloudflared starts.
+  # Cloudflare Tunnel (`--profile cloudflare`), using CLOUDFLARED_TUNNEL_TOKEN.
+  # Do not also run cloudflared as a host service.
   cloudflared:
     profiles: ["cloudflare"]
     image: cloudflare/cloudflared:latest
@@ -592,10 +309,7 @@ services:
         max-size: "10m"
         max-file: "5"
 
-# `storage` holds the object store and the services that talk to it, and
-# nothing else (#545). Compose names it `<project>_storage`, e.g.
-# `tckdb_storage`. The selfhost API is on it; an API container started by
-# backend/scripts/ops/tckdb_deploy.sh joins it through TCKDB_EXTRA_NETWORKS.
+# Only services you would trust with S3_SECRET_KEY may join `storage`.
 networks:
   default:
   storage:

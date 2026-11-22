@@ -25,6 +25,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Config files carry short comments (Unreleased)
+
+- **Behaviour:** none. `docker-compose.yml`, both env templates, the Caddyfile and the shipped systemd units keep only the comments an operator needs at that line; no key, value, default or message changed. The deployment guide now notes `DB_MAX_CONNECTIONS`.
+- **Schema and migration:** none. No new environment variable.
+
 ## Release 0.4.1 is the self-hosting default (Unreleased)
 
 - **Behaviour:** the `selfhost` compose profile, the install guide and `tckdb_deploy.sh` examples default to the 0.4.1 images (`TCKDB_IMAGE_TAG`). 0.4.1 is the first release with a self-host bundle attached, and its ops scripts answer `--help` before any check.
