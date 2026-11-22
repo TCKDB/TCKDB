@@ -109,7 +109,7 @@ export function DepositWarningsPanel({ warnings, recordRef, labelForRef, heading
     const others = records.filter((block) => block.record_ref !== recordRef)
     const deposit = warnings.deposit_warnings.filter((block) => block.items.length > 0)
     const heading = variant === "block"
-        ? <h4 className="model-block-heading" id={headingId}>Deposit warnings</h4>
+        ? <h4 className="model-block-heading" id={headingId} tabIndex={-1}>Deposit warnings</h4>
         : <SectionHeading id={headingId} subsection={variant === "subsection"}>Deposit warnings</SectionHeading>
     return (
         <section aria-labelledby={recordLabel ? undefined : headingId} aria-label={recordLabel ? `Deposit warnings of ${recordLabel}` : undefined} className={className ? `deposit-warnings ${className}` : "deposit-warnings"} data-component="deposit-warnings">

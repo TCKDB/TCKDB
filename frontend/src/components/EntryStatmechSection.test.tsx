@@ -265,6 +265,23 @@ describe("EntryStatmechSection: trust, reproducibility and deposit warnings", ()
         expect(document.activeElement).toBe(failed)
     })
 
+    it("moves focus to the visible heading once the warnings load", async () => {
+        handleOthers()
+        server.use(http.get("/api/v1/scientific/statmech/:ref", ({ params }) => HttpResponse.json({
+            record: {},
+            record_warnings: [{ record_ref: params.ref, status: "recorded", items: [{ code: "c", message: `Warning for ${params.ref}.`, field: "statmech[*]", register_entry: 21, check_version: 1 }] }],
+            deposit_warnings: [],
+        })))
+        page()
+        await screen.findByText("sm_one")
+        fireEvent.click(screen.getByRole("button", { name: "Show deposit warnings of statmech record 1" }))
+        await screen.findByText("Warning for sm_one.")
+        await waitFor(() => expect(document.activeElement?.tagName).toBe("H4"))
+        const focused = document.activeElement as HTMLElement
+        expect(focused).toHaveTextContent("Deposit warnings")
+        expect(focused.className).not.toContain("record-warnings-status")
+    })
+
     it("says the warnings could not be loaded and still renders the record", async () => {
         handleOthers()
         server.use(http.get("/api/v1/scientific/statmech/:ref", () => HttpResponse.json({ detail: "down" }, { status: 500 })))
