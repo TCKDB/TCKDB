@@ -811,6 +811,50 @@ def deleted_records(
     return {(row.record_type, row.record_id): row for row in rows}
 
 
+def _history_rows_naming(
+    session: Session, table: str, column: str, ids: Iterable[int]
+) -> list[tuple[int, dict[str, Any], str, Any]]:
+    """History rows removed by a deletion whose ``column`` names one of ``ids``: ``(id, row, deleted ref, deleted at)``."""
+    wanted = sorted({int(i) for i in ids})
+    if not wanted:
+        return []
+    rows = session.execute(
+        text(
+            "SELECT (e ->> :column)::bigint, e, d.record_public_ref, d.deleted_at "
+            "FROM record_deletion d CROSS JOIN LATERAL jsonb_array_elements("
+            "coalesce(d.snapshot -> 'history' -> :table, '[]'::jsonb)) AS e "
+            "WHERE (e ->> :column)::bigint = ANY(:ids) ORDER BY (e ->> 'id')::bigint"
+        ),
+        {"table": table, "column": column, "ids": wanted},
+    ).all()
+    return [(int(key), row, ref, deleted_at) for key, row, ref, deleted_at in rows]
+
+
+def removed_determination_sources(session: Session, determination_ids: Iterable[int]) -> dict[int, list[dict[str, Any]]]:
+    """Per determination, the sources a calculation deletion removed: ``{role, deleted_calculation_ref, deleted_at}``."""
+    out: dict[int, list[dict[str, Any]]] = {}
+    for determination_id, row, ref, deleted_at in _history_rows_naming(
+        session, "structure_determination_source", "determination_id", determination_ids
+    ):
+        out.setdefault(determination_id, []).append(
+            {"role": row["role"], "deleted_calculation_ref": ref, "deleted_at": deleted_at.isoformat()}
+        )
+    return out
+
+
+def removed_adjudications(session: Session, finding_ids: Iterable[int]) -> dict[int, list[dict[str, Any]]]:
+    """Per finding, the adjudications settling it that a calculation deletion removed:
+    ``{finding_ref, deleted_calculation_ref, deleted_at}``."""
+    out: dict[int, list[dict[str, Any]]] = {}
+    for finding_id, row, ref, deleted_at in _history_rows_naming(
+        session, "structure_evidence_finding", "supersedes_finding_id", finding_ids
+    ):
+        out.setdefault(finding_id, []).append(
+            {"finding_ref": row["public_ref"], "deleted_calculation_ref": ref, "deleted_at": deleted_at.isoformat()}
+        )
+    return out
+
+
 def record_type_for_model(model_cls: type) -> SubmissionRecordType | None:
     """The deletable record type an ORM class stores, or ``None``."""
     for record_type in DELETABLE_RECORD_TYPES:
@@ -871,4 +915,6 @@ __all__ = [
     "raise_if_deleted",
     "raise_if_deleted_id",
     "record_type_for_model",
+    "removed_adjudications",
+    "removed_determination_sources",
 ]

@@ -49,6 +49,7 @@ from tckdb_schemas.stationary_point import (
 from app.db.models.common import CalculationType
 from app.services.selection_kernel import Applicability
 from app.services.structure_selection.models import (
+    SOURCE_DELETED,
     SUPPORTED_FINDING_VERSIONS,
     ClaimSupport,
     CurvatureFacts,
@@ -87,6 +88,10 @@ _NON_ROLE_KINDS = frozenset(
         "adjudication",
     }
 )
+
+
+#: Blocking: the determination states a quantity and every energy source was removed by a deletion.
+REQUIRED_SOURCE_DELETED = "required_source_deleted"
 
 
 class _Findings:
@@ -670,6 +675,16 @@ def assess_determination(
     roles = _roles(d, calculations)
     value: EnergyValue | None = None
     energy_calc: NormalizedCalculation | None = None
+
+    # A determination that states a quantity rests on its energy source; once a deletion has removed every one, nothing
+    # supplies the quantity and no request makes it eligible. Its sources still read, the removed ones marked.
+    energy_sources = [s for s in d.sources if s.role == "energy"]
+    if (
+        d.quantity is not None
+        and energy_sources
+        and all(s.unavailable_reason == SOURCE_DELETED for s in energy_sources)
+    ):
+        f.block(REQUIRED_SOURCE_DELETED)
     energy_level_ref: str | None = None
 
     if request.geometry_ref is not None and d.evaluated_geometry_ref != request.geometry_ref:
