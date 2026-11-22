@@ -1423,3 +1423,47 @@ describe("ReactionEntryPage -- the compare link", () => {
         expect(screen.queryByRole("link", { name: "Compare these values" })).not.toBeInTheDocument()
     })
 })
+
+describe("ReactionEntryPage -- kinetics trust, reproducibility and deposit warnings", () => {
+    const KINETICS_ENDPOINT = `/api/v1/scientific/reaction-entries/${ENTRY_REF}/kinetics`
+    const TRUST = {
+        review_status: "not_reviewed", trust_status: "mostly_supported",
+        evidence: { passed_count: 4, possible_count: 5, rubric: "computed_kinetics", rubric_version: 1, checks: { arrhenius_parameters_complete: "passed", irc_evidence_present: "missing" }, hard_fail_reason: null },
+    }
+    const ASSESSMENTS = { reproducibility: { state: "current", grade: "described", made_under: { state: "inputs_unchecked", rubric: "reproducibility", assessed_version: 1, current_version: 1 } } }
+
+    it("shows each record's trust, grade and warnings from the supplementary read", async () => {
+        handleFull(mockFull({ kinetics: [kineticsRecordFixture(undefined)] }))
+        let url: URL | null = null
+        server.use(http.get(KINETICS_ENDPOINT, ({ request }) => {
+            url = new URL(request.url)
+            return HttpResponse.json({
+                records: [{ ...kineticsRecordFixture(undefined), trust: TRUST, assessments: ASSESSMENTS }],
+                record_warnings: [{ record_ref: "kin_test1", status: "recorded", items: [{ code: "c", message: "Kinetics warning text.", field: "kinetics[*]", register_entry: 30, check_version: 1 }] }],
+            })
+        }))
+        page()
+        expect(await screen.findByText("Kinetics warning text.")).toBeVisible()
+        expect(screen.getByText("4 of 5 weighted checks passed")).toBeVisible()
+        expect(screen.getByText("described")).toBeVisible()
+        expect(url!.searchParams.getAll("include")).toEqual(["trust", "assessments"])
+    })
+
+    it("says so in one line when the supplementary read fails, and renders the rest of the page", async () => {
+        handleFull(mockFull({ kinetics: [kineticsRecordFixture(undefined)] }))
+        server.use(http.get(KINETICS_ENDPOINT, () => HttpResponse.json({ detail: "down" }, { status: 500 })))
+        page()
+        expect(await screen.findByText("Trust, reproducibility and deposit warnings could not be loaded for this record.")).toBeVisible()
+        expect(screen.getAllByText("Model kind").length).toBeGreaterThan(0)
+    })
+
+    it("says a record the read did not return was not returned, without borrowing another's", async () => {
+        handleFull(mockFull({ kinetics: [kineticsRecordFixture(undefined)] }))
+        server.use(http.get(KINETICS_ENDPOINT, () => HttpResponse.json({
+            records: [{ ...kineticsRecordFixture(undefined), kinetics_ref: "kin_other", trust: TRUST, assessments: ASSESSMENTS }],
+        })))
+        page()
+        expect(await screen.findByText("Trust, reproducibility and deposit warnings were not returned for this record.")).toBeVisible()
+        expect(screen.queryByText("4 of 5 weighted checks passed")).toBeNull()
+    })
+})

@@ -21,7 +21,8 @@ import { ReviewChip } from "../components/ReviewChip"
 import { useReactionEntryNeighbours } from "../hooks/useNeighbours"
 import { reactionEntryLede } from "../domain/reactionLede"
 import { ReactionEquation } from "../components/ReactionEquation"
-import { ReactionKineticsSection } from "../components/ReactionKineticsSection"
+import { ReactionKineticsSection, type KineticsEvidence } from "../components/ReactionKineticsSection"
+import { loadReactionEntryKineticsAssessments } from "../api/reactionKineticsApi"
 import { ReactionTransitionStatesSection } from "../components/ReactionTransitionStatesSection"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
 import { PageShell } from "../components/PageShell"
@@ -114,6 +115,10 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
     const recordNumbers = useMemo(() => numberRefs(kinetics.map((item) => item.kinetics_ref)), [kinetics])
     const transitionStates = record.transition_states ?? []
     const networksState = useReactionEntryNetworks(entry.reaction_entry_ref, record.networks)
+    const kineticsRead = useScientificRecord(entry.reaction_entry_ref, loadReactionEntryKineticsAssessments)
+    const kineticsEvidence: KineticsEvidence = kineticsRead.status === "ready"
+        ? kineticsRead.record
+        : kineticsRead.status === "loading" || kineticsRead.status === "retrying" ? "loading" : "unavailable"
     const formulaOnly = !equationNeedsStructure(species.reactants, species.products)
     const equation = <ReactionEquation reactants={species.reactants} products={species.products} reversible={entry.reversible} linkParticipants={false} formulaOnly={formulaOnly} />
     const mapReactants = useMemo(() => species.reactants.map(mapParticipant), [species.reactants])
@@ -275,6 +280,7 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                     <ReactionKineticsSection
                         kinetics={kinetics}
                         recordNumbers={recordNumbers}
+                        evidence={kineticsEvidence}
                         calculations={record.calculations}
                         transitionStates={transitionStates}
                         networksStatus={networksState.status === "ready" ? (networksState.networks.length ? "populated" : "empty") : "loading"}

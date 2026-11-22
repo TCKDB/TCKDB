@@ -15,6 +15,11 @@ import { OrderNote } from "./OrderNote"
 import { ReviewChip } from "./ReviewChip"
 import { ValueSource } from "./ValueSource"
 import { LiteratureCitation } from "./LiteratureCitation"
+import { RecordEvidenceBlocks, warningsForRecord } from "./RecordEvidenceBlocks"
+import type { ReactionKineticsAssessments } from "../api/reactionKineticsApi"
+
+/** What the supplementary kinetics read gave: still loading, failed, or the answer by kinetics ref. */
+export type KineticsEvidence = "loading" | "unavailable" | ReactionKineticsAssessments
 
 function token(value: string): string {
     return value.replaceAll("_", " ")
@@ -72,8 +77,10 @@ function softwareCellText(release: { software: string; version?: string | null }
     return softwareLabel(release)
 }
 
-export function ReactionKineticsSection({ kinetics, calculations, transitionStates, networksStatus, networkRefs, recordNumbers }: {
+export function ReactionKineticsSection({ kinetics, calculations, transitionStates, networksStatus, networkRefs, recordNumbers, evidence = "loading" }: {
     kinetics: ReactionKineticsRecord[]
+    /** Trust, reproducibility and deposit warnings for these records, from one supplementary read. */
+    evidence?: KineticsEvidence
     /** The page's one "Record N" numbering, by kinetics ref; the list order when absent. */
     recordNumbers?: ReadonlyMap<string, number>
     calculations: ReactionFullCalculationEvidence[] | null | undefined
@@ -121,6 +128,7 @@ export function ReactionKineticsSection({ kinetics, calculations, transitionStat
                         position={numbers.get(record.kinetics_ref) ?? 1}
                         calculationsByRef={calculationsByRef}
                         dependencyEdgesByChildRef={dependencyEdgesByChildRef}
+                        evidence={evidence}
                     />
                 ))}
             </div>
@@ -138,8 +146,9 @@ export function ReactionKineticsSection({ kinetics, calculations, transitionStat
     )
 }
 
-function KineticsRecordCard({ record, position, calculationsByRef, dependencyEdgesByChildRef }: {
+function KineticsRecordCard({ record, position, calculationsByRef, dependencyEdgesByChildRef, evidence }: {
     record: ReactionKineticsRecord
+    evidence: KineticsEvidence
     position: number
     calculationsByRef: ReturnType<typeof buildCalculationsByRef>
     dependencyEdgesByChildRef: ReturnType<typeof buildDependencyEdgesByChildRef>
@@ -293,6 +302,29 @@ function KineticsRecordCard({ record, position, calculationsByRef, dependencyEdg
                     </div>
                 )}
             </dl>
+
+            <KineticsRecordEvidence record={record} evidence={evidence} />
         </div>
+    )
+}
+
+/**
+ * Trust, reproducibility and deposit warnings for one kinetics record, from the supplementary read. When that read failed,
+ * or did not return this record, one line says so; nothing is borrowed from another record.
+ */
+function KineticsRecordEvidence({ record, evidence }: { record: ReactionKineticsRecord; evidence: KineticsEvidence }) {
+    if (evidence === "loading") return null
+    if (evidence === "unavailable") {
+        return <p className="note">Trust, reproducibility and deposit warnings could not be loaded for this record.</p>
+    }
+    const own = evidence.byKineticsRef.get(record.kinetics_ref)
+    if (!own) return <p className="note">Trust, reproducibility and deposit warnings were not returned for this record.</p>
+    return (
+        <RecordEvidenceBlocks
+            trust={own.trust}
+            assessments={own.assessments}
+            warnings={warningsForRecord(evidence.depositWarnings, record.kinetics_ref)}
+            idBase={record.kinetics_ref}
+        />
     )
 }

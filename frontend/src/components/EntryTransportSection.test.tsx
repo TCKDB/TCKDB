@@ -244,7 +244,7 @@ describe("EntryTransportSection: trust, reproducibility and deposit warnings", (
     const ASSESSMENTS = { reproducibility: { state: "current", grade: "auditable", made_under: { state: "inputs_unchecked", rubric: "reproducibility", assessed_version: 1, current_version: 1 } } }
     const withEvidence = () => {
         const base = mockResponse()
-        return { ...base, records: base.records.map((record: Record<string, unknown>) => ({ ...record, trust: TRUST, assessments: ASSESSMENTS })) }
+        return { ...base, records: base.records.map((record) => ({ ...(record as Record<string, unknown>), trust: TRUST, assessments: ASSESSMENTS })) }
     }
 
     it("shows trust and reproducibility from the list and the by-ref warnings", async () => {
