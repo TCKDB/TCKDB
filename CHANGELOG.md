@@ -25,6 +25,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Operator scripts answer --help (Unreleased)
+
+- **Behaviour:** `tckdb_deploy.sh`, `tckdb_backup.sh`, `tckdb_alert_check.sh` and `tckdb_ci_watchdog.sh` print their header comment and exit 0 when `--help` or `-h` appears anywhere in the arguments, before reading any environment variable or calling docker, curl or the network. Each header now lists its arguments, every environment variable it reads (required or default) and an example. Other arguments behave as before.
+- **Schema and migration:** none. No new environment variable.
+
 ## Release 0.4.0 is the self-hosting default (Unreleased)
 
 - **Behaviour:** the `selfhost` compose profile and `tckdb_deploy.sh` examples default to the 0.4.0 images (`TCKDB_IMAGE_TAG`). 0.4.0 adds admin deletion of approved records with an append-only audit.

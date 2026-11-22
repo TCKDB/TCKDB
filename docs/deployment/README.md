@@ -360,7 +360,8 @@ together with a fresh volume.
 - The `selfhost` profile always uses the bundled SeaweedFS. For an external
   S3 store (AWS S3, Google Cloud Storage, an existing MinIO), run the API
   container with `backend/scripts/ops/tckdb_deploy.sh` instead. Its header
-  lists the settings.
+  lists the settings; `tckdb_deploy.sh --help` prints it, as `--help` does
+  for every script in `backend/scripts/ops/`, `tckdb_backup.sh` included.
 - `TCKDB_BOOTSTRAP_PASSWORD` can be removed from `.env.db-admin` after the
   first start.
 - `TCKDB_API_PORT`, `TCKDB_WEB_PORT`, `DB_PORT` and `S3_PORT` move the

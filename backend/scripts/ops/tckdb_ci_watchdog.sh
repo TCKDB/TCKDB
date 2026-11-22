@@ -59,6 +59,18 @@
 #   TCKDB_WATCHDOG_REMINDER_HOURS default 168 (remind weekly while silent)
 #   TCKDB_DEADMAN_URL            optional, strongly recommended -- external URL
 #                                pinged after every completed run
+#   GITHUB_ACTIONS               set by GitHub Actions: findings are also
+#                                printed as ::warning:: / ::error:: annotations
+#   GITHUB_STEP_SUMMARY          set by GitHub Actions: summary lines are also
+#                                appended to this file
+#
+# USAGE
+#   tckdb_ci_watchdog.sh            # takes no arguments
+#   tckdb_ci_watchdog.sh -h | --help
+#
+# EXAMPLE
+#   TCKDB_NTFY_TOPIC=tckdb-<something-random> GH_TOKEN=<token> \
+#   TCKDB_WATCHED_WORKFLOWS="backend-nightly.yml:30" tckdb_ci_watchdog.sh
 #
 # A RUN THAT CHECKED NOTHING IS NOT A PASS
 #   The count of verdicts reached is reported unconditionally and before the
@@ -92,6 +104,11 @@
 #   verdict was reached at all: a dead watchdog's only honest signal is its
 #   silence.
 set -uo pipefail
+
+usage() { sed -n '2,/^set -uo/p' "$0" | sed '$d; s/^# \{0,1\}//'; }
+for arg in "$@"; do
+    case "$arg" in -h | --help) usage; exit 0 ;; esac
+done
 
 EXIT_OK=0
 EXIT_ALERT=1

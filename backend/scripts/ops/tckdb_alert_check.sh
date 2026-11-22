@@ -51,6 +51,14 @@
 #   4. Create a check on an external dead-man service (healthchecks.io) and set
 #      TCKDB_DEADMAN_URL to its ping URL.
 #
+# USAGE
+#   tckdb_alert_check.sh            # takes no arguments
+#   tckdb_alert_check.sh -h | --help
+#
+# EXAMPLE
+#   TCKDB_STATUS_URL=https://tckdb.example.com/api/v1/status \
+#   TCKDB_NTFY_TOPIC=tckdb-<something-random> tckdb_alert_check.sh
+#
 # ENVIRONMENT
 #   TCKDB_STATUS_URL   required -- no default on purpose; this script is
 #                      public, and a baked-in host would mean every copy of
@@ -98,6 +106,11 @@
 #   The trap below closes that: 1 keeps its meaning only once a verdict exists,
 #   and any other early exit is reported as 2.
 set -uo pipefail
+
+usage() { sed -n '2,/^set -uo/p' "$0" | sed '$d; s/^# \{0,1\}//'; }
+for arg in "$@"; do
+    case "$arg" in -h | --help) usage; exit 0 ;; esac
+done
 
 verdict_reached=0
 on_exit() {
