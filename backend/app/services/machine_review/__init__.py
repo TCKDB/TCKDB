@@ -60,13 +60,21 @@ from app.services.machine_review.derivation import (
     MachineReviewOutcome,
     derive_machine_review_status,
 )
+from app.services.machine_review.curator_task_findings import (
+    CuratorTaskFindingResolution,
+    curator_task_ids_by_fingerprint,
+    fingerprint_for_review_finding,
+    resolve_curator_task_findings,
+)
 from app.services.machine_review.inspection import (
     MachineReviewInspectionView,
+    MachineReviewRunInspection,
     SubmissionMachineReviewInspection,
     SubmissionRecordMachineReviewInspection,
     build_machine_review_inspection_view,
     build_submission_machine_review_inspection,
     get_machine_review_summaries_for_record,
+    project_machine_review_events,
 )
 from app.services.machine_review.mapping import (
     MachineReviewRecordMapping,
@@ -185,11 +193,17 @@ __all__ = [
     "SourceCalculationContext",
     "StoredMachineReviewProjection",
     "SubmissionAuditEventLike",
+    "CuratorTaskFindingResolution",
+    "MachineReviewRunInspection",
     "SubmissionMachineReviewInspection",
     "SubmissionRecordLinkLike",
     "SubmissionRecordLinkRef",
     "SubmissionRecordMachineReviewInspection",
     "UnmappedFinding",
+    "curator_task_ids_by_fingerprint",
+    "fingerprint_for_review_finding",
+    "project_machine_review_events",
+    "resolve_curator_task_findings",
     "UnmappedReason",
     "active_rubric",
     "active_rubric_for_record_type",

@@ -39,7 +39,8 @@ submission.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from datetime import datetime
 from typing import Any
 
 from app.services.machine_review.audit_adapter import (
@@ -52,7 +53,13 @@ from app.services.machine_review.mapping import UnmappedFinding
 from app.services.machine_review.read_model import (
     MachineReviewRecordSummary,
     RecordMachineReview,
+    _highest_severity,
     build_machine_review_record_summary,
+)
+from app.services.machine_review.schemas import (
+    CuratorPriority,
+    MachineReviewSeverity,
+    MachineReviewStatus,
 )
 
 
@@ -126,6 +133,43 @@ def _links_for_submission(
 
 
 @dataclass(frozen=True)
+class MachineReviewRunInspection:
+    """One stored machine-review event, as one reviewer run.
+
+    ``parsed`` is false when the payload could not be read; the run is still
+    listed (with ``status=None`` and its ``parse_warnings``) so a curator sees
+    that a review was recorded. ``findings_count`` counts every finding in the
+    payload and ``highest_severity`` is taken over all of them, mapped or not;
+    ``mapped_findings_count`` and ``unmapped_findings_count`` split that count.
+    ``summary`` is the reviewer's own text, or the failure text on a failed run.
+    """
+
+    audit_event_id: int | None
+    reviewed_at: datetime | None
+    parsed: bool
+    status: MachineReviewStatus | None = None
+    curator_priority: CuratorPriority | None = None
+    summary: str | None = None
+    model: str | None = None
+    provider: str | None = None
+    findings_count: int = 0
+    mapped_findings_count: int = 0
+    unmapped_findings_count: int = 0
+    highest_severity: MachineReviewSeverity | None = None
+    parse_warnings: tuple[str, ...] = ()
+
+
+def _run_sort_key(run: MachineReviewRunInspection) -> tuple[int, float, int]:
+    """Newest-last key: the timestamp first, the event id breaking a tie.
+
+    Events written inside one transaction share a ``created_at``, so the id is
+    what orders them.
+    """
+    stamp = (0, 0.0) if run.reviewed_at is None else (1, run.reviewed_at.timestamp())
+    return (*stamp, run.audit_event_id if run.audit_event_id is not None else -1)
+
+
+@dataclass(frozen=True)
 class _EventsProjection:
     """Single-pass projection of many audit events (internal to this module)."""
 
@@ -134,9 +178,10 @@ class _EventsProjection:
     mapping_warnings: tuple[str, ...] = ()
     parse_warnings: tuple[str, ...] = ()
     source_audit_event_ids: tuple[int, ...] = ()
+    runs: tuple[MachineReviewRunInspection, ...] = ()
 
 
-def _project_events(
+def project_machine_review_events(
     submission_record_links: Sequence[AuditRecordLink],
     submission_audit_events: Sequence[SubmissionAuditEventLike],
 ) -> _EventsProjection:
@@ -153,6 +198,7 @@ def _project_events(
     mapping_warnings: list[str] = []
     parse_warnings: list[str] = []
     source_ids: list[int] = []
+    runs: list[MachineReviewRunInspection] = []
 
     for event in submission_audit_events:
         if not event_is_machine_review(event):
@@ -169,9 +215,42 @@ def _project_events(
             event=event, submission_record_links=scoped_links
         )
         all_reviews.extend(projection.record_reviews)
-        unmapped.extend(projection.unmapped_findings)
+        unmapped.extend(replace(u, audit_event_id=event_id) for u in projection.unmapped_findings)
         mapping_warnings.extend(projection.mapping_warnings)
         parse_warnings.extend(projection.parse_warnings)
+
+        result = projection.result
+        reviewed_at = getattr(event, "created_at", None)
+        if result is None:
+            runs.append(
+                MachineReviewRunInspection(
+                    audit_event_id=event_id,
+                    reviewed_at=reviewed_at,
+                    parsed=False,
+                    provider=projection.provider,
+                    parse_warnings=projection.parse_warnings,
+                )
+            )
+        else:
+            runs.append(
+                MachineReviewRunInspection(
+                    audit_event_id=event_id,
+                    reviewed_at=reviewed_at,
+                    parsed=True,
+                    status=result.status,
+                    curator_priority=result.curator_priority,
+                    summary=result.summary,
+                    model=result.model,
+                    provider=projection.provider,
+                    findings_count=len(result.findings),
+                    mapped_findings_count=sum(len(r.findings) for r in projection.record_reviews),
+                    unmapped_findings_count=len(projection.unmapped_findings),
+                    highest_severity=_highest_severity(result.findings),
+                    parse_warnings=projection.parse_warnings,
+                )
+            )
+
+    runs.sort(key=_run_sort_key, reverse=True)
 
     return _EventsProjection(
         record_reviews=tuple(all_reviews),
@@ -179,6 +258,7 @@ def _project_events(
         mapping_warnings=tuple(mapping_warnings),
         parse_warnings=tuple(parse_warnings),
         source_audit_event_ids=tuple(sorted(set(source_ids))),
+        runs=tuple(runs),
     )
 
 
@@ -208,7 +288,7 @@ def build_machine_review_inspection_view(
     target_ref = _resolve_target_ref(record_ref, record_id)
     record_type_value = getattr(record_type, "value", record_type)
 
-    projection = _project_events(submission_record_links, submission_audit_events)
+    projection = project_machine_review_events(submission_record_links, submission_audit_events)
 
     # Step 3: exact-record matching only — sibling records never leak in.
     matched_reviews = tuple(
@@ -304,6 +384,8 @@ class SubmissionMachineReviewInspection:
     mapping_warnings: tuple[str, ...] = ()
     parse_warnings: tuple[str, ...] = ()
     source_audit_event_ids: tuple[int, ...] = field(default_factory=tuple)
+    #: One entry per machine-review event, newest first.
+    runs: tuple[MachineReviewRunInspection, ...] = ()
 
 
 def build_submission_machine_review_inspection(
@@ -324,7 +406,7 @@ def build_submission_machine_review_inspection(
     Returns an empty inspection (no record inspections, no diagnostics) when the
     submission has no machine-review events.
     """
-    projection = _project_events(submission_record_links, submission_audit_events)
+    projection = project_machine_review_events(submission_record_links, submission_audit_events)
 
     grouped: dict[tuple[str, str], list[RecordMachineReview]] = {}
     for review in projection.record_reviews:
@@ -362,4 +444,5 @@ def build_submission_machine_review_inspection(
         mapping_warnings=projection.mapping_warnings,
         parse_warnings=projection.parse_warnings,
         source_audit_event_ids=projection.source_audit_event_ids,
+        runs=projection.runs,
     )

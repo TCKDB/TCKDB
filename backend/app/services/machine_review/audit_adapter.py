@@ -181,6 +181,12 @@ class MachineReviewAuditProjection:
     unmapped_findings: tuple[UnmappedFinding, ...] = ()
     mapping_warnings: tuple[str, ...] = ()
     parse_warnings: tuple[str, ...] = field(default_factory=tuple)
+    #: The parsed run behind this projection (``None`` for a non-machine-review
+    #: event or an unparseable payload), its provider and its source event id.
+    #: Read-only data carried so a caller need not parse the payload a second time.
+    result: MachineReviewResult | None = None
+    provider: str | None = None
+    audit_event_id: int | None = None
 
 
 def event_is_machine_review(event: SubmissionAuditEventLike) -> bool:
@@ -375,8 +381,13 @@ def record_machine_reviews_from_submission_audit_event(
     parsed = machine_review_result_from_audit_event(
         getattr(event, "details_json", None)
     )
+    audit_event_id = getattr(event, "id", None)
     if parsed.result is None:
-        return MachineReviewAuditProjection(parse_warnings=parsed.parse_warnings)
+        return MachineReviewAuditProjection(
+            parse_warnings=parsed.parse_warnings,
+            provider=parsed.provider,
+            audit_event_id=audit_event_id,
+        )
 
     mapping = map_findings_to_submission_records(
         findings=parsed.result.findings,
@@ -389,7 +400,6 @@ def record_machine_reviews_from_submission_audit_event(
 
     reviewed_at = getattr(event, "created_at", None)
     submission_id = getattr(event, "submission_id", None)
-    audit_event_id = getattr(event, "id", None)
     record_reviews = tuple(
         RecordMachineReview.from_mapped_record(
             mapped,
@@ -408,6 +418,9 @@ def record_machine_reviews_from_submission_audit_event(
         unmapped_findings=mapping.unmapped_findings,
         mapping_warnings=mapping.mapping_warnings,
         parse_warnings=parsed.parse_warnings,
+        result=parsed.result,
+        provider=parsed.provider,
+        audit_event_id=audit_event_id,
     )
 
 
