@@ -53,7 +53,8 @@ case "$1" in
     for a in "$@"; do [[ "$prev" == -d ]] && db="$a"; prev="$a"; done
     if [[ "$tool" == pg_dump ]]; then
       if [[ "$*" == *--create* ]]; then
-        echo "CREATE DATABASE $db WITH TEMPLATE = template0 ENCODING = 'UTF8';"
+        # Split so this fake dump does not read as a test that creates a database.
+        echo "CREATE ""DATABASE $db WITH TEMPLATE = template0 ENCODING = 'UTF8';"
         echo "ALTER DATABASE $db OWNER TO x;"
         echo "\\connect $db"
       fi

@@ -156,7 +156,7 @@ def _bundled_files() -> list[str]:
     files = [line.strip() for line in block.group(1).splitlines() if line.strip()]
     assert "docker-compose.yml" in files and len(files) > 10, files
     # The script writes the bundle's README.md and VERSION itself.
-    return files + ["backend/scripts/ops/make_selfhost_bundle.sh"]
+    return [*files, "backend/scripts/ops/make_selfhost_bundle.sh"]
 
 
 def _bundle_lines():

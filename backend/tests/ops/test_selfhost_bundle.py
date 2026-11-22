@@ -303,10 +303,7 @@ def test_rejects_a_malformed_version(tmp_path: Path) -> None:
 def repo_copy(tmp_path: Path) -> Path:
     """The bundle's sources, the build script and pyproject, outside git."""
     root = tmp_path / "repo"
-    for rel in sorted(ALLOWED - {"README.md", "VERSION"}) + [
-        "backend/pyproject.toml",
-        "backend/scripts/ops/make_selfhost_bundle.sh",
-    ]:
+    for rel in [*sorted(ALLOWED - {"README.md", "VERSION"}), "backend/pyproject.toml", "backend/scripts/ops/make_selfhost_bundle.sh"]:
         target = root / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO_ROOT / rel, target)
