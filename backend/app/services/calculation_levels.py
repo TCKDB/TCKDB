@@ -1243,6 +1243,9 @@ def declared_scheme_level_ids(session: Session | None, lot_ids: Collection[int])
 #: listed, because a producer states the spin form in ``spin_treatment``, not in the method.
 HARTREE_FOCK_METHOD_KEYS = frozenset({"hf"})
 
+#: Level qualifiers that act only on the correlation step; a Hartree-Fock energy does not depend on them.
+CORRELATION_ONLY_QUALIFIERS = ("pno_truncation", "core_treatment")
+
 
 def _method_key(level: LevelOfTheory) -> str:
     from app.chemistry.dispersion_names import level_identity_keys
@@ -1255,8 +1258,9 @@ def is_one_electron_hf_substitute(declared: LevelOfTheory, linked: LevelOfTheory
 
     ``linked`` has method key ``hf``; ``declared`` is classified ``wavefunction`` or ``multireference`` and is not
     ``hf`` (a density functional, a composite recipe or an unclassified method gets no exemption); every other
-    identity field but spin treatment agrees. The caller adds the one-electron condition: with one electron every
-    correlation term is zero, and ORCA refuses correlated methods there (ORCA 6 "no electrons to correlate").
+    identity field but spin treatment, PNO truncation and core treatment agrees (neither qualifier changes a
+    Hartree-Fock energy). The caller adds the one-electron condition: with one electron every correlation term is zero,
+    and ORCA refuses correlated methods there (ORCA 6 "no electrons to correlate").
     """
     from app.chemistry.method_families import MethodFamily, classify_method
     from app.services.calculation_resolution import spin_agnostic_level_key
@@ -1267,8 +1271,9 @@ def is_one_electron_hf_substitute(declared: LevelOfTheory, linked: LevelOfTheory
         return False
     declared_key = spin_agnostic_level_key(declared)
     linked_key = spin_agnostic_level_key(linked)
-    declared_key.pop("method")
-    linked_key.pop("method")
+    for key in ("method", *CORRELATION_ONLY_QUALIFIERS):
+        declared_key.pop(key, None)
+        linked_key.pop(key, None)
     return declared_key == linked_key
 
 
@@ -1559,6 +1564,7 @@ def assert_kinetics_energy_level_consistency(
 
 
 __all__ = [
+    "CORRELATION_ONLY_QUALIFIERS",
     "W_COMPOSITE_FREQUENCY_LEVEL_DIFFERS",
     "W_COMPOSITE_ROLE_ON_NON_COMPOSITE",
     "W_KINETICS_ENERGY_LEVEL_CONTRADICTION",
