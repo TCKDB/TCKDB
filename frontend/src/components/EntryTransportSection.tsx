@@ -26,6 +26,7 @@ import type { PageRequest } from "../domain/paging"
 import { Disclosure } from "./Disclosure"
 import { LazyRowBody } from "./LazyRowBody"
 import { SectionHeading } from "./PageSections"
+import { HardFailFlag } from "./TrustAssessment"
 import { RecordEvidenceBlocks } from "./RecordEvidenceBlocks"
 import { DepositWideWarnings } from "./RecordWarningsOnRequest"
 import { QuantityValue, ROUNDED_NOTE } from "./QuantityValue"
@@ -209,6 +210,7 @@ function TransportRecordCard({ record }: { record: TransportRecord }) {
             <div className="science-record-heading">
                 <h3 id={`transport-heading-${core.transport_ref}`}>{numberedWords(`${statusLabel(core.scientific_origin)} transport record`, core.transport_ref, numbers)}</h3>
                 <span className="value-pill value-pill--muted">{statusLabel(core.review.status)}</span>
+                <HardFailFlag trust={record.trust} />
             </div>
 
             {record.supersession && <SupersessionNotice kind="transport" supersession={record.supersession} />}

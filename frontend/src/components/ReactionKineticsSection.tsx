@@ -15,6 +15,7 @@ import { OrderNote } from "./OrderNote"
 import { ReviewChip } from "./ReviewChip"
 import { ValueSource } from "./ValueSource"
 import { LiteratureCitation } from "./LiteratureCitation"
+import { HardFailFlag } from "./TrustAssessment"
 import { RecordEvidenceBlocks } from "./RecordEvidenceBlocks"
 import { DepositWarningsPanel } from "./DepositWarningsPanel"
 import { warningsForRecord } from "../api/depositWarningsSchema"
@@ -213,7 +214,7 @@ function KineticsRecordCard({ record, position, calculationsByRef, dependencyEdg
             <dl className="kv-list">
                 <div><dt>Model kind</dt><dd><WordOrCode word={modelKindWord(record.model_kind)} code={record.model_kind} /></dd></div>
                 <div><dt>Origin</dt><dd><WordOrCode word={originWord(record.scientific_origin)} code={record.scientific_origin} /></dd></div>
-                <div><dt>Review</dt><dd><ReviewChip status={record.review.status} explain={false} /></dd></div>
+                <div><dt>Review</dt><dd><ReviewChip status={record.review.status} explain={false} /> <HardFailFlag trust={typeof evidence === "object" ? evidence.byKineticsRef.get(record.kinetics_ref)?.trust : null} /></dd></div>
                 {/* `.t-preserve-case` keeps these symbols and units in their own case. */}
                 {record.parameters.A != null && (
                     <div><dt className="t-preserve-case">A</dt><dd><code className="data">{formatArrheniusValue(record.parameters.A)} {unitLabel}</code></dd></div>
@@ -322,7 +323,7 @@ function KineticsRecordCard({ record, position, calculationsByRef, dependencyEdg
  * or did not return this record, one line says so; nothing is borrowed from another record.
  */
 function KineticsRecordEvidence({ record, evidence }: { record: ReactionKineticsRecord; evidence: KineticsEvidence }) {
-    if (evidence === "loading") return null
+    if (evidence === "loading") return <p className="note" role="status">Loading trust and deposit warnings.</p>
     if (evidence === "unavailable") {
         return <p className="note">Trust, reproducibility and deposit warnings could not be loaded for this record.</p>
     }

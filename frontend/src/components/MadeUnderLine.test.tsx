@@ -60,7 +60,7 @@ describe("MadeUnderLine", () => {
                 madeUnder={{ ...base, assessed_version: 0, current_version: 1, state: "stale", stale_reason: "rubric_version" }}
             />,
         )
-        expect(screen.getByText(/^Reviewed under rubric tckdb reproducibility/)).toBeVisible()
+        expect(screen.getByText(/^Reviewed under rubric TCKDB reproducibility/)).toBeVisible()
     })
 
     it("renders nothing when the API served no made_under", () => {

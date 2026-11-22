@@ -24,7 +24,7 @@ describe("apiVocabulary", () => {
     })
 
     it("looks a check up by rubric and name", () => {
-        expect(checkAsks("computed_kinetics", "arrhenius_units_present")).toBe("Arrhenius A units should be populated for Arrhenius-family kinetics.")
+        expect(checkAsks("computed_kinetics", "arrhenius_units_present")).toBe("An Arrhenius-form rate should state the units of A.")
         expect(checkAsks("computed_kinetics", "no_such_check")).toBeNull()
         expect(checkAsks(undefined, "arrhenius_units_present")).toBeNull()
     })

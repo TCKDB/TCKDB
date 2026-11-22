@@ -252,6 +252,19 @@ describe("EntryStatmechSection: trust, reproducibility and deposit warnings", ()
         expect(screen.getAllByText("Whole-deposit warning.")).toHaveLength(1)
     })
 
+    it("keeps focus and a live region when the button is pressed", async () => {
+        handleOthers()
+        server.use(http.get("/api/v1/scientific/statmech/:ref", () => HttpResponse.json({ detail: "down" }, { status: 500 })))
+        page()
+        await screen.findByText("sm_one")
+        const live = screen.getAllByRole("status")
+        expect(live.length).toBeGreaterThan(0)
+        fireEvent.click(screen.getByRole("button", { name: "Show deposit warnings of statmech record 1" }))
+        const failed = (await screen.findAllByText("Deposit warnings could not be loaded for this record."))[0]
+        expect(failed).toHaveAttribute("role", "status")
+        expect(document.activeElement).toBe(failed)
+    })
+
     it("says the warnings could not be loaded and still renders the record", async () => {
         handleOthers()
         server.use(http.get("/api/v1/scientific/statmech/:ref", () => HttpResponse.json({ detail: "down" }, { status: 500 })))

@@ -15,6 +15,13 @@
     text-transform: var(--type-label-transform);
 }
 
+.deposit-warnings-owner a {
+    color: var(--accent-700);
+    text-decoration: underline;
+    text-decoration-color: var(--accent-underline);
+    text-underline-offset: .16em;
+}
+
 .deposit-warnings-list {
     display: grid;
     gap: var(--s-4);
@@ -60,6 +67,10 @@
 
 .record-warnings-request {
     margin: var(--s-3) 0 0;
+}
+
+.record-warnings-status {
+    margin: 0;
 }
 
 .record-warnings-request button {

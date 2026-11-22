@@ -380,7 +380,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                         <p><span className="tse-pair-label">Structure assessment</span> {structureAssessmentSentence(trust.structure_assessment)}</p>
                                     )}
                                     <TrustWarnings checks={trust.evidence.checks} />
-                                    <TrustChecks evidence={trust.evidence} />
+                                    <TrustChecks evidence={trust.evidence} stacked />
                                 </>
                             ) : (
                                 <p className="empty-projection">No trust assessment was served for this entry.</p>

@@ -35,6 +35,7 @@ import { ProductLevelsFact, ProductLevelsTableCells, ProductLevelsTableHead } fr
 import { QuantityValue, ROUNDED_NOTE } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
 import { DepositWarningsPanel } from "./DepositWarningsPanel"
+import { HardFailFlag } from "./TrustAssessment"
 import { RecordEvidenceBlocks } from "./RecordEvidenceBlocks"
 import { emptyDepositWarnings, warningsForRecord, type DepositWarnings } from "../api/depositWarningsSchema"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
@@ -317,6 +318,7 @@ function ThermoRecordCard({ record, sectionLabel }: { record: ThermoRecord; sect
             <div className="science-record-heading">
                 <h3 id={`thermo-heading-${record.thermo_ref}`}>{numberedWords(`${modelKindLabel(record.model_kind)} thermo record`, record.thermo_ref, numbers)}</h3>
                 <span className="value-pill value-pill--muted">{statusLabel(record.review.status)}</span>
+                <HardFailFlag trust={record.trust} />
             </div>
             <ThermoRecordBody record={record} />
             <RefsDisclosure refs={[{ label: "Thermo record", value: record.thermo_ref }, ...supersessionRefs(record.supersession)]} />

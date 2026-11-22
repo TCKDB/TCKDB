@@ -43,6 +43,7 @@ import { Disclosure } from "./Disclosure"
 import { LazyRowBody } from "./LazyRowBody"
 import { LevelLabel } from "./LevelLabel"
 import { SectionHeading } from "./PageSections"
+import { HardFailFlag } from "./TrustAssessment"
 import { RecordEvidenceBlocks } from "./RecordEvidenceBlocks"
 import { DepositWideWarnings } from "./RecordWarningsOnRequest"
 import { SettingsBehindValue, SettingsLegend } from "./EffectiveSettings"
@@ -426,6 +427,7 @@ function StatmechRecordCard({ record, conformers, sourceCalcsState, frequenciesS
             <div className="science-record-heading">
                 <h3 id={`statmech-heading-${core.statmech_ref}`}>{numberedWords(`${statusLabel(core.scientific_origin)} statmech record`, core.statmech_ref, numbers)}</h3>
                 <span className="value-pill value-pill--muted">{statusLabel(core.review.status)}</span>
+                <HardFailFlag trust={record.trust} />
             </div>
             <StatmechRecordBody
                 record={record}

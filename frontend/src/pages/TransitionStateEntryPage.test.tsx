@@ -1927,8 +1927,8 @@ describe("TransitionStateEntryPage -- deposit warnings and the full check list",
         await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.getByText(/3 of 6 checks passed/)).toBeVisible()
         expect(screen.getByText("Every check")).toBeInTheDocument()
-        expect(screen.getByText("irc evidence present")).toBeInTheDocument()
-        expect(screen.getByText("charge present")).toBeInTheDocument()
+        expect(screen.getByText("IRC evidence present")).toBeInTheDocument()
+        expect(screen.getByText("Charge present")).toBeInTheDocument()
     })
 
     it("shows the hard-failure reason inside the trust card", async () => {

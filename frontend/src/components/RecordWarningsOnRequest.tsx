@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react"
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react"
 import { DepositWarningsPanel } from "./DepositWarningsPanel"
 import { useRecordDepositWarnings } from "../hooks/useRecordDepositWarnings"
 import type { DepositWarnings, SubmissionWarnings } from "../api/depositWarningsSchema"
@@ -37,41 +37,53 @@ export function DepositWideWarnings({ children, headingId }: { children: ReactNo
             <DepositWarningsPanel
                 warnings={{ record_warnings: [], deposit_warnings: [...blocks.values()] }}
                 headingId={headingId}
+                variant="subsection"
                 className="ledger-section"
             />
         </ReportContext.Provider>
     )
 }
 
-function LoadedWarnings({ ref_, load, idBase, recordLabel }: { ref_: string; load: WarningsLoader; idBase: string; recordLabel?: string }) {
+function LoadedWarnings({ ref_, load, idBase, recordLabel, onStatus }: {
+    ref_: string; load: WarningsLoader; idBase: string; recordLabel?: string; onStatus: (text: string) => void
+}) {
     const warnings = useRecordDepositWarnings(ref_, load)
     const report = useContext(ReportContext)
+    const hasOwn = warnings !== null && warnings !== "unavailable" && warnings.record_warnings.some((block) => block.items.length > 0)
     useEffect(() => {
         if (warnings && warnings !== "unavailable") report?.(warnings.deposit_warnings)
     }, [warnings, report])
-    if (warnings === null) return <p className="note" role="status">Loading deposit warnings.</p>
-    if (warnings === "unavailable") return <p className="note">Deposit warnings could not be loaded for this record.</p>
+    useEffect(() => {
+        if (warnings === null) onStatus("Loading deposit warnings.")
+        else if (warnings === "unavailable") onStatus("Deposit warnings could not be loaded for this record.")
+        else onStatus(hasOwn ? "Deposit warnings loaded." : "No deposit warnings are recorded for this record.")
+    }, [warnings, hasOwn, onStatus])
+    if (warnings === null || warnings === "unavailable") return null
     const own = { record_warnings: warnings.record_warnings, deposit_warnings: [] }
-    return (
-        <>
-            <DepositWarningsPanel warnings={own} variant="block" headingId={`deposit-warnings-${idBase}`} recordLabel={recordLabel} />
-            {own.record_warnings.every((block) => block.items.length === 0) && <p className="note">No deposit warnings are recorded for this record.</p>}
-        </>
-    )
+    return <DepositWarningsPanel warnings={own} variant="block" headingId={`deposit-warnings-${idBase}`} recordLabel={recordLabel} />
 }
 
 /**
  * A record's deposit warnings, read from its own route only when the reader asks. The list a card comes from carries none,
- * and a read per card on mount would spend the anonymous read budget on records nobody has opened.
+ * and a read per card on mount would spend the anonymous read budget on records nobody has opened. The status line is
+ * mounted from the start so the outcome is announced, and takes focus when the button it replaces goes.
  */
 export function RecordWarningsOnRequest({ ref_, load, idBase, recordLabel }: { ref_: string; load: WarningsLoader; idBase: string; recordLabel?: string }) {
     const [requested, setRequested] = useState(false)
-    if (requested) return <LoadedWarnings ref_={ref_} load={load} idBase={idBase} recordLabel={recordLabel} />
+    const [status, setStatus] = useState("")
+    const statusRef = useRef<HTMLParagraphElement>(null)
+    useEffect(() => {
+        if (requested) statusRef.current?.focus()
+    }, [requested])
     return (
-        <p className="record-warnings-request">
-            <button type="button" onClick={() => setRequested(true)} aria-label={recordLabel ? `Show deposit warnings of ${recordLabel}` : undefined}>
-                Show deposit warnings
-            </button>
-        </p>
+        <div className="record-warnings-request">
+            {!requested && (
+                <button type="button" onClick={() => { setStatus("Loading deposit warnings."); setRequested(true) }} aria-label={recordLabel ? `Show deposit warnings of ${recordLabel}` : undefined}>
+                    Show deposit warnings
+                </button>
+            )}
+            <p className="note record-warnings-status" role="status" tabIndex={-1} ref={statusRef}>{status}</p>
+            {requested && <LoadedWarnings ref_={ref_} load={load} idBase={idBase} recordLabel={recordLabel} onStatus={setStatus} />}
+        </div>
     )
 }

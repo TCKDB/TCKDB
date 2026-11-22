@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { cleanup, render, screen } from "@testing-library/react"
-import { TrustAssessment } from "./TrustAssessment"
+import { HardFailFlag, TrustAssessment } from "./TrustAssessment"
 import type { TrustFragment } from "../api/trustSchema"
 
 afterEach(cleanup)
@@ -41,15 +41,15 @@ describe("TrustAssessment", () => {
         render(<TrustAssessment trust={TRUST} headingId="trust-x" />)
         const rows = Array.from(document.querySelectorAll("tbody tr")).map((tr) => Array.from(tr.querySelectorAll("th, td")).map((td) => td.textContent))
         expect(rows.map((row) => row[0])).toEqual([
-            "arrhenius parameters complete", "arrhenius units present", "geometry validation not failed for source calculations",
-            "irc evidence present", "brand new check",
+            "Arrhenius parameters complete", "Arrhenius units present", "Geometry validation not failed for source calculations",
+            "IRC evidence present", "Brand new check",
         ])
-        expect(rows[0]).toEqual(["arrhenius parameters complete", "passed", "Arrhenius-family kinetics should include A, A units, n, and Ea."])
+        expect(rows[0]).toEqual(["Arrhenius parameters complete", "passed", "An Arrhenius-form rate should give A, its units, n and the activation energy."])
         expect(rows[1][1]).toBe("missing")
         expect(rows[2][1]).toBe("warning, needs investigation")
         expect(rows[3][1]).toBe("not applicable")
         // Unknown tokens: words only, no invented meaning.
-        expect(rows[4]).toEqual(["brand new check", "brand new outcome", ""])
+        expect(rows[4]).toEqual(["Brand new check", "brand new outcome", ""])
         expect(screen.getByText("Every check")).toBeInTheDocument()
     })
 
@@ -85,7 +85,7 @@ describe("TrustAssessment", () => {
         render(<TrustAssessment trust={TRUST} headingId="trust-x" recordLabel="statmech record 2" />)
         const region = screen.getByRole("region", { name: "Every trust check of statmech record 2" })
         expect(region).toHaveAttribute("tabindex", "0")
-        expect(screen.getByRole("rowheader", { name: "arrhenius units present" })).toBeInTheDocument()
+        expect(screen.getByRole("rowheader", { name: "Arrhenius units present" })).toBeInTheDocument()
         expect(screen.getByRole("region", { name: "Trust of statmech record 2" })).toBeInTheDocument()
     })
 
@@ -101,5 +101,14 @@ describe("TrustAssessment", () => {
         render(<TrustAssessment trust={TRUST} headingId="trust-x" />)
         expect(document.body.innerHTML).not.toContain("987654")
         expect(document.body.textContent).not.toMatch(/certified/i)
+    })
+})
+
+describe("HardFailFlag", () => {
+    it("flags only a hard-failed record", () => {
+        const { container, rerender } = render(<HardFailFlag trust={{ trust_status: "hard_failed" }} />)
+        expect(container).toHaveTextContent("Hard failed")
+        rerender(<HardFailFlag trust={{ trust_status: "partial" }} />)
+        expect(container).toBeEmptyDOMElement()
     })
 })

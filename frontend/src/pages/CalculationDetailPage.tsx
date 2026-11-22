@@ -581,7 +581,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 />
             </section>
 
-            {calculation.trust && <TrustAssessment trust={calculation.trust} headingId="trust-heading" className="ledger-section" />}
+            {calculation.trust && <TrustAssessment trust={calculation.trust} headingId="trust-heading" className="ledger-section" showReviewStatus={false} />}
 
             <DepositWarningsPanel warnings={calculation.depositWarnings} recordRef={core.calculation_ref} className="ledger-section" />
 

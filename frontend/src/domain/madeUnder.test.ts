@@ -8,7 +8,7 @@ describe("describeMadeUnder", () => {
         const w = describeMadeUnder({ ...base, assessed_version: 2, current_version: 2, state: "current", inputs_checked: true })
         expect(w.state).toBe("current")
         expect(w.badge).toBeNull()
-        expect(w.sentence).toBe("Assessed under rubric tckdb reproducibility, version 2 (current).")
+        expect(w.sentence).toBe("Assessed under rubric TCKDB reproducibility, version 2 (current).")
     })
 
     it("inputs_unchecked: the rubric is the current one and nothing is claimed about the inputs", () => {
@@ -16,7 +16,7 @@ describe("describeMadeUnder", () => {
         expect(w.state).toBe("inputs_unchecked")
         expect(w.badge).toBeNull()
         expect(w.sentence).toBe(
-            "Assessed under rubric tckdb reproducibility, version 1 (the current version). "
+            "Assessed under rubric TCKDB reproducibility, version 1 (the current version). "
             + "Whether its inputs have changed since was not checked on this page.",
         )
     })
@@ -28,7 +28,7 @@ describe("describeMadeUnder", () => {
         expect(w.state).toBe("stale")
         expect(w.badge).toBe("Stale")
         expect(w.sentence).toBe(
-            "Assessed under rubric tckdb reproducibility, version 1. The current version is 3. "
+            "Assessed under rubric TCKDB reproducibility, version 1. The current version is 3. "
             + "It has not been re-assessed under the current version.",
         )
     })
@@ -45,7 +45,7 @@ describe("describeMadeUnder", () => {
         expect(w.state).toBe("stale")
         expect(w.badge).toBe("Stale")
         expect(w.sentence).toBe(
-            "Assessed under rubric tckdb reproducibility (no version recorded). "
+            "Assessed under rubric TCKDB reproducibility (no version recorded). "
             + "The current version is 1. It has not been re-assessed under the current version.",
         )
         expect(w.sentence).not.toMatch(/\bv0\b|version 0|numbered/)
@@ -106,7 +106,7 @@ describe("describeMadeUnder", () => {
     it("an unknown state is worded neutrally and never throws", () => {
         const w = describeMadeUnder({ ...base, assessed_version: 4, current_version: 4, state: "some_future_state" })
         expect(w.state).toBe("unknown")
-        expect(w.sentence).toBe("Assessed under rubric tckdb reproducibility, version 4.")
+        expect(w.sentence).toBe("Assessed under rubric TCKDB reproducibility, version 4.")
     })
 
     it("never implies the record is preferred or best", () => {

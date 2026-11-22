@@ -2071,7 +2071,7 @@ describe("CalculationDetailPage deposit warnings and trust", () => {
         expect(within(panel).getByText(/Register entry 19/)).toBeInTheDocument()
         const trust = screen.getByRole("region", { name: "Trust" })
         expect(within(trust).getByText("2 of 4 weighted checks passed")).toBeInTheDocument()
-        expect(within(trust).getByText("artifacts present")).toBeInTheDocument()
+        expect(within(trust).getByText("Artifacts present")).toBeInTheDocument()
         expect(document.body.innerHTML).not.toContain("424242")
     })
 

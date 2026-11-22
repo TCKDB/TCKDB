@@ -1,4 +1,5 @@
 import vocabulary from "./apiVocabulary.json"
+import { readerCheckAsks } from "./readerChecks"
 import { READER_HARD_FAIL_REASON, READER_REVIEW_STATUS, READER_TRUST_STATUS } from "./readerWording"
 
 // The meaning of each token a record page words from the trust and reproducibility blocks. The token set is copied from
@@ -33,9 +34,7 @@ export function meaningOf(kind: VocabularyKind, token: string | null | undefined
     return cut < 0 ? text : text.slice(0, cut)
 }
 
-/** The rubric's own sentence for a check ("What it asks"), or null when the rubric does not carry that check. */
+/** The site's own sentence for a check ("What it asks"), or null when none is written: the guide's developer wording is never shown. */
 export function checkAsks(rubric: string | null | undefined, check: string): string | null {
-    if (!rubric) return null
-    const key = `${rubric}:${check}`
-    return Object.hasOwn(vocabulary.checkAsks, key) ? (vocabulary.checkAsks as Record<string, string>)[key] : null
+    return readerCheckAsks(rubric, check)
 }

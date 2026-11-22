@@ -3,6 +3,7 @@ import { Disclosure } from "./Disclosure"
 import { MadeUnderLine } from "./MadeUnderLine"
 import type { TrustFragment } from "../api/trustSchema"
 import { checkAsks, meaningOf, tokenWords } from "../domain/apiVocabulary"
+import { readerTokenLabel } from "../domain/readerChecks"
 import { liveMadeUnder } from "../domain/madeUnder"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import "../trust-assessment.css"
@@ -28,6 +29,12 @@ export function TrustBadge({ status }: { status: string }) {
     return <span className={status === "hard_failed" ? ATTENTION_PILL : "value-pill"}>{tokenWords(status)}</span>
 }
 
+/** A card header's flag for a hard-failed record, so the numbers below are not read without it. Nothing for any other badge. */
+export function HardFailFlag({ trust }: { trust: { trust_status: string } | null | undefined }) {
+    if (trust?.trust_status !== "hard_failed") return null
+    return <span className={ATTENTION_PILL}>Hard failed</span>
+}
+
 /** The first thing a hard-failed record shows: the discrete failure that set the badge. */
 export function HardFailNote({ reason }: { reason: string | null | undefined }) {
     if (!reason) return null
@@ -41,16 +48,18 @@ export function HardFailNote({ reason }: { reason: string | null | undefined }) 
 }
 
 /** One row per check the server reported, in served order: name, outcome, and what the rubric asks. */
-export function TrustChecks({ evidence, label = "Every trust check" }: {
+export function TrustChecks({ evidence, label = "Every trust check", stacked = false }: {
     evidence: Evidence
     /** Names the table; a page with several records gives each its own. */
     label?: string
+    /** Stack each check as label and value pairs at every width, for a card too narrow for three columns. */
+    stacked?: boolean
 }) {
     const checks = Object.entries(evidence.checks ?? {})
     if (checks.length === 0) return null
     const attention = Boolean(evidence.hard_fail_reason) || checks.some(([, outcome]) => outcome === "missing")
     return (
-        <div className="trust-checks">
+        <div className={stacked ? "trust-checks trust-checks--stacked" : "trust-checks"}>
             <Disclosure summary="Every check" count={checks.length} defaultOpen={attention}>
                 <div className="table-scroll table-scroll--compact" tabIndex={0} role="region" aria-label={label}>
                     <table className="data-table trust-checks-table">
@@ -58,13 +67,16 @@ export function TrustChecks({ evidence, label = "Every trust check" }: {
                             <tr><th scope="col">Check</th><th scope="col">Outcome</th><th scope="col">What it asks</th></tr>
                         </thead>
                         <tbody>
-                            {checks.map(([name, outcome]) => (
-                                <tr key={name}>
-                                    <th scope="row" data-label="Check">{tokenWords(name)}</th>
-                                    <td data-label="Outcome">{outcomePill(outcome)}</td>
-                                    <td className="trust-check-ask" data-label="What it asks">{checkAsks(evidence.rubric, name) ?? ""}</td>
-                                </tr>
-                            ))}
+                            {checks.map(([name, outcome]) => {
+                                const asks = checkAsks(evidence.rubric, name)
+                                return (
+                                    <tr key={name}>
+                                        <th scope="row" data-label="Check">{readerTokenLabel(name)}</th>
+                                        <td data-label="Outcome">{outcomePill(outcome)}</td>
+                                        <td className="trust-check-ask" data-label={asks ? "What it asks" : undefined}>{asks ?? ""}</td>
+                                    </tr>
+                                )
+                            })}
                         </tbody>
                     </table>
                 </div>

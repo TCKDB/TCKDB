@@ -44,9 +44,15 @@ export type MadeUnderWording = {
 /** An assessment of a record, or the stored machine review a curator task came from. */
 export type MadeUnderKind = "assessment" | "review"
 
+const RUBRIC_NAMES: Record<string, string> = {
+    tckdb_reproducibility: "TCKDB reproducibility",
+    computed_ts_statmech: "computed transition state statistical mechanics",
+    computed_statmech: "computed statistical mechanics",
+}
+
 /** Rubric names are snake_case identifiers (`computed_transition_state`); read them as words. */
 export function rubricLabel(name: string): string {
-    return name.replaceAll("_", " ")
+    return Object.hasOwn(RUBRIC_NAMES, name) ? RUBRIC_NAMES[name] : name.replaceAll("_", " ")
 }
 
 /** The assessment was just computed under the rubric version in force (the live trust badge): current by construction. */

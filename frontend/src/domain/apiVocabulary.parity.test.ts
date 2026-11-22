@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import vocabulary from "./apiVocabulary.json"
+import { READER_CHECK_NAMES, readerCheckAsks } from "./readerChecks"
 import { READER_HARD_FAIL_REASON, READER_REVIEW_STATUS, READER_TRUST_STATUS } from "./readerWording"
 
 // The published guide. `import.meta.glob` instead of `node:fs` (no Node types under src/); a match count other than one
@@ -49,5 +50,21 @@ describe("apiVocabulary.json parity with docs/guides/api_vocabulary.md", () => {
         expect(Object.keys(READER_REVIEW_STATUS).sort()).toEqual(Object.keys(vocabulary.reviewStatus).sort())
         expect(Object.keys(READER_TRUST_STATUS).sort()).toEqual(Object.keys(vocabulary.trustStatus).sort())
         expect(Object.keys(READER_HARD_FAIL_REASON).sort()).toEqual(Object.keys(vocabulary.hardFailReason).sort())
+    })
+
+    it("words every guide check for a reader, in plain words", () => {
+        const guideChecks = new Set(Object.keys(vocabulary.checkAsks).map((key) => key.split(":")[1]))
+        expect([...READER_CHECK_NAMES].sort()).toEqual([...guideChecks].sort())
+        for (const key of Object.keys(vocabulary.checkAsks)) {
+            const [rubric, check] = key.split(":")
+            const sentence = readerCheckAsks(rubric, check)
+            expect(sentence, key).not.toBeNull()
+            expect(sentence, key).not.toMatch(/[a-z]_[a-z]|\w\.\w|--/)
+        }
+    })
+
+    it("shows no sentence for a check or rubric the reader map does not word", () => {
+        expect(readerCheckAsks("computed_thermo", "a_brand_new_check")).toBeNull()
+        expect(readerCheckAsks("some_other_rubric", "species_entry_present")).toBeNull()
     })
 })
