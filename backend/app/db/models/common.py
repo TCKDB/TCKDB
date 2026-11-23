@@ -2149,6 +2149,67 @@ class MachineReviewCuratorTaskStateGroup(str, Enum):
         return frozenset(s for s in MachineReviewCuratorTaskState if s not in terminal)
 
 
+class MachineReviewProviderKey(str, Enum):
+    """Which reviewer backend a machine-review job asks."""
+
+    fake = "fake"
+    local = "local"
+    cloud = "cloud"
+    claude_code = "claude_code"
+    codex = "codex"
+
+
+class MachineReviewExecutor(str, Enum):
+    """Which kind of worker may claim a machine-review job."""
+
+    in_process = "in_process"
+    remote_runner = "remote_runner"
+
+
+class MachineReviewJobStatus(str, Enum):
+    """Lifecycle of a machine-review job; never mixed into the review's own status."""
+
+    queued = "queued"
+    running = "running"
+    succeeded = "succeeded"
+    failed = "failed"
+    cancelled = "cancelled"
+
+    @classmethod
+    def open_states(cls) -> "frozenset[MachineReviewJobStatus]":
+        """States in which a job still occupies its submission's single slot."""
+        return frozenset({cls.queued, cls.running})
+
+
+class MachineReviewJobFailure(str, Enum):
+    """Why a machine-review job did not produce a review; the UI words come from this code."""
+
+    provider_unavailable = "provider_unavailable"
+    provider_timeout = "provider_timeout"
+    budget_exhausted = "budget_exhausted"
+    invalid_output = "invalid_output"
+    quota_exhausted = "quota_exhausted"
+    auth_failed = "auth_failed"
+    worker_lost = "worker_lost"
+    config_error = "config_error"
+    internal_error = "internal_error"
+    machine_review_disabled = "machine_review_disabled"
+
+
+class MachineReviewJobEventKind(str, Enum):
+    """Kinds of progress entry a machine-review job appends."""
+
+    claimed = "claimed"
+    context_built = "context_built"
+    model_turn = "model_turn"
+    tool_call = "tool_call"
+    tool_result = "tool_result"
+    retry = "retry"
+    final_output = "final_output"
+    parse_failed = "parse_failed"
+    finished = "finished"
+
+
 class CuratorTaskInclude(str, Enum):
     """Optional expansions of a curator-task list item (query-side only)."""
 

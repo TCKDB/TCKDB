@@ -419,6 +419,52 @@ enum MachineReviewCuratorTaskState {
   dismissed_machine_finding
 }
 
+enum MachineReviewExecutor {
+  in_process
+  remote_runner
+}
+
+enum MachineReviewJobEventKind {
+  claimed
+  context_built
+  model_turn
+  tool_call
+  tool_result
+  retry
+  final_output
+  parse_failed
+  finished
+}
+
+enum MachineReviewJobFailure {
+  provider_unavailable
+  provider_timeout
+  budget_exhausted
+  invalid_output
+  quota_exhausted
+  auth_failed
+  worker_lost
+  config_error
+  internal_error
+  machine_review_disabled
+}
+
+enum MachineReviewJobStatus {
+  queued
+  running
+  succeeded
+  failed
+  cancelled
+}
+
+enum MachineReviewProviderKey {
+  fake
+  local
+  cloud
+  claude_code
+  codex
+}
+
 enum MachineReviewSeverity {
   info
   warning
@@ -2924,6 +2970,81 @@ Table machine_review_curator_task {
   }
 
   Note: 'One human to-do about one finding on one record in one submission.'
+}
+
+Table machine_review_job {
+  id bigint [pk, not null]
+  submission_id bigint [not null, ref: > submission.id]
+  requested_by bigint [not null, ref: > app_user.id]
+  provider_key MachineReviewProviderKey [not null]
+  executor MachineReviewExecutor [not null]
+  status MachineReviewJobStatus [not null, default: 'queued']
+  cancel_requested boolean [not null, default: 'false']
+  failure_code MachineReviewJobFailure
+  failure_detail text
+  step_count int [not null, default: '0']
+  model string
+  context_hash text
+  prompt_name text
+  prompt_version int
+  budget_json jsonb
+  tokens_in int
+  tokens_out int
+  runner_name string
+  attempts int [not null, default: '0']
+  max_attempts int [not null, default: '2']
+  lease_expires_at timestamp
+  heartbeat_at timestamp
+  audit_event_id bigint [ref: > submission_audit_event.id]
+  created_at timestamp [not null, default: 'now']
+  started_at timestamp
+  finished_at timestamp
+
+  indexes {
+    (status, created_at) [name: 'ix_machine_review_job_status_created_at']
+    (submission_id, created_at) [name: 'ix_machine_review_job_submission_id_created_at']
+    submission_id [unique, name: 'ux_machine_review_job_open_submission']
+  }
+
+  checks {
+    `(status = 'succeeded' AND audit_event_id IS NOT NULL) OR (status IN ('queued', 'running', 'cancelled') AND audit_event_id IS NULL) OR status = 'failed'` [name: 'ck_machine_review_job_audit_event_state']
+    `(status = 'failed' AND failure_code IS NOT NULL) OR (status = 'cancelled' AND (failure_code IS NULL OR failure_code = 'machine_review_disabled')) OR (status IN ('queued', 'running', 'succeeded') AND failure_code IS NULL)` [name: 'ck_machine_review_job_failure_code_state']
+    `char_length(failure_detail) <= 2000` [name: 'ck_machine_review_job_failure_detail_length']
+  }
+
+  Note: 'One machine-review attempt on a submission: who asked, which backend, how it ended.'
+}
+
+Table machine_review_job_event {
+  id bigint [pk, not null]
+  job_id bigint [not null, ref: > machine_review_job.id]
+  seq int [not null]
+  kind MachineReviewJobEventKind [not null]
+  tool_name string
+  status_code string
+  started_at timestamp
+  duration_ms int
+  detail_json jsonb
+
+  indexes {
+    (job_id, seq) [unique, name: 'uq_machine_review_job_event_job_id_seq']
+  }
+
+  Note: 'One progress entry of a machine-review job, numbered in order.'
+}
+
+Table machine_review_settings {
+  id int [pk, not null]
+  machine_review_enabled boolean [not null, default: 'true']
+  curator_requests_enabled boolean [not null, default: 'true']
+  updated_at timestamp [not null, default: 'now']
+  updated_by bigint [ref: > app_user.id]
+
+  checks {
+    `id = 1` [name: 'ck_machine_review_settings_singleton']
+  }
+
+  Note: 'The single row of admin switches for machine review.'
 }
 
 Table method_catalogue {
