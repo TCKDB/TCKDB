@@ -8,6 +8,8 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 4173,
     strictPort: true,
+    // Tests read one repo-level guide as text (apiVocabulary.parity.test.ts); the dev server serves only the frontend.
+    fs: process.env.VITEST ? { allow: ['..'] } : undefined,
   },
   test: {
     environment: 'jsdom',

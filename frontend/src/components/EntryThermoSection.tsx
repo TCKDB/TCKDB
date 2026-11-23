@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react"
+import { createContext, useContext, useMemo, type ReactNode } from "react"
 import { RecordNumbersProvider } from "./RecordNumbers"
 import { numberedWords, numberRefs, type RecordNumbering } from "../domain/recordNumbers"
 import { useRecordNumbers } from "../hooks/useRecordNumbers"
@@ -34,7 +34,10 @@ import { SettingsBehindValue, SettingsLegend } from "./EffectiveSettings"
 import { ProductLevelsFact, ProductLevelsTableCells, ProductLevelsTableHead } from "./ProductLevels"
 import { QuantityValue, ROUNDED_NOTE } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
-import { MadeUnderLine } from "./MadeUnderLine"
+import { DepositWarningsPanel } from "./DepositWarningsPanel"
+import { HardFailFlag } from "./TrustAssessment"
+import { RecordEvidenceBlocks } from "./RecordEvidenceBlocks"
+import { emptyDepositWarnings, warningsForRecord, type DepositWarnings } from "../api/depositWarningsSchema"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
 import { SupersessionNotice } from "./SupersessionNotice"
 import { ThermoCpChart } from "./ThermoCpChart"
@@ -65,6 +68,9 @@ import { ThermoCpChart } from "./ThermoCpChart"
 // ---------------------------------------------------------------------------
 
 const statusLabel = (status: string) => status.replaceAll("_", " ")
+
+/** The list response's deposit warnings, for each record card to read its own from. */
+const ThermoWarningsContext = createContext<DepositWarnings>(emptyDepositWarnings())
 
 export function EntryThermoSection({ entryRef, conformer, conformers }: {
     entryRef: string
@@ -224,6 +230,7 @@ function ThermoList({ response, meta, onPage, linkedNote, conformer, conformers 
     const renderThermoRecords = makeThermoGroupedRenderer(sectionLabels)
     return (
         <RecordNumbersProvider refs={records.map((record) => record.thermo_ref)} offset={pagination.offset}>
+        <ThermoWarningsContext.Provider value={{ record_warnings: response.record_warnings, deposit_warnings: response.deposit_warnings }}>
         <section className="ledger-section" aria-labelledby="thermo-heading">
             <div className="ledger-heading">
                 <p className="eyebrow">Deposited evidence</p>
@@ -283,7 +290,13 @@ function ThermoList({ response, meta, onPage, linkedNote, conformer, conformers 
                 renderThermoRecords(records)
             )}
             {records.some((record) => (record.calculation_settings?.length ?? 0) > 0) && <SettingsLegend perLevel />}
+            <DepositWarningsPanel
+                warnings={{ record_warnings: [], deposit_warnings: response.deposit_warnings }}
+                variant="subsection"
+                headingId="thermo-deposit-warnings"
+            />
         </section>
+        </ThermoWarningsContext.Provider>
         </RecordNumbersProvider>
     )
 }
@@ -305,6 +318,7 @@ function ThermoRecordCard({ record, sectionLabel }: { record: ThermoRecord; sect
             <div className="science-record-heading">
                 <h3 id={`thermo-heading-${record.thermo_ref}`}>{numberedWords(`${modelKindLabel(record.model_kind)} thermo record`, record.thermo_ref, numbers)}</h3>
                 <span className="value-pill value-pill--muted">{statusLabel(record.review.status)}</span>
+                <HardFailFlag trust={record.trust} />
             </div>
             <ThermoRecordBody record={record} />
             <RefsDisclosure refs={[{ label: "Thermo record", value: record.thermo_ref }, ...supersessionRefs(record.supersession)]} />
@@ -366,7 +380,9 @@ function ThermoRecordBody({ record, idSuffix = "", showProvenance = true }: {
             <TemperatureCoverageBlock coverage={record.temperature_coverage ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
             <ModelBlock record={record} idSuffix={idSuffix} />
             <EvidenceCompletenessBlock completeness={record.evidence_completeness ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
-            <ReproducibilityAssessmentBlock assessments={record.assessments ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
+            {/* Trust, reproducibility and warnings are this record's own; the group's shared body leaves them to
+                each individual card below. */}
+            {showProvenance && <ThermoRecordEvidence record={record} idSuffix={idSuffix} />}
             {showProvenance && (
                 <ProvenanceBlock
                     provenance={record.provenance ?? null}
@@ -436,6 +452,10 @@ function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: Thermo
     const representative = records[0]
     const numbers = useRecordNumbers()
     const anchorId = `thermo-heading-${representative.thermo_ref}${GROUP_ID_SUFFIX}`
+    const warnings = useContext(ThermoWarningsContext)
+    // A hard failure or a warning on any member opens the individual cards, which carry each record's evidence.
+    const needsAttention = records.some((record) => record.trust?.evidence.hard_fail_reason
+        || warningsForRecord(warnings, record.thermo_ref).record_warnings.some((block) => block.items.length > 0))
     useRegisteredSection(sectionLabel ? anchorId : null, sectionLabel ?? "", 2)
     return (
         <article className="science-record identical-record-group card" aria-labelledby={anchorId}>
@@ -470,7 +490,7 @@ function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: Thermo
                 </dl>
             )}
             <IdenticalThermoGroupRefs records={records} />
-            <Disclosure className="identical-record-group-detail" summary={`Show all ${records.length} records individually`}>
+            <Disclosure className="identical-record-group-detail" summary={`Show all ${records.length} records individually`} defaultOpen={needsAttention}>
                 {records.map((record) => (
                     <SectionErrorBoundary key={record.thermo_ref} fallback={thermoRecordFallback()}>
                         <ThermoRecordCard record={record} sectionLabel={null} />
@@ -800,26 +820,18 @@ function evidenceCheckLabel(key: string): string {
     return EVIDENCE_CHECK_LABELS[key] ?? key.replace(/^has_/, "").replaceAll("_", " ")
 }
 
-/**
- * The reproducibility assessment of this record, with the rubric it was made under. Rendered only when the API served
- * `assessments` (an older deployment does not). A record nobody has assessed says so: "not assessed" is not "stale".
- * The grade is a statement about how complete the deposited evidence is for a rerun, not a ranking of the record.
- */
-function ReproducibilityAssessmentBlock({ assessments, thermoRef, idSuffix = "" }: {
-    assessments: ThermoRecord["assessments"] | null
-    thermoRef: string
-    idSuffix?: string
-}) {
-    const reproducibility = assessments?.reproducibility
-    if (!reproducibility) return null
-    const id = `reproducibility-${thermoRef}${idSuffix}`
+function ThermoRecordEvidence({ record, idSuffix = "" }: { record: ThermoRecord; idSuffix?: string }) {
+    const warnings = useContext(ThermoWarningsContext)
     return (
-        <section aria-labelledby={id}>
-            <h4 className="model-block-heading" id={id}>
-                Reproducibility assessment{reproducibility.grade ? `: ${reproducibility.grade.replaceAll("_", " ")}` : ""}
-            </h4>
-            <MadeUnderLine madeUnder={reproducibility.made_under} />
-        </section>
+        <RecordEvidenceBlocks
+            trust={record.trust}
+            assessments={record.assessments}
+            warnings={warningsForRecord(warnings, record.thermo_ref)}
+            idBase={`${record.thermo_ref}${idSuffix}`}
+            noun="thermo record"
+            recordRef={record.thermo_ref}
+            showReviewStatus={false}
+        />
     )
 }
 

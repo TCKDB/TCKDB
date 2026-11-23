@@ -1,6 +1,7 @@
 import { z } from "zod"
 import { levelOfTheorySchema, productLevelsSchema, recordReviewSchema, entryFacetFields } from "./scientificSchemas"
 import { parseScientificResponse, requestScientificJson, ScientificApiError } from "./scientificTransport"
+import { assessmentsSchema, trustFragmentSchema } from "./trustSchema"
 
 /**
  * `GET /scientific/reaction-entries/{ref}/full` --
@@ -187,6 +188,9 @@ export const kineticsRecordSchema = z.object({
     // feeds a TS-chain-derived fallback when this key is missing.
     levels: levelsSummarySchema.nullable().optional(),
     provenance: kineticsProvenanceSchema,
+    // `include=trust` and `include=assessments`; the /full read can carry trust, the kinetics list both.
+    trust: trustFragmentSchema.nullable().optional(),
+    assessments: assessmentsSchema.nullable().optional(),
 }).passthrough()
 
 // ---------------------------------------------------------------------------

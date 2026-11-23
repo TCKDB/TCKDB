@@ -1,0 +1,119 @@
+/* `components/TrustAssessment.tsx` and `ReproducibilityAssessment.tsx`. Design tokens only; pills, notes, the disclosure
+ * and the data table are the shared ones. */
+.trust-assessment-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--s-2) var(--s-3);
+    margin: var(--s-3) 0 0;
+}
+
+.trust-assessment-line .note {
+    margin: 0;
+}
+
+.trust-hard-fail {
+    margin: var(--s-3) 0 0;
+    padding: var(--s-3) var(--s-4);
+    border: 1px solid var(--warning);
+    border-left-width: 3px;
+    border-radius: var(--radius-sm);
+}
+
+.trust-hard-fail-title {
+    margin: 0;
+    color: var(--ink);
+    font: var(--type-ui-font);
+}
+
+.trust-hard-fail .note {
+    margin: var(--s-1) 0 0;
+}
+
+.trust-checks {
+    margin-top: var(--s-3);
+}
+
+.trust-check-ask {
+    color: var(--muted);
+}
+
+.trust-pill-attention.trust-pill-attention {
+    border-color: var(--warning);
+    background: transparent;
+    color: var(--ink);
+}
+
+.trust-checks-table th[scope="row"] {
+    color: var(--ink);
+    font-weight: 600;
+    text-align: left;
+}
+
+/* Below 40rem, or in a narrow card (`stacked`), each check stacks as label and value pairs, so nothing hides behind a
+ * sideways scroll. */
+@media (max-width: 40rem) {
+    .trust-checks-table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+    }
+
+    .trust-checks-table tr,
+    .trust-checks-table th,
+    .trust-checks-table td {
+        display: block;
+        width: auto;
+        min-width: 0;
+    }
+
+    .trust-checks-table tr {
+        padding: var(--s-3) var(--s-4);
+        border-bottom: 1px solid var(--line-2);
+    }
+
+    .trust-checks-table td:empty {
+        display: none;
+    }
+
+    .trust-checks-table td[data-label]::before {
+        content: attr(data-label);
+        display: block;
+        color: var(--muted);
+        font: var(--type-label-font);
+    }
+}
+
+.trust-checks--stacked .trust-checks-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+}
+
+.trust-checks--stacked .trust-checks-table tr,
+.trust-checks--stacked .trust-checks-table th,
+.trust-checks--stacked .trust-checks-table td {
+    display: block;
+    width: auto;
+    min-width: 0;
+}
+
+.trust-checks--stacked .trust-checks-table tr {
+    padding: var(--s-3) var(--s-4);
+    border-bottom: 1px solid var(--line-2);
+}
+
+.trust-checks--stacked .trust-checks-table td:empty {
+    display: none;
+}
+
+.trust-checks--stacked .trust-checks-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    color: var(--muted);
+    font: var(--type-label-font);
+}

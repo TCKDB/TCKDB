@@ -4,7 +4,8 @@ import { roleCalculationSettingsSchema } from "./effectiveSettingsSchema"
 import { listRequestEchoSchema, paginationSchema } from "./listEnvelope"
 import { pageQuery, parsePagedRef } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
-import { madeUnderSchema } from "../domain/madeUnder"
+import { depositWarningsEnvelopeShape } from "./depositWarningsSchema"
+import { assessmentsSchema, trustFragmentSchema } from "./trustSchema"
 
 // ---------------------------------------------------------------------------
 // Shape notes (from
@@ -26,8 +27,7 @@ import { madeUnderSchema } from "../domain/madeUnder"
 //   service, so they gate nothing. `INCLUDE_GATED_COMPONENTS["ThermoRecord"]`
 //   in `backend/app/api/routes/scientific/_response.py` lists the gated
 //   tokens: `calculation_settings`, `trust` and `assessments`. This client
-//   requests `assessments` and `calculation_settings` (see
-//   `loadEntryThermo`) and not `trust`.
+//   requests all three (see `loadEntryThermo`).
 //
 // - `nasa` / `nasa9` / `wilhoit` / `points` are UNGATED SCIENTIFIC FACTS,
 //   not sections behind a token. A `null` here means "this record has no
@@ -207,15 +207,6 @@ const groupAdditivitySchema = z.object({
     components: z.array(groupAdditivityComponentSchema).optional(),
 }).passthrough()
 
-// Only the facts the page words are pulled out; the rest of the summary rides on `.passthrough()`.
-const assessmentsSchema = z.object({
-    reproducibility: z.object({
-        state: z.string(),
-        grade: z.string().nullable().optional(),
-        made_under: madeUnderSchema.nullable().optional(),
-    }).passthrough().nullable().optional(),
-}).passthrough()
-
 export const thermoRecordSchema = z.object({
     thermo_ref: z.string(),
     scientific_origin: z.string(),
@@ -260,6 +251,8 @@ export const thermoRecordSchema = z.object({
     calculation_settings: z.array(roleCalculationSettingsSchema).nullable().optional(),
     // `include=assessments` (requested below): the reproducibility assessment, with the rubric it was made under.
     assessments: assessmentsSchema.nullable().optional(),
+    // `include=trust` (requested below): the evidence verdict, with every check's outcome.
+    trust: trustFragmentSchema.nullable().optional(),
 }).passthrough()
 
 const reviewStatusSummarySchema = z.object({
@@ -272,6 +265,7 @@ const reviewStatusSummarySchema = z.object({
 }).passthrough()
 
 const thermoListResponseSchema = z.object({
+    ...depositWarningsEnvelopeShape,
     species_entry_ref: z.string(),
     review_summary: reviewStatusSummarySchema,
     records: z.array(thermoRecordSchema),
@@ -288,7 +282,7 @@ export type ThermoListResponse = z.infer<typeof thermoListResponseSchema>
 
 /**
  * Load every thermo record deposited for this species entry, requesting
- * `include=assessments` and `include=calculation_settings`.
+ * `include=assessments`, `include=trust` and `include=calculation_settings`.
  * `useScientificRecord`-shaped: `(ref, signal) => Promise<T>`.
  */
 export async function loadEntryThermo(
@@ -303,8 +297,19 @@ export async function loadEntryThermo(
     const { ref, request } = parsePagedRef(entryRef)
     const query = request ? pageQuery(request) : new URLSearchParams()
     query.append("include", "assessments")
+    query.append("include", "trust")
     query.append("include", "calculation_settings")
     const endpoint = `/api/v1/scientific/species-entries/${encodeURIComponent(ref)}/thermo?${query}`
     const payload = await requestScientificJson(endpoint, signal, onRateLimited)
+    return parseScientificResponse(thermoListResponseSchema, payload, "thermo")
+}
+
+/**
+ * One page of the entry's thermo records with no include tokens, for a caller that only asks whether any exist
+ * (the network page's participant check), so the server does not compute trust or assessments for it.
+ */
+export async function loadEntryThermoPresence(entryRef: string, signal?: AbortSignal): Promise<ThermoListResponse> {
+    const endpoint = `/api/v1/scientific/species-entries/${encodeURIComponent(entryRef)}/thermo`
+    const payload = await requestScientificJson(endpoint, signal)
     return parseScientificResponse(thermoListResponseSchema, payload, "thermo")
 }

@@ -13,6 +13,7 @@ import "../conformer-group.css"
 import "../entry-science.css"
 import {
     loadEntryStatmechSection,
+    loadStatmechDepositWarnings,
     readStatmechSectionField,
     type StatmechListResponse,
     type StatmechRecord,
@@ -42,6 +43,9 @@ import { Disclosure } from "./Disclosure"
 import { LazyRowBody } from "./LazyRowBody"
 import { LevelLabel } from "./LevelLabel"
 import { SectionHeading } from "./PageSections"
+import { HardFailFlag } from "./TrustAssessment"
+import { RecordEvidenceBlocks } from "./RecordEvidenceBlocks"
+import { DepositWideWarnings } from "./RecordWarningsOnRequest"
 import { SettingsBehindValue, SettingsLegend } from "./EffectiveSettings"
 import { ProductLevelsFact, ProductLevelsTableCells, ProductLevelsTableHead } from "./ProductLevels"
 import { QuantityValue } from "./QuantityValue"
@@ -205,6 +209,7 @@ function StatmechList({ listKey, meta, onPage, linkedNote, response, conformer, 
     return (
         <RecordNumbersProvider refs={records.map((record) => record.statmech.statmech_ref)} offset={pagination.offset}>
         <SettingsStateContext.Provider value={settingsState}>
+            <DepositWideWarnings headingId="statmech-deposit-warnings">
             <section className="ledger-section" aria-labelledby="statmech-heading">
                 <div className="ledger-heading">
                     <p className="eyebrow">Deposited evidence</p>
@@ -237,6 +242,7 @@ function StatmechList({ listKey, meta, onPage, linkedNote, response, conformer, 
                     <SettingsLegend perLevel />
                 )}
             </section>
+            </DepositWideWarnings>
 
             <StatmechLazySection
                 heading="Source calculations"
@@ -421,6 +427,7 @@ function StatmechRecordCard({ record, conformers, sourceCalcsState, frequenciesS
             <div className="science-record-heading">
                 <h3 id={`statmech-heading-${core.statmech_ref}`}>{numberedWords(`${statusLabel(core.scientific_origin)} statmech record`, core.statmech_ref, numbers)}</h3>
                 <span className="value-pill value-pill--muted">{statusLabel(core.review.status)}</span>
+                <HardFailFlag trust={record.trust} />
             </div>
             <StatmechRecordBody
                 record={record}
@@ -526,7 +533,27 @@ function StatmechRecordBody({ record, conformers, sourceCalcsState, frequenciesS
                 fsf={record.frequency_scale_factor}
                 productLevels={productLevels}
             />
+
+            {/* Trust, reproducibility and warnings are this record's own; the group's shared body leaves them to
+                each individual card below. */}
+            {showRecordEvidence && <StatmechRecordEvidence record={record} />}
         </>
+    )
+}
+
+/** Trust and reproducibility from the list; this record's deposit warnings are read from its own route when the reader asks. */
+function StatmechRecordEvidence({ record }: { record: StatmechRecord }) {
+    const ref = record.statmech.statmech_ref
+    return (
+        <RecordEvidenceBlocks
+            trust={record.trust}
+            assessments={record.assessments}
+            loadWarnings={{ ref, load: loadStatmechDepositWarnings }}
+            idBase={ref}
+            noun="statmech record"
+            recordRef={ref}
+            showReviewStatus={false}
+        />
     )
 }
 
@@ -699,7 +726,7 @@ function IdenticalStatmechRecordsCard({ records, conformers, sourceCalcsState, f
                 productLevels={sharedProductLevels}
             />
             <IdenticalStatmechGroupRefs records={records} sourceCalcsState={sourceCalcsState} frequenciesState={frequenciesState} />
-            <Disclosure className="identical-record-group-detail" summary={`Show all ${records.length} records individually`}>
+            <Disclosure className="identical-record-group-detail" summary={`Show all ${records.length} records individually`} defaultOpen={records.some((record) => record.trust?.evidence.hard_fail_reason)}>
                 {records.map((record) => (
                     <SectionErrorBoundary key={record.statmech.statmech_ref} fallback={statmechRecordFallback()}>
                         <StatmechRecordCard record={record} conformers={conformers} sourceCalcsState={sourceCalcsState} frequenciesState={frequenciesState} />

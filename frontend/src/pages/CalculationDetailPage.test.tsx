@@ -395,10 +395,10 @@ describe("CalculationDetailPage", () => {
         expect(ddFor(resultsSection, "Noise floor τ")).toContain("semi_numerical_v2")
     })
 
-    it("requests exactly the eager section tokens, in the documented order", async () => {
+    it("requests exactly the eager section tokens, then trust, in the documented order", async () => {
         server.use(http.get(ENDPOINT, ({ request }) => {
             expect(new URL(request.url).searchParams.getAll("include")).toEqual([
-                "results", "dependencies", "review", "input_geometries", "output_geometries",
+                "results", "dependencies", "review", "input_geometries", "output_geometries", "trust",
             ])
             return HttpResponse.json({ record: mockRecord() })
         }))
@@ -1105,7 +1105,7 @@ describe("CalculationDetailPage", () => {
         expect(screen.getByText("is_isomorphic (legacy name, same value)")).toBeVisible()
 
         expect(requestedIncludeSets).toEqual([
-            ["results", "dependencies", "review", "input_geometries", "output_geometries"],
+            ["results", "dependencies", "review", "input_geometries", "output_geometries", "trust"],
             ["geometry_validation"],
         ])
     })
@@ -2041,5 +2041,69 @@ describe("CalculationDetailPage -- no depositor-typed text", () => {
         expectNoAdversarialText()
         // A recognised key's free-text value reads "recorded", never the string itself.
         expect(screen.getAllByText("recorded").length).toBeGreaterThan(0)
+    })
+})
+
+describe("CalculationDetailPage deposit warnings and trust", () => {
+    const WARNING = {
+        code: "missing_irc_for_ts",
+        message: "This transition state has no IRC calculation.",
+        field: "calculations[*]",
+        register_entry: 19,
+        context: null,
+        check_version: 1,
+    }
+    const TRUST = {
+        review_status: "not_reviewed",
+        trust_status: "partial",
+        evidence: { passed_count: 2, possible_count: 4, rubric: "computed_calculation", rubric_version: 1, checks: { artifacts_present: "missing", input_geometry_present: "passed" }, hard_fail_reason: null, record_id: 424242 },
+    }
+
+    it("shows the warnings panel and the trust section", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({ trust: TRUST }),
+            record_warnings: [{ record_ref: "calc_freq_one", status: "recorded", items: [WARNING] }],
+        })))
+        page()
+        await findLoaded("Frequency")
+        const panel = screen.getByRole("region", { name: "Deposit warnings" })
+        expect(within(panel).getByText("This transition state has no IRC calculation.")).toBeInTheDocument()
+        expect(within(panel).getByText(/Register entry 19/)).toBeInTheDocument()
+        const trust = screen.getByRole("region", { name: "Trust" })
+        expect(within(trust).getByText("2 of 4 weighted checks passed")).toBeInTheDocument()
+        expect(within(trust).getByText("Artifacts present")).toBeInTheDocument()
+        expect(document.body.innerHTML).not.toContain("424242")
+    })
+
+    it("shows no warnings panel when the payload carries none, and no trust section without a verdict", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord(),
+            record_warnings: [{ record_ref: "calc_freq_one", status: "not_recorded", items: [] }],
+            deposit_warnings: [],
+        })))
+        page()
+        await findLoaded("Frequency")
+        expect(screen.queryByText("Deposit warnings")).toBeNull()
+        expect(screen.queryByRole("region", { name: "Trust" })).toBeNull()
+    })
+
+    it("opens a hard failure with its reason before anything else in the trust section", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({ trust: { ...TRUST, trust_status: "hard_failed", evidence: { ...TRUST.evidence, hard_fail_reason: "calculation_rejected" } } }),
+        })))
+        page()
+        await findLoaded("Frequency")
+        expect(screen.getByText("Hard failure: calculation rejected")).toBeInTheDocument()
+    })
+
+    it("keeps depositor text out of the page, even with depositor_supplied planted", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord(),
+            record_warnings: [{ record_ref: "calc_freq_one", status: "recorded", items: [{ ...WARNING, context: { depositor_supplied: "DEPOSITOR_SENTINEL_supplied" } }] }],
+        })))
+        page()
+        await findLoaded("Frequency")
+        expect(screen.getByText("This transition state has no IRC calculation.")).toBeInTheDocument()
+        expectNoDepositorText()
     })
 })

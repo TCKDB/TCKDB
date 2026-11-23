@@ -1,0 +1,100 @@
+/* `components/DepositWarningsPanel.tsx`: the deposit-time warnings of a record, in TCKDB's words. Design tokens only;
+ * the note, pill and depositor-note styles it uses are the shared ones. */
+.deposit-warnings-block + .deposit-warnings-block {
+    margin-top: var(--s-5);
+    padding-top: var(--s-4);
+    border-top: 1px solid var(--line-2);
+}
+
+.deposit-warnings-owner {
+    margin: var(--s-3) 0 0;
+    color: var(--ink-2);
+    font: var(--type-label-font);
+    font-weight: 600;
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
+}
+
+.deposit-warnings-owner a {
+    color: var(--accent-700);
+    text-decoration: underline;
+    text-decoration-color: var(--accent-underline);
+    text-underline-offset: .16em;
+}
+
+.deposit-warnings-list {
+    display: grid;
+    gap: var(--s-4);
+    margin: var(--s-3) 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.deposit-warning {
+    padding-left: var(--s-4);
+    border-left: 3px solid var(--notice-border);
+}
+
+.deposit-warning-message {
+    max-width: var(--measure-prose);
+    margin: 0;
+    color: var(--ink);
+    font: var(--type-value-font);
+}
+
+.deposit-warning .note,
+.deposit-warning .depositor-note {
+    margin-top: var(--s-1);
+    margin-bottom: 0;
+}
+
+.deposit-warning-retired {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--s-2) var(--s-3);
+    margin: var(--s-1) 0 0;
+}
+
+/* A retired warning no longer applies: muted, and listed after the active ones. */
+.deposit-warning--retired {
+    border-left-color: var(--line-2);
+}
+
+.deposit-warning--retired .deposit-warning-message {
+    color: var(--muted);
+}
+
+.record-warnings-request {
+    margin: var(--s-3) 0 0;
+}
+
+.record-warnings-status {
+    margin: 0;
+}
+
+.record-warnings-request button {
+    min-height: 24px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent-700);
+    font: var(--type-note-font);
+    text-decoration: underline;
+    text-underline-offset: .15em;
+    cursor: pointer;
+}
+
+.record-warnings-request button:hover {
+    color: var(--accent);
+}
+
+.record-warnings-status--loaded {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+}

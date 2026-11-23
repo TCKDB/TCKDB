@@ -942,3 +942,31 @@ describe("NetworkEntryPage -- electronic-state labels and term symbols tell exci
         expectNoDepositorText()
     })
 })
+
+describe("NetworkEntryPage deposit warnings", () => {
+    const item = (message: string) => ({ code: "c", message, field: "f", register_entry: 3, check_version: 1 })
+
+    it("merges the network and solve warnings into one panel", async () => {
+        handleEverything()
+        handleNetworkDetail({
+            ...networkDetailFixture(),
+            record_warnings: [{ record_ref: NETWORK_REF, status: "recorded", items: [item("The network warning.")] }],
+        })
+        server.use(http.get("/api/v1/scientific/network-solves/nsolve_test1", () => HttpResponse.json({
+            record: { network_solve: { network_solve_ref: "nsolve_test1" }, state_energies: [], channel_barriers: [] },
+            record_warnings: [{ record_ref: "nsolve_test1", status: "recorded", items: [item("The solve warning.")] }],
+        })))
+        page()
+        const panel = await screen.findByRole("region", { name: "Deposit warnings" })
+        expect(within(panel).getByText("The network warning.")).toBeVisible()
+        expect(within(panel).getByText("The solve warning.")).toBeVisible()
+        expect(within(panel).getByText("Network solve")).toBeVisible()
+    })
+
+    it("shows no panel without warnings", async () => {
+        handleEverything()
+        page()
+        await screen.findByRole("heading", { name: "Review" })
+        expect(screen.queryByText("Deposit warnings")).toBeNull()
+    })
+})

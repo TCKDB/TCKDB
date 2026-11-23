@@ -29,6 +29,8 @@ import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
 import { RefsDisclosure } from "../components/RefsDisclosure"
 import { MadeUnderLine } from "../components/MadeUnderLine"
+import { DepositWarningsPanel } from "../components/DepositWarningsPanel"
+import { HardFailNote, TrustBadge, TrustChecks } from "../components/TrustAssessment"
 import { TransitionStateStage } from "../components/TransitionStateStage"
 import { ValueLink } from "../components/ValueLink"
 import { liveMadeUnder } from "../domain/madeUnder"
@@ -367,8 +369,9 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                             <h3 className="t-heading-2" id="trust-card-heading">Trust</h3>
                             {trust ? (
                                 <>
+                                    <HardFailNote reason={trust.evidence.hard_fail_reason} />
                                     <p>
-                                        <strong>{statusLabel(trust.trust_status)}</strong> · {trust.evidence.passed_count} of {trust.evidence.possible_count} checks passed
+                                        <TrustBadge status={trust.trust_status} /> · {trust.evidence.passed_count} of {trust.evidence.possible_count} checks passed
                                     </p>
                                     {trust.evidence.rubric && trust.evidence.rubric_version != null && (
                                         <MadeUnderLine madeUnder={liveMadeUnder(trust.evidence.rubric, trust.evidence.rubric_version)} />
@@ -377,6 +380,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                         <p><span className="tse-pair-label">Structure assessment</span> {structureAssessmentSentence(trust.structure_assessment)}</p>
                                     )}
                                     <TrustWarnings checks={trust.evidence.checks} />
+                                    <TrustChecks evidence={trust.evidence} stacked />
                                 </>
                             ) : (
                                 <p className="empty-projection">No trust assessment was served for this entry.</p>
@@ -394,6 +398,8 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                         </section>
                     </div>
                 </section>
+
+                <DepositWarningsPanel warnings={record.depositWarnings} recordRef={entry.transition_state_entry_ref} className="ledger-section" />
 
                 <section className="ledger-section" aria-labelledby="reaction-context">
                     <SectionHeading id="reaction-context">

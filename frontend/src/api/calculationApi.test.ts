@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { loadCalculation } from "./calculationApi"
+import { loadCalculation, loadCalculationSection } from "./calculationApi"
 import { ScientificApiError } from "./scientificTransport"
 
 const server = setupServer()
@@ -88,5 +88,57 @@ describe("geometryLinkSchema's source field", () => {
         })))
         const record = await loadCalculation("calc_demo")
         expect(record.input_geometries?.map((link) => link.source)).toEqual(["deposited", "extracted_from_artifact", undefined])
+    })
+})
+
+const WARNING_ITEM = {
+    code: "missing_irc_for_ts",
+    message: "This transition state has no IRC calculation.",
+    field: "calculations[*]",
+    register_entry: 19,
+    context: { calculation_type: "irc" },
+    check_version: 1,
+}
+
+describe("deposit warnings and trust on the calculation read", () => {
+    it("exposes the envelope's record_warnings as typed depositWarnings", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: minimalRecord(),
+            record_warnings: [{ record_ref: "calc_demo", status: "recorded", items: [WARNING_ITEM] }],
+            deposit_warnings: [{ items: [{ ...WARNING_ITEM, code: "whole_deposit", register_entry: null }] }],
+        })))
+        const record = await loadCalculation("calc_demo")
+        expect(record.depositWarnings.record_warnings[0].status).toBe("recorded")
+        expect(record.depositWarnings.record_warnings[0].items[0].register_entry).toBe(19)
+        expect(record.depositWarnings.deposit_warnings[0].items[0].register_entry).toBeNull()
+    })
+
+    it("defaults to empty warnings when the envelope carries none", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: minimalRecord() })))
+        const record = await loadCalculation("calc_demo")
+        expect(record.depositWarnings).toEqual({ record_warnings: [], deposit_warnings: [] })
+    })
+
+    it("asks for include=trust on the eager read and parses the verdict", async () => {
+        let includes: string[] = []
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            includes = new URL(request.url).searchParams.getAll("include")
+            return HttpResponse.json({ record: minimalRecord({ trust: {
+                review_status: "not_reviewed", trust_status: "hard_failed",
+                evidence: { passed_count: 1, possible_count: 4, checks: { artifacts_present: "missing" }, hard_fail_reason: "calculation_rejected" },
+            } }) })
+        }))
+        const record = await loadCalculation("calc_demo")
+        expect(includes).toContain("trust")
+        expect(record.trust?.evidence.hard_fail_reason).toBe("calculation_rejected")
+    })
+
+    it("returns warnings from an on-demand section read too", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: minimalRecord(),
+            record_warnings: [{ record_ref: "calc_demo", status: "not_recorded", items: [WARNING_ITEM] }],
+        })))
+        const record = await loadCalculationSection("calc_demo", "artifacts")
+        expect(record.depositWarnings.record_warnings[0].status).toBe("not_recorded")
     })
 })

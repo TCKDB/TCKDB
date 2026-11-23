@@ -4,6 +4,8 @@ import { roleCalculationSettingsSchema } from "./effectiveSettingsSchema"
 import { listRequestEchoSchema, paginationSchema } from "./listEnvelope"
 import { pageQuery, parsePagedRef, type PageRequest } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
+import { pickDepositWarnings, depositWarningsEnvelopeSchema, type DepositWarnings } from "./depositWarningsSchema"
+import { assessmentsSchema, trustFragmentSchema } from "./trustSchema"
 
 // ---------------------------------------------------------------------------
 // Shape notes (from
@@ -260,6 +262,9 @@ const statmechRecordSchema = z.object({
     // `include=calculation_settings`: the source calculation this record links for its geometry, frequency and
     // energy, with the grid and SCF convergence each used.
     calculation_settings: z.array(roleCalculationSettingsSchema).nullable().optional(),
+    // `include=trust` and `include=assessments` (requested by `loadEntryStatmech`).
+    trust: trustFragmentSchema.nullable().optional(),
+    assessments: assessmentsSchema.nullable().optional(),
 }).passthrough()
 
 const reviewStatusSummarySchema = z.object({
@@ -304,7 +309,7 @@ export async function loadEntryStatmech(
     // `entryRef` may be a paged ref (`entryRef#offset:limit`, see `domain/paging.ts`) naming one page of the list;
     // a plain ref names the first page.
     const { ref, request } = parsePagedRef(entryRef)
-    const payload = await requestScientificJson(buildEndpoint(ref, [], request), signal, onRateLimited)
+    const payload = await requestScientificJson(buildEndpoint(ref, ["trust", "assessments"], request), signal, onRateLimited)
     return parseScientificResponse(statmechListResponseSchema, payload, "statmech")
 }
 
@@ -329,4 +334,17 @@ export async function loadEntryStatmechSection(
 /** Read the field a resolved on-demand token actually populated on one record. */
 export function readStatmechSectionField<T>(record: StatmechRecord, token: StatmechSectionToken): T {
     return (record as unknown as Record<string, unknown>)[sectionField(token)] as T
+}
+
+/**
+ * The deposit warnings of one statmech record. The entry-scoped list carries none (it reuses the search response), so
+ * this reads `GET /scientific/statmech/{ref}` with no include tokens and keeps only the envelope's warnings.
+ */
+export async function loadStatmechDepositWarnings(
+    statmechRef: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<DepositWarnings> {
+    const payload = await requestScientificJson(`/api/v1/scientific/statmech/${encodeURIComponent(statmechRef)}`, signal, onRateLimited)
+    return pickDepositWarnings(parseScientificResponse(depositWarningsEnvelopeSchema, payload, "statmech"))
 }

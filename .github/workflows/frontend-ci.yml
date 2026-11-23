@@ -5,12 +5,14 @@ on:
     paths:
       - ".github/workflows/frontend-ci.yml"
       - "frontend/**"
+      - "docs/guides/api_vocabulary.md"
   push:
     branches:
       - main
     paths:
       - ".github/workflows/frontend-ci.yml"
       - "frontend/**"
+      - "docs/guides/api_vocabulary.md"
   workflow_dispatch:
 
 permissions:

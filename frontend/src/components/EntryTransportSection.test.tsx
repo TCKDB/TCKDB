@@ -226,16 +226,72 @@ describe("EntryTransportSection", () => {
         page()
         await screen.findByText("trn_one")
         // The list itself is asked for with the source calculations, so the numbers table on the page shares the request.
-        expect(requestedIncludeSets).toEqual([["source_calculations"]])
+        expect(requestedIncludeSets).toEqual([["source_calculations", "trust", "assessments"]])
 
         const section = screen.getByText("Source calculations", { selector: "summary" }).closest("details") as HTMLDetailsElement
         fireEvent.click(screen.getByText("Source calculations", { selector: "summary" }))
         await within(section).findByText("Source calculations loaded.")
         // The list already carried the source calculations, so opening the disclosure asks for nothing more.
-        expect(requestedIncludeSets).toEqual([["source_calculations"]])
+        expect(requestedIncludeSets).toEqual([["source_calculations", "trust", "assessments"]])
 
         // "Review history" was never opened, so it must never be requested.
         expect(requestedIncludeSets.flat()).not.toContain("review")
+    })
+})
+
+describe("EntryTransportSection: trust, reproducibility and deposit warnings", () => {
+    const TRUST = { review_status: "not_reviewed", trust_status: "sparse", evidence: { passed_count: 1, possible_count: 5, rubric: "computed_transport", rubric_version: 1, checks: { epsilon_present: "missing" } } }
+    const ASSESSMENTS = { reproducibility: { state: "current", grade: "auditable", made_under: { state: "inputs_unchecked", rubric: "reproducibility", assessed_version: 1, current_version: 1 } } }
+    const withEvidence = () => {
+        const base = mockResponse()
+        return { ...base, records: base.records.map((record) => ({ ...(record as Record<string, unknown>), trust: TRUST, assessments: ASSESSMENTS })) }
+    }
+
+    it("shows trust and reproducibility from the list, and reads no warnings until the reader asks", async () => {
+        let reads = 0
+        server.use(
+            http.get(ENDPOINT, () => HttpResponse.json(withEvidence())),
+            http.get("/api/v1/scientific/transport/trn_one", () => {
+                reads += 1
+                return HttpResponse.json({
+                    record: {},
+                    record_warnings: [{ record_ref: "trn_one", status: "recorded", items: [{ code: "c", message: "Transport warning text.", field: "transport[*]", register_entry: 12, check_version: 1 }] }],
+                })
+            }),
+        )
+        page()
+        await screen.findByText("trn_one")
+        expect(screen.getByText("1 of 5 weighted checks passed")).toBeVisible()
+        expect(screen.getByText("auditable")).toBeVisible()
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        expect(reads).toBe(0)
+        fireEvent.click(screen.getByRole("button", { name: "Show deposit warnings of transport record" }))
+        expect(await screen.findByText("Transport warning text.")).toBeVisible()
+        expect(reads).toBe(1)
+    })
+
+    it("says the warnings could not be loaded and still renders the record", async () => {
+        server.use(
+            http.get(ENDPOINT, () => HttpResponse.json(withEvidence())),
+            http.get("/api/v1/scientific/transport/trn_one", () => HttpResponse.json({ detail: "down" }, { status: 500 })),
+        )
+        page()
+        await screen.findByText("trn_one")
+        fireEvent.click(screen.getByRole("button", { name: "Show deposit warnings of transport record" }))
+        expect(await screen.findByText("Deposit warnings could not be loaded for this record.")).toBeVisible()
+        expect(screen.getByText("1 of 5 weighted checks passed")).toBeVisible()
+    })
+
+    it("shows no warnings heading when the by-ref read has none", async () => {
+        server.use(
+            http.get(ENDPOINT, () => HttpResponse.json(mockResponse())),
+            http.get("/api/v1/scientific/transport/trn_one", () => HttpResponse.json({ record: {}, record_warnings: [], deposit_warnings: [] })),
+        )
+        page()
+        await screen.findByText("trn_one")
+        fireEvent.click(screen.getByRole("button", { name: "Show deposit warnings of transport record" }))
+        expect(await screen.findByText("No deposit warnings are recorded for this record.")).toBeVisible()
+        expect(screen.queryByRole("heading", { name: "Deposit warnings" })).toBeNull()
     })
 })
 

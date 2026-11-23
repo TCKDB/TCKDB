@@ -1123,6 +1123,24 @@ describe("ReactionEntryPage -- the References disclosure names every kinetics re
     })
 })
 
+describe("ReactionEntryPage -- evidence regions of several kinetics records", () => {
+    it("names each record's evidence regions by its own number", async () => {
+        const kin = (n: number) => ({ ...(mockFull().kinetics as Array<Record<string, unknown>>)[0], kinetics_ref: `kin_n${n}` })
+        const withTrust = (ref: string) => ({
+            kinetics_ref: ref, scientific_origin: "computed", model_kind: "modified_arrhenius", review: { status: "not_reviewed" },
+            parameters: { A: 1, A_units: "cm3_mol_s", n: 0, Ea_kj_mol: 10 }, is_third_body: false, uncertainty: {},
+            evidence_completeness: { score: 0, max: 9, checklist: {} }, provenance: {},
+            trust: { review_status: "not_reviewed", trust_status: "partial", evidence: { passed_count: 1, possible_count: 2, checks: { arrhenius_parameters_complete: "passed" } } },
+        })
+        server.use(http.get(`/api/v1/scientific/reaction-entries/${ENTRY_REF}/kinetics`, () => HttpResponse.json({ records: [withTrust("kin_n1"), withTrust("kin_n2")], record_warnings: [] })))
+        handleFull(mockFull({ kinetics: [kin(1), kin(2)] }))
+        page()
+        await screen.findAllByText("Model kind")
+        expect(await screen.findByRole("region", { name: "Trust of kinetics record 1" })).toBeInTheDocument()
+        expect(screen.getByRole("region", { name: "Trust of kinetics record 2" })).toBeInTheDocument()
+    })
+})
+
 describe("ReactionEntryPage -- no depositor-typed text", () => {
     it("prints none of the network name, the participants' joined labels, or atom-map and kinetics notes", async () => {
         const base = mockFull()
@@ -1421,5 +1439,60 @@ describe("ReactionEntryPage -- the compare link", () => {
         page()
         await screen.findByRole("heading", { name: "Numbers for this entry" })
         expect(screen.queryByRole("link", { name: "Compare these values" })).not.toBeInTheDocument()
+    })
+})
+
+describe("ReactionEntryPage -- kinetics trust, reproducibility and deposit warnings", () => {
+    const KINETICS_ENDPOINT = `/api/v1/scientific/reaction-entries/${ENTRY_REF}/kinetics`
+    const TRUST = {
+        review_status: "not_reviewed", trust_status: "mostly_supported",
+        evidence: { passed_count: 4, possible_count: 5, rubric: "computed_kinetics", rubric_version: 1, checks: { arrhenius_parameters_complete: "passed", irc_evidence_present: "missing" }, hard_fail_reason: null },
+    }
+    const ASSESSMENTS = { reproducibility: { state: "current", grade: "described", made_under: { state: "inputs_unchecked", rubric: "reproducibility", assessed_version: 1, current_version: 1 } } }
+
+    it("shows each record's trust, grade and warnings from the supplementary read", async () => {
+        handleFull(mockFull({ kinetics: [kineticsRecordFixture(undefined)] }))
+        let url: URL | null = null
+        server.use(http.get(KINETICS_ENDPOINT, ({ request }) => {
+            url = new URL(request.url)
+            return HttpResponse.json({
+                records: [{ ...kineticsRecordFixture(undefined), trust: TRUST, assessments: ASSESSMENTS }],
+                record_warnings: [{ record_ref: "kin_test1", status: "recorded", items: [{ code: "c", message: "Kinetics warning text.", field: "kinetics[*]", register_entry: 30, check_version: 1 }] }],
+            })
+        }))
+        page()
+        expect(await screen.findByText("Kinetics warning text.")).toBeVisible()
+        expect(screen.getByText("4 of 5 weighted checks passed")).toBeVisible()
+        expect(screen.getByText("described")).toBeVisible()
+        expect(url!.searchParams.getAll("include")).toEqual(["trust", "assessments"])
+    })
+
+    it("shows the warnings about the deposit as a whole once for the kinetics section", async () => {
+        handleFull(mockFull({ kinetics: [kineticsRecordFixture(undefined)] }))
+        server.use(http.get(KINETICS_ENDPOINT, () => HttpResponse.json({
+            records: [{ ...kineticsRecordFixture(undefined), trust: TRUST, assessments: ASSESSMENTS }],
+            deposit_warnings: [{ submission_ref: "sub_1", items: [{ code: "no_literature", message: "The deposit as a whole carries no literature reference.", field: "literature", check_version: 1 }] }],
+        })))
+        page()
+        expect(await screen.findByText("The deposit as a whole carries no literature reference.")).toBeVisible()
+        expect(screen.getAllByText("About the deposit as a whole")).toHaveLength(1)
+    })
+
+    it("says so in one line when the supplementary read fails, and renders the rest of the page", async () => {
+        handleFull(mockFull({ kinetics: [kineticsRecordFixture(undefined)] }))
+        server.use(http.get(KINETICS_ENDPOINT, () => HttpResponse.json({ detail: "down" }, { status: 500 })))
+        page()
+        expect(await screen.findByText("Trust, reproducibility and deposit warnings could not be loaded for this record.")).toBeVisible()
+        expect(screen.getAllByText("Model kind").length).toBeGreaterThan(0)
+    })
+
+    it("says a record the read did not return was not returned, without borrowing another's", async () => {
+        handleFull(mockFull({ kinetics: [kineticsRecordFixture(undefined)] }))
+        server.use(http.get(KINETICS_ENDPOINT, () => HttpResponse.json({
+            records: [{ ...kineticsRecordFixture(undefined), kinetics_ref: "kin_other", trust: TRUST, assessments: ASSESSMENTS }],
+        })))
+        page()
+        expect(await screen.findByText("Trust, reproducibility and deposit warnings were not returned for this record.")).toBeVisible()
+        expect(screen.queryByText("4 of 5 weighted checks passed")).toBeNull()
     })
 })

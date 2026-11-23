@@ -20,6 +20,7 @@ import { NetworkMap } from "../components/NetworkMap"
 import { NetworkChannelsTable, NetworkStatesTable } from "../components/NetworkTables"
 import { ReviewChip } from "../components/ReviewChip"
 import { PageShell } from "../components/PageShell"
+import { DepositWarningsPanel } from "../components/DepositWarningsPanel"
 import { RecordMap } from "../components/RelationshipMap"
 import { networkNodes } from "../domain/recordMapNodes"
 import { SectionHeading } from "../components/PageSections"
@@ -201,6 +202,13 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
                         note={`Counts reflect what this network's own record carries today, not an assumption about the underlying chemistry. "None deposited" describes the archive, not the chemistry.`}
                     />
                 </section>
+
+                <DepositWarningsPanel
+                    warnings={record.depositWarnings}
+                    recordRef={network.network_ref}
+                    labelForRef={(ref) => (record.solves.some((solve) => solve.network_solve_ref === ref) ? "Network solve" : "Another record")}
+                    className="ledger-section"
+                />
 
                 <section className="ledger-section" aria-labelledby="review-heading">
                     <SectionHeading id="review-heading">Review</SectionHeading>

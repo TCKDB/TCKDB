@@ -16,6 +16,7 @@ import { Formula } from "../components/Formula"
 import { EnergyNotices, ObservationEvidence } from "../components/ObservationEvidence"
 import { OrderNote } from "../components/OrderNote"
 import { PageShell } from "../components/PageShell"
+import { DepositWarningsPanel } from "../components/DepositWarningsPanel"
 import { RecordMap } from "../components/RelationshipMap"
 import { conformerObservationNodes } from "../domain/recordMapNodes"
 import { SectionHeading } from "../components/PageSections"
@@ -270,6 +271,12 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                         )}
                     </section>
                 )}
+
+                <DepositWarningsPanel
+                    warnings={observation.depositWarnings}
+                    recordRef={observation.conformer_observation.conformer_observation_ref}
+                    className="ledger-section"
+                />
 
                 <section className="ledger-section" aria-labelledby="review-ledger">
                     <SectionHeading

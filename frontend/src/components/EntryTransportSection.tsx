@@ -9,6 +9,7 @@ import "../conformer-group.css"
 import "../entry-science.css"
 import {
     loadEntryTransportSection,
+    loadTransportDepositWarnings,
     readTransportSectionField,
     type TransportListResponse,
     type TransportRecord,
@@ -25,6 +26,9 @@ import type { PageRequest } from "../domain/paging"
 import { Disclosure } from "./Disclosure"
 import { LazyRowBody } from "./LazyRowBody"
 import { SectionHeading } from "./PageSections"
+import { HardFailFlag } from "./TrustAssessment"
+import { RecordEvidenceBlocks } from "./RecordEvidenceBlocks"
+import { DepositWideWarnings } from "./RecordWarningsOnRequest"
 import { QuantityValue, ROUNDED_NOTE } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
@@ -116,6 +120,7 @@ function TransportList({ listKey, meta, onPage, linkedNote, response }: {
 
     return (
         <RecordNumbersProvider refs={records.map((record) => record.transport.transport_ref)} offset={pagination.offset}>
+            <DepositWideWarnings headingId="transport-deposit-warnings">
             <section className="ledger-section" aria-labelledby="transport-heading">
                 <div className="ledger-heading">
                     <p className="eyebrow">Deposited evidence</p>
@@ -153,6 +158,7 @@ function TransportList({ listKey, meta, onPage, linkedNote, response }: {
                     ))
                 )}
             </section>
+            </DepositWideWarnings>
 
             <TransportLazySection
                 heading="Source calculations"
@@ -204,6 +210,7 @@ function TransportRecordCard({ record }: { record: TransportRecord }) {
             <div className="science-record-heading">
                 <h3 id={`transport-heading-${core.transport_ref}`}>{numberedWords(`${statusLabel(core.scientific_origin)} transport record`, core.transport_ref, numbers)}</h3>
                 <span className="value-pill value-pill--muted">{statusLabel(core.review.status)}</span>
+                <HardFailFlag trust={record.trust} />
             </div>
 
             {record.supersession && <SupersessionNotice kind="transport" supersession={record.supersession} />}
@@ -246,8 +253,25 @@ function TransportRecordCard({ record }: { record: TransportRecord }) {
                 {" · "}Literature:{" "}
                 {record.literature ? <LiteratureCitation literature={record.literature} /> : "not recorded"}
             </p>
+            <TransportRecordEvidence record={record} />
             <RefsDisclosure refs={[{ label: "Transport record", value: core.transport_ref }, ...supersessionRefs(record.supersession)]} />
         </article>
+    )
+}
+
+/** Trust and reproducibility from the list; this record's deposit warnings are read from its own route when the reader asks. */
+function TransportRecordEvidence({ record }: { record: TransportRecord }) {
+    const ref = record.transport.transport_ref
+    return (
+        <RecordEvidenceBlocks
+            trust={record.trust}
+            assessments={record.assessments}
+            loadWarnings={{ ref, load: loadTransportDepositWarnings }}
+            idBase={ref}
+            noun="transport record"
+            recordRef={ref}
+            showReviewStatus={false}
+        />
     )
 }
 

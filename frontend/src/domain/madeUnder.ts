@@ -44,9 +44,15 @@ export type MadeUnderWording = {
 /** An assessment of a record, or the stored machine review a curator task came from. */
 export type MadeUnderKind = "assessment" | "review"
 
+const RUBRIC_NAMES: Record<string, string> = {
+    tckdb_reproducibility: "TCKDB reproducibility",
+    computed_ts_statmech: "computed transition state statistical mechanics",
+    computed_statmech: "computed statistical mechanics",
+}
+
 /** Rubric names are snake_case identifiers (`computed_transition_state`); read them as words. */
 export function rubricLabel(name: string): string {
-    return name.replaceAll("_", " ")
+    return Object.hasOwn(RUBRIC_NAMES, name) ? RUBRIC_NAMES[name] : name.replaceAll("_", " ")
 }
 
 /** The assessment was just computed under the rubric version in force (the live trust badge): current by construction. */
@@ -72,7 +78,7 @@ export function describeMadeUnder(m: MadeUnder, kind: MadeUnderKind = "assessmen
         ? "It has not been re-reviewed under the current version."
         : "It has not been re-assessed under the current version."
     if (m.state === "unassessed") {
-        return { state: "unassessed", badge: "Not assessed", sentence: "Not yet assessed under any rubric." }
+        return { state: "unassessed", badge: "not assessed", sentence: "Not yet assessed under any rubric." }
     }
     const assessed = m.assessed_version
     const current = m.current_version
@@ -106,7 +112,7 @@ export function describeMadeUnder(m: MadeUnder, kind: MadeUnderKind = "assessmen
         if (m.stale_reason === "prompt_version") {
             return {
                 state: "stale",
-                badge: "Stale",
+                badge: "stale",
                 sentence:
                     `${did} under ${rubricPhrase(m.rubric)}, version ${assessed}, with a review prompt that is no longer `
                     + "the current one. It has not been re-reviewed since.",
@@ -115,7 +121,7 @@ export function describeMadeUnder(m: MadeUnder, kind: MadeUnderKind = "assessmen
         if (assessed === 0) {
             return {
                 state: "stale",
-                badge: "Stale",
+                badge: "stale",
                 sentence:
                     `${did} under ${rubricPhrase(m.rubric)} (no version recorded). `
                     + `${currentNow} ${notRedone}`,
@@ -124,7 +130,7 @@ export function describeMadeUnder(m: MadeUnder, kind: MadeUnderKind = "assessmen
         if (m.stale_reason === "inputs_changed") {
             return {
                 state: "stale",
-                badge: "Stale",
+                badge: "stale",
                 sentence:
                     `${did} under ${rubricPhrase(m.rubric)}, version ${assessed}, which is still the current version, `
                     + "but the inputs to this assessment have changed since. It has not been re-assessed since.",
@@ -132,7 +138,7 @@ export function describeMadeUnder(m: MadeUnder, kind: MadeUnderKind = "assessmen
         }
         return {
             state: "stale",
-            badge: "Stale",
+            badge: "stale",
             sentence: `${did} under ${rubricPhrase(m.rubric)}, version ${assessed}. ${currentNow} ${notRedone}`,
         }
     }

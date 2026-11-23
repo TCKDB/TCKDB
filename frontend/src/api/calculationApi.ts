@@ -2,6 +2,8 @@ import { z } from "zod"
 import { compositeEnergyVerificationSchema, levelOfTheorySchema, entryFacetFields } from "./scientificSchemas"
 import { effectiveSettingSchema, type EffectiveSetting } from "./effectiveSettingsSchema"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
+import { depositWarningsEnvelopeShape, pickDepositWarnings, type DepositWarnings } from "./depositWarningsSchema"
+import { trustFragmentSchema } from "./trustSchema"
 
 // ---------------------------------------------------------------------------
 // Include-token vocabulary
@@ -11,8 +13,8 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
 // `internal_ids`, exists but must never be requested by this client (it only
 // widens the response when the deployment allows internal ids, which this
 // public client has no use for). `trust` is a further, separate opt-in
-// token (its own `TRUST_SECTION` table, not part of the 19) and is out of
-// scope for this slice — see the page-level docstring.
+// token (its own `TRUST_SECTION` table, not part of the 19); `loadCalculation`
+// appends it to the eager read.
 //
 // The mapping from token to response-field name is NOT the identity: the
 // `review` token gates the `review_history` field. Every other token here
@@ -520,13 +522,17 @@ const calculationRecordSchema = z.object({
     scan: scanSchema.nullable().optional(),
     irc: ircSchema.nullable().optional(),
     path_search: pathSearchSchema.nullable().optional(),
+    // `include=trust`: the evidence verdict. Only `loadCalculation` asks for it.
+    trust: trustFragmentSchema.nullable().optional(),
 }).passthrough()
 
 const responseSchema = z.object({
     record: calculationRecordSchema,
-})
+    ...depositWarningsEnvelopeShape,
+}).passthrough()
 
-export type CalculationRecord = z.infer<typeof calculationRecordSchema>
+/** The record, plus the response envelope's deposit warnings (a client-only key, so it never collides with a wire field). */
+export type CalculationRecord = z.infer<typeof calculationRecordSchema> & { depositWarnings: DepositWarnings }
 export type CalculationConformer = z.infer<typeof conformerSchema>
 export type CalculationDependency = z.infer<typeof dependencySchema>
 export type CalculationGeometryLink = z.infer<typeof geometryLinkSchema>
@@ -567,9 +573,10 @@ export async function loadCalculation(
     signal?: AbortSignal,
     onRateLimited?: (retryAfterSeconds: number) => void,
 ): Promise<CalculationRecord> {
-    const endpoint = buildEndpoint(ref, EAGER_SECTION_TOKENS)
+    const endpoint = buildEndpoint(ref, [...EAGER_SECTION_TOKENS, "trust"])
     const payload = await requestScientificJson(endpoint, signal, onRateLimited)
-    return parseScientificResponse(responseSchema, payload, "calculation").record
+    const parsed = parseScientificResponse(responseSchema, payload, "calculation")
+    return { ...parsed.record, depositWarnings: pickDepositWarnings(parsed) }
 }
 
 /**
@@ -583,7 +590,8 @@ export async function loadCalculationSection(
 ): Promise<CalculationRecord> {
     const endpoint = buildEndpoint(ref, [token])
     const payload = await requestScientificJson(endpoint, signal)
-    return parseScientificResponse(responseSchema, payload, "calculation").record
+    const parsed = parseScientificResponse(responseSchema, payload, "calculation")
+    return { ...parsed.record, depositWarnings: pickDepositWarnings(parsed) }
 }
 
 /** Read the field a resolved on-demand record's token actually populated. */
