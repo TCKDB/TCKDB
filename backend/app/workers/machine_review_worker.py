@@ -110,7 +110,7 @@ def process_one_cycle(
             session.commit()
             return False
         job_id, attempt = job.id, job.attempts
-        submission_id, provider_key = job.submission_id, job.provider_key
+        submission_id, provider_key, job_model = job.submission_id, job.provider_key, job.model
         if not read_machine_review_switches(session, settings_obj).review_allowed:
             jobs.finish_job(
                 session,
@@ -137,6 +137,7 @@ def process_one_cycle(
             attempt=attempt,
             submission_id=submission_id,
             provider_key=provider_key,
+            job_model=job_model,
             provider=provider,
         )
     finally:
@@ -153,6 +154,7 @@ def _run_claimed_job(
     attempt: int,
     submission_id: int,
     provider_key: Any,
+    job_model: str | None,
     provider: MachineReviewProvider | None,
 ) -> None:
     result: MachineReviewProviderResult | None = None
@@ -214,6 +216,7 @@ def _run_claimed_job(
             failure_reason=reason,
             provider_name=provider_name,
             settings_obj=settings_obj,
+            model=job_model,
         )
         job = session.get_one(MachineReviewJob, job_id)
         jobs.append_event(

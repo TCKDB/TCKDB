@@ -30,7 +30,7 @@ from app.db.models.common import (
 from app.db.models.machine_review_job import MachineReviewJob, MachineReviewJobEvent
 from app.db.models.submission import SubmissionAuditEvent
 from app.services.machine_review import jobs
-from app.services.machine_review.providers.fake import ScriptedFakeMachineReviewAgent
+from app.services.machine_review.providers.fake import ScriptedFakeMachineReviewAgent, make_pass_result
 from app.services.machine_review.switches import write_machine_review_switches
 from app.workers import machine_review_worker as worker
 from tests.services._machine_review_job_support import (
@@ -285,3 +285,38 @@ def test_cancel_flag_stops_a_single_shot_provider_before_it_is_called(ctx, facto
     assert job.status is S.cancelled and job.audit_event_id is None and job.failure_code is None
     assert _audit_events(session, submission) == []
     assert _kinds(session, job)[-1] is K.finished
+
+
+def test_cancel_arriving_while_a_single_shot_provider_runs_records_no_review(ctx, factory):
+    session, _, submission, job = ctx
+
+    class FlipsCancelWhileRunning:
+        def review_submission(self, context):
+            with factory() as other:
+                jobs.request_cancel(other, job.id)
+                other.commit()
+            return make_pass_result()
+
+    before = len(_audit_events(session, submission))
+    _cycle(factory, provider=FlipsCancelWhileRunning())
+
+    job = _reload(session, job)
+    assert job.status is S.cancelled and job.audit_event_id is None and job.failure_code is None
+    assert len(_audit_events(session, submission)) == before
+
+
+def test_a_refused_fake_job_records_the_job_model_not_the_configured_one(db_session, factory):
+    admin = make_user(db_session, "worker-admin4", AppUserRole.admin)
+    submission = make_submission(db_session, admin.id)
+    job = insert_job(db_session, submission.id, admin.id, provider_key=MachineReviewProviderKey.fake)
+    settings = FAKE_SETTINGS.model_copy(update={"ai_review_assistant_mode": "cloud", "llm_precheck_model": "cloud/never-asked"})
+
+    worker.process_one_cycle(factory, settings, heartbeat=False)
+
+    job = _reload(db_session, job)
+    assert job.failure_code is MachineReviewJobFailure.config_error
+    assert job.model == "fake_test/machine-review"
+    events = _audit_events(db_session, submission)
+    assert len(events) == 1
+    assert events[0].details_json["model"] == "fake_test/machine-review"
+    assert "cloud/never-asked" not in str(events[0].details_json)

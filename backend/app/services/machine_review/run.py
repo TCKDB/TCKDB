@@ -196,8 +196,12 @@ def _failed_result(
     reason: str,
     settings_obj: Any,
     provider_name: str | None,
+    model: str | None = None,
 ) -> MachineReviewProviderResult:
     """Build the advisory failed result for a run that could not complete.
+
+    ``model`` names the model the caller was committed to asking; it wins over
+    the configured one.
 
     Identity is stamped from configuration here, not read from anywhere: on
     this path there is no provider payload to read it from, and a stored
@@ -210,7 +214,7 @@ def _failed_result(
         curator_priority=None,
         summary=reason,
         findings=(),
-        model=_configured_model(settings_obj),
+        model=_clip(model, _MAX_MODEL_CHARS) if model else _configured_model(settings_obj),
         provider=provider_name,
         used_rag=False,
     )
@@ -332,8 +336,11 @@ def record_review(
     failure_reason: str | None,
     provider_name: str | None,
     settings_obj: Any,
+    model: str | None = None,
 ) -> tuple[MachineReviewRunOutcome, SubmissionAuditEvent | None]:
     """Record a review, or an advisory failed result when ``failure_reason`` is given.
+
+    ``model`` overrides the configured model name on a failed result.
 
     Returns the outcome and the audit event (``None`` if it did not land).
     """
@@ -342,6 +349,7 @@ def record_review(
             reason=failure_reason or "Machine review failed to review.",
             settings_obj=settings_obj,
             provider_name=provider_name,
+            model=model,
         )
         reason: str | None = failure_reason
     else:
