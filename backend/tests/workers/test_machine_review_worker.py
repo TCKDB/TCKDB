@@ -265,3 +265,23 @@ def test_the_worker_thread_runs_cycles_until_stopped():
 
     assert not thread.is_alive()
     assert len(calls) == 3
+
+
+def test_cancel_flag_stops_a_single_shot_provider_before_it_is_called(ctx, factory):
+    session, _, submission, job = ctx
+    job.cancel_requested = True
+    session.flush()
+    calls = []
+
+    class SingleShot:
+        def review_submission(self, context):
+            calls.append(context)
+            raise AssertionError("must not be called")
+
+    _cycle(factory, provider=SingleShot())
+
+    job = _reload(session, job)
+    assert calls == []
+    assert job.status is S.cancelled and job.audit_event_id is None and job.failure_code is None
+    assert _audit_events(session, submission) == []
+    assert _kinds(session, job)[-1] is K.finished

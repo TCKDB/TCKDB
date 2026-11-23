@@ -73,7 +73,8 @@ class MachineReviewUnavailable(DomainError):
     )
 
     def __init__(self, reason: str) -> None:
-        assert reason in self.REASONS, reason
+        if reason not in self.REASONS:
+            raise ValueError(f"Unknown machine review unavailable reason: {reason!r}")
         super().__init__(f"Machine review is unavailable: {reason}.")
         self.reason = reason
 
@@ -158,7 +159,7 @@ def append_event(
     kind: MachineReviewJobEventKind,
     *,
     tool_name: str | None = None,
-    status_code: str | None = None,
+    outcome: str | None = None,
     started_at: datetime | None = None,
     duration_ms: int | None = None,
     detail: dict[str, Any] | None = None,
@@ -179,7 +180,7 @@ def append_event(
         seq=seq,
         kind=kind,
         tool_name=tool_name,
-        status_code=status_code,
+        status_code=outcome,
         started_at=started_at,
         duration_ms=duration_ms,
         detail_json=detail if settings_obj.llm_precheck_store_full_context else None,
@@ -227,7 +228,7 @@ def claim_next_job(
     }
     session.flush()
     append_event(
-        session, job, MachineReviewJobEventKind.claimed, status_code="ok", started_at=now, settings_obj=settings_obj
+        session, job, MachineReviewJobEventKind.claimed, outcome="ok", started_at=now, settings_obj=settings_obj
     )
     return job
 
@@ -250,7 +251,7 @@ def heartbeat(session: Session, job_id: int, attempt: int, now: datetime | None 
 
 
 def reap_expired(session: Session, now: datetime | None = None) -> int:
-    """Requeue running jobs whose lease expired, or fail them as ``worker_lost`` once attempts run out."""
+    """Requeue running jobs whose lease expired (cancel them if a cancel was requested), or fail them as ``worker_lost`` once attempts run out."""
     now = now or _utcnow()
     jobs = session.scalars(
         select(MachineReviewJob)
@@ -263,16 +264,21 @@ def reap_expired(session: Session, now: datetime | None = None) -> int:
     for job in jobs:
         job.lease_expires_at = None
         job.heartbeat_at = None
-        if job.attempts < job.max_attempts:
+        if job.cancel_requested:
+            job.status = MachineReviewJobStatus.cancelled
+            job.finished_at = now
+            session.flush()
+            append_event(session, job, MachineReviewJobEventKind.finished, outcome="cancelled", started_at=now)
+        elif job.attempts < job.max_attempts:
             job.status = MachineReviewJobStatus.queued
             session.flush()
-            append_event(session, job, MachineReviewJobEventKind.retry, status_code="lease_expired", started_at=now)
+            append_event(session, job, MachineReviewJobEventKind.retry, outcome="lease_expired", started_at=now)
         else:
             job.status = MachineReviewJobStatus.failed
             job.failure_code = MachineReviewJobFailure.worker_lost
             job.finished_at = now
             session.flush()
-            append_event(session, job, MachineReviewJobEventKind.finished, status_code="failed", started_at=now)
+            append_event(session, job, MachineReviewJobEventKind.finished, outcome="failed", started_at=now)
     session.flush()
     return len(jobs)
 
@@ -293,7 +299,7 @@ def request_cancel(session: Session, job_id: int) -> MachineReviewJob:
         job.cancel_requested = True
         job.finished_at = now
         session.flush()
-        append_event(session, job, MachineReviewJobEventKind.finished, status_code="cancelled", started_at=now)
+        append_event(session, job, MachineReviewJobEventKind.finished, outcome="cancelled", started_at=now)
     elif job.status is MachineReviewJobStatus.running:
         job.cancel_requested = True
         session.flush()
@@ -348,7 +354,7 @@ def finish_job(
     job.lease_expires_at = None
     session.flush()
     append_event(
-        session, job, MachineReviewJobEventKind.finished, status_code=status.value, started_at=now,
+        session, job, MachineReviewJobEventKind.finished, outcome=status.value, started_at=now,
         settings_obj=settings_obj,
     )
     return True

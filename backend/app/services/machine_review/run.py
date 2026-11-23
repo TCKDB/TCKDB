@@ -425,7 +425,10 @@ def run_machine_review_for_submission(
     except Exception as exc:
         reason = _failure_text("Machine review failed to review", exc, settings_obj)
     else:
-        result, reason = invoke_provider(selected, context, settings_obj)
+        try:
+            result, reason = invoke_provider(selected, context, settings_obj)
+        except MachineReviewCancelled:
+            result, reason = None, "Machine review was cancelled."
 
     outcome, _ = record_review(
         session,

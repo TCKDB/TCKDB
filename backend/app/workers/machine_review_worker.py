@@ -167,7 +167,7 @@ def _run_claimed_job(
             job = session.get_one(MachineReviewJob, job_id)
             job.context_hash = _context_hash(context)
             jobs.append_event(
-                session, job, MachineReviewJobEventKind.context_built, status_code="ok", settings_obj=settings_obj
+                session, job, MachineReviewJobEventKind.context_built, outcome="ok", settings_obj=settings_obj
             )
             session.commit()
     except Exception as exc:
@@ -188,6 +188,8 @@ def _run_claimed_job(
                         session_factory, settings_obj, selected, context, job_id
                     )
                 else:
+                    if _cancel_requested(session_factory, job_id):
+                        raise MachineReviewCancelled
                     result, reason = invoke_provider(selected, context, settings_obj)
             except MachineReviewCancelled:
                 with session_factory() as session:
@@ -200,6 +202,10 @@ def _run_claimed_job(
                 code = MachineReviewJobFailure.invalid_output
 
     with session_factory() as session:
+        if jobs.is_cancel_requested(session, job_id):
+            jobs.finish_job(session, job_id, attempt, status=MachineReviewJobStatus.cancelled, settings_obj=settings_obj)
+            session.commit()
+            return
         submission = session.get_one(Submission, submission_id)
         outcome, event = record_review(
             session,
@@ -214,7 +220,7 @@ def _run_claimed_job(
             session,
             job,
             MachineReviewJobEventKind.parse_failed if parse_failed else MachineReviewJobEventKind.final_output,
-            status_code="invalid" if parse_failed else ("ok" if reason is None else "failed"),
+            outcome="invalid" if parse_failed else ("ok" if reason is None else "failed"),
             settings_obj=settings_obj,
         )
         failed = outcome.result.status is MachineReviewStatus.machine_review_failed
@@ -236,6 +242,13 @@ def _run_claimed_job(
             session.rollback()
 
 
+def _cancel_requested(session_factory: Callable[[], Session], job_id: int) -> bool:
+    with session_factory() as session:
+        flag = jobs.is_cancel_requested(session, job_id)
+        session.rollback()
+        return flag
+
+
 def _run_scripted(
     session_factory: Callable[[], Session],
     settings_obj: Any,
@@ -250,15 +263,12 @@ def _run_scripted(
             job = session.get_one(MachineReviewJob, job_id)
             job.step_count = step
             jobs.append_event(
-                session, job, MachineReviewJobEventKind.model_turn, status_code="ok", settings_obj=settings_obj
+                session, job, MachineReviewJobEventKind.model_turn, outcome="ok", settings_obj=settings_obj
             )
             session.commit()
 
     def cancelled() -> bool:
-        with session_factory() as session:
-            flag = jobs.is_cancel_requested(session, job_id)
-            session.rollback()
-            return flag
+        return _cancel_requested(session_factory, job_id)
 
     try:
         text = agent.run(context, on_step=on_step, cancelled=cancelled)

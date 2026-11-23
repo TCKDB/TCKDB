@@ -138,7 +138,7 @@ def test_event_seq_runs_one_to_n(ctx):
     session, admin, _, _, submission = ctx
     job = _create(session, submission, admin)
     for _ in range(4):
-        jobs.append_event(session, job, MachineReviewJobEventKind.model_turn, status_code="ok")
+        jobs.append_event(session, job, MachineReviewJobEventKind.model_turn, outcome="ok")
     seqs = list(
         session.scalars(
             select(MachineReviewJobEvent.seq).where(MachineReviewJobEvent.job_id == job.id).order_by(MachineReviewJobEvent.seq)
@@ -220,6 +220,46 @@ def test_reaper_requeues_once_then_fails_worker_lost(ctx):
     assert (claimed.status, claimed.failure_code, claimed.audit_event_id, claimed.attempts) == (
         MachineReviewJobStatus.failed, MachineReviewJobFailure.worker_lost, None, 2,
     )
+
+
+def test_reaper_cancels_an_expired_job_with_a_cancel_request(ctx):
+    session, admin, _, _, submission = ctx
+    job = _create(session, submission, admin)
+    t0 = job.created_at
+    jobs.claim_next_job(session, now=t0, settings_obj=FAKE_SETTINGS)
+    jobs.request_cancel(session, job.id)
+
+    assert jobs.reap_expired(session, t0 + jobs.LEASE_DURATION + timedelta(seconds=1)) == 1
+    session.refresh(job)
+    assert (job.status, job.failure_code) == (MachineReviewJobStatus.cancelled, None)
+    assert job.finished_at is not None
+    assert jobs.claim_next_job(session, settings_obj=FAKE_SETTINGS) is None
+    last = session.scalars(
+        select(MachineReviewJobEvent).where(MachineReviewJobEvent.job_id == job.id).order_by(MachineReviewJobEvent.seq.desc())
+    ).first()
+    assert (last.kind, last.status_code) == (MachineReviewJobEventKind.finished, "cancelled")
+
+
+def test_heartbeat_extends_the_lease_only_for_the_current_attempt(ctx):
+    session, admin, _, _, submission = ctx
+    job = _create(session, submission, admin)
+    t0 = job.created_at
+    jobs.claim_next_job(session, now=t0, settings_obj=FAKE_SETTINGS)
+    t1 = t0 + timedelta(minutes=4)
+
+    assert jobs.heartbeat(session, job.id, job.attempts, t1) is True
+    assert job.lease_expires_at == t1 + jobs.LEASE_DURATION
+
+    assert jobs.heartbeat(session, job.id, job.attempts + 1, t1 + timedelta(minutes=1)) is False
+    assert job.lease_expires_at == t1 + jobs.LEASE_DURATION
+
+    jobs.finish_job(session, job.id, job.attempts, status=MachineReviewJobStatus.cancelled)
+    assert jobs.heartbeat(session, job.id, job.attempts, t1) is False
+
+
+def test_unknown_unavailable_reason_is_refused():
+    with pytest.raises(ValueError):
+        jobs.MachineReviewUnavailable("nope")
 
 
 def test_reaper_leaves_a_live_lease_alone(ctx):
