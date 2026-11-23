@@ -662,6 +662,65 @@ the gap.
 
 - `ck_level_of_theory_merge_not_merged_into_itself`: `merged_lot_id <> into_lot_id`
 
+### `machine_review_job`
+
+**Role:** provenance
+
+**Purpose:** One machine-review attempt on a submission: who asked, which backend, how it ended.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `submission_id` | BIGINT | no | — | submission.id | — | not documented |
+| `requested_by` | BIGINT | no | — | app_user.id | — | not documented |
+| `provider_key` | MachineReviewProviderKey (enum) | no | — | — | `fake`, `local`, `cloud`, `claude_code`, `codex` | not documented |
+| `executor` | MachineReviewExecutor (enum) | no | — | — | `in_process`, `remote_runner` | not documented |
+| `status` | MachineReviewJobStatus (enum) | no | queued | — | `queued`, `running`, `succeeded`, `failed`, `cancelled` | not documented |
+| `cancel_requested` | BOOLEAN | no | false | — | — | not documented |
+| `failure_code` | MachineReviewJobFailure (enum) | yes | — | — | `provider_unavailable`, `provider_timeout`, `budget_exhausted`, `invalid_output`, `quota_exhausted`, `auth_failed`, `worker_lost`, `config_error`, `internal_error`, `machine_review_disabled` | not documented |
+| `failure_detail` | TEXT | yes | — | — | — | not documented |
+| `step_count` | INTEGER | no | 0 | — | — | not documented |
+| `model` | VARCHAR(128) | yes | — | — | — | not documented |
+| `context_hash` | TEXT | yes | — | — | — | not documented |
+| `prompt_name` | TEXT | yes | — | — | — | not documented |
+| `prompt_version` | INTEGER | yes | — | — | — | not documented |
+| `budget_json` | JSONB | yes | — | — | — | not documented |
+| `tokens_in` | INTEGER | yes | — | — | — | not documented |
+| `tokens_out` | INTEGER | yes | — | — | — | not documented |
+| `runner_name` | VARCHAR(64) | yes | — | — | — | not documented |
+| `attempts` | INTEGER | no | 0 | — | — | not documented |
+| `max_attempts` | INTEGER | no | 2 | — | — | not documented |
+| `lease_expires_at` | TIMESTAMP WITHOUT TIME ZONE | yes | — | — | — | not documented |
+| `heartbeat_at` | TIMESTAMP WITHOUT TIME ZONE | yes | — | — | — | not documented |
+| `audit_event_id` | BIGINT | yes | — | submission_audit_event.id | — | not documented |
+| `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+| `started_at` | TIMESTAMP WITHOUT TIME ZONE | yes | — | — | — | not documented |
+| `finished_at` | TIMESTAMP WITHOUT TIME ZONE | yes | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_machine_review_job_audit_event_state`: `(status = 'succeeded' AND audit_event_id IS NOT NULL) OR (status IN ('queued', 'running', 'cancelled') AND audit_event_id IS NULL) OR status = 'failed'`
+- `ck_machine_review_job_failure_code_state`: `(status = 'failed' AND failure_code IS NOT NULL) OR (status = 'cancelled' AND (failure_code IS NULL OR failure_code = 'machine_review_disabled')) OR (status IN ('queued', 'running', 'succeeded') AND failure_code IS NULL)`
+- `ck_machine_review_job_failure_detail_length`: `char_length(failure_detail) <= 2000`
+
+### `machine_review_job_event`
+
+**Role:** provenance
+
+**Purpose:** One progress entry of a machine-review job, numbered in order.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `job_id` | BIGINT | no | — | machine_review_job.id | — | not documented |
+| `seq` | INTEGER | no | — | — | — | not documented |
+| `kind` | MachineReviewJobEventKind (enum) | no | — | — | `claimed`, `context_built`, `model_turn`, `tool_call`, `tool_result`, `retry`, `final_output`, `parse_failed`, `finished` | not documented |
+| `tool_name` | VARCHAR(64) | yes | — | — | — | not documented |
+| `status_code` | VARCHAR(64) | yes | — | — | — | not documented |
+| `started_at` | TIMESTAMP WITHOUT TIME ZONE | yes | — | — | — | not documented |
+| `duration_ms` | INTEGER | yes | — | — | — | not documented |
+| `detail_json` | JSONB | yes | — | — | — | not documented |
+
 ### `molecular_property_observation`
 
 **Role:** provenance
@@ -2382,6 +2441,24 @@ the gap.
 
 - `ck_machine_review_curator_task_findings_count_positive`: `findings_count >= 1`
 - `ck_machine_review_curator_task_resolution_consistency`: `(workflow_state IN ('resolved_no_action', 'resolved_human_reviewed', 'dismissed_machine_finding')) = (resolved_at IS NOT NULL AND resolved_by IS NOT NULL AND resolution_note IS NOT NULL)`
+
+### `machine_review_settings`
+
+**Role:** role not stated on the model
+
+**Purpose:** The single row of admin switches for machine review.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | SMALLINT | no | — | — | — | not documented |
+| `machine_review_enabled` | BOOLEAN | no | true | — | — | not documented |
+| `curator_requests_enabled` | BOOLEAN | no | true | — | — | not documented |
+| `updated_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+| `updated_by` | BIGINT | yes | — | app_user.id | — | not documented |
+
+**Check constraints:**
+
+- `ck_machine_review_settings_singleton`: `id = 1`
 
 ### `network`
 

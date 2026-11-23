@@ -30,6 +30,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.config import Settings
+from app.db.models.app_user import AppUser
 from app.db.models.calculation import (
     Calculation,
     CalculationGeometryValidation,
@@ -527,3 +528,56 @@ def test_repeated_machine_review_runs_keep_evidence_byte_identical(db_session, _
     assert _deterministic_snapshot(db_session, calc.id) == evidence_before
     # Advisory persistence is append-only: one event per run.
     assert len(_precheck_events(db_session, submission.id)) == 3
+
+
+# ---------------------------------------------------------------------------
+# The worker path
+# ---------------------------------------------------------------------------
+
+
+def test_worker_path_leaves_records_and_status_unchanged(db_session, _api_admin_user):
+    """A queued fake job run by the worker adds one audit event, one job and its events, nothing else."""
+    from sqlalchemy import func
+    from sqlalchemy.orm import sessionmaker
+
+    from app.db.models.common import MachineReviewProviderKey
+    from app.db.models.machine_review_job import MachineReviewJob, MachineReviewJobEvent
+    from app.services.machine_review import jobs
+    from app.workers import machine_review_worker
+
+    fake_settings = Settings(
+        ai_review_assistant_mode="test", deployment_mode="local", llm_precheck_fake_step_delay_seconds=0.0
+    )
+    admin = db_session.get(AppUser, _api_admin_user)
+    calc = _make_opt_calc_with_rubric(db_session)
+    submission = _seed_submission(db_session, _api_admin_user)
+    link_record(
+        db_session,
+        submission=submission,
+        record_type=SubmissionRecordType.calculation,
+        record_id=calc.id,
+        role="primary",
+    )
+    scientific_before = _scientific_record_snapshot(db_session, calc.id)
+    deterministic_before = _deterministic_snapshot(db_session, calc.id)
+    status_before = submission.status
+    events_before = len(_precheck_events(db_session, submission.id))
+    jobs.create_job(
+        db_session,
+        submission_id=submission.id,
+        requester=admin,
+        provider_key=MachineReviewProviderKey.fake,
+        settings_obj=fake_settings,
+    )
+
+    factory = sessionmaker(
+        bind=db_session.get_bind(), expire_on_commit=False, join_transaction_mode="create_savepoint"
+    )
+    assert machine_review_worker.process_one_cycle(factory, fake_settings, heartbeat=False) is True
+
+    assert _scientific_record_snapshot(db_session, calc.id) == scientific_before
+    assert _deterministic_snapshot(db_session, calc.id) == deterministic_before
+    assert submission.status is status_before
+    assert len(_precheck_events(db_session, submission.id)) == events_before + 1
+    assert db_session.scalar(select(func.count()).select_from(MachineReviewJob)) == 1
+    assert db_session.scalar(select(func.count()).select_from(MachineReviewJobEvent)) == 7

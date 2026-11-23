@@ -392,10 +392,11 @@ def record_machine_review_audit_event(
     submission status, moderation, summary columns, record-review rows, or
     scientific records.
 
-    Its one caller in ``app/`` is
-    :func:`~app.services.machine_review.run.run_machine_review_for_submission`,
-    which is reached only from the admin-triggered
-    ``POST /api/v1/admin/machine-review/run-for-submission/{submission_id}``.
+    Its callers in ``app/`` are
+    :func:`~app.services.machine_review.run.run_machine_review_for_submission`
+    (the admin-triggered
+    ``POST /api/v1/admin/machine-review/run-for-submission/{submission_id}``)
+    and the machine-review worker, through ``run.record_review``.
     It remains an explicit, caller-driven recorder: nothing on the upload
     path calls it, and uploading never produces one of these events.
     Commit control stays with the caller (this only flushes, via

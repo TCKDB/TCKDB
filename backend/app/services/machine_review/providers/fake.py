@@ -1,11 +1,11 @@
 """Test-only fake machine-review provider emitting native results.
 
-Developer/test-only. It is **never** selectable through
-``AI_REVIEW_ASSISTANT_MODE`` (the deployer-facing factory in :mod:`factory`
-refuses to build it); the only ways to obtain it are
-:func:`build_fake_machine_review_provider` or direct instantiation in a test.
-This keeps a deployer from accidentally shipping fabricated reviews by flipping
-one env var.
+Developer/test-only. The deployer-facing factory in :mod:`factory` builds the
+scripted agent (:class:`ScriptedFakeMachineReviewAgent`) for
+``AI_REVIEW_ASSISTANT_MODE=test`` only under ``DEPLOYMENT_MODE=local`` and
+refuses it in every hosted mode; the plain :class:`FakeMachineReviewProvider`
+comes only from :func:`build_fake_machine_review_provider` or direct
+instantiation in a test.
 
 It makes no network call and returns deterministic
 :class:`~app.services.machine_review.schemas.MachineReviewProviderResult`
@@ -16,7 +16,15 @@ pass / warning / critical / failed — and exercise the categories only the mach
 
 from __future__ import annotations
 
-from app.services.machine_review.providers.interface import MachineReviewContext
+import json
+import time
+from collections.abc import Callable
+
+from app.services.machine_review.providers.interface import (
+    MachineReviewContext,
+    machine_review_result_to_details_json,
+    parse_machine_review_payload,
+)
 from app.services.machine_review.schemas import (
     MACHINE_REVIEW_FORMAT,
     CuratorPriority,
@@ -174,6 +182,54 @@ class FakeMachineReviewProvider:
         )
 
 
+class ScriptedFakeMachineReviewAgent:
+    """A fixed-length scripted reviewer that reports each step and honours cancellation.
+
+    Makes no network call. :meth:`run` returns the review as JSON text, the way
+    a real agent does, so the worker and the synchronous route both cross the
+    same parse boundary.
+    """
+
+    def __init__(
+        self,
+        *,
+        steps: int = 3,
+        step_delay_seconds: float = 0.0,
+        result: MachineReviewProviderResult | None = None,
+    ) -> None:
+        """Create an agent that takes ``steps`` steps of ``step_delay_seconds`` each."""
+        self.steps = steps
+        self.step_delay_seconds = step_delay_seconds
+        self._result = result if result is not None else make_pass_result()
+
+    def run(
+        self,
+        context: MachineReviewContext,
+        *,
+        on_step: Callable[[int], None],
+        cancelled: Callable[[], bool],
+    ) -> str:
+        """Take the scripted steps, then return the review as JSON text.
+
+        Raises :class:`~app.services.machine_review.run.MachineReviewCancelled`
+        when ``cancelled()`` is true before a step.
+        """
+        from app.services.machine_review.run import MachineReviewCancelled
+
+        for index in range(1, self.steps + 1):
+            if cancelled():
+                raise MachineReviewCancelled
+            if self.step_delay_seconds > 0:
+                time.sleep(self.step_delay_seconds)
+            on_step(index)
+        return json.dumps(machine_review_result_to_details_json(self._result))
+
+    def review_submission(self, context: MachineReviewContext) -> MachineReviewProviderResult:
+        """Run without progress reporting or cancellation and return the parsed review."""
+        text = self.run(context, on_step=lambda _step: None, cancelled=lambda: False)
+        return parse_machine_review_payload(text)
+
+
 def build_fake_machine_review_provider(
     fixed_result: MachineReviewProviderResult | None = None,
 ) -> FakeMachineReviewProvider:
@@ -181,6 +237,7 @@ def build_fake_machine_review_provider(
 
     Deliberately a separate, clearly test-named entry point. The deployer-facing
     :func:`~app.services.machine_review.providers.factory.build_machine_review_provider`
-    never returns this provider for any ``AI_REVIEW_ASSISTANT_MODE`` value.
+    returns the scripted agent, not this provider, and only under
+    ``DEPLOYMENT_MODE=local``.
     """
     return FakeMachineReviewProvider(fixed_result=fixed_result)

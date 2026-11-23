@@ -50,7 +50,7 @@ from sqlalchemy.orm import Session
 
 from app.api.config import settings as app_settings
 from app.api.errors import NotFoundError
-from app.db.models.submission import Submission
+from app.db.models.submission import Submission, SubmissionAuditEvent
 from app.services.llm_precheck.context_builder import build_llm_precheck_context
 from app.services.machine_review.providers.disabled import (
     DisabledMachineReviewProvider,
@@ -196,8 +196,12 @@ def _failed_result(
     reason: str,
     settings_obj: Any,
     provider_name: str | None,
+    model: str | None = None,
 ) -> MachineReviewProviderResult:
     """Build the advisory failed result for a run that could not complete.
+
+    ``model`` names the model the caller was committed to asking; it wins over
+    the configured one.
 
     Identity is stamped from configuration here, not read from anywhere: on
     this path there is no provider payload to read it from, and a stored
@@ -210,7 +214,7 @@ def _failed_result(
         curator_priority=None,
         summary=reason,
         findings=(),
-        model=_configured_model(settings_obj),
+        model=_clip(model, _MAX_MODEL_CHARS) if model else _configured_model(settings_obj),
         provider=provider_name,
         used_rag=False,
     )
@@ -222,8 +226,8 @@ def _record(
     submission: Submission,
     result: MachineReviewProviderResult,
     provider_name: str | None,
-) -> bool:
-    """Record the audit event; report whether it landed, never raise.
+) -> SubmissionAuditEvent | None:
+    """Record the audit event; return it if it landed, ``None`` if not, never raise.
 
     A failure to *write down* a failure still must not reach the caller as an
     exception: an advisory reviewer that can take down an admin request by
@@ -233,7 +237,7 @@ def _record(
     field is not cosmetic.
     """
     try:
-        record_machine_review_audit_event(
+        return record_machine_review_audit_event(
             session,
             submission=submission,
             result=result,
@@ -260,35 +264,107 @@ def _record(
             # A session too broken to roll back is still not worth raising
             # over. The outcome already says the event did not land.
             pass
-        return False
-    return True
+        return None
 
 
-def _failed_outcome(
+class MachineReviewCancelled(Exception):
+    """Raised by a provider that stopped because the job was cancelled."""
+
+
+def resolve_provider(
+    settings_obj: Any,
+    provider: MachineReviewProvider | None = None,
+) -> tuple[MachineReviewProvider | None, str | None]:
+    """Return ``(provider, None)``, or ``(None, failure_reason)`` when it cannot be configured.
+
+    An injected provider wins over the configured factory. Covers the
+    configuration errors the factory raises for an incomplete cloud/local
+    setup: a misconfigured deployment is the reviewer's failure to report.
+    """
+    if provider is not None:
+        return provider, None
+    try:
+        return build_machine_review_provider(settings_obj), None
+    except Exception as exc:
+        return None, _failure_text("Machine review could not be configured", exc, settings_obj)
+
+
+def build_review_context(session: Session, submission_id: int) -> MachineReviewContext:
+    """Build the review context of a submission."""
+    return MachineReviewContext.from_llm_precheck_context(
+        build_llm_precheck_context(session, submission_id)
+    )
+
+
+def invoke_provider(
+    selected: MachineReviewProvider,
+    context: MachineReviewContext,
+    settings_obj: Any,
+) -> tuple[MachineReviewProviderResult | None, str | None]:
+    """Ask ``selected`` for a review; return ``(result, None)`` or ``(None, failure_reason)``.
+
+    Touches no database. Every exception becomes a failure reason, except
+    :class:`MachineReviewCancelled`, which passes through untouched.
+    """
+    try:
+        result = selected.review_submission(context)
+    except MachineReviewCancelled:
+        raise
+    except Exception as exc:
+        return None, _failure_text("Machine review failed to review", exc, settings_obj)
+
+    if not isinstance(result, MachineReviewProviderResult):
+        # A type check, not a parse. Re-validating an object that is already
+        # supposed to be validated would stand a second, more forgiving
+        # boundary next to ``parse_machine_review_payload`` -- and a second
+        # boundary that coerces is how a payload the strict one would have
+        # refused gets in anyway. So this refuses; it does not repair.
+        return None, _clip(
+            "Machine review provider returned "
+            f"{type(result).__name__}, not a validated "
+            "MachineReviewProviderResult.",
+            _MAX_SUMMARY_CHARS,
+        )
+    return result, None
+
+
+def record_review(
     session: Session,
     *,
     submission: Submission,
-    reason: str,
-    settings_obj: Any,
+    result: MachineReviewProviderResult | None,
+    failure_reason: str | None,
     provider_name: str | None,
-) -> MachineReviewRunOutcome:
-    """Build, record and return the advisory failed outcome."""
-    result = _failed_result(
-        reason=reason,
-        settings_obj=settings_obj,
-        provider_name=provider_name,
-    )
-    recorded = _record(
-        session,
-        submission=submission,
+    settings_obj: Any,
+    model: str | None = None,
+) -> tuple[MachineReviewRunOutcome, SubmissionAuditEvent | None]:
+    """Record a review, or an advisory failed result when ``failure_reason`` is given.
+
+    ``model`` overrides the configured model name on a failed result.
+
+    Returns the outcome and the audit event (``None`` if it did not land).
+    """
+    if result is None:
+        result = _failed_result(
+            reason=failure_reason or "Machine review failed to review.",
+            settings_obj=settings_obj,
+            provider_name=provider_name,
+            model=model,
+        )
+        reason: str | None = failure_reason
+    else:
+        reason = (
+            result.summary
+            if result.status is MachineReviewStatus.machine_review_failed
+            else None
+        )
+    event = _record(session, submission=submission, result=result, provider_name=provider_name)
+    outcome = MachineReviewRunOutcome(
         result=result,
-        provider_name=provider_name,
-    )
-    return MachineReviewRunOutcome(
-        result=result,
-        audit_event_recorded=recorded,
+        audit_event_recorded=event is not None,
         failure_reason=reason,
     )
+    return outcome, event
 
 
 def run_machine_review_for_submission(
@@ -328,26 +404,17 @@ def run_machine_review_for_submission(
     if submission is None:
         raise NotFoundError("Submission not found.")
 
-    try:
-        selected = (
-            provider
-            if provider is not None
-            else build_machine_review_provider(settings_obj)
-        )
-    except Exception as exc:
-        # Covers the configuration errors the factory raises for an incomplete
-        # cloud/local setup, and the NotImplementedError local mode still
-        # raises. A misconfigured deployment is the reviewer's failure to
-        # report, not the admin request's failure to suffer.
-        return _failed_outcome(
+    selected, reason = resolve_provider(settings_obj, provider)
+    if selected is None:
+        outcome, _ = record_review(
             session,
             submission=submission,
-            reason=_failure_text(
-                "Machine review could not be configured", exc, settings_obj
-            ),
-            settings_obj=settings_obj,
+            result=None,
+            failure_reason=reason,
             provider_name=None,
+            settings_obj=settings_obj,
         )
+        return outcome
 
     provider_name = type(selected).__name__
 
@@ -360,59 +427,34 @@ def run_machine_review_for_submission(
             failure_reason=None,
         )
 
+    result: MachineReviewProviderResult | None = None
     try:
-        context = MachineReviewContext.from_llm_precheck_context(
-            build_llm_precheck_context(session, submission_id)
-        )
-        result = selected.review_submission(context)
+        context = build_review_context(session, submission_id)
     except Exception as exc:
-        return _failed_outcome(
-            session,
-            submission=submission,
-            reason=_failure_text(
-                "Machine review failed to review", exc, settings_obj
-            ),
-            settings_obj=settings_obj,
-            provider_name=provider_name,
-        )
+        reason = _failure_text("Machine review failed to review", exc, settings_obj)
+    else:
+        try:
+            result, reason = invoke_provider(selected, context, settings_obj)
+        except MachineReviewCancelled:
+            result, reason = None, "Machine review was cancelled."
 
-    if not isinstance(result, MachineReviewProviderResult):
-        # A type check, not a parse. Re-validating an object that is already
-        # supposed to be validated would stand a second, more forgiving
-        # boundary next to ``parse_machine_review_payload`` -- and a second
-        # boundary that coerces is how a payload the strict one would have
-        # refused gets in anyway. So this refuses; it does not repair.
-        return _failed_outcome(
-            session,
-            submission=submission,
-            reason=_clip(
-                "Machine review provider returned "
-                f"{type(result).__name__}, not a validated "
-                "MachineReviewProviderResult.",
-                _MAX_SUMMARY_CHARS,
-            ),
-            settings_obj=settings_obj,
-            provider_name=provider_name,
-        )
-
-    recorded = _record(
+    outcome, _ = record_review(
         session,
         submission=submission,
         result=result,
+        failure_reason=reason,
         provider_name=provider_name,
+        settings_obj=settings_obj,
     )
-    return MachineReviewRunOutcome(
-        result=result,
-        audit_event_recorded=recorded,
-        failure_reason=(
-            result.summary
-            if result.status is MachineReviewStatus.machine_review_failed
-            else None
-        ),
-    )
+    return outcome
 
 
 __all__ = [
+    "MachineReviewCancelled",
     "MachineReviewRunOutcome",
+    "build_review_context",
+    "invoke_provider",
+    "record_review",
+    "resolve_provider",
     "run_machine_review_for_submission",
 ]

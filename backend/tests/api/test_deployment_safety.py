@@ -86,6 +86,7 @@ class _UnsafeCase:
         _UnsafeCase({"rate_limit_enabled": False}, "RATE_LIMIT_ENABLED must be true"),
         _UnsafeCase({"paging_cursor_key": None}, "PAGING_CURSOR_KEY must be set"),
         _UnsafeCase({"paging_cursor_key": "too-short"}, "PAGING_CURSOR_KEY must be set"),
+        _UnsafeCase({"ai_review_assistant_mode": "test"}, "AI_REVIEW_ASSISTANT_MODE must not be test"),
     ],
     ids=lambda c: next(iter(c.overrides)),
 )
@@ -191,6 +192,7 @@ def test_placeholder_violations_are_listed_together(monkeypatch):
         _UnsafeCase({"rate_limit_enabled": False}, "RATE_LIMIT_ENABLED must be true"),
         _UnsafeCase({"paging_cursor_key": None}, "PAGING_CURSOR_KEY must be set"),
         _UnsafeCase({"paging_cursor_key": "too-short"}, "PAGING_CURSOR_KEY must be set"),
+        _UnsafeCase({"ai_review_assistant_mode": "test"}, "AI_REVIEW_ASSISTANT_MODE must not be test"),
     ],
     ids=lambda c: next(iter(c.overrides)),
 )

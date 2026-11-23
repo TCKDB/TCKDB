@@ -37,6 +37,7 @@ from app.services.machine_review.providers import (
     make_warning_result,
     parse_machine_review_payload,
 )
+from app.services.machine_review.providers.fake import ScriptedFakeMachineReviewAgent
 from app.services.machine_review.schemas import (
     MACHINE_REVIEW_FORMAT,
     MachineReviewCategory,
@@ -169,28 +170,46 @@ def test_fake_v2_provider_supports_pass_warning_critical_failed():
 # --------------------------------------------------------------------------- #
 
 
-def test_factory_does_not_expose_fake_as_deployer_mode():
-    """No AI_REVIEW_ASSISTANT_MODE value yields the fake provider."""
-    for mode in ("off", "cloud", "local", "test"):
-        settings = Settings(
-            ai_review_assistant_mode=mode,
-            llm_precheck_model="vendor/model",
-            llm_precheck_base_url="http://localhost:11434",
-        )
-        try:
-            provider = build_machine_review_provider(settings)
-        except (NotImplementedError, MachineReviewProviderConfigurationError):
-            # cloud/local (not implemented) and test (refused) never build a fake.
-            continue
-        assert not isinstance(provider, FakeMachineReviewProvider)
+def test_no_mode_yields_a_fake_outside_local_deployments():
+    """No AI_REVIEW_ASSISTANT_MODE value yields a fake reviewer unless DEPLOYMENT_MODE=local."""
+    for deployment_mode in ("shared_private", "hosted_public"):
+        for mode in ("off", "cloud", "local", "test"):
+            settings = Settings(
+                deployment_mode=deployment_mode,
+                ai_review_assistant_mode=mode,
+                llm_precheck_model="vendor/model",
+                llm_precheck_base_url="http://localhost:11434",
+            )
+            try:
+                provider = build_machine_review_provider(settings)
+            except (NotImplementedError, MachineReviewProviderConfigurationError):
+                continue
+            assert not isinstance(provider, (FakeMachineReviewProvider, ScriptedFakeMachineReviewAgent))
 
 
-def test_test_mode_is_refused_by_deployer_factory():
-    """``mode=test`` is refused: the fake is reachable only via the test helper."""
-    settings = Settings(ai_review_assistant_mode="test")
+@pytest.mark.parametrize("deployment_mode", ["shared_private", "hosted_public"])
+def test_test_mode_is_refused_by_deployer_factory_in_hosted_modes(deployment_mode):
+    """``mode=test`` is refused outside DEPLOYMENT_MODE=local."""
+    settings = Settings(deployment_mode=deployment_mode, ai_review_assistant_mode="test")
 
     with pytest.raises(MachineReviewProviderConfigurationError, match="test-only"):
         build_machine_review_provider(settings)
+
+
+def test_test_mode_builds_the_scripted_agent_in_local_mode():
+    """The twin of the refusal: the same mode under ``local`` builds the scripted agent."""
+    settings = Settings(
+        deployment_mode="local",
+        ai_review_assistant_mode="test",
+        llm_precheck_fake_step_delay_seconds=0.0,
+    )
+
+    provider = build_machine_review_provider(settings)
+
+    assert isinstance(provider, ScriptedFakeMachineReviewAgent)
+    result = provider.review_submission(MachineReviewContext(submission_id=1))
+    assert result.status is MachineReviewStatus.machine_screened_pass
+    assert result.model == "fake_test/machine-review"
 
 
 # --------------------------------------------------------------------------- #

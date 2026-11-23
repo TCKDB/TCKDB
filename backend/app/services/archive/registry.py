@@ -248,6 +248,9 @@ EXCLUDED_TABLES: Mapping[str, str] = {
         "would import a storage incident the restoring cluster never had"
     ),
     "idempotency_record": "ephemeral HTTP retry state",
+    "machine_review_job": "deployment-local machine-review worker queue and progress log",
+    "machine_review_job_event": "deployment-local machine-review worker queue and progress log",
+    "machine_review_settings": "deployment-local operator switch",
     "upload_job": "ephemeral worker queue state",
     "user_session": "authentication session state",
 }

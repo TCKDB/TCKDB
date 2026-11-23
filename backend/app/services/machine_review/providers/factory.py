@@ -104,11 +104,11 @@ def build_machine_review_provider(
 ) -> MachineReviewProvider:
     """Build the configured machine-review provider. Makes no model call.
 
-    Off returns the disabled provider. Cloud validates its configuration and
+    Off returns the disabled provider. Test returns the scripted fake agent under
+    ``DEPLOYMENT_MODE=local`` and refuses otherwise. Cloud validates its configuration and
     returns a real provider -- constructing one calls nothing; the model is
     reached only when a review is requested. Local still validates and raises
-    :class:`NotImplementedError`, which is a later slice. The fake provider is
-    never returned here, whatever the mode says.
+    :class:`NotImplementedError`, which is a later slice.
     """
     mode = settings_obj.ai_review_assistant_mode
 
@@ -156,10 +156,17 @@ def build_machine_review_provider(
         )
 
     if mode == "test":
-        raise MachineReviewProviderConfigurationError(
-            "The fake machine-review provider is test-only and is not "
-            "selectable via AI_REVIEW_ASSISTANT_MODE; use "
-            "build_fake_machine_review_provider() in tests."
+        if settings_obj.deployment_mode != "local":
+            raise MachineReviewProviderConfigurationError(
+                "The fake machine-review provider is test-only and is selectable "
+                "only with DEPLOYMENT_MODE=local."
+            )
+        from app.services.machine_review.providers.fake import (
+            ScriptedFakeMachineReviewAgent,
+        )
+
+        return ScriptedFakeMachineReviewAgent(
+            step_delay_seconds=settings_obj.llm_precheck_fake_step_delay_seconds
         )
 
     raise MachineReviewProviderConfigurationError(
