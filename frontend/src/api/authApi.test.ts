@@ -214,3 +214,22 @@ describe("a request-validation failure names the field", () => {
         expect(message).not.toContain("422")
     })
 })
+
+describe("throwForFailedResponse context", () => {
+    it("keeps the envelope's context object on the error", async () => {
+        server.use(http.get("/api/v1/auth/me", () => HttpResponse.json(
+            { code: "structure_finding_already_settled", detail: "x", context: { settled_by_finding_ref: "sef_abc" } },
+            { status: 409 },
+        )))
+        const error = await fetchMe().catch((e: unknown) => e)
+        expect(error).toBeInstanceOf(AuthApiError)
+        expect((error as AuthApiError).code).toBe("structure_finding_already_settled")
+        expect((error as AuthApiError).context).toEqual({ settled_by_finding_ref: "sef_abc" })
+    })
+
+    it("leaves context undefined when the envelope has none", async () => {
+        server.use(http.get("/api/v1/auth/me", () => HttpResponse.json({ detail: "nope" }, { status: 500 })))
+        const error = await fetchMe().catch((e: unknown) => e)
+        expect((error as AuthApiError).context).toBeUndefined()
+    })
+})

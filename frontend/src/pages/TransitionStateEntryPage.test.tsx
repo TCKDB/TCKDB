@@ -10,6 +10,7 @@ import { ADVERSARIAL, expectDepositorTextOnlyInNotes, expectNoAdversarialText, e
 import { rankingWords, textOf } from "../test/rankingWords"
 import { titleHasKind } from "../test/routeTitleKinds"
 import { resetAllRequestCaches } from "../api/requestCache"
+import { AuthProvider } from "../components/AuthProvider"
 
 const ENTRY_REF = "tse_aq5ktxlu27nvul3hmdwpuyuz4e"
 
@@ -1952,5 +1953,62 @@ describe("TransitionStateEntryPage -- deposit warnings and the full check list",
         page()
         await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
         expect(screen.queryByText("Deposit warnings")).toBeNull()
+    })
+})
+
+describe("TransitionStateEntryPage structure findings (curators only)", () => {
+    const FINDINGS = "/api/v1/curation/structure-evidence-findings"
+    const ENTRY = `/api/v1/scientific/transition-state-entries/${ENTRY_REF}`
+
+    function pageWithAuth() {
+        return render(
+            <AuthProvider>
+                <MemoryRouter initialEntries={[`/transition-state-entries/${ENTRY_REF}`]}>
+                    <Routes>
+                        <Route path="/transition-state-entries/:entryRef" element={<TransitionStateEntryPage />} />
+                    </Routes>
+                </MemoryRouter>
+            </AuthProvider>,
+        )
+    }
+
+    it("offers a curator a Findings about select listing the calculations and geometries by ref", async () => {
+        const asked: URL[] = []
+        server.use(
+            http.get("/api/v1/auth/me", () => HttpResponse.json({ id: 1, username: "ada", email: "a@example.com", full_name: "Ada", role: "curator", is_active: true })),
+            http.get(ENTRY, () => HttpResponse.json({ record: mockRecord() })),
+            http.get(FINDINGS, ({ request }) => {
+                const url = new URL(request.url)
+                asked.push(url)
+                return HttpResponse.json({ subject_ref: url.searchParams.get("subject_ref"), findings: [], offset: 0, limit: 20 })
+            }),
+        )
+        pageWithAuth()
+        const select = await screen.findByLabelText("Findings about")
+        const values = within(select).getAllByRole("option").map((o) => (o as HTMLOptionElement).value)
+        expect(values).toEqual([
+            "calculation:calc_yu6nspewwco74qzh6lwgh6ewxy", "calculation:calc_heds3dt3dsqxmqkcchibvbtwi4",
+            "geometry:geom_mtihqs7ac7btur4efqushl7aoy", "geometry:geom_4gm2gdummrj2kepzxfn3ivq6pu",
+        ])
+        await waitFor(() => expect(asked.length).toBeGreaterThan(0))
+        await userEvent.selectOptions(select, "geometry:geom_mtihqs7ac7btur4efqushl7aoy")
+        await waitFor(() => expect(asked.at(-1)?.searchParams.get("subject_ref")).toBe("geom_mtihqs7ac7btur4efqushl7aoy"))
+        expect(asked.at(-1)?.searchParams.get("scope")).toBe("geometry")
+    })
+
+    it("shows an anonymous visitor nothing", async () => {
+        let me = 0
+        let curation = 0
+        server.use(
+            http.get("/api/v1/auth/me", () => { me += 1; return new HttpResponse(null, { status: 401 }) }),
+            http.all("/api/v1/curation/*", () => { curation += 1; return HttpResponse.json({}) }),
+            http.get(ENTRY, () => HttpResponse.json({ record: mockRecord() })),
+        )
+        pageWithAuth()
+        await screen.findByRole("heading", { level: 1, name: /^Transition state of/ })
+        await waitFor(() => expect(me).toBeGreaterThan(0))
+        expect(screen.queryByLabelText("Findings about")).toBeNull()
+        expect(screen.queryByRole("heading", { name: "Structure findings" })).toBeNull()
+        expect(curation).toBe(0)
     })
 })

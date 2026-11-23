@@ -37,12 +37,15 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "")
 export class AuthApiError extends Error {
     readonly status: number
     readonly code?: string
+    /** The envelope's `context` object (the values a refusal is worded from), when the response carried one. */
+    readonly context?: Record<string, unknown>
 
-    constructor(status: number, message: string, code?: string) {
+    constructor(status: number, message: string, code?: string, context?: Record<string, unknown>) {
         super(message)
         this.name = "AuthApiError"
         this.status = status
         this.code = code
+        this.context = context
     }
 }
 
@@ -63,10 +66,14 @@ function stripCodePrefix(detail: string, code: string | undefined): string {
 export async function throwForFailedResponse(response: Response): Promise<never> {
     let detail = response.statusText || `Request failed (${response.status})`
     let code: string | undefined
+    let context: Record<string, unknown> | undefined
     try {
         const body: unknown = await response.json()
         if (body && typeof body === "object") {
             if ("code" in body && typeof body.code === "string") code = body.code
+            if ("context" in body && body.context && typeof body.context === "object" && !Array.isArray(body.context)) {
+                context = body.context as Record<string, unknown>
+            }
             if ("detail" in body && typeof body.detail === "string") detail = body.detail
             // FastAPI's request-validation errors put a LIST here, one entry
             // per rejected field ({loc, msg, type}), not a string. Without
@@ -94,7 +101,7 @@ export async function throwForFailedResponse(response: Response): Promise<never>
     } catch {
         // Non-JSON error body; keep the status text.
     }
-    throw new AuthApiError(response.status, stripCodePrefix(detail, code), code)
+    throw new AuthApiError(response.status, stripCodePrefix(detail, code), code, context)
 }
 
 function jsonHeaders(): HeadersInit {

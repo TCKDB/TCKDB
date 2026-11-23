@@ -38,6 +38,7 @@ import { EvidenceChecklist } from "../components/EvidenceChecklist"
 import { Formula } from "../components/Formula"
 import { LevelLabel } from "../components/LevelLabel"
 import { PageShell } from "../components/PageShell"
+import { StructureFindingsPanel } from "../components/StructureFindingsPanel"
 import { DepositWarningsPanel } from "../components/DepositWarningsPanel"
 import { TrustAssessment } from "../components/TrustAssessment"
 import { RecordMap } from "../components/RelationshipMap"
@@ -620,6 +621,8 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 entries={reviewHistory}
                 availability={reviewAvailability}
             />
+
+            <StructureFindingsPanel subjects={[{ ref: core.calculation_ref, scope: "calculation", label: "this calculation" }]} idBase="calculation" />
             </PageShell>
         </section>
     )

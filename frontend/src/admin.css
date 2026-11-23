@@ -469,8 +469,13 @@
 
 .review-record-row-right {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
-    gap: var(--s-3);
+    gap: var(--s-2) var(--s-3);
+}
+
+@media (max-width: 40rem) {
+    .review-record-row-right { flex-basis: 100%; }
 }
 
 .review-record-type {
@@ -642,4 +647,10 @@
 
 .admin-legend .admin-absent {
     font: inherit;
+}
+
+.review-repro-panel {
+    margin-left: var(--s-2);
+    padding-left: var(--s-3);
+    border-left: 2px solid var(--control-border);
 }

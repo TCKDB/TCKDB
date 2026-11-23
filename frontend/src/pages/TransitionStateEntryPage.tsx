@@ -21,6 +21,8 @@ import { PathSearchCard } from "../components/PathSearchCard"
 import { ListPager } from "../components/ListPager"
 import { LevelLabel } from "../components/LevelLabel"
 import { PageShell } from "../components/PageShell"
+import { StructureFindingsPanel, type FindingSubject } from "../components/StructureFindingsPanel"
+import { tokenWords } from "../domain/apiVocabulary"
 import { RecordMap } from "../components/RelationshipMap"
 import { transitionStateEntryNodes } from "../domain/recordMapNodes"
 import { SectionHeading } from "../components/PageSections"
@@ -211,6 +213,11 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
             seenGeometryRefs.add(geometry.geometry_ref)
             return true
         })
+    // Every record a curator can rule on from this page: its calculations, then its geometries.
+    const findingSubjects: FindingSubject[] = [
+        ...calculations.map((calc) => ({ ref: calc.calculation_ref, scope: "calculation" as const, label: `${calculationWords(calc.type)} ${calc.calculation_ref}` })),
+        ...geometries.map((geometry) => ({ ref: geometry.geometry_ref, scope: "geometry" as const, label: `Geometry${geometry.role ? ` (${tokenWords(geometry.role).replace(/\birc\b/gi, "IRC")})` : ""} ${geometry.geometry_ref}` })),
+    ]
     // `final` leads; every other role is grouped behind one collapsed disclosure showing its point count.
     const finalGeometries = geometries.filter((geometry) => geometry.role === "final")
     const otherGeometriesByRole = new Map<string, Geometry[]>()
@@ -569,6 +576,8 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                     />
                 )}
             </section>
+
+            <StructureFindingsPanel subjects={findingSubjects} idBase="entry" />
 
             <section className="ledger-section" aria-labelledby="review-ledger">
                 <SectionHeading id="review-ledger">Review history</SectionHeading>

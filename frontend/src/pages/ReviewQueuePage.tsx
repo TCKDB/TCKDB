@@ -21,6 +21,7 @@ import {
     recordTypeHasPage,
 } from "../domain/recordRoute"
 import { useAuth } from "../hooks/useAuth"
+import { ReproducibilityDetailPanel } from "../components/ReproducibilityDetailPanel"
 import {
     ALL_STATUSES,
     allowedTransitions,
@@ -510,6 +511,8 @@ export default function ReviewQueuePage() {
     const [rowErrors, setRowErrors] = useState<ReadonlyMap<number, RowError>>(new Map())
     const [draft, setDraft] = useState<Draft | null>(null)
     const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
+    // Rows whose reproducibility detail is open; several may be open at once, and each loads only when opened.
+    const [reproOpen, setReproOpen] = useState<ReadonlySet<number>>(new Set())
 
     const role = state.status === "signed-in" ? state.user.role : null
     const canReview = role === "curator" || role === "admin"
@@ -690,6 +693,14 @@ export default function ReviewQueuePage() {
         return statusFilter === "all" || status !== statusFilter
     }
 
+    function toggleRepro(rowId: number) {
+        setReproOpen((current) => {
+            const next = new Set(current)
+            if (!next.delete(rowId)) next.add(rowId)
+            return next
+        })
+    }
+
     function toggleExpanded(groupKey: string) {
         setExpanded((current) => {
             const next = new Set(current)
@@ -803,7 +814,7 @@ export default function ReviewQueuePage() {
         return (
             <li key={rowId} className="review-record-row">
                 <div className="review-record-row-line">
-                    <div className="review-record-row-left">
+                    <div className="review-record-row-left" id={`review-record-${rowId}`}>
                         <span className="review-record-type">
                             {recordTypeGroupLabel(row.record_type, 1)}
                         </span>
@@ -826,6 +837,15 @@ export default function ReviewQueuePage() {
                         {showStatusFor(row.status) && (
                             <span className={cls ?? undefined}>{statusLabel(row.status)}</span>
                         )}
+                        <button
+                            type="button"
+                            aria-expanded={reproOpen.has(rowId)}
+                            aria-controls={reproOpen.has(rowId) ? `repro-${rowId}` : undefined}
+                            aria-describedby={`review-record-${rowId}`}
+                            onClick={() => toggleRepro(rowId)}
+                        >
+                            Reproducibility…
+                        </button>
                         {options.length > 0 ? (
                             <button
                                 type="button"
@@ -845,6 +865,16 @@ export default function ReviewQueuePage() {
                     <p className="auth-error admin-row-error" role="alert">
                         {rowErrors.get(rowId)?.message}
                     </p>
+                )}
+                {reproOpen.has(rowId) && (
+                    <div id={`repro-${rowId}`} className="review-repro-panel">
+                        <ReproducibilityDetailPanel
+                            recordType={row.record_type}
+                            recordId={row.record_id}
+                            recordLabel={`the ${recordTypeGroupLabel(row.record_type, 1).toLowerCase()} record${row.record_public_ref ? ` ${row.record_public_ref}` : ""}`}
+                            idBase={`row-${rowId}`}
+                        />
+                    </div>
                 )}
                 {draft?.rowId === rowId && canSubmit && (
                     <form
