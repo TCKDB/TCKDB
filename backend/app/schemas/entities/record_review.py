@@ -7,6 +7,8 @@ from datetime import datetime
 from pydantic import Field
 
 from app.db.models.common import (
+    MachineReviewSeverity,
+    MachineReviewStatus,
     RecordReviewStatus,
     SpeciesEntryStateKind,
     StationaryPointKind,
@@ -218,6 +220,29 @@ class ReviewQueueReactionEquation(SchemaBase):
     products: list[ReviewQueueReactionParticipant]
 
 
+class ReviewQueueMachineFindingsRead(SchemaBase):
+    """What the machine reviewer last said about one record, and the open work on it.
+
+    ``status`` is ``not_run`` (with zero counts and no ids) when no review has
+    mapped a finding to this record: a record is judged only by findings that
+    name it, never by a sibling's or the submission's. ``open_task_ids`` are the
+    curator tasks on the record in an open state, sorted.
+    """
+
+    status: MachineReviewStatus
+    highest_severity: MachineReviewSeverity | None = None
+    findings_count: int = 0
+    reviewed_at: datetime | None = None
+    open_task_count: int = 0
+    open_task_ids: list[int] = Field(default_factory=list)
+
+
+class ReviewQueueRecordRead(RecordReviewRead):
+    """A queue record: the review row plus its machine-review summary."""
+
+    machine_findings: ReviewQueueMachineFindingsRead
+
+
 class ReviewQueueSubjectRead(SchemaBase):
     """One subject block: the record a reviewer judges as one unit, and
     every review row nested under it.
@@ -257,7 +282,7 @@ class ReviewQueueSubjectRead(SchemaBase):
     #: names a reaction_entry subject instead, the same way `chemistry`
     #: names a species_entry or transition_state_entry one.
     reaction: ReviewQueueReactionEquation | None = None
-    records: list[RecordReviewRead]
+    records: list[ReviewQueueRecordRead]
 
 
 class ReviewQueuePageRead(SchemaBase):

@@ -612,6 +612,10 @@ def test_projection_shape_carries_no_forbidden_state():
         "unmapped_findings",
         "mapping_warnings",
         "parse_warnings",
+        # Read-only provenance of the parsed run.
+        "result",
+        "provider",
+        "audit_event_id",
     }
 
     event = _AuditEvent(details_json=_details(findings=(_record_finding(),)))

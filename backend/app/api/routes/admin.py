@@ -26,7 +26,10 @@ from app.db.models.app_user import AppUser
 from app.db.models.common import (
     AppUserRole,
     ArtifactStorageCapacityObservation,
+    CuratorTaskFindingMatch,
+    CuratorTaskInclude,
     MachineReviewCuratorTaskState,
+    MachineReviewCuratorTaskStateGroup,
     MachineReviewSeverity,
     MachineReviewStatus,
     SubmissionRecordType,
@@ -45,27 +48,40 @@ from app.services.artifact_storage_capacity import (
 from app.services.calculation_resolution import resolve_workflow_tool_release_ref
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.machine_review import (
+    CuratorTaskFindingResolution,
+    MachineReviewCategory,
+    MachineReviewFinding,
     MachineReviewOrchestrationStatus,
     MachineReviewRecordSummary,
     MachineReviewReReviewDecision,
     MachineReviewReReviewExecutionStatus,
+    MachineReviewRunInspection,
+    RecordMachineReview,
     SubmissionMachineReviewInspection,
+    UnmappedFinding,
+    UnmappedReason,
     assign_curator_task,
     build_curator_tasks_for_submission,
     build_submission_machine_review_inspection,
+    curator_task_ids_by_fingerprint,
+    fingerprint_for_review_finding,
     get_curator_task_or_404,
     reopen_curator_task,
     resolve_curator_task,
+    resolve_curator_task_findings,
     run_admin_fake_machine_review,
+    select_latest_machine_review_for_record,
     start_curator_task_review,
 )
 from app.services.machine_review.made_under import machine_review_made_under
 from app.services.machine_review.run import run_machine_review_for_submission
+from app.services.machine_review.schemas import CuratorPriority
 from app.services.observation_identity_attach import attach_observation_identity
 from app.services.record_containers import (
     RecordContainer,
     resolve_record_container,
     resolve_record_containers,
+    resolve_record_containers_by_name,
 )
 from app.services.record_refs import (
     resolve_record_public_ref,
@@ -258,6 +274,88 @@ def change_user_role(
 # through ``get_db`` (no write session) and mutates nothing.
 
 
+class AdminMachineReviewFindingRead(BaseModel):
+    """One finding exactly as the machine reviewer wrote it.
+
+    ``message``, ``recommended_action`` and ``evidence_keys`` are the reviewer's
+    own machine-generated text. ``curator_task_id`` is the curator task whose
+    fingerprint is this finding, ``null`` for an ``info`` finding and before
+    tasks are built. The record the finding concerns is the enclosing record;
+    the matching key is not published.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    severity: MachineReviewSeverity
+    category: MachineReviewCategory
+    message: str
+    evidence_keys: list[str] = Field(default_factory=list)
+    recommended_action: str | None = None
+    curator_task_id: int | None = None
+
+
+class AdminMachineReviewRecordReviewRead(BaseModel):
+    """One machine-review pass over one record (one stored review event)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    audit_event_id: int | None = None
+    reviewed_at: datetime | None = None
+    status: MachineReviewStatus
+    curator_priority: CuratorPriority | None = None
+    model: str | None = None
+    provider: str | None = None
+    #: Exactly one review per record is the latest, chosen by the read model.
+    is_latest: bool = False
+    findings: list[AdminMachineReviewFindingRead] = Field(default_factory=list)
+
+
+class AdminMachineReviewRunRead(BaseModel):
+    """One stored reviewer run over the whole submission.
+
+    ``summary`` is the reviewer's own text, or the redacted failure text on a
+    failed run. ``parsed`` is false when the stored payload could not be read;
+    then ``status`` is ``null`` and ``parse_warnings`` says why.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    audit_event_id: int | None = None
+    reviewed_at: datetime | None = None
+    parsed: bool
+    status: MachineReviewStatus | None = None
+    curator_priority: CuratorPriority | None = None
+    summary: str | None = None
+    model: str | None = None
+    provider: str | None = None
+    findings_count: int = 0
+    mapped_findings_count: int = 0
+    unmapped_findings_count: int = 0
+    highest_severity: MachineReviewSeverity | None = None
+    parse_warnings: list[str] = Field(default_factory=list)
+
+
+class AdminMachineReviewUnmappedFindingRead(BaseModel):
+    """A finding that did not map to any linked record, and why.
+
+    ``cited_record_type`` and ``cited_record_ref`` are what the reviewer wrote,
+    verbatim: free reviewer text, not a public ref (for a finding addressed by
+    record id it is that id as text).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    audit_event_id: int | None = None
+    reason: UnmappedReason
+    cited_record_type: str | None = None
+    cited_record_ref: str | None = None
+    severity: MachineReviewSeverity
+    category: MachineReviewCategory
+    message: str
+    evidence_keys: list[str] = Field(default_factory=list)
+    recommended_action: str | None = None
+
+
 class AdminMachineReviewRecordInspection(BaseModel):
     """Admin-only machine-review projection for one linked record.
 
@@ -265,15 +363,20 @@ class AdminMachineReviewRecordInspection(BaseModel):
     ``public_ref``, resolved at read time, ``null`` when the record cannot be
     named (``applied_energy_correction`` has no such column, and the row may
     have been deleted since the review). See :mod:`app.services.record_refs`.
+    ``container_type`` / ``container_ref`` name the page that shows the record
+    when it has none of its own, both ``null`` together (see
+    :mod:`app.services.record_containers`).
     ``record_id`` remains the internal id, acceptable on an admin-only surface.
 
     The surface carries one identifier of each kind: ``record_id`` for
     the machine, ``record_public_ref`` for the reader. On this surface the
     matching key is always ``str(record_id)``, so it is not published as a
     second row-id-shaped value. A maintainer chasing a
-    finding that did *not* map is served elsewhere -- unmapped findings never
-    reach ``record_summaries``, and ``mapping`` already quotes the offending
-    ref in ``mapping_warnings``.
+    finding that did *not* map is served by ``unmapped_findings`` on the
+    enclosing response; those never reach ``record_summaries``.
+
+    ``all_record_reviews`` holds every review that mapped to this record,
+    newest first.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -281,8 +384,11 @@ class AdminMachineReviewRecordInspection(BaseModel):
     record_type: str
     record_public_ref: str | None = None
     record_id: int | None = None
+    container_type: SubmissionRecordType | None = None
+    container_ref: str | None = None
     latest_summary: MachineReviewRecordSummary
     all_record_reviews_count: int = 0
+    all_record_reviews: list[AdminMachineReviewRecordReviewRead] = Field(default_factory=list)
 
 
 class AdminSubmissionMachineReviewInspectionResponse(BaseModel):
@@ -291,8 +397,9 @@ class AdminSubmissionMachineReviewInspectionResponse(BaseModel):
     Private/debugging shape — intentionally distinct from the public
     scientific ``TrustFragment``. ``record_summaries`` carries one entry per
     linked record that received at least one mapped machine-review finding;
-    submission-scoped, unlinked, and sibling findings appear only in the
-    diagnostics counters/warnings, never as a record summary.
+    submission-scoped, unlinked, and sibling findings appear only in
+    ``unmapped_findings`` and the diagnostics, never as a record summary.
+    ``runs`` lists every stored reviewer run, newest first.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -300,14 +407,71 @@ class AdminSubmissionMachineReviewInspectionResponse(BaseModel):
     submission_id: int
     record_summaries: tuple[AdminMachineReviewRecordInspection, ...] = ()
     unmapped_findings_count: int = 0
+    unmapped_findings: list[AdminMachineReviewUnmappedFindingRead] = Field(default_factory=list)
+    runs: list[AdminMachineReviewRunRead] = Field(default_factory=list)
     mapping_warnings: tuple[str, ...] = ()
     parse_warnings: tuple[str, ...] = ()
     source_audit_event_ids: tuple[int, ...] = ()
 
 
+def _finding_read(
+    finding: MachineReviewFinding, curator_task_id: int | None = None
+) -> AdminMachineReviewFindingRead:
+    return AdminMachineReviewFindingRead(
+        severity=MachineReviewSeverity(finding.severity.value),
+        category=finding.category,
+        message=finding.message,
+        evidence_keys=list(finding.evidence_keys),
+        recommended_action=finding.recommended_action,
+        curator_task_id=curator_task_id,
+    )
+
+
+def _run_read(run: MachineReviewRunInspection) -> AdminMachineReviewRunRead:
+    return AdminMachineReviewRunRead(
+        audit_event_id=run.audit_event_id,
+        reviewed_at=run.reviewed_at,
+        parsed=run.parsed,
+        status=None if run.status is None else MachineReviewStatus(run.status.value),
+        curator_priority=run.curator_priority,
+        summary=run.summary,
+        model=run.model,
+        provider=run.provider,
+        findings_count=run.findings_count,
+        mapped_findings_count=run.mapped_findings_count,
+        unmapped_findings_count=run.unmapped_findings_count,
+        highest_severity=(
+            None if run.highest_severity is None else MachineReviewSeverity(run.highest_severity.value)
+        ),
+        parse_warnings=list(run.parse_warnings),
+    )
+
+
+def _unmapped_read(item: UnmappedFinding) -> AdminMachineReviewUnmappedFindingRead:
+    finding = item.finding
+    return AdminMachineReviewUnmappedFindingRead(
+        audit_event_id=item.audit_event_id,
+        reason=item.reason,
+        cited_record_type=finding.record_type,
+        cited_record_ref=finding.record_ref,
+        severity=MachineReviewSeverity(finding.severity.value),
+        category=finding.category,
+        message=finding.message,
+        evidence_keys=list(finding.evidence_keys),
+        recommended_action=finding.recommended_action,
+    )
+
+
+def _review_sort_key(review: RecordMachineReview) -> tuple[int, float, int]:
+    stamp = (0, 0.0) if review.reviewed_at is None else (1, review.reviewed_at.timestamp())
+    return (*stamp, review.audit_event_id if review.audit_event_id is not None else -1)
+
+
 def _to_admin_inspection_response(
     inspection: SubmissionMachineReviewInspection,
     public_refs: dict[tuple[str, int], str],
+    containers: dict[tuple[str, int], RecordContainer] | None = None,
+    task_ids: dict[tuple[str, int, str], int] | None = None,
 ) -> AdminSubmissionMachineReviewInspectionResponse:
     """Map the private inspection result onto the admin response schema.
 
@@ -316,24 +480,65 @@ def _to_admin_inspection_response(
     ``context_hash`` is computed over and so cannot be renamed without
     restaling every stored review, and it is not published because on this
     surface it always equals ``str(record_id)`` (see the response docstring).
+
+    Pure: refs, containers and task ids are supplied, never looked up here.
     """
+    containers = containers or {}
+    task_ids = task_ids or {}
+
+    def _record(record) -> AdminMachineReviewRecordInspection:
+        key = None if record.record_id is None else (record.record_type, record.record_id)
+        container = None if key is None else containers.get(key)
+        latest = select_latest_machine_review_for_record(
+            record_type=record.record_type,
+            record_ref=record.record_ref or "",
+            reviews=record.all_record_reviews,
+        )
+        reviews = []
+        for review in sorted(record.all_record_reviews, key=_review_sort_key, reverse=True):
+            reviews.append(
+                AdminMachineReviewRecordReviewRead(
+                    audit_event_id=review.audit_event_id,
+                    reviewed_at=review.reviewed_at,
+                    status=MachineReviewStatus(review.status.value),
+                    curator_priority=review.curator_priority,
+                    model=review.model,
+                    provider=review.provider,
+                    is_latest=review is latest,
+                    findings=[
+                        _finding_read(
+                            f,
+                            None
+                            if record.record_id is None
+                            else task_ids.get(
+                                (
+                                    record.record_type,
+                                    record.record_id,
+                                    fingerprint_for_review_finding(f, record.record_type, record.record_id),
+                                )
+                            ),
+                        )
+                        for f in review.findings
+                    ],
+                )
+            )
+        return AdminMachineReviewRecordInspection(
+            record_type=record.record_type,
+            record_public_ref=None if key is None else public_refs.get(key),
+            record_id=record.record_id,
+            container_type=container.container_type if container else None,
+            container_ref=container.container_ref if container else None,
+            latest_summary=record.latest_summary,
+            all_record_reviews_count=len(record.all_record_reviews),
+            all_record_reviews=reviews,
+        )
+
     return AdminSubmissionMachineReviewInspectionResponse(
         submission_id=inspection.submission_id,
-        record_summaries=tuple(
-            AdminMachineReviewRecordInspection(
-                record_type=record.record_type,
-                record_public_ref=(
-                    None
-                    if record.record_id is None
-                    else public_refs.get((record.record_type, record.record_id))
-                ),
-                record_id=record.record_id,
-                latest_summary=record.latest_summary,
-                all_record_reviews_count=len(record.all_record_reviews),
-            )
-            for record in inspection.record_inspections
-        ),
+        record_summaries=tuple(_record(record) for record in inspection.record_inspections),
         unmapped_findings_count=len(inspection.unmapped_findings),
+        unmapped_findings=[_unmapped_read(u) for u in inspection.unmapped_findings],
+        runs=[_run_read(r) for r in inspection.runs],
         mapping_warnings=inspection.mapping_warnings,
         parse_warnings=inspection.parse_warnings,
         source_audit_event_ids=inspection.source_audit_event_ids,
@@ -353,6 +558,9 @@ def inspect_submission_machine_review(
 
     Loads the submission (404 if missing), then projects its machine-review
     audit events onto its linked records via the private inspection service.
+    Each record lists every review that mapped to it with the reviewer's
+    findings, ``runs`` lists every stored run with the reviewer's summary, and
+    ``unmapped_findings`` lists what could not be mapped and why.
     Non-machine-review events are ignored. This is read-only: it never mutates
     submission status/lifecycle fields, review state, deterministic evidence,
     or scientific records.
@@ -368,15 +576,15 @@ def inspect_submission_machine_review(
     )
     # Records with no internal id cannot be looked up at all; the resolver
     # drops a type it does not recognise. Both simply get no ref.
-    public_refs = resolve_record_public_refs_by_name(
-        session,
-        (
-            (record.record_type, record.record_id)
-            for record in inspection.record_inspections
-            if record.record_id is not None
-        ),
-    )
-    return _to_admin_inspection_response(inspection, public_refs)
+    keys = [
+        (record.record_type, record.record_id)
+        for record in inspection.record_inspections
+        if record.record_id is not None
+    ]
+    public_refs = resolve_record_public_refs_by_name(session, keys)
+    containers = resolve_record_containers_by_name(session, keys)
+    task_ids = curator_task_ids_by_fingerprint(session, submission.id)
+    return _to_admin_inspection_response(inspection, public_refs, containers, task_ids)
 
 
 # ---------------------------------------------------------------------------
@@ -554,6 +762,19 @@ class AdminCuratorTaskResponse(BaseModel):
     resolved_at: datetime | None = None
     resolved_by: int | None = None
     resolution_note: str | None = None
+    #: Usernames of ``assigned_to`` and ``resolved_by``, ``null`` when unset.
+    assigned_to_username: str | None = None
+    resolved_by_username: str | None = None
+    #: The finding this task was raised for, recovered from the stored review
+    #: events by its exact fingerprint (see
+    #: :mod:`app.services.machine_review.curator_task_findings`). Filled by the
+    #: single-task routes and by the list with ``include=findings``; otherwise
+    #: ``null``. ``finding_match`` says how it was found and is ``null`` when the
+    #: finding was not requested; ``not_found`` leaves ``finding`` null.
+    #: ``finding_audit_event_ids`` lists every review event the finding appears in.
+    finding: AdminMachineReviewFindingRead | None = None
+    finding_match: CuratorTaskFindingMatch | None = None
+    finding_audit_event_ids: list[int] = Field(default_factory=list)
     #: The prompt and rubric the stored machine review this task came from was made under, read against the registry by
     #: the currency rule. ``null`` when that review is not stored. Stamps only: ``inputs_checked`` is false.
     made_under: MadeUnder | None = None
@@ -612,14 +833,18 @@ def _to_curator_task_response(
     record_public_ref: str | None,
     container: RecordContainer | None,
     made_under: MadeUnder | None = None,
+    usernames: dict[int, str] | None = None,
+    resolution: CuratorTaskFindingResolution | None = None,
 ) -> AdminCuratorTaskResponse:
     """Pure mapper: the ref and the container are supplied, never looked up here.
 
     Keeping the lookups out means the list route can resolve a whole page in
     a handful of grouped queries instead of one (or several) per task.
     ``container`` carries its type and ref as one value, so this mapper
-    cannot emit half a pair.
+    cannot emit half a pair. The same goes for the usernames and the resolved
+    finding: both are supplied, ``None`` meaning not requested.
     """
+    usernames = usernames or {}
     return AdminCuratorTaskResponse(
         id=task.id,
         submission_id=task.submission_id,
@@ -640,8 +865,25 @@ def _to_curator_task_response(
         resolved_at=task.resolved_at,
         resolved_by=task.resolved_by,
         resolution_note=task.resolution_note,
+        assigned_to_username=None if task.assigned_to is None else usernames.get(task.assigned_to),
+        resolved_by_username=None if task.resolved_by is None else usernames.get(task.resolved_by),
+        finding=(
+            None
+            if resolution is None or resolution.finding is None
+            else _finding_read(resolution.finding, task.id)
+        ),
+        finding_match=None if resolution is None else resolution.match,
+        finding_audit_event_ids=[] if resolution is None else list(resolution.audit_event_ids),
         made_under=made_under,
     )
+
+
+def _usernames(session: Session, tasks: list[MachineReviewCuratorTask]) -> dict[int, str]:
+    """``{user_id: username}`` for every assignee and resolver on the page, one query."""
+    ids = {u for t in tasks for u in (t.assigned_to, t.resolved_by) if u is not None}
+    if not ids:
+        return {}
+    return dict(session.execute(select(AppUser.id, AppUser.username).where(AppUser.id.in_(ids))).all())
 
 
 def _curator_task_response(
@@ -658,6 +900,8 @@ def _curator_task_response(
             session, record_type=task.record_type, record_id=task.record_id
         ),
         machine_review_made_under(session, [task]).get(task.id),
+        _usernames(session, [task]),
+        resolve_curator_task_findings(session, [task])[task.id],
     )
 
 
@@ -666,7 +910,9 @@ def _curator_task_response(
     response_model=PaginatedResponse[AdminCuratorTaskResponse],
 )
 def list_curator_tasks(
-    workflow_state: MachineReviewCuratorTaskState | None = None,
+    workflow_state: list[MachineReviewCuratorTaskState] | None = Query(default=None),
+    state_group: MachineReviewCuratorTaskStateGroup | None = None,
+    include: list[CuratorTaskInclude] = Query(default=[]),
     assigned_to: int | None = None,
     record_type: SubmissionRecordType | None = None,
     record_id: int | None = None,
@@ -681,11 +927,19 @@ def list_curator_tasks(
 
     Deterministic ordering: open states first, then highest severity first,
     then most-recently-updated, with ``id`` as the final tie-break. Filters are
-    ANDed. Terminal tasks are included; filter on ``workflow_state`` to narrow.
+    ANDed, and ``total`` counts under the same filters. Terminal tasks are
+    included; narrow with ``workflow_state`` (repeatable: any of the given
+    states) or ``state_group`` (``open`` is every non-terminal state).
+    Contradictory filters give an empty page, not an error.
+
+    ``include=findings`` fills ``finding``, ``finding_match`` and
+    ``finding_audit_event_ids`` on every item; without it they stay empty.
     """
     filters = []
-    if workflow_state is not None:
-        filters.append(MachineReviewCuratorTask.workflow_state == workflow_state)
+    if workflow_state:
+        filters.append(MachineReviewCuratorTask.workflow_state.in_(workflow_state))
+    if state_group is not None:
+        filters.append(MachineReviewCuratorTask.workflow_state.in_(state_group.states()))
     if assigned_to is not None:
         filters.append(MachineReviewCuratorTask.assigned_to == assigned_to)
     if record_type is not None:
@@ -732,6 +986,12 @@ def list_curator_tasks(
     public_refs = resolve_record_public_refs(session, keys)
     containers = resolve_record_containers(session, keys)
     made_under = machine_review_made_under(session, tasks)
+    usernames = _usernames(session, tasks)
+    resolutions = (
+        resolve_curator_task_findings(session, tasks)
+        if CuratorTaskInclude.findings in include
+        else {}
+    )
     return PaginatedResponse(
         items=[
             _to_curator_task_response(
@@ -739,6 +999,8 @@ def list_curator_tasks(
                 public_refs.get((t.record_type, t.record_id)),
                 containers.get((t.record_type, t.record_id)),
                 made_under.get(t.id),
+                usernames,
+                resolutions.get(t.id),
             )
             for t in tasks
         ],

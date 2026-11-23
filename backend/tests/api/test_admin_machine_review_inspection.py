@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.app import create_app
@@ -28,6 +29,7 @@ from app.db.models.common import (
     SubmissionKind,
     SubmissionRecordType,
 )
+from app.db.models.machine_review_curator_task import MachineReviewCuratorTask
 from app.db.models.submission import Submission, SubmissionAuditEvent
 from app.services.machine_review import (
     MachineReviewCategory,
@@ -50,7 +52,13 @@ from app.services.trust.models import (
     EvidenceEvaluation,
     EvidenceOutcome,
 )
-from tests.services.scientific_read._factories import make_species
+from tests.api import _machine_review_seed as seed
+from tests.services.scientific_read._factories import (
+    make_applied_energy_correction,
+    make_energy_correction_scheme,
+    make_species,
+    make_species_entry,
+)
 
 _BASE = "/api/v1/admin/submissions"
 
@@ -189,6 +197,8 @@ def test_admin_submission_machine_review_inspection_empty_when_no_machine_review
         "submission_id": submission.id,
         "record_summaries": [],
         "unmapped_findings_count": 0,
+        "unmapped_findings": [],
+        "runs": [],
         "mapping_warnings": [],
         "parse_warnings": [],
         "source_audit_event_ids": [],
@@ -517,4 +527,237 @@ def test_inspection_never_publishes_the_old_name(
         "record_id",
         "latest_summary",
         "all_record_reviews_count",
+        "all_record_reviews",
+        "container_type",
+        "container_ref",
     }
+
+
+# --------------------------------------------------------------------------- #
+# The reviewer's words: every review, every finding, every run
+# --------------------------------------------------------------------------- #
+
+_SPECIES = SubmissionRecordType.species
+
+
+def _species_submission(db_session, user_id, *, n: int = 1):
+    species = [make_species(db_session) for _ in range(n)]
+    submission = seed.new_submission(db_session, user_id)
+    for s in species:
+        seed.link(db_session, submission, _SPECIES, s.id)
+    return submission, species
+
+
+def test_inspection_returns_every_review_with_findings(
+    client, db_session, login_as, _api_admin_user, monkeypatch
+):
+    """Two runs on one record: both reviews come back, with the reviewer's words."""
+    submission, (species,) = _species_submission(db_session, _api_admin_user)
+    login_as(_api_admin_user)
+    first = seed.finding(
+        "species", species.id, message="First pass concern.", evidence_keys=("a.key",),
+        recommended_action="Do the first thing.",
+    )
+    second = seed.finding(
+        "species", species.id, severity=MachineReviewSeverity.critical,
+        category=MachineReviewCategory.geometry, message="Second pass concern.",
+        evidence_keys=("b.key", "c.key"), recommended_action="Do the second thing.",
+    )
+    seed.run_review(client, monkeypatch, submission.id, seed.result((first,)))
+    seed.run_review(client, monkeypatch, submission.id, seed.result((second,)))
+
+    body = client.get(_url(submission.id)).json()
+
+    (record,) = body["record_summaries"]
+    reviews = record["all_record_reviews"]
+    assert len(reviews) == 2
+    assert [r["is_latest"] for r in reviews] == [True, False]
+    newest, oldest = reviews
+    assert newest["audit_event_id"] > oldest["audit_event_id"]
+    assert newest["model"] == "fake_test/machine-review"
+    assert newest["provider"] == "FakeMachineReviewProvider"
+    assert newest["curator_priority"] == "medium"
+    (f_new,) = newest["findings"]
+    assert f_new["severity"] == "critical"
+    assert f_new["category"] == "geometry"
+    assert f_new["message"] == "Second pass concern."
+    assert f_new["evidence_keys"] == ["b.key", "c.key"]
+    assert f_new["recommended_action"] == "Do the second thing."
+    (f_old,) = oldest["findings"]
+    assert f_old["message"] == "First pass concern."
+    # Pre-existing fields are unchanged.
+    assert record["all_record_reviews_count"] == 2
+    assert record["latest_summary"]["findings_count"] == 1
+    assert record["latest_summary"]["highest_severity"] == "critical"
+    assert body["unmapped_findings_count"] == 0
+
+
+def test_inspection_returns_runs_with_reviewer_summary(
+    client, db_session, login_as, _api_admin_user, monkeypatch
+):
+    submission, (species,) = _species_submission(db_session, _api_admin_user)
+    login_as(_api_admin_user)
+    ok = seed.result(
+        (seed.finding("species", species.id),), summary="The reviewer's own summary."
+    )
+    seed.run_review(client, monkeypatch, submission.id, ok)
+
+    class _Raising:
+        def review_submission(self, context):
+            raise RuntimeError("upstream endpoint unreachable")
+
+    seed.use_provider(monkeypatch, _Raising())
+    assert client.post(f"{seed.RUN_URL}/{submission.id}").status_code == 200
+
+    runs = client.get(_url(submission.id)).json()["runs"]
+
+    assert len(runs) == 2
+    failed, good = runs
+    assert failed["audit_event_id"] > good["audit_event_id"]
+    assert failed["status"] == "machine_review_failed"
+    assert failed["parsed"] is True
+    assert "RuntimeError" in failed["summary"]
+    assert failed["findings_count"] == 0
+    assert good["summary"] == "The reviewer's own summary."
+    assert good["status"] == "machine_screened_warning"
+    assert good["curator_priority"] == "medium"
+    assert good["model"] == "fake_test/machine-review"
+    assert good["provider"] == "FakeMachineReviewProvider"
+    assert good["findings_count"] == 1
+    assert good["mapped_findings_count"] == 1
+    assert good["unmapped_findings_count"] == 0
+    assert good["highest_severity"] == "warning"
+
+
+def test_inspection_lists_unmapped_findings_with_reason(
+    client, db_session, login_as, _api_admin_user, monkeypatch
+):
+    submission, (s1, s2) = _species_submission(db_session, _api_admin_user, n=2)
+    login_as(_api_admin_user)
+    findings = (
+        seed.finding(None, None, message="Whole-submission concern."),
+        seed.finding("not_a_type", None, record_ref="42", message="Unknown type concern."),
+        seed.finding("species", None, message="Which species?"),  # two linked -> ambiguous
+        seed.finding("species", s1.id, message="Mapped concern."),
+    )
+    seed.run_review(client, monkeypatch, submission.id, seed.result(findings))
+
+    body = client.get(_url(submission.id)).json()
+
+    assert body["unmapped_findings_count"] == 3
+    unmapped = body["unmapped_findings"]
+    assert len(unmapped) == body["unmapped_findings_count"]
+    by_message = {u["message"]: u for u in unmapped}
+    assert by_message["Whole-submission concern."]["reason"] == "submission_scoped"
+    assert by_message["Whole-submission concern."]["cited_record_type"] is None
+    assert by_message["Unknown type concern."]["reason"] == "unknown_record_type"
+    assert by_message["Unknown type concern."]["cited_record_type"] == "not_a_type"
+    assert by_message["Unknown type concern."]["cited_record_ref"] == "42"
+    assert by_message["Which species?"]["reason"] == "ambiguous_record_type"
+    run_event = body["runs"][0]["audit_event_id"]
+    assert {u["audit_event_id"] for u in unmapped} == {run_event}
+    # Anti-fan-out: none of them sits under a record.
+    (record,) = body["record_summaries"]
+    messages = {f["message"] for r in record["all_record_reviews"] for f in r["findings"]}
+    assert messages == {"Mapped concern."}
+    assert body["runs"][0]["mapped_findings_count"] == 1
+    assert body["runs"][0]["unmapped_findings_count"] == 3
+
+
+def test_unparseable_event_appears_as_unparsed_run(
+    client, db_session, login_as, _api_admin_user
+):
+    submission = seed.new_submission(db_session, _api_admin_user)
+    db_session.add(
+        SubmissionAuditEvent(
+            submission_id=submission.id,
+            actor_kind=SubmissionActorKind.llm,
+            event_kind=SubmissionAuditEventKind.llm_precheck_recorded,
+            details_json={"format": MACHINE_REVIEW_FORMAT.model_dump(), "status": "not-a-real-status", "findings": []},
+        )
+    )
+    db_session.flush()
+    login_as(_api_admin_user)
+
+    runs = client.get(_url(submission.id)).json()["runs"]
+
+    assert len(runs) == 1
+    assert runs[0]["parsed"] is False
+    assert runs[0]["status"] is None
+    assert len(runs[0]["parse_warnings"]) == 1
+
+
+def test_inspection_findings_link_to_their_curator_tasks(
+    client, db_session, login_as, _api_admin_user, monkeypatch
+):
+    submission, (species,) = _species_submission(db_session, _api_admin_user)
+    login_as(_api_admin_user)
+    warn = seed.finding("species", species.id, message="Warn concern.")
+    crit = seed.finding("species", species.id, severity=MachineReviewSeverity.critical, message="Critical concern.")
+    info = seed.finding("species", species.id, severity=MachineReviewSeverity.info, message="Info note.")
+    seed.run_review(client, monkeypatch, submission.id, seed.result((warn, crit, info)))
+
+    def _ids():
+        record = client.get(_url(submission.id)).json()["record_summaries"][0]
+        return {
+            f["message"]: f["curator_task_id"]
+            for f in record["all_record_reviews"][0]["findings"]
+        }
+
+    assert _ids() == {"Warn concern.": None, "Critical concern.": None, "Info note.": None}  # before the build
+
+    built = seed.build_tasks(client, submission.id)
+
+    ids = _ids()
+    assert ids["Info note."] is None
+    assert len(built["task_ids"]) == 2
+    assert ids["Warn concern."] == built["task_ids"][0]
+    assert ids["Critical concern."] == built["task_ids"][1]
+    assert ids["Warn concern."] != ids["Critical concern."]
+
+
+def test_applied_energy_correction_record_names_its_container(
+    client, db_session, login_as, _api_admin_user, monkeypatch
+):
+    entry = make_species_entry(db_session, make_species(db_session))
+    correction = make_applied_energy_correction(
+        db_session,
+        target_species_entry=entry,
+        scheme=make_energy_correction_scheme(db_session, name="inspection_container"),
+    )
+    submission = seed.new_submission(db_session, _api_admin_user)
+    seed.link(db_session, submission, SubmissionRecordType.applied_energy_correction, correction.id)
+    login_as(_api_admin_user)
+    seed.run_review(
+        client, monkeypatch, submission.id,
+        seed.result((seed.finding("applied_energy_correction", correction.id),)),
+    )
+
+    (record,) = client.get(_url(submission.id)).json()["record_summaries"]
+
+    assert record["record_public_ref"] is None
+    assert record["container_type"] == "species_entry"
+    assert record["container_ref"] == entry.public_ref
+
+
+def test_inspection_reads_write_nothing(
+    client, db_session, login_as, _api_admin_user, monkeypatch
+):
+    submission, (species,) = _species_submission(db_session, _api_admin_user)
+    login_as(_api_admin_user)
+    seed.run_review(client, monkeypatch, submission.id, seed.result((seed.finding("species", species.id),)))
+    status_before = submission.status
+    def _event_count():
+        return db_session.scalar(
+            select(func.count())
+            .select_from(SubmissionAuditEvent)
+            .where(SubmissionAuditEvent.submission_id == submission.id)
+        )
+
+    events_before = _event_count()
+
+    assert client.get(_url(submission.id)).status_code == 200
+
+    assert submission.status is status_before
+    assert _event_count() == events_before
+    assert db_session.scalar(select(func.count()).select_from(MachineReviewCuratorTask)) == 0

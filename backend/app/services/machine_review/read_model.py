@@ -149,7 +149,7 @@ class MachineReviewRecordSummary(BaseModel):
     submission_id: int | None = None
 
 
-def _highest_severity(
+def highest_severity(
     findings: Sequence[MachineReviewFinding],
 ) -> MachineReviewSeverity | None:
     """Return the single highest severity present, or ``None`` if no findings."""
@@ -255,7 +255,7 @@ def build_machine_review_record_summary(
         status=latest.status,
         curator_priority=latest.curator_priority,
         findings_count=len(latest.findings),
-        highest_severity=_highest_severity(latest.findings),
+        highest_severity=highest_severity(latest.findings),
         model=latest.model,
         provider=latest.provider,
         reviewed_at=latest.reviewed_at,

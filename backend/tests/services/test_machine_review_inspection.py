@@ -476,3 +476,59 @@ def test_get_machine_review_summaries_for_record_returns_latest_summary():
 
     assert summary.status is MachineReviewStatus.machine_screened_warning
     assert summary.submission_id == 5
+
+
+# --------------------------------------------------------------------------- #
+# Runs and event ids on the submission inspection
+# --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True)
+class _IdEvent(_AuditEvent):
+    id: int | None = None
+
+
+def _id_event(event_id: int, *, findings=(), status=MachineReviewStatus.machine_screened_warning, details=None):
+    return _IdEvent(
+        details_json=details if details is not None else _details(status=status, findings=findings),
+        id=event_id,
+        created_at=_T0,
+    )
+
+
+def test_runs_and_unmapped_event_ids_are_projected():
+    from app.services.machine_review.inspection import build_submission_machine_review_inspection
+
+    scoped = MachineReviewProviderFinding(
+        severity=MachineReviewSeverity.critical,
+        category=MachineReviewCategory.consistency,
+        record_type=None,
+        message="Whole-submission concern.",
+    )
+    mapped = _record_finding(record_type="calculation", record_id=1, severity=MachineReviewSeverity.info)
+    events = [
+        # Input order is deliberately not chronological, and all three share one created_at.
+        _id_event(9, findings=(mapped,)),
+        _id_event(7, findings=(scoped, _record_finding(record_type="calculation", record_id=1))),
+        _id_event(8, details={"status": "not-a-real-status", "findings": []}),
+    ]
+
+    inspection = build_submission_machine_review_inspection(
+        submission_id=5,
+        submission_record_links=[_Link(SubmissionRecordType.calculation, 1, submission_id=5)],
+        submission_audit_events=events,
+    )
+
+    assert [r.audit_event_id for r in inspection.runs] == [9, 8, 7]  # the id breaks the timestamp tie
+    newest, unparsed, oldest = inspection.runs
+    assert newest.parsed is True and newest.summary == "advisory summary"
+    assert newest.findings_count == 1 and newest.mapped_findings_count == 1
+    assert newest.unmapped_findings_count == 0
+    assert newest.highest_severity is MachineReviewSeverity.info
+    assert newest.model == "fake_test/simple-v1"
+    assert newest.provider == "FakeLLMPrecheckProvider"
+    assert unparsed.parsed is False and unparsed.status is None and len(unparsed.parse_warnings) == 1
+    assert oldest.findings_count == 2
+    assert oldest.mapped_findings_count == 1 and oldest.unmapped_findings_count == 1
+    assert oldest.highest_severity is MachineReviewSeverity.critical
+    assert [u.audit_event_id for u in inspection.unmapped_findings] == [7]

@@ -2130,6 +2130,48 @@ class MachineReviewCuratorTaskState(str, Enum):
         return self in self.terminal_states()
 
 
+class MachineReviewCuratorTaskStateGroup(str, Enum):
+    """Query-side grouping of :class:`MachineReviewCuratorTaskState`.
+
+    Not a column and never stored: ``open`` is every non-terminal state and
+    ``terminal`` every terminal one, derived from
+    :meth:`MachineReviewCuratorTaskState.terminal_states` so the two cannot
+    drift apart.
+    """
+
+    open = "open"
+    terminal = "terminal"
+
+    def states(self) -> "frozenset[MachineReviewCuratorTaskState]":
+        terminal = MachineReviewCuratorTaskState.terminal_states()
+        if self is MachineReviewCuratorTaskStateGroup.terminal:
+            return terminal
+        return frozenset(s for s in MachineReviewCuratorTaskState if s not in terminal)
+
+
+class CuratorTaskInclude(str, Enum):
+    """Optional expansions of a curator-task list item (query-side only)."""
+
+    findings = "findings"
+
+
+class CuratorTaskFindingMatch(str, Enum):
+    """How the finding behind a curator task was recovered (response-side only).
+
+    * ``source_audit_event`` -- the fingerprint matched inside the one event the
+      task records as its source.
+    * ``submission_audit_events`` -- the task records no source event (or its
+      event does not hold the finding); the fingerprint matched in other
+      machine-review events of the same submission.
+    * ``not_found`` -- no stored review of the submission produces this
+      fingerprint.
+    """
+
+    source_audit_event = "source_audit_event"
+    submission_audit_events = "submission_audit_events"
+    not_found = "not_found"
+
+
 # ---------------------------------------------------------------------------
 # Curated product / dataset-release semantics
 # ---------------------------------------------------------------------------

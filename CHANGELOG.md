@@ -25,6 +25,15 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Machine-review findings are readable through the API (Unreleased)
+
+- **Behaviour:** `GET /api/v1/admin/submissions/{id}/machine-review-inspection` lists every review of each record (`all_record_reviews`, newest first, one `is_latest`) with the reviewer's findings (severity, category, message, evidence keys, recommended action, and the curator task raised for it), every stored run (`runs`, with the reviewer's summary, status, model, provider and counts, including runs whose payload could not be read), and the findings that mapped to no record (`unmapped_findings`, each with its reason). Each record also names its `container_type` / `container_ref`.
+- **Behaviour:** curator tasks carry `finding`, `finding_match` and `finding_audit_event_ids`, recovered from the stored review events by exact fingerprint (`source_audit_event`, `submission_audit_events` or `not_found`). The list returns them only with `include=findings`; the single-task routes always do. Tasks also carry `assigned_to_username` and `resolved_by_username`.
+- **Behaviour:** `GET /api/v1/admin/machine-review/curator-tasks` accepts `workflow_state` more than once and a new `state_group` (`open` or `terminal`); `total` is exact under the same filters.
+- **Behaviour:** each record on `GET /api/v1/record-reviews/queue` carries `machine_findings`: latest status, highest severity, finding count, review time, and the open curator task count and ids.
+- **Behaviour:** new `GET /api/v1/submissions/machine-review-overview` (curator or admin) pages every submission with its run count, latest run, and open and total curator task counts; filters `statuses`, `reviewed`, `has_open_tasks`.
+- **Schema:** no migration. tckdb-client 0.211.1 only updates its route ledger.
+
 ## A one-electron Hartree-Fock energy ignores PNO truncation and core treatment (Unreleased)
 
 - **Behaviour:** the one-electron Hartree-Fock exemption no longer compares `pno_truncation` or `core_treatment`, so a Hartree-Fock energy with neither, or with any value of either, is accepted under a declared level that states them, reported as `one_electron_hf_substitution`. A different `ri_approximation` or `relativistic_hamiltonian` is still `kinetics_energy_level_contradiction`, as is a participant with more than one electron.

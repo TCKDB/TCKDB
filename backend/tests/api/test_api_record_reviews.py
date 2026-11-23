@@ -38,6 +38,8 @@ from app.db.models.submission import (
     SubmissionRecordLink,
 )
 from app.db.models.thermo import Thermo
+from app.services.machine_review.schemas import MachineReviewSeverity
+from tests.api import _machine_review_seed as _mr
 from tests.services.scientific_read._factories import (
     make_applied_energy_correction,
     make_calculation,
@@ -1281,3 +1283,132 @@ class TestReviewQueueSubjectsApi:
             f"offset did not advance the page: got {seen}, expected {expected}"
         )
         assert len(set(seen)) == 3, "two different offsets returned the same subject"
+
+
+# --------------------------------------------------------------------------- #
+# machine_findings on the grouped queue
+# --------------------------------------------------------------------------- #
+
+def _queue_records(client) -> dict[tuple[str, int], dict]:
+    resp = client.get("/api/v1/record-reviews/queue", params={"limit": 200})
+    assert resp.status_code == 200, resp.text
+    return {
+        (r["record_type"], r["record_id"]): r
+        for subject in resp.json()["subjects"]
+        for r in subject["records"]
+    }
+
+
+def _review_row(db_session, species) -> None:
+    db_session.add(
+        RecordReview(
+            record_type=SubmissionRecordType.species,
+            record_id=species.id,
+            status=RecordReviewStatus.not_reviewed,
+        )
+    )
+    db_session.flush()
+
+
+def test_queue_records_carry_machine_findings(
+    client, db_session, login_as, _api_admin_user, _api_curator_user, monkeypatch
+):
+    reviewed, sibling, never = (make_species(db_session) for _ in range(3))
+    for s in (reviewed, sibling, never):
+        _review_row(db_session, s)
+    species_type = SubmissionRecordType.species
+
+    # Submission A links ``reviewed`` and its ``sibling``; only ``reviewed`` has findings.
+    sub_a = _mr.new_submission(db_session, _api_admin_user)
+    _mr.link(db_session, sub_a, species_type, reviewed.id)
+    _mr.link(db_session, sub_a, species_type, sibling.id)
+    login_as(_api_admin_user)
+    _mr.run_review(
+        client, monkeypatch, sub_a.id,
+        _mr.result((
+            _mr.finding("species", reviewed.id, message="Concern one."),
+            _mr.finding("species", reviewed.id, severity=MachineReviewSeverity.critical, message="Concern two."),
+            _mr.finding("species", reviewed.id, severity=MachineReviewSeverity.info, message="Just a note."),
+        )),
+    )
+    task_ids = _mr.build_tasks(client, sub_a.id)["task_ids"]
+    assert len(task_ids) == 2
+    resolved_id, open_id = task_ids
+    assert client.post(
+        f"{_mr.TASKS_URL}/{resolved_id}/resolve",
+        json={"resolution_state": "resolved_no_action", "resolution_note": "fine"},
+    ).status_code == 200
+
+    # ``two_runs`` is linked from two submissions; the later run must win.
+    two_runs = make_species(db_session)
+    _review_row(db_session, two_runs)
+    sub_b = _mr.new_submission(db_session, _api_admin_user)
+    sub_c = _mr.new_submission(db_session, _api_admin_user)
+    _mr.link(db_session, sub_b, species_type, two_runs.id)
+    _mr.link(db_session, sub_c, species_type, two_runs.id)
+    _mr.run_review(client, monkeypatch, sub_b.id, _mr.result((_mr.finding("species", two_runs.id),)))
+    _mr.run_review(
+        client, monkeypatch, sub_c.id,
+        _mr.result((_mr.finding("species", two_runs.id, severity=MachineReviewSeverity.info),)),
+    )
+
+    login_as(_api_curator_user)
+    records = _queue_records(client)
+
+    mf = records[("species", reviewed.id)]["machine_findings"]
+    assert mf["status"] == "machine_screened_needs_attention"
+    assert mf["highest_severity"] == "critical"
+    assert mf["findings_count"] == 3
+    assert mf["open_task_count"] == 1
+    assert mf["open_task_ids"] == [open_id]
+    assert mf["reviewed_at"] is not None
+
+    for key in (("species", sibling.id), ("species", never.id)):
+        quiet = records[key]["machine_findings"]
+        assert quiet["status"] == "not_run"
+        assert quiet["findings_count"] == 0
+        assert quiet["highest_severity"] is None
+        assert quiet["open_task_count"] == 0
+        assert quiet["open_task_ids"] == []
+
+    latest = records[("species", two_runs.id)]["machine_findings"]
+    assert latest["highest_severity"] == "info"
+    assert latest["findings_count"] == 1
+    assert latest["open_task_count"] == 0
+
+
+def test_queue_machine_findings_do_not_cost_more_queries_for_a_longer_page(
+    client, db_session, login_as, _api_admin_user, _api_curator_user, monkeypatch
+):
+    def _seed(n: int) -> None:
+        login_as(_api_admin_user)
+        for _ in range(n):
+            species = make_species(db_session)
+            _review_row(db_session, species)
+            sub = _mr.new_submission(db_session, _api_admin_user)
+            _mr.link(db_session, sub, SubmissionRecordType.species, species.id)
+            _mr.run_review(client, monkeypatch, sub.id, _mr.result((_mr.finding("species", species.id),)))
+            _mr.build_tasks(client, sub.id)
+
+    def _count() -> int:
+        login_as(_api_curator_user)
+        statements = 0
+        engine = db_session.connection().engine
+
+        def _before(conn, cursor, statement, parameters, context, executemany):
+            nonlocal statements
+            statements += 1
+
+        event.listen(engine, "before_cursor_execute", _before)
+        try:
+            records = _queue_records(client)
+        finally:
+            event.remove(engine, "before_cursor_execute", _before)
+        assert all(r["machine_findings"]["open_task_count"] == 1 for r in records.values())
+        return statements
+
+    _seed(2)
+    two = _count()
+    _seed(8)
+    ten = _count()
+    assert ten == two, f"the queue cost {two} statements for 2 records and {ten} for 10"

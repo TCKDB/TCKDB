@@ -156,6 +156,8 @@ class UnmappedFinding:
 
     finding: MachineReviewFinding
     reason: UnmappedReason
+    #: The audit event the finding came from; set by the projection that knows it.
+    audit_event_id: int | None = None
 
 
 @dataclass(frozen=True)

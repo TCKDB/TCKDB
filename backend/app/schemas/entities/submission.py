@@ -17,6 +17,8 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.db.models.common import (
+    MachineReviewSeverity,
+    MachineReviewStatus,
     RightsBasisKind,
     SubmissionActorKind,
     SubmissionAuditEventKind,
@@ -77,6 +79,50 @@ class SubmissionRead(TimestampedReadSchema):
     llm_precheck_model: str | None = None
     llm_precheck_at: datetime | None = None
     is_public: bool
+
+
+class SubmissionMachineReviewLatestRunRead(BaseModel):
+    """The newest machine-review run of a submission, in brief.
+
+    ``parsed`` is false when the stored payload could not be read; ``status`` is
+    then ``null``. ``highest_severity`` is taken over every finding in the run.
+    """
+
+    audit_event_id: int
+    reviewed_at: datetime | None = None
+    parsed: bool
+    status: MachineReviewStatus | None = None
+    highest_severity: MachineReviewSeverity | None = None
+    findings_count: int = 0
+    model: str | None = None
+    provider: str | None = None
+
+
+class SubmissionMachineReviewStateRead(BaseModel):
+    """Machine-review state of one submission: runs, latest run and curator tasks."""
+
+    run_count: int
+    latest_run: SubmissionMachineReviewLatestRunRead | None = None
+    open_task_count: int
+    task_count: int
+
+
+class SubmissionMachineReviewOverviewRead(BaseModel):
+    """One row of the curator submissions list with its machine-review state.
+
+    ``title`` is supplied by the depositor: show it only as "as deposited",
+    never as the archive's own wording.
+    """
+
+    id: int
+    public_ref: str
+    status: SubmissionStatus
+    submission_kind: SubmissionKind
+    title: str | None = None
+    created_by: int
+    created_by_username: str | None = None
+    submitted_at: datetime
+    machine_review: SubmissionMachineReviewStateRead
 
 
 # ---------------------------------------------------------------------------

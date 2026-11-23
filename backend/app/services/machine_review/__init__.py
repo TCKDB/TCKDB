@@ -36,6 +36,12 @@ from app.services.machine_review.context_hash import (
     SourceCalculationContext,
     build_machine_review_context_hash,
 )
+from app.services.machine_review.curator_task_findings import (
+    CuratorTaskFindingResolution,
+    curator_task_ids_by_fingerprint,
+    fingerprint_for_review_finding,
+    resolve_curator_task_findings,
+)
 from app.services.machine_review.curator_task_lifecycle import (
     assign_curator_task,
     get_curator_task_or_404,
@@ -62,11 +68,13 @@ from app.services.machine_review.derivation import (
 )
 from app.services.machine_review.inspection import (
     MachineReviewInspectionView,
+    MachineReviewRunInspection,
     SubmissionMachineReviewInspection,
     SubmissionRecordMachineReviewInspection,
     build_machine_review_inspection_view,
     build_submission_machine_review_inspection,
     get_machine_review_summaries_for_record,
+    project_machine_review_events,
 )
 from app.services.machine_review.mapping import (
     MachineReviewRecordMapping,
@@ -148,6 +156,7 @@ __all__ = [
     "AuditRecordLink",
     "CuratorPriority",
     "CuratorTaskBuildResult",
+    "CuratorTaskFindingResolution",
     "FakeMachineReviewProducer",
     "GeometryValidationContext",
     "InternalTrustEnvelopeWithMachineReview",
@@ -176,6 +185,7 @@ __all__ = [
     "MachineReviewRecordMapping",
     "MachineReviewRecordSummary",
     "MachineReviewResult",
+    "MachineReviewRunInspection",
     "MachineReviewSeverity",
     "MachineReviewStaleReason",
     "MachineReviewStatus",
@@ -206,9 +216,11 @@ __all__ = [
     "classify_record_machine_review_currency_from_rows",
     "compute_finding_fingerprint",
     "create_record_machine_review_row",
+    "curator_task_ids_by_fingerprint",
     "derive_machine_review_status",
     "event_is_machine_review",
     "execute_record_machine_rereview_plan",
+    "fingerprint_for_review_finding",
     "get_curator_task_or_404",
     "get_latest_record_machine_review_row",
     "get_machine_review_summaries_for_record",
@@ -217,10 +229,12 @@ __all__ = [
     "machine_review_result_from_audit_event",
     "map_findings_to_submission_records",
     "plan_record_machine_rereview",
+    "project_machine_review_events",
     "record_machine_reviews_from_audit_events",
     "record_machine_reviews_from_submission_audit_event",
     "reopen_curator_task",
     "resolve_curator_task",
+    "resolve_curator_task_findings",
     "resolve_record_trust_fragment",
     "run_admin_fake_machine_review",
     "run_fake_record_machine_review",

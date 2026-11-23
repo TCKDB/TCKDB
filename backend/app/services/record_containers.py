@@ -275,6 +275,24 @@ def resolve_record_containers(
     return resolved
 
 
+def resolve_record_containers_by_name(
+    session: Session,
+    refs: Iterable[tuple[str, int]],
+) -> dict[tuple[str, int], RecordContainer]:
+    """As :func:`resolve_record_containers`, but keyed by the raw type *name*.
+
+    For callers that hold a record type as a plain ``str`` (the machine-review
+    projection). A name outside :class:`SubmissionRecordType` resolves to
+    nothing, the same answer as any record that cannot be linked.
+    """
+    by_value = {t.value: t for t in SubmissionRecordType}
+    typed = [(by_value[name], rid) for name, rid in refs if name in by_value]
+    return {
+        (record_type.value, record_id): container
+        for (record_type, record_id), container in resolve_record_containers(session, typed).items()
+    }
+
+
 def resolve_record_container(
     session: Session,
     *,
