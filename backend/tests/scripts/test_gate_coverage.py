@@ -981,6 +981,7 @@ def test_frontend_gate_runs_for_frontend_prs_and_main_pushes() -> None:
     assert push.get("paths") == pull_request.get("paths") == [
         ".github/workflows/frontend-ci.yml",
         "frontend/**",
+        "docs/guides/api_vocabulary.md",  # read by frontend/src/domain/apiVocabulary.parity.test.ts
     ]
     assert "workflow_dispatch" in triggers
 
