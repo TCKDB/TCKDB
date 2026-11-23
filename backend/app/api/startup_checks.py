@@ -106,6 +106,10 @@ def _collect_violations(settings: Settings) -> list[str]:
     if not settings.paging_cursor_key or len(settings.paging_cursor_key) < 32:
         violations.append("PAGING_CURSOR_KEY must be set to a secret of at least 32 characters (it seals paging cursors)")
     violations.extend(_placeholder_secret_violations(settings))
+    if settings.ai_review_assistant_mode == "test":
+        violations.append(
+            "AI_REVIEW_ASSISTANT_MODE must not be test (the scripted fake reviewer is for DEPLOYMENT_MODE=local only)"
+        )
 
     # CORS rules diverge between the two hosted modes. shared_private
     # may run curl/HPC-only with no browser clients (empty allow-list

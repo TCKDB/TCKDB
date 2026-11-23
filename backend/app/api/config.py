@@ -289,6 +289,8 @@ class Settings(BaseSettings):
     llm_precheck_include_artifact_text: bool = False
     llm_precheck_include_coordinates: bool = False
     llm_precheck_store_full_context: bool = False
+    # Seconds the scripted fake reviewer waits per step (DEPLOYMENT_MODE=local only).
+    llm_precheck_fake_step_delay_seconds: float = 1.0
 
     # Observability: log output format and minimum level. ``text`` is
     # the developer-friendly default; hosted deployments set
