@@ -20,6 +20,7 @@ from app.db.models.common import (
     MachineReviewJobFailure,
     MachineReviewProviderKey,
     SubmissionAuditEventKind,
+    SubmissionRecordType,
 )
 from app.db.models.common import (
     MachineReviewJobEventKind as K,
@@ -30,8 +31,13 @@ from app.db.models.common import (
 from app.db.models.machine_review_job import MachineReviewJob, MachineReviewJobEvent
 from app.db.models.submission import SubmissionAuditEvent
 from app.services.machine_review import jobs
-from app.services.machine_review.providers.fake import ScriptedFakeMachineReviewAgent, make_pass_result
+from app.services.machine_review.providers.fake import (
+    ScriptedFakeMachineReviewAgent,
+    make_pass_result,
+    make_warning_result,
+)
 from app.services.machine_review.switches import write_machine_review_switches
+from app.services.submission import link_record
 from app.workers import machine_review_worker as worker
 from tests.services._machine_review_job_support import (
     FAKE_SETTINGS,
@@ -398,3 +404,104 @@ def test_a_refused_fake_job_records_the_job_model_not_the_configured_one(db_sess
     assert len(events) == 1
     assert events[0].details_json["model"] == "fake_test/machine-review"
     assert "cloud/never-asked" not in str(events[0].details_json)
+
+
+def _scripted_with(**kw):
+    return ScriptedFakeMachineReviewAgent(steps=1, result=make_warning_result(**kw))
+
+
+def _failed_audit_events(session, submission):
+    return [e for e in _audit_events(session, submission) if e.details_json["status"] == "machine_review_failed"]
+
+
+def test_a_finding_citing_an_unlinked_record_fails_the_job_as_invalid_output(ctx, factory):
+    session, _, submission, job = ctx
+
+    _cycle(factory, provider=_scripted_with(record_type="calculation", record_ref="777"))
+
+    job = _reload(session, job)
+    assert (job.status, job.failure_code) == (S.failed, MachineReviewJobFailure.invalid_output)
+    assert _kinds(session, job).count(K.parse_failed) == 1
+    assert len(_failed_audit_events(session, submission)) == 1
+    assert "not offered" in job.failure_detail
+
+
+def test_the_same_finding_citing_a_linked_record_succeeds(ctx, factory):
+    session, _, submission, job = ctx
+    link_record(
+        session, submission=submission, record_type=SubmissionRecordType.calculation, record_id=777, role="primary"
+    )
+    session.flush()
+
+    _cycle(factory, provider=_scripted_with(record_type="calculation", record_ref="777"))
+
+    job = _reload(session, job)
+    assert job.status is S.succeeded and job.failure_code is None
+    assert K.parse_failed not in _kinds(session, job)
+    assert len(_audit_events(session, submission)) == 1
+    assert _failed_audit_events(session, submission) == []
+
+
+class _SingleShotCitingCalculation777:
+    def review_submission(self, context):
+        return make_warning_result(record_type="calculation", record_ref="777")
+
+
+def test_single_shot_provider_citing_an_unlinked_record_fails_as_invalid_output(ctx, factory):
+    session, _, submission, job = ctx
+
+    _cycle(factory, provider=_SingleShotCitingCalculation777())
+
+    job = _reload(session, job)
+    assert (job.status, job.failure_code) == (S.failed, MachineReviewJobFailure.invalid_output)
+    assert len(_failed_audit_events(session, submission)) == 1
+
+
+def test_single_shot_provider_citing_a_linked_record_succeeds(ctx, factory):
+    session, _, submission, job = ctx
+    link_record(
+        session, submission=submission, record_type=SubmissionRecordType.calculation, record_id=777, role="primary"
+    )
+    session.flush()
+
+    _cycle(factory, provider=_SingleShotCitingCalculation777())
+
+    assert _reload(session, job).status is S.succeeded
+    assert _failed_audit_events(session, submission) == []
+
+
+def _scripted_with_sources(sources):
+    result = make_pass_result().model_copy(update={"retrieval_sources": sources})
+    return ScriptedFakeMachineReviewAgent(steps=1, result=result)
+
+
+def test_naming_a_retrieval_source_nothing_returned_fails_and_naming_none_succeeds(db_session, factory):
+    admin = make_user(db_session, "worker-admin5", AppUserRole.admin)
+    outcomes = {}
+    for label, sources in (("named", ("guidance.t1",)), ("none", ())):
+        submission = make_submission(db_session, admin.id)
+        job = jobs.create_job(
+            db_session,
+            submission_id=submission.id,
+            requester=admin,
+            provider_key=MachineReviewProviderKey.fake,
+            settings_obj=FAKE_SETTINGS,
+        )
+        _cycle(factory, provider=_scripted_with_sources(sources))
+        job = _reload(db_session, job)
+        outcomes[label] = (job.status, job.failure_code, len(_failed_audit_events(db_session, submission)))
+
+    assert outcomes["named"] == (S.failed, MachineReviewJobFailure.invalid_output, 1)
+    assert outcomes["none"] == (S.succeeded, None, 0)
+
+
+def test_identity_on_a_stored_review_comes_from_the_job_and_not_from_the_model(ctx, factory):
+    session, _, _, job = ctx
+    claimed = make_pass_result().model_copy(update={"model": "claimed/model", "provider": "ClaimedProvider"})
+
+    _cycle(factory, provider=ScriptedFakeMachineReviewAgent(steps=1, result=claimed))
+
+    job = _reload(session, job)
+    details = session.get(SubmissionAuditEvent, job.audit_event_id).details_json
+    assert details["model"] == job.model == "fake_test/machine-review"
+    assert details["provider"] == "ScriptedFakeMachineReviewAgent"

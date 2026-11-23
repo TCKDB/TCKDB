@@ -128,7 +128,6 @@ def _v2_result(
         findings=findings,
         model="vendor/model-name",
         provider="VendorProvider",
-        used_rag=False,
     )
 
 
@@ -381,19 +380,22 @@ def test_persisted_v2_unlinked_record_result_stays_diagnostic(
 def test_persisted_v2_malformed_result_becomes_parse_warning(
     client, db_session, login_as, _api_admin_user
 ):
-    """A malformed v2 payload (used_rag=true) degrades to a parse warning."""
+    """A format 2 payload with an unknown key degrades to a contract-validation parse warning."""
     submission = _new_submission(db_session, _api_admin_user)
     _link_kinetics(db_session, submission, 9001)
-    # A raw, malformed v2 event written directly: it carries the v2 marker but
-    # violates the contract (used_rag must be false), so it cannot validate.
+    # A raw event written directly: it carries the current marker and every
+    # required field, and differs from a valid payload only by an unknown key.
     db_session.add(
         SubmissionAuditEvent(
             submission_id=submission.id,
             actor_kind=SubmissionActorKind.llm,
             event_kind=SubmissionAuditEventKind.llm_precheck_recorded,
             details_json={
-                "format": {"name": "machine_review", "version": 1},
+                "format": {"name": "machine_review", "version": 2},
                 "status": "machine_screened_warning",
+                "summary": "advisory",
+                "findings": [],
+                "retrieval_sources": [],
                 "used_rag": True,
             },
         )
@@ -406,6 +408,7 @@ def test_persisted_v2_malformed_result_becomes_parse_warning(
     payload = body.json()
     assert payload["record_summaries"] == []
     assert len(payload["parse_warnings"]) == 1
+    assert "failed contract validation" in payload["parse_warnings"][0]
 
     build = client.post(_build_url(submission.id))
     assert build.status_code == 200, build.text
@@ -453,7 +456,6 @@ def test_a_marker_less_event_is_an_unknown_format_and_creates_nothing(
                     }
                 ],
                 "model": "retired/model",
-                "used_rag": False,
             },
         )
     )

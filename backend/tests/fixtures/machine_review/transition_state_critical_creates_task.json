@@ -9,7 +9,10 @@
     }
   ],
   "audit_event_details_json": {
-    "format": {"name": "machine_review", "version": 1},
+    "format": {
+      "name": "machine_review",
+      "version": 2
+    },
     "status": "machine_screened_needs_attention",
     "summary": "A critical contradiction on a transition-state entry.",
     "findings": [
@@ -17,17 +20,17 @@
         "severity": "critical",
         "category": "consistency",
         "record_type": "transition_state_entry",
-        "record_id": 9002,
         "message": "Validated TS has contradictory imaginary-frequency evidence: marked validated yet the frequency set shows no single imaginary mode.",
         "evidence_keys": [
           "ts.imaginary_frequency_count",
           "ts.validated"
-        ]
+        ],
+        "record_ref": "9002"
       }
     ],
     "model": "fake_test/machine-review",
     "provider": "FakeMachineReviewProvider",
-    "used_rag": false
+    "retrieval_sources": []
   },
   "expected": {
     "record_summary_count": 1,

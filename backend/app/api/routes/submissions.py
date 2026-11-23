@@ -124,9 +124,9 @@ def _ai_review_summary_from_event(event) -> SubmissionAIReviewSummaryRead:
             else event.summary
         ),
         model=details.get("model") if isinstance(details.get("model"), str) else None,
-        used_rag=(
-            details.get("used_rag")
-            if isinstance(details.get("used_rag"), bool)
+        retrieval_source_count=(
+            len(details["retrieval_sources"])
+            if isinstance(details.get("retrieval_sources"), list)
             else None
         ),
         created_at=event.created_at,

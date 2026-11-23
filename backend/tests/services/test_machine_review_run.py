@@ -32,6 +32,7 @@ from app.db.models.common import (
     SubmissionActorKind,
     SubmissionAuditEventKind,
     SubmissionKind,
+    SubmissionRecordType,
     SubmissionStatus,
 )
 from app.db.models.machine_review_curator_task import MachineReviewCuratorTask
@@ -48,7 +49,7 @@ from app.services.machine_review.schemas import (
     MACHINE_REVIEW_FORMAT,
     MachineReviewStatus,
 )
-from app.services.submission import create_submission
+from app.services.submission import create_submission, link_record
 
 # Off mode is what a default deployment runs; using it for the injected-provider
 # tests proves the injected provider wins over configuration rather than
@@ -87,7 +88,6 @@ class _WrongTypeProvider:
             else {
                 "format": MACHINE_REVIEW_FORMAT.model_dump(),
                 "status": "machine_screened_pass",
-                "used_rag": False,
             }
         )
 
@@ -198,9 +198,37 @@ def test_run_records_one_v2_audit_event(db_session, _api_test_user):
     assert events[0].to_status is None
 
 
+def _link_calculation_7(db_session: Session, submission) -> None:
+    link_record(
+        db_session, submission=submission, record_type=SubmissionRecordType.calculation, record_id=7, role="primary"
+    )
+    db_session.flush()
+
+
+def test_a_finding_citing_an_unoffered_record_fails_the_review_and_an_offered_one_succeeds(
+    db_session, _api_test_user
+):
+    """The reviewer may cite only records the context offered."""
+    fixed = make_warning_result(record_type="calculation", record_ref="7")
+    unlinked = _seed_submission(db_session, _api_test_user)
+    refused = run_machine_review_for_submission(
+        db_session, unlinked.id, provider=build_fake_machine_review_provider(fixed), settings_obj=_OFF
+    )
+    assert refused.status is MachineReviewStatus.machine_review_failed
+    assert "not offered" in (refused.failure_reason or "")
+
+    linked = _seed_submission(db_session, _api_test_user)
+    _link_calculation_7(db_session, linked)
+    accepted = run_machine_review_for_submission(
+        db_session, linked.id, provider=build_fake_machine_review_provider(fixed), settings_obj=_OFF
+    )
+    assert accepted.status is MachineReviewStatus.machine_screened_warning
+
+
 def test_run_reports_findings_count_summary_and_identity(db_session, _api_test_user):
     """The outcome carries what a caller (and the admin route) needs."""
     submission = _seed_submission(db_session, _api_test_user)
+    _link_calculation_7(db_session, submission)
     fixed = make_warning_result(record_type="calculation", record_ref="7")
 
     outcome = run_machine_review_for_submission(
@@ -406,9 +434,10 @@ def test_provider_returning_the_wrong_type_becomes_a_failed_result(
 def test_enormous_failure_text_is_clipped_not_raised(db_session, _api_test_user):
     """A huge exception message cannot break the failure path it describes.
 
-    ``summary`` is capped at 2000 characters, so an unclipped failure text
+    ``summary`` is capped at 280 characters, so an unclipped failure text
     would raise a ``ValidationError`` while the runner was in the middle of
-    handling a failure -- the one place it is not allowed to raise.
+    handling a failure -- the one place it is not allowed to raise. The failure
+    reason keeps more text than the stored summary.
     """
     submission = _seed_submission(db_session, _api_test_user)
 
@@ -421,8 +450,9 @@ def test_enormous_failure_text_is_clipped_not_raised(db_session, _api_test_user)
 
     assert outcome.status is MachineReviewStatus.machine_review_failed
     assert outcome.summary is not None
-    assert len(outcome.summary) <= 2000
+    assert len(outcome.summary) <= 280
     assert outcome.summary.endswith("[truncated]")
+    assert outcome.failure_reason is not None and 280 < len(outcome.failure_reason) <= 2000
     assert outcome.audit_event_recorded is True
 
 

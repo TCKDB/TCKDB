@@ -34,6 +34,7 @@ from app.db.models.common import (
 from app.db.models.machine_review_job import MachineReviewJob
 from app.db.models.submission import Submission
 from app.services.machine_review import jobs
+from app.services.machine_review.offer import offer_violation, offered_refs_from_context
 from app.services.machine_review.providers.fake import ScriptedFakeMachineReviewAgent
 from app.services.machine_review.providers.interface import (
     MachineReviewContext,
@@ -42,6 +43,7 @@ from app.services.machine_review.providers.interface import (
 )
 from app.services.machine_review.run import (
     MachineReviewCancelled,
+    _clip,
     _failure_text,
     build_review_context,
     invoke_provider,
@@ -196,6 +198,10 @@ def _run_claimed_job(
                     if _cancel_requested(session_factory, job_id):
                         raise MachineReviewCancelled
                     result, reason = invoke_provider(selected, context, settings_obj)
+                    if result is not None:
+                        violation = _offer_violation(result, context)
+                        if violation is not None:
+                            result, reason, parse_failed = None, violation, True
             except MachineReviewCancelled:
                 with session_factory() as session:
                     jobs.finish_job(
@@ -212,6 +218,13 @@ def _run_claimed_job(
             session.commit()
             return
         submission = session.get_one(Submission, submission_id)
+        if result is not None:
+            result = result.model_copy(
+                update={
+                    "model": _clip(job_model or settings_obj.llm_precheck_model, 128) if (job_model or settings_obj.llm_precheck_model) else None,
+                    "provider": provider_name,
+                }
+            )
         outcome, event = record_review(
             session,
             submission=submission,
@@ -283,9 +296,24 @@ def _run_scripted(
     except Exception as exc:
         return None, _failure_text("Machine review failed to review", exc, settings_obj), False
     try:
-        return parse_machine_review_payload(text), None, False
+        result = parse_machine_review_payload(text)
     except Exception as exc:
         return None, _failure_text("Machine review output was invalid", exc, settings_obj), True
+    violation = _offer_violation(result, context)
+    if violation is not None:
+        return None, violation, True
+    return result, None, False
+
+
+def _offer_violation(result: MachineReviewProviderResult, context: MachineReviewContext) -> str | None:
+    """Why ``result`` cites something the run did not offer, as failure text; ``None`` if it does not.
+
+    No guidance search exists yet, so no retrieval source has been returned.
+    """
+    violation = offer_violation(result, offered_refs=offered_refs_from_context(context), returned_sources=frozenset())
+    if violation is None:
+        return None
+    return _clip(f"Machine review output was invalid: {violation}", 2000)
 
 
 def run_worker_thread(

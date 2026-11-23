@@ -42,14 +42,11 @@ Three responsibilities, kept separate so each is independently testable:
 Internal-id addressing
 ----------------------
 
-Findings address records by internal ``record_id`` (the public
-``record_ref`` is not available at this layer), so this adapter uses the
-**stringified internal ``record_id`` as the mapper's matching key** and carries
-the real ``record_id`` int through as passthrough metadata. This is the
-internal-id variant the mapping module's docstring anticipates ("the same
-algorithm with the key field swapped"). The stringified id is never surfaced
-publicly — this whole module is private — so the internal-id policy is not
-violated.
+A finding's ``record_ref`` is the stringified internal id of a linked record, as
+offered to the reviewer in ``offered_record_refs``. The adapter uses it as the
+mapper's matching key and carries the real ``record_id`` int through as
+passthrough metadata. The stringified id is never surfaced publicly -- this whole
+module is private -- so the internal-id policy is not violated.
 """
 
 from __future__ import annotations
@@ -92,7 +89,7 @@ _MACHINE_REVIEW_ACTOR_KIND = SubmissionActorKind.llm
 _KNOWN_RECORD_TYPES: frozenset[str] = frozenset(t.value for t in SubmissionRecordType)
 
 #: The payload formats this release reads, keyed by ``(name, version)``: each entry is the reader that validates
-#: a ``details_json`` payload of that format. The only format today is the current one. A payload naming a format
+#: a ``details_json`` payload of that format. The only format held is the current one. A payload naming a format
 #: the registry does not hold is *refused*, never read as the current one: nothing is guessed about its shape.
 PAYLOAD_FORMATS: VersionRegistry[Callable[[dict[str, Any]], MachineReviewProviderResult]] = VersionRegistry(
     "machine_review_payload_formats", startup_checked=True
@@ -277,13 +274,7 @@ def machine_review_result_from_audit_event(
                     severity=f.severity,
                     category=f.category,
                     record_type=f.record_type,
-                    # A finding that cites only ``record_id`` gets the stringified
-                    # internal id as its mapping key (module docstring).
-                    record_ref=(
-                        f.record_ref
-                        if f.record_ref is not None or f.record_id is None
-                        else str(f.record_id)
-                    ),
+                    record_ref=f.record_ref,
                     message=f.message,
                     evidence_keys=f.evidence_keys,
                     recommended_action=f.recommended_action,
@@ -291,7 +282,7 @@ def machine_review_result_from_audit_event(
                 for f in payload.findings
             ),
             model=payload.model,
-            used_rag=payload.used_rag,
+            retrieval_sources=payload.retrieval_sources,
         )
     except (ValidationError, ValueError):
         return ParsedMachineReviewPayload(

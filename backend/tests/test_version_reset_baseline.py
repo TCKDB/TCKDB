@@ -64,7 +64,10 @@ REGISTRIES: dict[str, Callable[[], VersionRegistry]] = {
 #: The structure and relative-energy formats moved to 5: a basin determination records its conformer
 #: group's and observation's review statuses apart, so a replay judges the group as a record and the observation as evidence.
 #: The method-family classification is at 2: ``gfn2``, ``wb97xd3`` and ``mrci+davidson`` gained a family.
+#: The machine-review payload format is at 2: summaries and findings are length-capped and ``retrieval_sources``
+#: replaces the RAG flag; a payload stored under format 1 is not read.
 EXPECTED: dict[str, int] = {
+    "machine_review_payload_formats": 2,
     "thermo_formats": 5,
     "thermo_semantics": 2,
     "kinetics_formats": 5,

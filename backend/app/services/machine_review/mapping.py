@@ -27,7 +27,8 @@ to re-resolve it.
 Matching precedence (most specific first):
 
 1. exact ``(record_type, record_ref)`` of a linked record (in the audit path
-   ``record_ref`` is the stringified internal ``record_id``, so the "exact
+   ``record_ref`` is the stringified internal ``record_id`` that the audit
+   adapter's reviewer was offered, so the "exact
    ``record_type`` + ``record_id``" and "exact ``record_type`` +
    ``record_ref``" levels collapse here);
 2. the **single unambiguous** linked record of the finding's ``record_type``,

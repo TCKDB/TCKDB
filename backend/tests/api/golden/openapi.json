@@ -66029,6 +66029,17 @@
             ],
             "title": "Model"
           },
+          "retrieval_source_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retrieval Source Count"
+          },
           "summary": {
             "anyOf": [
               {
@@ -66039,17 +66050,6 @@
               }
             ],
             "title": "Summary"
-          },
-          "used_rag": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Used Rag"
           }
         },
         "required": [

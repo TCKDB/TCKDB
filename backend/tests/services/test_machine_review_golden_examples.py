@@ -71,15 +71,17 @@ _CASES = (
     "malformed_payload_parse_warning_only",
 )
 
-# Provider-contract golden cases. They
-# run through the SAME pipeline helpers; the adapter requires the schema_version
-# marker in the payload.
-_V2_CASES = (
-    "v2_transition_state_validation_critical_with_recommended_action",
-    "v2_schema_gap_warning_with_recommended_action",
-    "v2_unknown_schema_version_parse_warning",
-    "v2_extra_mutation_payload_rejected",
-    "v2_used_rag_true_rejected",
+# Cases with recommended actions, provider identity and refused payloads. They
+# run through the SAME pipeline helpers; the adapter requires the format marker
+# in the payload.
+_EXTRA_CASES = (
+    "case_transition_state_validation_critical_with_recommended_action",
+    "case_schema_gap_warning_with_recommended_action",
+    "case_unknown_schema_version_parse_warning",
+    "case_extra_mutation_payload_rejected",
+    "case_used_rag_true_rejected",
+    "case_stored_previous_format_parse_warning",
+    "format_v2_full_review",
 )
 
 
@@ -159,7 +161,7 @@ def _count_tasks(db_session: Session, submission_id: int) -> int:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize("case", _CASES + _V2_CASES)
+@pytest.mark.parametrize("case", _CASES + _EXTRA_CASES)
 def test_golden_case_inspection_and_build(db_session, _api_test_user, case):
     fixture = _load(case)
     expected = fixture["expected"]
@@ -171,6 +173,9 @@ def test_golden_case_inspection_and_build(db_session, _api_test_user, case):
     assert len(inspection.unmapped_findings) == expected["unmapped_findings_count"]
     assert len(inspection.mapping_warnings) == expected["mapping_warnings_count"]
     assert len(inspection.parse_warnings) == expected["parse_warnings_count"]
+
+    if "parse_warning_contains" in expected:
+        assert any(expected["parse_warning_contains"] in w for w in inspection.parse_warnings)
 
     if "mapping_warning_contains" in expected:
         assert any(
@@ -316,7 +321,7 @@ def test_v2_transition_state_case_closes_v1_gap(db_session, _api_test_user):
     """The v2 TS case expresses what the v1 source contract could not:
     transition_state_validation category + recommended_action, both surviving
     end-to-end, with recommended_action folded into the task fingerprint."""
-    fixture = _load("v2_transition_state_validation_critical_with_recommended_action")
+    fixture = _load("case_transition_state_validation_critical_with_recommended_action")
     submission = _seed(db_session, _api_test_user, fixture)
     inspection = _inspect(db_session, submission)
 
@@ -363,7 +368,7 @@ def test_a_payload_without_the_format_marker_is_refused_and_creates_no_task(db_s
 
 def test_v2_provider_field_supersedes_sibling_provider(db_session, _api_test_user):
     """v2 carries provider as a first-class field; it reaches the summary."""
-    fixture = _load("v2_schema_gap_warning_with_recommended_action")
+    fixture = _load("case_schema_gap_warning_with_recommended_action")
     submission = _seed(db_session, _api_test_user, fixture)
     inspection = _inspect(db_session, submission)
     assert inspection.record_inspections[0].latest_summary.provider == "VendorProvider"

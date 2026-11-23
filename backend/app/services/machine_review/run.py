@@ -52,6 +52,7 @@ from app.api.config import settings as app_settings
 from app.api.errors import NotFoundError
 from app.db.models.submission import Submission, SubmissionAuditEvent
 from app.services.llm_precheck.context_builder import build_llm_precheck_context
+from app.services.machine_review.offer import offer_violation, offered_refs_from_context
 from app.services.machine_review.providers.disabled import (
     DisabledMachineReviewProvider,
 )
@@ -64,18 +65,20 @@ from app.services.machine_review.providers.interface import (
 )
 from app.services.machine_review.schemas import (
     MACHINE_REVIEW_FORMAT,
+    SUMMARY_MAX_CHARS,
     MachineReviewProviderResult,
     MachineReviewStatus,
 )
 from app.services.submission import record_machine_review_audit_event
 
-#: ``MachineReviewProviderResult.summary`` is capped at 2000 characters and
-#: ``model`` at 128. A failure summary is built from an exception message,
-#: which has no length bound at all -- a client library is free to put a whole
-#: response body in one. Clipping here is not cosmetic: an over-long summary
-#: would fail validation while *constructing the failed result*, and the one
-#: thing this module must never do is raise on the failure path.
-_MAX_SUMMARY_CHARS = 2000
+#: Failure text is built from an exception message, which has no length bound
+#: at all -- a client library is free to put a whole response body in one. The
+#: text is kept to this many characters for ``failure_reason`` and a job's
+#: failure detail; the stored summary is clipped further, to the contract's cap.
+#: Clipping is not cosmetic: an over-long summary would fail validation while
+#: *constructing the failed result*, and the one thing this module must never do
+#: is raise on the failure path. ``model`` is capped at 128.
+_MAX_FAILURE_TEXT_CHARS = 2000
 _MAX_MODEL_CHARS = 128
 
 #: Marker appended to text that was cut to fit, so a reader can tell a short
@@ -101,12 +104,11 @@ class MachineReviewRunOutcome:
     audit event actually landed, and why the run failed when it did.
 
     ``failure_reason`` is non-``None`` exactly when :attr:`status` is
-    ``machine_review_failed``, and on that path it carries the same text as
-    :attr:`summary`. That is deliberate rather than duplication left in by
-    accident: the payload is ``extra="forbid"`` and has no error field, so
-    in the *recorded event* the reason has nowhere to live but ``summary``.
-    Naming it separately means a caller need not know that, and need not infer
-    "this summary is an error" from the status.
+    ``machine_review_failed``. It carries the failure text, which can be longer
+    than the stored :attr:`summary` (clipped to the contract's cap). The payload
+    is ``extra="forbid"`` and has no error field, so in the *recorded event* the
+    reason has nowhere to live but ``summary``. Naming it separately means a
+    caller need not infer "this summary is an error" from the status.
 
     No row id appears here. Whether an event was
     written is a fact a caller can act on; which row it was is not.
@@ -180,7 +182,7 @@ def _failure_text(prefix: str, exc: BaseException, settings_obj: Any) -> str:
     """
     detail = str(exc).strip() or exc.__class__.__name__
     text = f"{prefix}: {exc.__class__.__name__}: {detail}"
-    return _clip(_redact_secrets(text, settings_obj), _MAX_SUMMARY_CHARS)
+    return _clip(_redact_secrets(text, settings_obj), _MAX_FAILURE_TEXT_CHARS)
 
 
 def _configured_model(settings_obj: Any) -> str | None:
@@ -212,11 +214,10 @@ def _failed_result(
         format=MACHINE_REVIEW_FORMAT,
         status=MachineReviewStatus.machine_review_failed,
         curator_priority=None,
-        summary=reason,
+        summary=_clip(reason, SUMMARY_MAX_CHARS) or _clip("Machine review failed to review.", SUMMARY_MAX_CHARS),
         findings=(),
         model=_clip(model, _MAX_MODEL_CHARS) if model else _configured_model(settings_obj),
         provider=provider_name,
-        used_rag=False,
     )
 
 
@@ -323,7 +324,7 @@ def invoke_provider(
             "Machine review provider returned "
             f"{type(result).__name__}, not a validated "
             "MachineReviewProviderResult.",
-            _MAX_SUMMARY_CHARS,
+            _MAX_FAILURE_TEXT_CHARS,
         )
     return result, None
 
@@ -437,6 +438,13 @@ def run_machine_review_for_submission(
             result, reason = invoke_provider(selected, context, settings_obj)
         except MachineReviewCancelled:
             result, reason = None, "Machine review was cancelled."
+        else:
+            if result is not None:
+                violation = offer_violation(
+                    result, offered_refs=offered_refs_from_context(context), returned_sources=frozenset()
+                )
+                if violation is not None:
+                    result, reason = None, _clip(f"Machine review output was invalid: {violation}", _MAX_FAILURE_TEXT_CHARS)
 
     outcome, _ = record_review(
         session,

@@ -102,7 +102,7 @@ def _record_finding(
         severity=severity,
         category=MachineReviewCategory.provenance,
         record_type=record_type,
-        record_id=record_id,
+        record_ref=None if record_id is None else str(record_id),
         message="Missing source artifact summary.",
         evidence_keys=("missing_checks.source_artifact_present",),
     )
@@ -121,7 +121,6 @@ def _record_mr_event(
         summary="advisory",
         findings=findings,
         model="fake_test/simple-v1",
-        used_rag=False,
     )
     record_machine_review_audit_event(
         db_session,

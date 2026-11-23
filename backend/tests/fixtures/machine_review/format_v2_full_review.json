@@ -1,0 +1,66 @@
+{
+  "case": "format_v2_full_review",
+  "description": "A format 2 review with findings, a priority and retrieval sources.",
+  "linked_records": [
+    {
+      "record_type": "kinetics",
+      "record_id": 9001,
+      "role": "primary"
+    },
+    {
+      "record_type": "transition_state_entry",
+      "record_id": 9002,
+      "role": "primary"
+    }
+  ],
+  "audit_event_details_json": {
+    "format": {
+      "name": "machine_review",
+      "version": 2
+    },
+    "status": "machine_screened_needs_attention",
+    "curator_priority": "high",
+    "summary": "The transition state evidence does not establish a saddle point.",
+    "findings": [
+      {
+        "severity": "critical",
+        "category": "transition_state_validation",
+        "record_type": "transition_state_entry",
+        "record_ref": "9002",
+        "message": "Marked validated, but no single imaginary mode is reported.",
+        "evidence_keys": [
+          "ts.imaginary_frequency_count"
+        ],
+        "recommended_action": "Re-run the frequency analysis."
+      },
+      {
+        "severity": "info",
+        "category": "schema_gap",
+        "record_type": null,
+        "record_ref": null,
+        "message": "A reported quantity has no field.",
+        "evidence_keys": [],
+        "recommended_action": null
+      }
+    ],
+    "retrieval_sources": [
+      "guidance.ts_validation"
+    ],
+    "model": "fake_test/machine-review",
+    "provider": "FakeMachineReviewProvider"
+  },
+  "expected": {
+    "record_summary_count": 1,
+    "unmapped_findings_count": 1,
+    "mapping_warnings_count": 0,
+    "parse_warnings_count": 0,
+    "created_tasks": 1,
+    "record_type": "transition_state_entry",
+    "record_id": 9002,
+    "latest_status": "machine_screened_needs_attention",
+    "highest_severity": "critical",
+    "workflow_state": "needs_curator_review",
+    "provider": "FakeMachineReviewProvider",
+    "recommended_action": "Re-run the frequency analysis."
+  }
+}

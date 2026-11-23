@@ -772,9 +772,9 @@ class TestAuditEventsVisibility:
             "curator_priority": None,
             "summary": "Fake machine review inspected 1 linked record(s).",
             "findings": [],
+            "retrieval_sources": [],
             "model": "fake_test/machine-review",
             "provider": "FakeMachineReviewProvider",
-            "used_rag": False,
         }
 
         other_sub = _seed_submission(db_session, created_by=_api_other_user)
@@ -799,13 +799,12 @@ class TestAuditEventsVisibility:
                     severity=MachineReviewSeverity.warning,
                     category=MachineReviewCategory.provenance,
                     record_type="calculation",
-                    record_id=42,
+                    record_ref="42",
                     message="Missing source artifact summary.",
                     evidence_keys=("missing_checks.source_artifact_present",),
                 ),
             ),
             model="fake/test",
-            used_rag=False,
         )
 
         record_machine_review_audit_event(
@@ -833,16 +832,15 @@ class TestAuditEventsVisibility:
                     "severity": "warning",
                     "category": "provenance",
                     "record_type": "calculation",
-                    "record_ref": None,
-                    "record_id": 42,
+                    "record_ref": "42",
                     "message": "Missing source artifact summary.",
                     "evidence_keys": ["missing_checks.source_artifact_present"],
                     "recommended_action": None,
                 }
             ],
+            "retrieval_sources": [],
             "model": "fake/test",
             "provider": "fake_test",
-            "used_rag": False,
         }
 
 
@@ -856,14 +854,12 @@ class TestAIReviewSummary:
             status=MachineReviewStatus.machine_screened_warning,
             summary="Older warning",
             model="fake/old",
-            used_rag=False,
         )
         newer = MachineReviewProviderResult(
             format=MACHINE_REVIEW_FORMAT,
             status=MachineReviewStatus.machine_screened_needs_attention,
             summary="Newer needs attention",
             model="fake/new",
-            used_rag=False,
         )
         old_event = record_machine_review_audit_event(
             db_session, submission=sub, result=older
@@ -882,7 +878,7 @@ class TestAIReviewSummary:
             "label": "machine_screened_needs_attention",
             "summary": "Newer needs attention",
             "model": "fake/new",
-            "used_rag": False,
+            "retrieval_source_count": 0,
             "created_at": "2026-01-02T12:00:00",
             "finding_counts": {"info": 0, "warning": 0, "critical": 0},
         }
@@ -998,11 +994,43 @@ class TestAIReviewSummary:
             event_kind=SubmissionAuditEventKind.llm_precheck_recorded,
             actor_kind=SubmissionActorKind.llm,
             summary="Retired shape",
-            details_json={"label": "warning", "findings": [], "model": "fake/test", "used_rag": False},
+            details_json={"label": "warning", "findings": [], "model": "fake/test"},
         )
         resp = client.get(f"/api/v1/submissions/{retired.id}/ai-review-summary")
         assert resp.status_code == 200
         assert resp.json()["label"] is None
+
+    def test_the_card_counts_retrieval_sources_and_has_no_rag_flag(
+        self, client, db_session, _api_test_user
+    ):
+        sub = _seed_submission(db_session, created_by=_api_test_user)
+        record_machine_review_audit_event(
+            db_session,
+            submission=sub,
+            result=MachineReviewProviderResult(
+                format=MACHINE_REVIEW_FORMAT,
+                status=MachineReviewStatus.machine_screened_pass,
+                summary="Cites guidance",
+                retrieval_sources=("guidance.a", "guidance.b"),
+                model="fake/test",
+            ),
+        )
+        empty = _seed_submission(db_session, created_by=_api_test_user)
+        record_machine_review_audit_event(
+            db_session,
+            submission=empty,
+            result=MachineReviewProviderResult(
+                format=MACHINE_REVIEW_FORMAT,
+                status=MachineReviewStatus.machine_screened_pass,
+                summary="Cites nothing",
+                model="fake/test",
+            ),
+        )
+
+        body = client.get(f"/api/v1/submissions/{sub.id}/ai-review-summary").json()
+        assert "used_rag" not in body
+        assert body["retrieval_source_count"] == 2
+        assert client.get(f"/api/v1/submissions/{empty.id}/ai-review-summary").json()["retrieval_source_count"] == 0
 
     def test_missing_findings_behaves_like_empty_list(
         self, client, db_session, _api_test_user
@@ -1019,7 +1047,6 @@ class TestAIReviewSummary:
                 "status": "machine_screened_warning",
                 "summary": "No findings key",
                 "model": "fake/test",
-                "used_rag": False,
                 "future_field": {"ignored": True},
             },
         )
@@ -1048,7 +1075,6 @@ class TestAIReviewSummary:
                 "status": "machine_screened_warning",
                 "findings": [],
                 "model": "fake/test",
-                "used_rag": False,
             },
         )
 
@@ -1119,7 +1145,6 @@ class TestAIReviewSummary:
                     ),
                 ),
                 model="fake/test",
-                used_rag=False,
             ),
             provider="fake_test",
         )
@@ -1138,7 +1163,6 @@ class TestAIReviewSummary:
                 "category": "provenance",
                 "record_type": None,
                 "record_ref": None,
-                "record_id": None,
                 "message": "Missing source artifact summary.",
                 "evidence_keys": [],
                 "recommended_action": None,

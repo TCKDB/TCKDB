@@ -9,7 +9,10 @@
     }
   ],
   "audit_event_details_json": {
-    "format": {"name": "machine_review", "version": 1},
+    "format": {
+      "name": "machine_review",
+      "version": 2
+    },
     "status": "machine_screened_warning",
     "summary": "One advisory warning on a kinetics record.",
     "findings": [
@@ -17,17 +20,17 @@
         "severity": "warning",
         "category": "kinetics",
         "record_type": "kinetics",
-        "record_id": 9001,
         "message": "Note mentions tunneling but tunneling_model is null; clarify whether tunneling was applied.",
         "evidence_keys": [
           "missing_checks.tunneling_model",
           "kinetics.note"
-        ]
+        ],
+        "record_ref": "9001"
       }
     ],
     "model": "fake_test/machine-review",
     "provider": "FakeMachineReviewProvider",
-    "used_rag": false
+    "retrieval_sources": []
   },
   "expected": {
     "record_summary_count": 1,
