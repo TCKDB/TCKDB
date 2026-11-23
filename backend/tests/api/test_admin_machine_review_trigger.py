@@ -375,7 +375,7 @@ def test_admin_fake_machine_review_response_contains_context_hash(
 
     assert isinstance(body["context_hash"], str) and len(body["context_hash"]) == 64
     assert body["context_schema_version"] == MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION
-    assert body["prompt"] == {"name": "machine_review", "version": 1}
+    assert body["prompt"] == {"name": "machine_review", "version": 2}
     assert body["rubric"] == {"name": "computed_calculation", "version": 1}
 
     # The stored row's currency key matches what the response reported.

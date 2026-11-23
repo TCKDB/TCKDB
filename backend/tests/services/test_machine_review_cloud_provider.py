@@ -144,18 +144,16 @@ def test_a_recorded_response_parses_into_a_validated_v2_result():
 
     result = provider.review_submission(a_context())
 
-    assert result.format.name == "machine_review" and result.format.version == 1
+    assert result.format.name == "machine_review" and result.format.version == 2
     assert result.status is MachineReviewStatus.machine_screened_warning
     assert len(result.findings) == 2
     first = result.findings[0]
     assert first.severity is MachineReviewSeverity.warning
     assert first.category is MachineReviewCategory.transition_state_validation
     assert first.record_type == "transition_state_entry"
-    assert first.record_id == 9
+    assert first.record_ref == "9"
     assert first.recommended_action is not None
-    # used_rag is Literal[False]; asserting it here documents that the value
-    # survives the round trip rather than being defaulted back in.
-    assert result.used_rag is False
+    assert result.retrieval_sources == ()
 
 
 def test_the_prompt_and_the_context_actually_reach_the_client():
@@ -199,11 +197,11 @@ def test_the_model_cannot_name_itself():
     """
     lying = json.dumps(
         {
-            "format": {"name": "machine_review", "version": 1},
+            "format": {"name": "machine_review", "version": 2},
             "status": "machine_screened_pass",
+            "summary": "Nothing to report.",
             "model": "some-other-model",
             "provider": "SomeoneElse",
-            "used_rag": False,
         }
     )
 
@@ -228,9 +226,9 @@ def test_a_mutation_field_is_refused():
     """
     smuggled = json.dumps(
         {
-            "format": {"name": "machine_review", "version": 1},
+            "format": {"name": "machine_review", "version": 2},
             "status": "machine_screened_pass",
-            "used_rag": False,
+            "summary": "Nothing to report.",
             "set_review_status": "approved",
         }
     )
@@ -239,11 +237,12 @@ def test_a_mutation_field_is_refused():
         build(RecordedClient(smuggled)).review_submission(a_context())
 
 
-def test_a_rag_claim_is_refused():
+def test_the_removed_rag_flag_is_refused():
     claimed = json.dumps(
         {
-            "format": {"name": "machine_review", "version": 1},
+            "format": {"name": "machine_review", "version": 2},
             "status": "machine_screened_pass",
+            "summary": "Nothing to report.",
             "used_rag": True,
         }
     )
@@ -255,9 +254,9 @@ def test_a_rag_claim_is_refused():
 def test_an_out_of_vocabulary_category_is_refused():
     invented = json.dumps(
         {
-            "format": {"name": "machine_review", "version": 1},
+            "format": {"name": "machine_review", "version": 2},
             "status": "machine_screened_warning",
-            "used_rag": False,
+            "summary": "Something is off.",
             "findings": [
                 {
                     "severity": "warning",
@@ -399,9 +398,11 @@ def test_the_prompt_states_the_rules_the_schema_enforces():
     subject matter, not wording.
     """
     prompt = MACHINE_REVIEW_SYSTEM_PROMPT
-    assert '"format": {"name": "machine_review", "version": 1}' in prompt
+    assert '"format": {"name": "machine_review", "version": 2}' in prompt
     assert "advisory" in prompt.lower()
-    assert "used_rag" in prompt
+    assert "offered_record_refs" in prompt and "untrusted_depositor_text" in prompt
+    assert "retrieval_sources" in prompt
+    assert "used_rag" not in prompt and "record_id" not in prompt
     # Every status and category the model may return is named.
     for status in ("machine_screened_pass", "machine_screened_warning"):
         assert status in prompt
@@ -420,9 +421,11 @@ def test_the_user_message_carries_the_context_and_nothing_else():
     payload = json.loads(build_user_message(context))
 
     assert payload["submission_id"] == 7
-    assert payload["submission"]["record_refs"][0]["record_type"] == (
-        "transition_state_entry"
-    )
+    assert payload["offered_record_refs"][0] == {
+        "record_type": "transition_state_entry",
+        "record_ref": "9",
+        "role": None,
+    }
     # The context carries *flags* saying artifact text and coordinates were not
     # assembled, and the renderer must pass those through rather than drop
     # them: "we did not send coordinates" is itself part of what a stored
