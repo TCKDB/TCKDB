@@ -2107,3 +2107,39 @@ describe("CalculationDetailPage deposit warnings and trust", () => {
         expectNoDepositorText()
     })
 })
+
+describe("CalculationDetailPage structure findings (curators only)", () => {
+    const FINDINGS = "/api/v1/curation/structure-evidence-findings"
+    const curatorMe = { id: 1, username: "ada", email: "a@example.com", full_name: "Ada", role: "curator", is_active: true }
+
+    it("shows a curator the section and asks for findings about this calculation", async () => {
+        const asked: URL[] = []
+        server.use(
+            http.get("/api/v1/auth/me", () => HttpResponse.json(curatorMe)),
+            http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })),
+            http.get(FINDINGS, ({ request }) => {
+                asked.push(new URL(request.url))
+                return HttpResponse.json({ subject_ref: "calc_freq_one", findings: [], offset: 0, limit: 20 })
+            }),
+        )
+        page()
+        await findLoaded("Frequency")
+        expect(await screen.findByRole("heading", { name: "Structure findings" })).toBeInTheDocument()
+        await waitFor(() => expect(asked).toHaveLength(1))
+        expect(asked[0].searchParams.get("subject_ref")).toBe("calc_freq_one")
+        expect(asked[0].searchParams.get("scope")).toBe("calculation")
+    })
+
+    it("shows an anonymous visitor nothing and sends no curation request", async () => {
+        let curation = 0
+        server.use(
+            http.all("/api/v1/curation/*", () => { curation += 1; return HttpResponse.json({}) }),
+            http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })),
+        )
+        page()
+        await findLoaded("Frequency")
+        await new Promise((r) => setTimeout(r, 30))
+        expect(screen.queryByRole("heading", { name: "Structure findings" })).toBeNull()
+        expect(curation).toBe(0)
+    })
+})

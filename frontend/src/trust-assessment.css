@@ -117,3 +117,48 @@
     color: var(--muted);
     font: var(--type-label-font);
 }
+
+/* `components/ReproducibilityDetailPanel.tsx`. */
+.repro-panel {
+    margin-top: var(--s-3);
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.repro-group {
+    margin-top: var(--s-3);
+}
+
+.repro-heading {
+    margin: 0;
+    font: var(--type-heading-3-font);
+    letter-spacing: var(--type-heading-3-tracking);
+}
+
+.repro-group-title {
+    margin: 0;
+    color: var(--ink);
+    font: var(--type-ui-font);
+}
+
+.repro-level-name {
+    margin: var(--s-2) 0 0;
+    color: var(--muted);
+    font: var(--type-note-font);
+}
+
+.repro-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--s-2);
+    margin-top: var(--s-4);
+}
+
+.repro-actions [role="status"] {
+    margin: 0;
+}
+
+.repro-actions [role="status"]:empty {
+    margin-top: calc(-1 * var(--s-2));
+}

@@ -125,5 +125,6 @@ describe("describeMadeUnder", () => {
 
     it("rubricLabel reads a snake_case name as words", () => {
         expect(rubricLabel("computed_transition_state")).toBe("computed transition state")
+        expect(rubricLabel("tckdb_reproducibility_ts_statmech")).toBe("TCKDB reproducibility of transition state statistical mechanics")
     })
 })

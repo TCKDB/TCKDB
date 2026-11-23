@@ -8,6 +8,7 @@ import { Breadcrumbs, type Crumb } from "../components/Breadcrumbs"
 import { entryCrumbs } from "../components/entryCrumbs"
 import { Formula } from "../components/Formula"
 import { PageShell } from "../components/PageShell"
+import { StructureFindingsPanel } from "../components/StructureFindingsPanel"
 import { RecordMap } from "../components/RelationshipMap"
 import { geometryNodes } from "../domain/recordMapNodes"
 import { SectionHeading } from "../components/PageSections"
@@ -236,6 +237,8 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                         <p className="note">Validation lives on the producing or consuming calculation.</p>
                     )}
                 </section>
+
+                <StructureFindingsPanel subjects={[{ ref: geometry.geometry_ref, scope: "geometry", label: "this geometry" }]} idBase="geometry" />
             </PageShell>
         </section>
     )

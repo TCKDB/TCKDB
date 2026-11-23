@@ -266,6 +266,21 @@
     outline-offset: 2px;
 }
 
+.auth-field textarea {
+    padding: .6rem .75rem;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--ink);
+    font: var(--type-value-font);
+    letter-spacing: var(--type-value-tracking);
+}
+
+.auth-field textarea:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
 .auth-field-hint {
     margin: 0;
     color: var(--muted);
@@ -284,8 +299,9 @@
     cursor: pointer;
 }
 
-.auth-submit:hover:not(:disabled) { background: var(--accent-700); }
-.auth-submit:disabled { opacity: .7; cursor: wait; }
+.auth-submit:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--accent-700); }
+.auth-submit:disabled,
+.auth-submit[aria-disabled="true"] { opacity: .7; cursor: wait; }
 
 /* No dedicated "error" token exists in `theme.css` (only `--warning`,
    used elsewhere for the clipboard-denied state) -- reused here rather

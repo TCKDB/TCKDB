@@ -46,6 +46,7 @@ export type MadeUnderKind = "assessment" | "review"
 
 const RUBRIC_NAMES: Record<string, string> = {
     tckdb_reproducibility: "TCKDB reproducibility",
+    tckdb_reproducibility_ts_statmech: "TCKDB reproducibility of transition state statistical mechanics",
     computed_ts_statmech: "computed transition state statistical mechanics",
     computed_statmech: "computed statistical mechanics",
 }

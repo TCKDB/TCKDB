@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event"
 import { rankingWords, textOf } from "../test/rankingWords"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import GeometryDetailPage from "./GeometryDetailPage"
+import { AuthProvider } from "../components/AuthProvider"
 import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels, setAt } from "../test/depositorSentinel"
 import { ANGSTROM_TO_BOHR } from "../domain/geometryXyz"
 // `design-system.css` is normally reached only via `index.css`'s `@import`
@@ -1045,5 +1046,53 @@ describe("GeometryDetailPage -- no depositor-typed text", () => {
 
         expectNoDepositorText()
         expectNoAdversarialText()
+    })
+})
+
+describe("GeometryDetailPage structure findings (curators only)", () => {
+    const FINDINGS = "/api/v1/curation/structure-evidence-findings"
+
+    function pageWithAuth() {
+        return render(
+            <AuthProvider>
+                <MemoryRouter initialEntries={["/geometries/geom_ch4_one"]}>
+                    <Routes>
+                        <Route path="/geometries/:geometryRef" element={<GeometryDetailPage />} />
+                    </Routes>
+                </MemoryRouter>
+            </AuthProvider>,
+        )
+    }
+
+    it("shows a curator the section and asks for findings about this geometry", async () => {
+        const asked: URL[] = []
+        server.use(
+            http.get("/api/v1/auth/me", () => HttpResponse.json({ id: 1, username: "ada", email: "a@example.com", full_name: "Ada", role: "curator", is_active: true })),
+            http.get(ENDPOINT, () => HttpResponse.json(mockRecord())),
+            http.get(FINDINGS, ({ request }) => {
+                asked.push(new URL(request.url))
+                return HttpResponse.json({ subject_ref: "geom_ch4_one", findings: [], offset: 0, limit: 20 })
+            }),
+        )
+        pageWithAuth()
+        expect(await screen.findByRole("heading", { name: "Structure findings" })).toBeInTheDocument()
+        await waitFor(() => expect(asked).toHaveLength(1))
+        expect(asked[0].searchParams.get("subject_ref")).toBe("geom_ch4_one")
+        expect(asked[0].searchParams.get("scope")).toBe("geometry")
+    })
+
+    it("shows an anonymous visitor nothing and sends no curation request", async () => {
+        let me = 0
+        let curation = 0
+        server.use(
+            http.get("/api/v1/auth/me", () => { me += 1; return new HttpResponse(null, { status: 401 }) }),
+            http.all("/api/v1/curation/*", () => { curation += 1; return HttpResponse.json({}) }),
+            http.get(ENDPOINT, () => HttpResponse.json(mockRecord())),
+        )
+        pageWithAuth()
+        await screen.findByRole("heading", { name: /^Geometry of CH4/ })
+        await waitFor(() => expect(me).toBeGreaterThan(0))
+        expect(screen.queryByRole("heading", { name: "Structure findings" })).toBeNull()
+        expect(curation).toBe(0)
     })
 })

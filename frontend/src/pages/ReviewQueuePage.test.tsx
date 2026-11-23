@@ -2127,3 +2127,47 @@ describe("filtering by record type and submission", () => {
         expect(await screen.findByText(/No records match these filters/)).toBeInTheDocument()
     })
 })
+
+describe("ReviewQueuePage reproducibility detail", () => {
+    it("gives every record row a Reproducibility toggle that loads the latest assessment for that row only when opened", async () => {
+        meIs(curator)
+        queueIs([subject([record({ id: 11, record_type: "thermo", record_id: 987654 }), record({ id: 12, record_type: "kinetics", record_id: 555 })])])
+        const asked: string[] = []
+        server.use(http.get("/api/v1/curation/reproducibility-assessments/:type/:id/latest", ({ params }) => {
+            asked.push(`${String(params.type)}/${String(params.id)}`)
+            return HttpResponse.json({ detail: "none" }, { status: 404 })
+        }))
+        renderPage()
+        const toggles = await screen.findAllByRole("button", { name: "Reproducibility…" })
+        expect(toggles).toHaveLength(2)
+        expect(asked).toEqual([])
+        for (const toggle of toggles) {
+            expect(toggle).toHaveAttribute("aria-expanded", "false")
+            expect(document.getElementById(toggle.getAttribute("aria-controls")!)).toBeNull()
+        }
+        await userEvent.click(toggles[0])
+        expect(toggles[0]).toHaveAttribute("aria-expanded", "true")
+        const panel = document.getElementById(toggles[0].getAttribute("aria-controls")!)!
+        expect(await within(panel).findByText("Not assessed yet.")).toBeInTheDocument()
+        expect(asked).toEqual(["thermo/987654"])
+        await userEvent.click(toggles[1])
+        await waitFor(() => expect(asked).toEqual(["thermo/987654", "kinetics/555"]))
+        expect(toggles[0]).toHaveAttribute("aria-expanded", "true")
+        const openId = toggles[0].getAttribute("aria-controls")!
+        await userEvent.click(toggles[0])
+        expect(document.getElementById(openId)).toBeNull()
+        expect(toggles[0]).not.toHaveAttribute("aria-controls")
+    })
+
+    it("names the panel region from the record type, never from the depositor note", async () => {
+        meIs(curator)
+        queueIs([subject([record({ id: 11, record_type: "thermo", record_id: 987654, record_public_ref: null, note: "free text from a depositor" })])])
+        server.use(http.get("/api/v1/curation/reproducibility-assessments/:type/:id/latest", () => HttpResponse.json({ detail: "none" }, { status: 404 })))
+        renderPage()
+        await userEvent.click(await screen.findByRole("button", { name: "Reproducibility…" }))
+        const region = await screen.findByRole("region", { name: /Reproducibility of/ })
+        const name = region.getAttribute("aria-label")!
+        expect(name).toBe("Reproducibility of the thermochemistry record")
+        expect(name).not.toContain("free text from a depositor")
+    })
+})
