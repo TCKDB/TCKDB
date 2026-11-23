@@ -31,19 +31,24 @@
    indistinguishable from the words either side of it. Matched to
    `.record-breadcrumbs a` (`index.css`), the house treatment for a link in
    running text, rather than inventing a third one. */
-.admin-lede a {
+.admin-lede a,
+.admin-hint a {
     color: var(--accent);
     text-decoration: underline;
     text-decoration-color: var(--accent-underline);
     text-underline-offset: .16em;
 }
 
-.admin-lede a:hover {
+.admin-lede a:hover,
+.admin-hint a:hover {
     color: var(--accent-700);
     text-decoration-color: currentColor;
 }
 
-.admin-lede a:focus-visible {
+.admin-lede a:focus-visible,
+.admin-hint a:focus-visible,
+.admin-resolve textarea:focus-visible,
+.admin-page summary:focus-visible {
     outline: 3px solid var(--focus-ring);
     outline-offset: 3px;
 }
@@ -207,6 +212,16 @@
     margin: var(--s-4) 0;
 }
 
+/* Long submission refs must not push the filter row past a phone's width. */
+.admin-filter {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.admin-filter select {
+    max-width: 100%;
+}
+
 .admin-record-type {
     color: var(--muted);
     font: var(--type-note-font);
@@ -269,6 +284,14 @@
    the filter above it so the two read as the same kind of control. */
 .admin-paging {
     margin: var(--s-4) 0;
+}
+
+/* A paging button with nothing to page to. It stays focusable and says so in the
+   accessibility tree through aria-disabled; this is what a sighted reader sees. */
+.admin-paging button[aria-disabled="true"] {
+    color: var(--muted);
+    cursor: not-allowed;
+    opacity: 0.55;
 }
 
 
@@ -486,4 +509,137 @@
 .review-record-group-detail .review-record-row {
     padding-top: 0;
     border-top: none;
+}
+
+
+/* ---------------------------------------------------------------------------
+ * Machine findings and the inspection page
+ * --------------------------------------------------------------------------- */
+
+/* The queue's filters sit in a row and wrap. */
+.admin-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 var(--s-5);
+}
+
+/* A label and its value, side by side where there is room. */
+.admin-facts {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: var(--s-1) var(--s-4);
+    margin: var(--s-3) 0;
+}
+
+.admin-facts dt {
+    color: var(--muted);
+    font: var(--type-note-font);
+}
+
+.admin-facts dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+/* A list that carries its own structure (cards, steps), so it takes no bullets. */
+.admin-plain-list {
+    list-style: none;
+    margin: var(--s-3) 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-3);
+}
+
+/* The same list with rows as close as a description list's. */
+.admin-tight-list {
+    gap: var(--s-1);
+}
+
+/* One review's findings. The reviewer's own message is a quotation, set off from the page's words. */
+.admin-findings {
+    list-style: none;
+    margin: var(--s-3) 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-4);
+}
+
+.admin-findings > li {
+    padding-left: var(--s-3);
+    border-left: 2px solid var(--line-2);
+}
+
+.admin-findings p {
+    margin: var(--s-1) 0;
+}
+
+.admin-findings blockquote {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+/* The detail row opens under its task, across every column. */
+.admin-task-detail > td {
+    background: var(--surface-sunken);
+}
+
+/* The machine-review line on a record in Record review. */
+.review-machine-findings {
+    color: var(--muted);
+    font: var(--type-note-font);
+}
+
+
+/* Dates stay on one line instead of breaking at the hyphen. */
+.admin-date {
+    white-space: nowrap;
+}
+
+/* A card's first child sits flush with the card's own padding. */
+.admin-page .card > :first-child {
+    margin-top: 0;
+}
+
+/* Controls in the run and build sections keep a gap from the text and results around them. */
+.admin-page section > button {
+    margin-block: var(--s-3);
+}
+
+.admin-page section > details {
+    margin-top: var(--s-4);
+}
+
+/* Status legend: one label size, a separator between label and meaning. */
+.admin-legend dt {
+    color: inherit;
+    font: inherit;
+}
+
+.admin-legend dt::after {
+    content: ":";
+}
+
+/* On a narrow screen the open detail row reads without sideways scrolling. */
+@media (max-width: 640px) {
+    .admin-task-scroll {
+        container-type: inline-size;
+    }
+
+    .admin-task-detail > td {
+        padding-inline: 0;
+    }
+
+    .admin-task-detail > td > div {
+        position: sticky;
+        left: 0;
+        box-sizing: border-box;
+        max-width: 100cqw;
+        padding-inline: var(--s-3);
+    }
+}
+
+.admin-legend .admin-absent {
+    font: inherit;
 }

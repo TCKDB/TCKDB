@@ -49,16 +49,8 @@ export async function fetchMachineReviewInspection(
     })
 
     if (!response.ok) {
-        let detail = response.statusText
-        try {
-            const body = await response.json()
-            if (body && typeof body.detail === "string") {
-                detail = body.detail
-            }
-        } catch {
-            // non-JSON error body; keep the status text
-        }
-        throw new InspectionFetchError(response.status, detail)
+        // The server's own detail can name the row id, so it is not passed on: the page words each status itself.
+        throw new InspectionFetchError(response.status, response.statusText)
     }
 
     // Validate the payload against the backend contract so malformed/changed

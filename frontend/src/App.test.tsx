@@ -721,10 +721,16 @@ describe("the renamed review surfaces keep the addresses they had", () => {
     })
 })
 
-it("retains the admin machine-review route outside public navigation", async () => {
+it("renders the admin machine-review route inside the site frame", async () => {
+    server.use(http.get("/api/v1/auth/me", () => HttpResponse.json({ id: 1, username: "ada", email: "a@example.com", full_name: "Ada", role: "admin", is_active: true })))
+    server.use(http.get("/api/v1/submissions/machine-review-overview", () => HttpResponse.json({ items: [], total: 0, skip: 0, limit: 50 })))
     window.history.replaceState({}, "", "/admin/machine-review-inspection")
     render(<QueryClientProvider client={new QueryClient()}><App /></QueryClientProvider>)
-    expect(await screen.findByRole("heading", { name: "Submission Machine-Review Inspection" })).toBeVisible()
+    expect(await screen.findByRole("heading", { name: "Machine review inspection", level: 1 })).toBeVisible()
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1)
+    // The shell's own navigation is present, which the old out-of-shell route never had.
+    expect(screen.getAllByRole("navigation").length).toBeGreaterThan(0)
+    expect(screen.getByRole("contentinfo")).toBeInTheDocument()
 })
 
 it("routes a transition-state-entry ref to its detail page (finding #1)", async () => {
@@ -1001,13 +1007,9 @@ describe("every route sets a title and renders exactly one h1", () => {
     it.each(NON_RECORD_ROUTES)("%s is titled %s", async (path, title) => {
         allRouteHandlers()
         window.history.replaceState({}, "", path)
-        // The admin inspection route sits outside the shell and uses react-query.
         render(<QueryClientProvider client={new QueryClient()}><App /></QueryClientProvider>)
         await waitFor(() => expect(document.title).toBe(title))
-        // The admin inspection page sits outside the shell and titles itself with an h2.
-        if (path !== "/admin/machine-review-inspection") {
-            await waitFor(() => expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1))
-        }
+        await waitFor(() => expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1))
     })
 
     const RECORD_ROUTES: Array<[path: string, key: RouteTitleKindKey]> = [

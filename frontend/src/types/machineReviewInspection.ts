@@ -41,6 +41,65 @@ export const MachineReviewRecordSummarySchema = z.object({
 export type MachineReviewRecordSummary = z.infer<typeof MachineReviewRecordSummarySchema>
 
 /**
+ * One finding the reviewer raised. Severity, category and the status words are display-only here, so they stay strings: an
+ * unfamiliar token is shown as itself rather than costing the whole page.
+ */
+export const AdminMachineReviewFindingSchema = z.object({
+    severity: z.string(),
+    category: z.string(),
+    message: z.string(),
+    evidence_keys: z.array(z.string()).default([]),
+    recommended_action: z.string().nullable().default(null),
+    curator_task_id: z.number().int().nullable().default(null),
+})
+export type AdminMachineReviewFinding = z.infer<typeof AdminMachineReviewFindingSchema>
+
+/** One stored review of one record. */
+export const AdminMachineReviewRecordReviewSchema = z.object({
+    audit_event_id: z.number().int().nullable().default(null),
+    reviewed_at: z.string().nullable().default(null),
+    status: z.string(),
+    curator_priority: z.string().nullable().default(null),
+    model: z.string().nullable().default(null),
+    provider: z.string().nullable().default(null),
+    is_latest: z.boolean().default(false),
+    findings: z.array(AdminMachineReviewFindingSchema).default([]),
+})
+export type AdminMachineReviewRecordReview = z.infer<typeof AdminMachineReviewRecordReviewSchema>
+
+/** One stored reviewer run, including one whose payload could not be read (`parsed: false`). */
+export const AdminMachineReviewRunSchema = z.object({
+    audit_event_id: z.number().int().nullable().default(null),
+    reviewed_at: z.string().nullable().default(null),
+    status: z.string().nullable().default(null),
+    curator_priority: z.string().nullable().default(null),
+    model: z.string().nullable().default(null),
+    provider: z.string().nullable().default(null),
+    findings_count: z.number().int().default(0),
+    mapped_findings_count: z.number().int().default(0),
+    unmapped_findings_count: z.number().int().default(0),
+    highest_severity: z.string().nullable().default(null),
+    summary: z.string().nullable().default(null),
+    parsed: z.boolean(),
+    parse_warnings: z.array(z.string()).default([]),
+})
+export type AdminMachineReviewRun = z.infer<typeof AdminMachineReviewRunSchema>
+
+/** A finding that mapped to no record. `cited_*` are the reviewer's words, kept verbatim. */
+export const AdminMachineReviewUnmappedFindingSchema = z.object({
+    audit_event_id: z.number().int().nullable().default(null),
+    reason: z.string(),
+    cited_record_type: z.string().nullable().default(null),
+    cited_record_ref: z.string().nullable().default(null),
+    severity: z.string(),
+    category: z.string(),
+    message: z.string(),
+    evidence_keys: z.array(z.string()).default([]),
+    recommended_action: z.string().nullable().default(null),
+})
+export type AdminMachineReviewUnmappedFinding = z.infer<typeof AdminMachineReviewUnmappedFindingSchema>
+
+/**
  * One linked record that received >=1 exactly-mapped finding.
  *
  * `record_public_ref` is the identifier the archive is addressed by, `null`
@@ -57,8 +116,12 @@ export const AdminMachineReviewRecordInspectionSchema = z.object({
     record_type: z.string(),
     record_public_ref: z.string().nullable().default(null),
     record_id: z.number().int().nullable().default(null),
+    // Where the record is shown when it has no page of its own; null together.
+    container_type: z.string().nullable().default(null),
+    container_ref: z.string().nullable().default(null),
     latest_summary: MachineReviewRecordSummarySchema,
     all_record_reviews_count: z.number().int().nonnegative().default(0),
+    all_record_reviews: z.array(AdminMachineReviewRecordReviewSchema).default([]),
 })
 export type AdminMachineReviewRecordInspection = z.infer<
     typeof AdminMachineReviewRecordInspectionSchema
@@ -69,6 +132,8 @@ export const AdminSubmissionMachineReviewInspectionSchema = z.object({
     submission_id: z.number().int(),
     record_summaries: z.array(AdminMachineReviewRecordInspectionSchema).default([]),
     unmapped_findings_count: z.number().int().nonnegative().default(0),
+    unmapped_findings: z.array(AdminMachineReviewUnmappedFindingSchema).default([]),
+    runs: z.array(AdminMachineReviewRunSchema).default([]),
     mapping_warnings: z.array(z.string()).default([]),
     parse_warnings: z.array(z.string()).default([]),
     source_audit_event_ids: z.array(z.number().int()).default([]),
@@ -76,27 +141,3 @@ export const AdminSubmissionMachineReviewInspectionSchema = z.object({
 export type AdminSubmissionMachineReviewInspection = z.infer<
     typeof AdminSubmissionMachineReviewInspectionSchema
 >
-
-/**
- * Highest severity across all returned record summaries, computed client-side
- * (the endpoint does not return an aggregate). ``null`` when no summary carries
- * a severity.
- */
-const SEVERITY_RANK: Record<MachineReviewSeverity, number> = {
-    info: 1,
-    warning: 2,
-    critical: 3,
-}
-
-export function overallHighestSeverity(
-    inspection: AdminSubmissionMachineReviewInspection,
-): MachineReviewSeverity | null {
-    let best: MachineReviewSeverity | null = null
-    for (const record of inspection.record_summaries) {
-        const sev = record.latest_summary.highest_severity
-        if (sev && (best === null || SEVERITY_RANK[sev] > SEVERITY_RANK[best])) {
-            best = sev
-        }
-    }
-    return best
-}

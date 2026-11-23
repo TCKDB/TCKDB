@@ -168,6 +168,8 @@ def list_reviews(
 @router.get("/queue", response_model=ReviewQueuePageRead)
 def list_review_queue_page(
     status: RecordReviewStatus | None = Query(default=None),
+    record_type: SubmissionRecordType | None = Query(default=None),
+    submission_id: int | None = Query(default=None),
     pagination: PaginationParams = Depends(),
     session: Session = Depends(get_db),
     actor: AppUser = Depends(require_curator_or_admin),
@@ -185,6 +187,8 @@ def list_review_queue_page(
         status=status,
         limit=pagination.limit,
         offset=pagination.skip,
+        record_type=record_type,
+        submission_id=submission_id,
     )
     refused = refused_self_approval(
         session,

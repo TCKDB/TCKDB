@@ -459,6 +459,8 @@ def list_review_queue(
     status: Optional[RecordReviewStatus],
     limit: int,
     offset: int,
+    record_type: Optional[SubmissionRecordType] = None,
+    submission_id: Optional[int] = None,
 ) -> ReviewQueueResult:
     """Page the review queue by subject.
 
@@ -486,6 +488,10 @@ def list_review_queue(
     )
     if status is not None:
         stmt = stmt.where(RecordReview.status == status)
+    if record_type is not None:
+        stmt = stmt.where(RecordReview.record_type == record_type)
+    if submission_id is not None:
+        stmt = stmt.where(RecordReview.submission_id == submission_id)
     all_rows = list(session.scalars(stmt).all())
 
     if len(all_rows) > _ROW_RESOLUTION_CAP:

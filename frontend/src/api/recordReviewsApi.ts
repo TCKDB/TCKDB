@@ -109,11 +109,15 @@ export async function listRecordReviews(options: {
  */
 export async function listReviewQueue(options: {
     status?: RecordReviewStatus
+    recordType?: string
+    submissionId?: number
     limit: number
     offset?: number
 }): Promise<ReviewQueuePage> {
     const params = new URLSearchParams()
     if (options.status) params.set("status", options.status)
+    if (options.recordType) params.set("record_type", options.recordType)
+    if (options.submissionId !== undefined) params.set("submission_id", String(options.submissionId))
     params.set("limit", String(options.limit))
     if (options.offset !== undefined) params.set("skip", String(options.offset))
 

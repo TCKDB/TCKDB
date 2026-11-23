@@ -112,7 +112,7 @@ describe("what the menu offers each role", () => {
         )
         // The two are different gates: curator/admin for reviewing records,
         // admin for everything under /admin.
-        for (const hidden of ["Machine findings", "Machine-review inspection", "Administration"]) {
+        for (const hidden of ["Machine findings", "Machine review inspection", "Administration"]) {
             expect(screen.queryByRole("menuitem", { name: hidden })).not.toBeInTheDocument()
         }
     })
@@ -125,7 +125,7 @@ describe("what the menu offers each role", () => {
         const expected: [string, string][] = [
             ["Record review", "/review-queue"],
             ["Machine findings", "/admin/curator-queue"],
-            ["Machine-review inspection", "/admin/machine-review-inspection"],
+            ["Machine review inspection", "/admin/machine-review-inspection"],
             ["Administration", "/admin"],
         ]
         for (const [label, href] of expected) {
@@ -145,7 +145,7 @@ describe("what the menu offers each role", () => {
         for (const hidden of [
             "Record review",
             "Machine findings",
-            "Machine-review inspection",
+            "Machine review inspection",
             "Administration",
         ]) {
             expect(screen.queryByRole("menuitem", { name: hidden })).not.toBeInTheDocument()

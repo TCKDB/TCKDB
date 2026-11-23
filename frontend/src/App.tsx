@@ -1,6 +1,5 @@
 import { lazy, Suspense } from "react"
 import { BrowserRouter, Route, Routes, useParams } from "react-router-dom"
-import MachineReviewInspectionPage from "./pages/MachineReviewInspectionPage"
 import { AppShell } from "./components/AppShell"
 import { AuthProvider } from "./components/AuthProvider"
 import { LoadingPage } from "./components/LoadingPage"
@@ -16,6 +15,7 @@ const ConformerGroupPage = lazy(() => import("./pages/ConformerGroupPage"))
 const ConformerObservationPage = lazy(() => import("./pages/ConformerObservationPage"))
 const CorrectionSchemePage = lazy(() => import("./pages/CorrectionSchemePage"))
 const CompositeSchemePage = lazy(() => import("./pages/CompositeSchemePage"))
+const MachineReviewInspectionPage = lazy(() => import("./pages/MachineReviewInspectionPage"))
 const MethodCataloguePage = lazy(() => import("./pages/MethodCataloguePage"))
 const CuratorQueuePage = lazy(() => import("./pages/CuratorQueuePage"))
 const GuidePage = lazy(() => import("./pages/GuidePage"))
@@ -149,8 +149,7 @@ function App() {
             <Route path="/methods/:lotRef" element={<LevelOfTheoryPage />} />
             {/* Both render inside the same `AppShell` every public page
                 does -- signing in/managing keys is an ordinary part of
-                this site, not a separate admin shell the way
-                `/admin/machine-review-inspection` below is. `LoginPage`
+                this site, not a separate admin shell. `LoginPage`
                 gates nothing itself (it just redirects away once
                 `useAuth()` reports signed-in); `AccountPage` is the one
                 page that DOES require a session, and redirects
@@ -166,13 +165,10 @@ function App() {
                 router-level guard collapses the last two into one redirect. */}
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/admin/curator-queue" element={<CuratorQueuePage />} />
+            <Route path="/admin/machine-review-inspection" element={<MachineReviewInspectionPage />} />
             <Route path="/review-queue" element={<ReviewQueuePage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
-          <Route
-            path="/admin/machine-review-inspection"
-            element={<MachineReviewInspectionPage />}
-          />
         </Routes>
       </Suspense>
     </BrowserRouter>

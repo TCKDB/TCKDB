@@ -89,13 +89,29 @@ function parseWriteResult(payload: unknown, action: string): CuratorTask {
     return parsed.data
 }
 
-export async function listCuratorTasks(options?: {
-    workflowState?: CuratorTaskState
+export type CuratorTaskListOptions = {
+    /** Repeated as `workflow_state`; a task matches any of them. */
+    workflowStates?: CuratorTaskState[]
+    /** `open` or `terminal`: the route's own grouping of the six states. */
+    stateGroup?: "open" | "terminal"
+    highestSeverity?: string
+    recordType?: string
+    recordId?: number
+    submissionId?: number
+    assignedTo?: number
     limit?: number
     offset?: number
-}): Promise<CuratorTaskPage> {
+}
+
+export async function listCuratorTasks(options?: CuratorTaskListOptions): Promise<CuratorTaskPage> {
     const params = new URLSearchParams()
-    if (options?.workflowState) params.set("workflow_state", options.workflowState)
+    for (const state of options?.workflowStates ?? []) params.append("workflow_state", state)
+    if (options?.stateGroup) params.set("state_group", options.stateGroup)
+    if (options?.highestSeverity) params.set("highest_severity", options.highestSeverity)
+    if (options?.recordType) params.set("record_type", options.recordType)
+    if (options?.recordId !== undefined) params.set("record_id", String(options.recordId))
+    if (options?.submissionId !== undefined) params.set("submission_id", String(options.submissionId))
+    if (options?.assignedTo !== undefined) params.set("assigned_to", String(options.assignedTo))
     if (options?.limit !== undefined) params.set("limit", String(options.limit))
     if (options?.offset !== undefined) params.set("offset", String(options.offset))
     const query = params.toString()
@@ -120,6 +136,16 @@ export async function listCuratorTasks(options?: {
         limit: envelope.limit,
         unreadable,
     }
+}
+
+/** One task with its finding and how it was matched: `GET /curator-tasks/{id}`. */
+export async function getCuratorTask(taskId: number): Promise<CuratorTask> {
+    return CuratorTaskSchema.parse(await readJson(`${BASE}/${taskId}`))
+}
+
+/** Set a task's assignee, or clear it with `null`. Changes no workflow state. */
+export async function assignCuratorTask(taskId: number, assigneeId: number | null): Promise<CuratorTask> {
+    return parseWriteResult(await postJson(`/${taskId}/assign`, { assignee_id: assigneeId }), "assign")
 }
 
 /**
@@ -155,9 +181,21 @@ export async function resolveCuratorTask(
     )
 }
 
-/** Reopen a terminal task. Clears the resolution triple; keeps the assignee. */
-export async function reopenCuratorTask(taskId: number): Promise<CuratorTask> {
-    return parseWriteResult(await postJson(`/${taskId}/reopen`, {}), "reopen")
+/**
+ * Reopen a terminal task into one of the open states. Clears the resolution triple; keeps the assignee unless
+ * `clearAssignment` is set.
+ */
+export async function reopenCuratorTask(
+    taskId: number,
+    options: { targetState: CuratorTaskState; clearAssignment: boolean },
+): Promise<CuratorTask> {
+    return parseWriteResult(
+        await postJson(`/${taskId}/reopen`, {
+            target_state: options.targetState,
+            clear_assignment: options.clearAssignment,
+        }),
+        "reopen",
+    )
 }
 
 /**

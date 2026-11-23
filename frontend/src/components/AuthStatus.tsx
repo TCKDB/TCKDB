@@ -88,7 +88,7 @@ function pagesFor(role: AppUserRole): MenuPage[] {
     if (role === "admin") {
         pages.push({ label: "Machine findings", to: "/admin/curator-queue" })
         pages.push({
-            label: "Machine-review inspection",
+            label: "Machine review inspection",
             to: "/admin/machine-review-inspection",
         })
         pages.push({ label: "Administration", to: "/admin" })

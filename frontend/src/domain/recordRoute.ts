@@ -174,14 +174,7 @@ export function resolveRecordLocation(
     return { kind: "unnamed" }
 }
 
-/**
- * A record type as a reader should see it: `species_entry` -> "species entry".
- *
- * Only ever applied to a CONTAINER type, to build the sentence "shown on
- * species entry spc_...". The record's own type is still printed verbatim,
- * because that column is the queue's index of what kind of claim is being
- * judged and a curator reads it against the backend's own vocabulary.
- */
+/** A record type token as words: `species_entry` -> "species entry". */
 export function recordTypeWords(recordType: string): string {
     return recordType.replace(/_/g, " ")
 }

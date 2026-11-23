@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router-dom"
 import ReviewQueuePage from "./ReviewQueuePage"
 import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels, setAt } from "../test/depositorSentinel"
 import { AuthProvider } from "../components/AuthProvider"
+import * as fx from "../test/machineReviewFixtures"
 
 /**
  * Record review is the one surface in this app where a click changes
@@ -61,8 +62,12 @@ const curator = {
 const admin = { ...curator, id: 2, username: "root", role: "admin" }
 const plainUser = { ...curator, id: 3, username: "noah", role: "user" }
 
+/** Sign in as `who`; also serve the submission list the Submission filter reads. */
 function meIs(who: Record<string, unknown>) {
-    server.use(http.get("/api/v1/auth/me", () => HttpResponse.json(who)))
+    server.use(
+        http.get("/api/v1/submissions/machine-review-overview", () => HttpResponse.json(fx.overviewPage())),
+        http.get("/api/v1/auth/me", () => HttpResponse.json(who)),
+    )
 }
 
 function chemistry(over: Record<string, unknown> = {}) {
@@ -184,10 +189,10 @@ function queueByStatus(subjectsNow: () => Record<string, unknown>[]) {
     )
 }
 
-function renderPage() {
+function renderPage(search = "") {
     return render(
         <AuthProvider>
-            <MemoryRouter>
+            <MemoryRouter initialEntries={[`/review-queue${search}`]}>
                 <ReviewQueuePage />
             </MemoryRouter>
         </AuthProvider>,
@@ -297,13 +302,23 @@ describe("the page says which review this is", () => {
         expect(lede).toHaveTextContent(/does not unfreeze it/i)
     })
 
-    it("links to the other queue, so the two are not confused", async () => {
-        meIs(curator)
+    it("links to the other queue for an administrator, so the two are not confused", async () => {
+        meIs(admin)
         queueIs([])
         renderPage()
 
         const link = await screen.findByRole("link", { name: "Machine findings" })
         expect(link).toHaveAttribute("href", "/admin/curator-queue")
+    })
+
+    it("names the other queue without linking it for a curator, who cannot open it", async () => {
+        meIs(curator)
+        queueIs([])
+        renderPage()
+
+        await screen.findByRole("heading", { level: 1, name: "Record review" })
+        expect(screen.queryByRole("link", { name: "Machine findings" })).toBeNull()
+        expect(screen.getByText(/Machine findings is not/)).toBeInTheDocument()
     })
 
     it("defaults to the backlog: records nobody has judged", async () => {
@@ -1748,7 +1763,8 @@ describe("guarantees carried over from the flat queue", () => {
         renderPage()
 
         expect(await screen.findByText("spe_h2o")).toBeInTheDocument()
-        expect(screen.getByText("Thermochemistry")).toBeInTheDocument()
+        // The record type also names an option in the Record type filter, so look at the row itself.
+        expect(document.querySelector(".review-record-type")).toHaveTextContent("Thermochemistry")
     })
 
     it("re-reads a refused row, because a refusal usually means it moved", async () => {
@@ -2013,5 +2029,101 @@ describe("ReviewQueuePage -- when a record was submitted and reviewed", () => {
         renderPage()
         const text = await rowText()
         expect(text).not.toMatch(/Submission|Reviewed|First approved/)
+    })
+})
+
+describe("machine findings on a record", () => {
+    const needsAttention = fx.machineFindings()
+    const row = (over: Record<string, unknown> = {}) => record({ id: 21, record_type: "kinetics", record_id: 9001, record_public_ref: "kin_flagged", machine_findings: needsAttention, ...over })
+
+    it("says the status, the highest severity and the finding count", async () => {
+        meIs(admin)
+        queueIs([subject([row()])])
+        renderPage()
+        const line = (await screen.findByText(/screened: needs attention/)).closest(".review-machine-findings")!
+        expect(line.textContent).toContain("critical")
+        expect(line.textContent).toContain("2 findings")
+    })
+
+    it("an admin gets a link to the record's open tasks", async () => {
+        meIs(admin)
+        queueIs([subject([row()])])
+        renderPage()
+        const link = await screen.findByRole("link", { name: /2 open machine-finding tasks/ })
+        expect(link).toHaveAttribute("href", "/admin/curator-queue?state=open&record_type=kinetics&record=9001")
+    })
+
+    it("a curator sees the same words, unlinked, and who handles them", async () => {
+        meIs(curator)
+        queueIs([subject([row()])])
+        renderPage()
+        await screen.findByText(/screened: needs attention/)
+        expect(screen.queryByRole("link", { name: /machine-finding tasks/ })).toBeNull()
+        expect(screen.getByText(/2 open machine-finding tasks \(handled by administrators\)/)).toBeInTheDocument()
+    })
+
+    it("shows nothing for a record that was never machine reviewed", async () => {
+        meIs(admin)
+        queueIs([subject([row({ machine_findings: fx.machineFindings({ status: "not_run", highest_severity: null, findings_count: 0, open_task_count: 0, open_task_ids: [], reviewed_at: null }) })])])
+        renderPage()
+        await screen.findByText("spe_h2o")
+        expect(document.body.textContent).not.toMatch(/screened|machine-finding|machine review/i)
+    })
+
+    it("a server that sends no machine_findings still renders the record", async () => {
+        meIs(admin)
+        queueIs([subject([record({ record_public_ref: "kin_plain" })])])
+        renderPage()
+        expect(await screen.findByText("spe_h2o")).toBeInTheDocument()
+    })
+
+    it("says when the machine review failed, without a severity", async () => {
+        meIs(admin)
+        queueIs([subject([row({ machine_findings: fx.machineFindings({ status: "machine_review_failed", highest_severity: null, findings_count: 0, open_task_count: 0, open_task_ids: [] }) })])])
+        renderPage()
+        expect(await screen.findByText("machine review failed")).toBeInTheDocument()
+    })
+
+    it("uses no field name or row id as text", async () => {
+        meIs(admin)
+        queueIs([subject([row()])])
+        renderPage()
+        await screen.findByText(/screened: needs attention/)
+        expect(document.body.textContent).not.toMatch(/open_task|findings_count|highest_severity/)
+    })
+})
+
+describe("filtering by record type and submission", () => {
+    it("sends the chosen record type and submission and starts again from the first page", async () => {
+        meIs(admin)
+        const seen: URLSearchParams[] = []
+        server.use(
+            http.get(QUEUE, ({ request }) => {
+                seen.push(new URL(request.url).searchParams)
+                return HttpResponse.json(queuePageBody([H2O], { subject_total: 120 }))
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText("spe_h2o")
+        await user.click(screen.getByRole("button", { name: "Older" }))
+        await waitFor(() => expect(seen.at(-1)?.get("skip")).toBe("50"))
+
+        await user.selectOptions(screen.getByLabelText("Record type"), "kinetics")
+        await waitFor(() => expect(seen.at(-1)?.get("record_type")).toBe("kinetics"))
+        expect(seen.at(-1)?.get("skip")).toBe("0")
+        await user.selectOptions(await screen.findByRole("combobox", { name: "Submission" }), String(fx.SUBMISSION_ID))
+        await waitFor(() => expect(seen.at(-1)?.get("submission_id")).toBe(String(fx.SUBMISSION_ID)))
+        expect(seen.at(-1)?.get("record_type")).toBe("kinetics")
+    })
+
+    it("an empty filtered view says the filters matched nothing", async () => {
+        meIs(admin)
+        queueIs([])
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByRole("combobox", { name: "Record type" })
+        await user.selectOptions(screen.getByLabelText("Record type"), "kinetics")
+        expect(await screen.findByText(/No records match these filters/)).toBeInTheDocument()
     })
 })
