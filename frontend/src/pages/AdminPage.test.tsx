@@ -179,7 +179,7 @@ describe("what the page does not show", () => {
     it("carries no in-page nav duplicating the header menu", async () => {
         /**
          * The page has no `<nav className="admin-nav">` with links
-         * to Record review, Machine findings and Machine-review inspection.
+         * to Record review, Machine findings and Machine review inspection.
          * The header's account menu offers all three from every route, so
          * such a block would be a second copy of the same navigation on one of
          * the routes it pointed at -- two things to keep in step.

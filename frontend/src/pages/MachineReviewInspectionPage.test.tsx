@@ -2,163 +2,435 @@ import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { MemoryRouter } from "react-router-dom"
+import { useEffect } from "react"
+import { MemoryRouter, useNavigate } from "react-router-dom"
 import MachineReviewInspectionPage from "./MachineReviewInspectionPage"
+import { AuthProvider } from "../components/AuthProvider"
 import { CuratorTaskBuildResultSchema } from "../types/curatorTask"
 import {
     knownRunStatus,
     MachineReviewRunResultSchema,
     reviewFailed,
 } from "../types/machineReviewRun"
+import { DEPOSITOR_SENTINEL } from "../test/depositorSentinel"
+import * as fx from "../test/machineReviewFixtures"
+import { bySummaryText } from "../test/disclosureQueries"
 
 /**
- * The record-summaries table does not carry a column headed `record_ref`
- * whose value is a database row id: `record_ref` means the *public* ref
- * everywhere else in this API.
- *
- * It shows `record_public_ref` -- the identifier the archive is addressed
- * by -- and `record_id`, which an admin-only surface may carry. These tests pin
- * which value lands in which column, and that a record with no public ref shows
- * nothing rather than falling back to its id.
+ * The inspection page: who may open it, how a submission is chosen (a list,
+ * never a typed id), what the header, records, findings and runs say, and
+ * the two controls that act on a submission. The run and build controls keep
+ * their outcome regions and their per-submission reset.
  */
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
-afterEach(() => { server.resetHandlers(); cleanup() })
+afterEach(() => { server.resetHandlers(); server.events.removeAllListeners(); cleanup() })
 afterAll(() => server.close())
 
-const SUMMARY = {
-    status: "machine_screened_warning",
-    highest_severity: "warning",
-    findings_count: 1,
-    model: "fake_test/simple-v1",
-    provider: "FakeLLMPrecheckProvider",
-    reviewed_at: "2026-09-14T10:00:00Z",
-    submission_id: 7,
+const admin = { id: 1, username: "ada", email: "ada@example.com", full_name: "Ada Example", role: "admin", is_active: true }
+const curator = { ...admin, id: 3, username: "cora", role: "curator" }
+const plainUser = { ...admin, id: 2, username: "noah", role: "user" }
+
+function meIs(who: Record<string, unknown>) {
+    server.use(http.get("/api/v1/auth/me", () => HttpResponse.json(who)))
 }
 
-const PUBLIC_REF = "spc_vu7cuk4s37szxaudjpf355tqda"
+const adminUsers = {
+    items: [{ ...admin, affiliation: null, created_at: "2026-01-01T00:00:00Z" }],
+    total: 1,
+    skip: 0,
+    limit: 200,
+}
 
-function serve(record: Record<string, unknown>) {
+/** Routes the header reads, for any submission. Per-test handlers added later take precedence. */
+function serveHeaderRoutes() {
     server.use(
-        http.get("/api/v1/admin/submissions/7/machine-review-inspection", () =>
-            HttpResponse.json({
-                submission_id: 7,
-                record_summaries: [record],
-                unmapped_findings_count: 0,
-                mapping_warnings: [],
-                parse_warnings: [],
-                source_audit_event_ids: [11],
-            }),
+        http.get("/api/v1/submissions/:id", ({ params }) =>
+            HttpResponse.json(fx.submission({ id: Number(params.id), public_ref: `sub_${params.id}` })),
         ),
+        http.get("/api/v1/submissions/:id/record-links", () =>
+            HttpResponse.json([fx.recordLink(), fx.recordLink({ id: 2, record_id: 11 }), fx.recordLink({ id: 3, record_type: "calculation" })]),
+        ),
+        http.get("/api/v1/submissions/:id/audit-events", () => HttpResponse.json([fx.auditEvent()])),
+        http.get("/api/v1/admin/users", () => HttpResponse.json(adminUsers)),
     )
 }
 
-/**
- * Render and inspect one submission; returns the `user` for further acts.
- *
- * `MemoryRouter` is here because the build tally offers a link into
- * Machine findings, and a `<Link>` outside a router throws. The page itself
- * is mounted outside the app's `Layout` route (see `App.tsx`) but still
- * inside `BrowserRouter`, so this matches how it really renders.
- */
-async function inspect(id = "7") {
+let navigateTo: (to: string) => void = () => {}
+function NavGrab() {
+    const navigate = useNavigate()
+    useEffect(() => {
+        navigateTo = (to) => void navigate(to)
+    }, [navigate])
+    return null
+}
+
+/** Render the page as `who`, at `?submission=<id>` when an id is given. */
+function renderPage(id?: string, who: Record<string, unknown> = admin, query = "") {
+    meIs(who)
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    const user = userEvent.setup()
     render(
-        <MemoryRouter>
-            <QueryClientProvider client={client}>
-                <MachineReviewInspectionPage />
-            </QueryClientProvider>
-        </MemoryRouter>,
+        <AuthProvider>
+            <MemoryRouter initialEntries={[id === undefined ? `/admin/machine-review-inspection${query}` : `/admin/machine-review-inspection?submission=${id}`]}>
+                <NavGrab />
+                <QueryClientProvider client={client}>
+                    <MachineReviewInspectionPage />
+                </QueryClientProvider>
+            </MemoryRouter>
+        </AuthProvider>,
     )
-    await user.type(screen.getByLabelText(/submission_id/), id)
-    await user.click(screen.getByRole("button", { name: "Inspect" }))
-    return user
 }
 
-/** Type a different submission id into the form already on screen. */
-async function reinspect(user: ReturnType<typeof userEvent.setup>, id: string) {
-    const field = screen.getByLabelText(/submission_id/)
-    await user.clear(field)
-    await user.type(field, id)
-    await user.click(screen.getByRole("button", { name: "Inspect" }))
+/** Open one submission as an admin; returns the `user` for further acts. */
+async function inspect(id = "7") {
+    serveHeaderRoutes()
+    renderPage(id)
+    return userEvent.setup()
 }
 
-/** The record row's cell texts, in column order. */
-async function recordCells(): Promise<string[]> {
-    const table = (await screen.findAllByRole("table")).at(-1)!
-    const bodyRow = within(table).getAllByRole("row").at(-1)!
-    return within(bodyRow).getAllByRole("cell").map((c) => (c.textContent ?? "").trim())
+/** Move to a different submission, as following a link would. */
+async function reinspect(_user: ReturnType<typeof userEvent.setup>, id: string) {
+    act(() => navigateTo(`/admin/machine-review-inspection?submission=${id}`))
 }
 
-describe("the record summaries table", () => {
-    it("shows the public ref and the row id in their own columns", async () => {
-        serve({
-            record_type: "species",
-            record_public_ref: PUBLIC_REF,
-            record_id: 431,
-            latest_summary: SUMMARY,
-            all_record_reviews_count: 1,
-        })
-        await inspect()
+const INSPECTION = "/api/v1/admin/submissions/:submissionId/machine-review-inspection"
 
-        // By position, not just presence: a swap leaves both strings on the
-        // page and would satisfy any "is it rendered" check. The two values are
-        // deliberately unlike each other so a swap is visible.
-        const cells = await recordCells()
-        expect(cells[0]).toBe("species")
-        expect(cells[1]).toBe(PUBLIC_REF)
-        expect(cells[2]).toBe("431")
+function serveInspection(body: Record<string, unknown> = fx.inspection()) {
+    server.use(http.get(INSPECTION, () => HttpResponse.json(body)))
+}
+
+/** The text of the page, for absence checks. */
+function pageText(): string {
+    return document.body.textContent ?? ""
+}
+
+/** The card of one record: the list item that holds the heading naming it. */
+async function recordCard(name: string | RegExp): Promise<HTMLElement> {
+    const pattern = typeof name === "string" ? new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`) : name
+    const heading = await screen.findByRole("heading", { level: 3, name: pattern })
+    const card = heading.closest("li")
+    if (card === null) throw new Error("the record heading is not inside a list item")
+    return card
+}
+
+describe("who can open the page", () => {
+    it("a curator is refused and no inspection is requested", async () => {
+        const requested: string[] = []
+        server.events.on("request:start", ({ request }) => requested.push(new URL(request.url).pathname))
+        renderPage("7", curator)
+        expect(await screen.findByRole("alert")).toHaveTextContent("This page is for administrators.")
+        expect(requested.filter((path) => /machine-review/.test(path))).toEqual([])
+        expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1)
     })
 
-    it("headings name what the columns hold", async () => {
-        serve({
-            record_type: "species",
-            record_public_ref: PUBLIC_REF,
-            record_id: 431,
-            latest_summary: SUMMARY,
-            all_record_reviews_count: 1,
-        })
-        await inspect()
-
-        const table = (await screen.findAllByRole("table")).at(-1)!
-        const headings = within(table)
-            .getAllByRole("columnheader")
-            .map((h) => h.textContent)
-
-        expect(headings).toContain("record_public_ref")
-        expect(headings).toContain("record_id")
-        // The old name promised a public ref and delivered a row id.
-        expect(headings).not.toContain("record_ref")
-        // Dropped rather than renamed: it was always `String(record_id)`.
-        expect(headings).not.toContain("record_match_key")
+    it("a plain user is refused and nothing is requested", async () => {
+        const requested: string[] = []
+        server.events.on("request:start", ({ request }) => requested.push(new URL(request.url).pathname))
+        renderPage(undefined, plainUser)
+        expect(await screen.findByRole("alert")).toHaveTextContent("This page is for administrators.")
+        expect(requested.filter((path) => /machine-review|submissions/.test(path))).toEqual([])
     })
 
-    it("a record that cannot be named shows a dash, never its row id", async () => {
-        /**
-         * `applied_energy_correction` has no `public_ref` column, so the
-         * backend answers `null`. Falling back to `record_id` would put a row
-         * id under a heading that says "public ref" -- the exact defect this
-         * page had.
-         */
-        serve({
-            record_type: "applied_energy_correction",
-            record_public_ref: null,
-            record_id: 88,
-            latest_summary: SUMMARY,
-            all_record_reviews_count: 1,
-        })
-        await inspect()
-
-        const cells = await recordCells()
-        expect(cells[1]).not.toBe("88")
-        expect(cells[1]).not.toBe("")
-        expect(cells[2]).toBe("88")
+    it("a backend outage does not render as 'you are not an admin'", async () => {
+        server.use(http.get("/api/v1/auth/me", () => HttpResponse.error()))
+        render(
+            <AuthProvider>
+                <MemoryRouter>
+                    <QueryClientProvider client={new QueryClient()}>
+                        <MachineReviewInspectionPage />
+                    </QueryClientProvider>
+                </MemoryRouter>
+            </AuthProvider>,
+        )
+        const alert = await screen.findByRole("alert")
+        expect(alert).toHaveTextContent(/could not be reached/i)
+        expect(alert).not.toHaveTextContent(/for administrators/i)
     })
 })
+
+describe("choosing a submission", () => {
+    function serveOverview(pages: Record<string, unknown>[] | Record<string, unknown> = fx.overviewPage()) {
+        const seen: URLSearchParams[] = []
+        server.use(
+            http.get("/api/v1/submissions/machine-review-overview", ({ request }) => {
+                const url = new URL(request.url)
+                seen.push(url.searchParams)
+                const body = Array.isArray(pages) ? pages[Number(url.searchParams.get("offset") ?? 0) > 0 ? 1 : 0] : pages
+                return HttpResponse.json(body)
+            }),
+        )
+        return seen
+    }
+
+    it("reads the filter and page from the address", async () => {
+        const seen = serveOverview()
+        renderPage(undefined, admin, "?show=open&offset=50")
+        await screen.findByRole("table", { name: "Submissions" })
+        expect(seen[0].get("offset")).toBe("50")
+        expect(seen[0].get("has_open_tasks")).toBe("true")
+        expect(screen.getByLabelText("Show")).toHaveValue("open")
+    })
+
+    it("lists submissions to pick from and has no field to type an id into", async () => {
+        serveOverview()
+        renderPage()
+
+        const table = await screen.findByRole("table", { name: "Submissions" })
+        const cells = within(within(table).getAllByRole("row")[1]).getAllByRole("cell").map((c) => c.textContent?.trim())
+        expect(cells[0]).toBe(fx.SUBMISSION_REF)
+        expect(cells).toContain("computed reaction")
+        expect(cells).toContain("approved")
+        expect(cells).toContain("2026-09-01")
+        expect(cells).toContain("ada")
+        expect(screen.queryByRole("spinbutton")).toBeNull()
+        expect(screen.getByRole("link", { name: new RegExp(`Inspect ${fx.SUBMISSION_REF}`) })).toHaveAttribute(
+            "href",
+            `/admin/machine-review-inspection?submission=${fx.SUBMISSION_ID}`,
+        )
+        expect(pageText()).toContain("2 open of 5")
+        expect(pageText()).not.toContain(String(fx.SUBMISSION_ID))
+        expect(pageText()).not.toContain("DEPOSITOR_TITLE")
+    })
+
+    it("shows an exact total and pages with Next", async () => {
+        const rows = Array.from({ length: 50 }, (_, i) => fx.overviewRow({ id: 1000 + i, public_ref: `sub_page1_${i}` }))
+        const seen = serveOverview([
+            fx.overviewPage(rows, { total: 132 }),
+            fx.overviewPage([fx.overviewRow({ id: 2000, public_ref: "sub_page2_0" })], { total: 132, skip: 50 }),
+        ])
+        renderPage()
+        const user = userEvent.setup()
+
+        expect(await screen.findByText("Showing 1–50 of 132 submissions")).toBeInTheDocument()
+        await user.click(screen.getByRole("button", { name: "Next" }))
+        expect(await screen.findByText("sub_page2_0")).toBeInTheDocument()
+        expect(seen.at(-1)?.get("offset")).toBe("50")
+        expect(screen.getByText("Showing 51–51 of 132 submissions")).toBeInTheDocument()
+    })
+
+    it("filters to reviewed submissions", async () => {
+        const seen = serveOverview()
+        renderPage()
+        const user = userEvent.setup()
+        await screen.findByRole("table", { name: "Submissions" })
+        await user.selectOptions(screen.getByLabelText("Show"), "reviewed")
+        await waitFor(() => expect(seen.at(-1)?.get("reviewed")).toBe("true"))
+    })
+
+    it("says so when there are no submissions", async () => {
+        serveOverview(fx.overviewPage([]))
+        renderPage()
+        expect(await screen.findByText("No submissions match.")).toBeInTheDocument()
+    })
+
+    it("a link that does not name a submission says so and still offers the list", async () => {
+        serveOverview()
+        renderPage("abc")
+        expect(await screen.findByText("That link does not name a submission.")).toBeInTheDocument()
+        expect(await screen.findByRole("table", { name: "Submissions" })).toBeInTheDocument()
+    })
+})
+
+describe("the submission header", () => {
+    it("names the submission by its reference, status, kind, dates, uploader and linked records", async () => {
+        serveInspection()
+        await inspect("42")
+
+        const header = await screen.findByRole("region", { name: "Submission" })
+        await screen.findByText("sub_42")
+        await screen.findByText("ada")
+        await screen.findByText("Calculation 1")
+        const text = header.textContent ?? ""
+        expect(text).toContain("sub_42")
+        expect(text).toContain("approved")
+        expect(text).toContain("computed reaction")
+        expect(text).toContain("2026-09-01 08:15 UTC")
+        expect(text).toContain("ada")
+        expect(text).toMatch(/Kinetics\s*2/)
+        expect(text).toMatch(/Calculation\s*1/)
+        expect(pageText()).not.toContain("not returned by endpoint")
+    })
+
+    it("lists the audit trail by kind, actor and status change, without free text", async () => {
+        serveInspection()
+        await inspect("42")
+        const trail = await screen.findByRole("region", { name: "Audit trail" })
+        await waitFor(() => expect(trail.textContent).toContain("2026-09-02"))
+        expect(trail.textContent).toContain("2026-09-02 12:30 UTC")
+        expect(trail.textContent).toContain("approved by a curator")
+        expect(trail.textContent).toContain("administrator")
+        expect(trail.textContent).toContain("pending → approved")
+        for (const hidden of ["AUDIT_REASON", "AUDIT_SUMMARY", "AUDIT_DETAILS"]) {
+            expect(document.body.outerHTML).not.toContain(hidden)
+        }
+    })
+
+    it("shows depositor words only inside the field marked as deposited", async () => {
+        const title = `${DEPOSITOR_SENTINEL}_TITLE`
+        const summary = `${DEPOSITOR_SENTINEL}_SUMMARY`
+        serveInspection()
+        serveHeaderRoutes()
+        server.use(http.get("/api/v1/submissions/:id", () => HttpResponse.json(fx.submission({ title, summary }))))
+        renderPage("42")
+
+        const marked = await screen.findByTestId("as-deposited")
+        expect(marked).toHaveTextContent(title)
+        expect(marked).toHaveTextContent("as deposited")
+        expect(document.body.outerHTML.split(title).length - 1).toBe(1)
+        expect(document.body.outerHTML).not.toContain(summary)
+    })
+
+    it("a missing submission says so in words, with no id in the message", async () => {
+        server.use(
+            http.get(INSPECTION, () => HttpResponse.json({ detail: "Submission 424242 not found" }, { status: 404 })),
+            http.get("/api/v1/submissions/:id", () => HttpResponse.json({ detail: "Submission 424242 not found" }, { status: 404 })),
+            http.get("/api/v1/submissions/:id/record-links", () => HttpResponse.json({ detail: "x" }, { status: 404 })),
+            http.get("/api/v1/submissions/:id/audit-events", () => HttpResponse.json({ detail: "x" }, { status: 404 })),
+            http.get("/api/v1/admin/users", () => HttpResponse.json(adminUsers)),
+        )
+        renderPage("424242")
+        expect(await screen.findByText("No submission was found for this link.")).toBeInTheDocument()
+        expect(pageText()).not.toContain("424242")
+    })
+})
+
+describe("records and findings", () => {
+    it("lists each record with its findings, priority and the reviewer's own words", async () => {
+        serveInspection()
+        await inspect("42")
+
+        const kinetics = await recordCard(`Kinetics ${fx.KINETICS_REF}`)
+        const text = kinetics.textContent ?? ""
+        expect(text).toContain("screened: needs attention")
+        expect(text).toContain("high")
+        expect(text).toContain("2026-09-14")
+        expect(text).toContain("REVIEWER_MESSAGE the rate constant is far above the collision limit")
+        expect(text).toContain("kinetics.a")
+        expect(text).toContain("REVIEWER_ACTION re-check the A factor units")
+        expect(text).toContain("units")
+        expect(text).toContain("critical")
+        expect(within(kinetics).getAllByText(/the reviewer/i).length).toBeGreaterThan(0)
+    })
+
+    it("links a finding that has a curator task to that task", async () => {
+        serveInspection()
+        await inspect("42")
+        const kinetics = await recordCard(`Kinetics ${fx.KINETICS_REF}`)
+        const link = within(kinetics).getByRole("link", { name: /curator task/i })
+        const href = link.getAttribute("href") ?? ""
+        expect(href).toContain("/admin/curator-queue?")
+        expect(href).toContain("task=41")
+        expect(href).toContain("record_type=kinetics")
+        expect(pageText()).not.toMatch(/task 41|#41/)
+    })
+
+    it("lists earlier reviews in a disclosure with their date and status", async () => {
+        serveInspection()
+        await inspect("42")
+        const kinetics = await recordCard(`Kinetics ${fx.KINETICS_REF}`)
+        const user = userEvent.setup()
+        await user.click(within(kinetics).getByText(bySummaryText(/Earlier reviews \(1\)/)))
+        expect(kinetics.textContent).toContain("2026-09-10")
+        expect(kinetics.textContent).toContain("screened: warning")
+        expect(kinetics.textContent).toContain("REVIEWER_MESSAGE earlier concern")
+    })
+
+    it("a calculation links to its own page", async () => {
+        serveInspection()
+        await inspect("42")
+        const calc = await recordCard(`Calculation ${fx.CALC_REF}`)
+        expect(within(calc).getByRole("link", { name: new RegExp(fx.CALC_REF) })).toHaveAttribute("href", `/calculations/${fx.CALC_REF}`)
+    })
+
+    it("an energy correction with no reference of its own links to the species entry it is shown on", async () => {
+        serveInspection()
+        await inspect("42")
+        const heading = await recordCard(/^Energy correction/)
+        expect(heading.textContent).toContain("(no reference of its own)")
+        expect(within(heading).getByRole("link", { name: new RegExp(fx.SPECIES_ENTRY_REF) })).toHaveAttribute("href", `/species-entries/${fx.SPECIES_ENTRY_REF}`)
+        expect(heading.textContent).not.toContain("—")
+    })
+
+    it("lists each finding that is about no record, with the reviewer's citation verbatim", async () => {
+        serveInspection()
+        await inspect("42")
+        const section = await screen.findByRole("region", { name: "Findings about no record" })
+        const text = section.textContent ?? ""
+        expect(text).toContain("about the whole submission")
+        expect(text).toContain("record type not recognised")
+        expect(text).toContain("REVIEWER_MESSAGE the submission has no stated purpose")
+        const cited = within(section).getByText("CITED_REF_VERBATIM")
+        expect(cited.tagName).toBe("CODE")
+        expect(text).toContain("as the reviewer cited it")
+        expect(text).toContain("CITED_TYPE_VERBATIM")
+    })
+
+    it("lists the reviewer's runs, with the summary and the reason an unreadable one could not be read", async () => {
+        serveInspection()
+        await inspect("42")
+        const section = await screen.findByRole("region", { name: "Reviewer runs" })
+        const text = section.textContent ?? ""
+        expect(text).toContain("REVIEWER_SUMMARY overall the kinetics look unreliable")
+        expect(text).toContain("reviewer-model-1")
+        expect(text).toContain("reviewer-provider")
+        expect(text).toContain("2026-09-10")
+        expect(text).toContain("The stored result could not be read")
+        expect(text).toContain("RUN_PARSE_WARNING the reply was not JSON")
+    })
+
+    it("shows the mapping and parse warnings, and no source event ids", async () => {
+        serveInspection()
+        await inspect("42")
+        expect(await screen.findByText("MAPPING_WARNING one finding named two records")).toBeInTheDocument()
+        expect(screen.getByText("PARSE_WARNING one finding had no severity")).toBeInTheDocument()
+        expect(pageText()).not.toMatch(/source audit event/i)
+    })
+
+    it("says nothing was mapped when no record has findings", async () => {
+        serveInspection(fx.inspection({ record_summaries: [], unmapped_findings: [], unmapped_findings_count: 0, runs: [] }))
+        await inspect("42")
+        expect(await screen.findByText("No record received a mapped finding.")).toBeInTheDocument()
+    })
+})
+
+describe("what the page leaves out", () => {
+    it("has no raw JSON drawer and no scratchpad", async () => {
+        serveInspection()
+        await inspect("42")
+        await recordCard(`Kinetics ${fx.KINETICS_REF}`)
+        expect(screen.queryByRole("button", { name: /raw json/i })).toBeNull()
+        expect(screen.queryByRole("checkbox")).toBeNull()
+        expect(screen.queryByRole("textbox")).toBeNull()
+        expect(pageText()).not.toMatch(/observations/i)
+    })
+
+    it("shows no field name, row id or ISO timestamp as text", async () => {
+        serveInspection()
+        await inspect("42")
+        await recordCard(`Kinetics ${fx.KINETICS_REF}`)
+        const text = pageText()
+        for (const raw of ["record_public_ref", "highest_severity", "all_record_reviews_count", "submission_id", "reviewed_at"]) {
+            expect(text).not.toContain(raw)
+        }
+        expect(text).not.toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:/)
+        for (const id of [fx.KINETICS_RECORD_ID, fx.CALC_RECORD_ID, fx.AEC_RECORD_ID, 7001, 7000]) {
+            expect(text).not.toContain(String(id))
+        }
+    })
+
+    it("is one h1 inside the page and nothing is styled inline", async () => {
+        serveInspection()
+        await inspect("42")
+        await recordCard(`Kinetics ${fx.KINETICS_REF}`)
+        expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1)
+        expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Machine review inspection")
+        expect(document.body.querySelectorAll("[style]")).toHaveLength(0)
+    })
+})
+
 
 /* ------------------------------------------------------------------ *
  * Building curator tasks
@@ -185,25 +457,8 @@ const BUILD_BUTTON = "Build curator tasks for this submission"
  */
 function serveAnyInspection() {
     server.use(
-        http.get(
-            "/api/v1/admin/submissions/:submissionId/machine-review-inspection",
-            ({ params }) =>
-                HttpResponse.json({
-                    submission_id: Number(params.submissionId),
-                    record_summaries: [
-                        {
-                            record_type: "species",
-                            record_public_ref: `spc_sub_${params.submissionId}`,
-                            record_id: 431,
-                            latest_summary: SUMMARY,
-                            all_record_reviews_count: 1,
-                        },
-                    ],
-                    unmapped_findings_count: 0,
-                    mapping_warnings: [],
-                    parse_warnings: [],
-                    source_audit_event_ids: [11],
-                }),
+        http.get(INSPECTION, ({ params }) =>
+            HttpResponse.json(inspectionBody(params.submissionId, [record(`spc_sub_${params.submissionId}`)])),
         ),
     )
 }
@@ -338,14 +593,10 @@ describe("the schema behind the build tally", () => {
 })
 
 describe("building curator tasks for a submission", () => {
-    it("is not offered before a submission has been inspected", () => {
-        render(
-            <MemoryRouter>
-                <QueryClientProvider client={new QueryClient()}>
-                    <MachineReviewInspectionPage />
-                </QueryClientProvider>
-            </MemoryRouter>,
-        )
+    it("is not offered before a submission has been chosen", async () => {
+        server.use(http.get("/api/v1/submissions/machine-review-overview", () => HttpResponse.json(fx.overviewPage())))
+        renderPage()
+        await screen.findByRole("table", { name: "Submissions" })
         expect(screen.queryByRole("button", { name: BUILD_BUTTON })).toBeNull()
     })
 
@@ -404,7 +655,7 @@ describe("building curator tasks for a submission", () => {
         // to the queue leaves the admin to remember the URL.
         expect(within(status).getByRole("link", { name: "Open Machine findings" })).toHaveAttribute(
             "href",
-            "/admin/curator-queue",
+            "/admin/curator-queue?submission=7",
         )
     })
 
@@ -649,7 +900,7 @@ describe("building curator tasks for a submission", () => {
         // a second write, and the admin has no way to know which tally they
         // are reading.
         const busy = await screen.findByRole("button", { name: /Building/ })
-        expect(busy).toBeDisabled()
+        expect(busy).toHaveAttribute("aria-disabled", "true")
 
         held.release()
         await tallyShown()
@@ -720,7 +971,6 @@ describe("building curator tasks for a submission", () => {
  * nothing to show.
  * ------------------------------------------------------------------ */
 
-const INSPECTION = "/api/v1/admin/submissions/:submissionId/machine-review-inspection"
 
 const RUN = "/api/v1/admin/machine-review/run-for-submission/:submissionId"
 
@@ -728,25 +978,17 @@ const RUN_BUTTON = "Run machine review for this submission"
 
 /** One inspection payload, with whichever record summaries a test wants. */
 function inspectionBody(submissionId: unknown, records: Record<string, unknown>[]) {
-    return {
-        submission_id: Number(submissionId),
-        record_summaries: records,
-        unmapped_findings_count: 0,
-        mapping_warnings: [],
-        parse_warnings: [],
-        source_audit_event_ids: [11],
-    }
+    return fx.inspection({ submission_id: Number(submissionId), record_summaries: records })
 }
 
 /** A record summary naming where it came from, so a wait can assert on it. */
 function record(publicRef: string): Record<string, unknown> {
-    return {
+    return fx.recordInspection({
         record_type: "species",
         record_public_ref: publicRef,
-        record_id: 431,
-        latest_summary: SUMMARY,
-        all_record_reviews_count: 1,
-    }
+        container_type: null,
+        container_ref: null,
+    })
 }
 
 type RunReply = {
@@ -831,14 +1073,10 @@ describe("the schema behind a machine-review run", () => {
 })
 
 describe("running machine review for a submission", () => {
-    it("is not offered before a submission has been inspected", () => {
-        render(
-            <MemoryRouter>
-                <QueryClientProvider client={new QueryClient()}>
-                    <MachineReviewInspectionPage />
-                </QueryClientProvider>
-            </MemoryRouter>,
-        )
+    it("is not offered before a submission has been chosen", async () => {
+        server.use(http.get("/api/v1/submissions/machine-review-overview", () => HttpResponse.json(fx.overviewPage())))
+        renderPage()
+        await screen.findByRole("table", { name: "Submissions" })
         expect(screen.queryByRole("button", { name: RUN_BUTTON })).toBeNull()
     })
 
@@ -1078,7 +1316,7 @@ describe("running machine review for a submission", () => {
         const user = await inspect()
         // Before: the table says the archive holds nothing for this
         // submission, which is the state 44 of 44 submissions were in.
-        await screen.findByText(/No records received mapped machine-review findings/)
+        await screen.findByText(/No record received a mapped finding/)
 
         await user.click(screen.getByRole("button", { name: RUN_BUTTON }))
         await runShown()
@@ -1104,7 +1342,7 @@ describe("running machine review for a submission", () => {
         const busy = await screen.findByRole("button", {
             name: /Running machine review/,
         })
-        expect(busy).toBeDisabled()
+        expect(busy).toHaveAttribute("aria-disabled", "true")
 
         held.release()
         await runShown()

@@ -227,12 +227,29 @@ export type ReviewQueueReactionEquation = z.infer<
     typeof ReviewQueueReactionEquationSchema
 >
 
+/** The record's latest machine review, as the queue summarises it. Display-only words stay strings. */
+export const ReviewQueueMachineFindingsSchema = z.object({
+    status: z.string(),
+    highest_severity: z.string().nullable().default(null),
+    findings_count: z.number().int().default(0),
+    reviewed_at: z.string().nullable().default(null),
+    open_task_count: z.number().int().default(0),
+    open_task_ids: z.array(z.number().int()).default([]),
+})
+export type ReviewQueueMachineFindings = z.infer<typeof ReviewQueueMachineFindingsSchema>
+
+/** A review row as the queue serves it: the review plus its machine-findings summary. */
+export const ReviewQueueRecordSchema = RecordReviewSchema.extend({
+    machine_findings: ReviewQueueMachineFindingsSchema.nullable().default(null),
+})
+export type ReviewQueueRecord = z.infer<typeof ReviewQueueRecordSchema>
+
 export const ReviewQueueSubjectSchema = z.object({
     subject_type: z.string().nullable().default(null),
     subject_ref: z.string().nullable().default(null),
     chemistry: ReviewQueueSubjectChemistrySchema,
     reaction: ReviewQueueReactionEquationSchema.nullable().default(null),
-    records: z.array(RecordReviewSchema),
+    records: z.array(ReviewQueueRecordSchema),
 })
 export type ReviewQueueSubject = z.infer<typeof ReviewQueueSubjectSchema>
 

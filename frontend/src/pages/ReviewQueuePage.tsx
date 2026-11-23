@@ -3,6 +3,7 @@ import { Link, Navigate } from "react-router-dom"
 import "../auth.css"
 import "../admin.css"
 import { AuthApiError } from "../api/authApi"
+import { listSubmissionMachineReviewOverview } from "../api/submissionsApi"
 import {
     RecordReviewResponseError,
     listReviewQueue,
@@ -12,6 +13,8 @@ import { spinWord } from "../domain/chemistryFormat"
 import { Formula } from "../components/Formula"
 import { ReactionEquation } from "../components/ReactionEquation"
 import { facetChips } from "../domain/recordFacets"
+import { adminDate, RECORD_TYPE_OPTIONS, wordLabel } from "../domain/machineReviewWords"
+import { MachineReviewStatusLabel } from "../components/MachineReviewStatusLabel"
 import {
     recordRoute,
     recordTypeGroupLabel,
@@ -26,6 +29,7 @@ import {
     statusMeaning,
     type RecordReview,
     type RecordReviewStatus,
+    type ReviewQueueRecord,
     type ReviewQueueReactionEquation,
     type ReviewQueueSubject,
 } from "../types/recordReview"
@@ -498,6 +502,9 @@ export default function ReviewQueuePage() {
         "not_reviewed",
     )
     const [offset, setOffset] = useState(0)
+    const [recordTypeFilter, setRecordTypeFilter] = useState("")
+    const [submissionFilter, setSubmissionFilter] = useState("")
+    const [submissions, setSubmissions] = useState<Array<{ id: number; label: string }>>([])
     const [load, setLoad] = useState<LoadState>({ status: "loading" })
     const [busy, setBusy] = useState<ReadonlySet<number>>(new Set())
     const [rowErrors, setRowErrors] = useState<ReadonlyMap<number, RowError>>(new Map())
@@ -506,6 +513,7 @@ export default function ReviewQueuePage() {
 
     const role = state.status === "signed-in" ? state.user.role : null
     const canReview = role === "curator" || role === "admin"
+    const isAdmin = role === "admin"
 
     // The filter as of *now*, for code that resumes after an await: a
     // transition can land after the curator has changed the view, and
@@ -521,13 +529,23 @@ export default function ReviewQueuePage() {
         offsetRef.current = offset
     }, [offset])
 
+    // The record type and submission as of *now*, for the same reason as the status filter above.
+    const recordTypeRef = useRef(recordTypeFilter)
+    useEffect(() => {
+        recordTypeRef.current = recordTypeFilter
+    }, [recordTypeFilter])
+    const submissionRef = useRef(submissionFilter)
+    useEffect(() => {
+        submissionRef.current = submissionFilter
+    }, [submissionFilter])
+
     // A refusal is about a row in a view. Change the view and it is no
     // longer about anything the curator is looking at -- left in place it
     // followed them from filter to filter announcing that a row they never
     // saw "is no longer in this view", which is both wrong and unclosable.
     useEffect(() => {
         setRowErrors(new Map())
-    }, [statusFilter, offset])
+    }, [statusFilter, offset, recordTypeFilter, submissionFilter])
 
     const requestSeq = useRef(0)
 
@@ -538,6 +556,8 @@ export default function ReviewQueuePage() {
         try {
             const page = await listReviewQueue({
                 ...(current === "all" ? {} : { status: current }),
+                ...(recordTypeRef.current ? { recordType: recordTypeRef.current } : {}),
+                ...(submissionRef.current ? { submissionId: Number(submissionRef.current) } : {}),
                 limit: PAGE_LIMIT,
                 offset: offsetRef.current,
             })
@@ -562,7 +582,23 @@ export default function ReviewQueuePage() {
 
     useEffect(() => {
         if (canReview) void refresh()
-    }, [canReview, refresh, statusFilter, offset])
+    }, [canReview, refresh, statusFilter, offset, recordTypeFilter, submissionFilter])
+
+    // The 200 most recently reviewed submissions, for the Submission filter. A failure leaves the filter empty.
+    useEffect(() => {
+        if (!canReview) return
+        let live = true
+        listSubmissionMachineReviewOverview({ reviewed: true, limit: 200 })
+            .then(
+                (page) =>
+                    live &&
+                    setSubmissions(page.items.map((x) => ({ id: x.id, label: `${x.public_ref} · ${adminDate(x.submitted_at)}` }))),
+            )
+            .catch(() => {})
+        return () => {
+            live = false
+        }
+    }, [canReview])
 
     if (state.status === "loading") {
         return (
@@ -702,8 +738,51 @@ export default function ReviewQueuePage() {
         }
     }
 
+    /**
+     * The record's latest machine review, in a line. Nothing for a record that was never reviewed. The curator task
+     * link goes to the admin-only queue, so a curator is told who handles them instead.
+     */
+    function renderMachineFindings(row: ReviewQueueRecord) {
+        const mf = row.machine_findings
+        if (mf === null || mf.status === "not_run") return null
+        return (
+            <span className="review-machine-findings">
+                {mf.status === "machine_review_failed" ? (
+                    <span className="admin-absent">machine review failed</span>
+                ) : (
+                    <>
+                        <MachineReviewStatusLabel status={mf.status} />
+                        {mf.highest_severity ? <> · {wordLabel("severity", mf.highest_severity)}</> : null}
+                        {" · "}
+                        {mf.findings_count} finding{mf.findings_count === 1 ? "" : "s"}
+                    </>
+                )}
+                {mf.open_task_count > 0 &&
+                    (isAdmin ? (
+                        <>
+                            {" · "}
+                            <Link
+                                to={`/admin/curator-queue?state=open&record_type=${encodeURIComponent(row.record_type)}&record=${row.record_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                {mf.open_task_count} open machine-finding task{mf.open_task_count === 1 ? "" : "s"}
+                                <NewTabNote />
+                            </Link>
+                        </>
+                    ) : (
+                        <>
+                            {" · "}
+                            {mf.open_task_count} open machine-finding task{mf.open_task_count === 1 ? "" : "s"} (handled by
+                            administrators)
+                        </>
+                    ))}
+            </span>
+        )
+    }
+
     /** One record's status + action, whether shown alone or inside an expanded group. */
-    function renderRecordRow(row: RecordReview, subject: ReviewQueueSubject) {
+    function renderRecordRow(row: ReviewQueueRecord, subject: ReviewQueueSubject) {
         const rowId = keyOf(row)
         const rowBusy = busy.has(rowId)
         const options = offeredTransitions(row)
@@ -729,6 +808,7 @@ export default function ReviewQueuePage() {
                             {recordTypeGroupLabel(row.record_type, 1)}
                         </span>
                         <RecordOwnLink row={row} subject={subject} />
+                        {renderMachineFindings(row)}
                         {row.note && (
                             <span className="review-record-note">{row.note}</span>
                         )}
@@ -825,7 +905,7 @@ export default function ReviewQueuePage() {
     function renderRecordGroup(
         groupKey: string,
         recordType: string,
-        rows: RecordReview[],
+        rows: ReviewQueueRecord[],
         subject: ReviewQueueSubject,
     ) {
         if (rows.length === 1) return renderRecordRow(rows[0], subject)
@@ -840,6 +920,14 @@ export default function ReviewQueuePage() {
                         {recordTypeGroupLabel(recordType, rows.length)}
                     </span>
                     <span className="review-record-count">{rows.length}</span>
+                    {rows.some((r) => (r.machine_findings?.open_task_count ?? 0) > 0) && (
+                        <span className="review-machine-findings">
+                            <span aria-hidden="true">&middot; </span>
+                            <span className="admin-visually-hidden">records, </span>
+                            {rows.filter((r) => (r.machine_findings?.open_task_count ?? 0) > 0).length} with open
+                            machine-finding tasks
+                        </span>
+                    )}
                     {uniformStatus ? (
                         showStatusFor(uniformStatus) && (
                             <span className={statusClass(uniformStatus) ?? undefined}>
@@ -874,7 +962,7 @@ export default function ReviewQueuePage() {
         const subjectKey = subjectKeyOf(subject, index)
         // Group this subject's own records by type, preserving the order
         // the server returned them in (newest-first).
-        const groups = new Map<string, RecordReview[]>()
+        const groups = new Map<string, ReviewQueueRecord[]>()
         for (const row of subject.records) {
             const existing = groups.get(row.record_type)
             if (existing) existing.push(row)
@@ -893,6 +981,23 @@ export default function ReviewQueuePage() {
         )
     }
 
+    const resultText =
+        load.status !== "ready"
+            ? ""
+            : load.subjects.length === 0
+              ? offset > 0
+                  ? "Nothing older than this. Go back for the newer subjects."
+                  : recordTypeFilter !== "" || submissionFilter !== ""
+                    ? "No records match these filters."
+                    : statusFilter === "not_reviewed"
+                      ? "Nothing is waiting. Every record has been looked at."
+                      : "No records match this filter."
+              : `${load.recordTotal} record${load.recordTotal === 1 ? "" : "s"}${
+                    statusFilter === "not_reviewed" ? " awaiting review" : ""
+                }, ${load.subjectTotal} subject${load.subjectTotal === 1 ? "" : "s"}${
+                    offset > 0 ? ` (showing subjects ${offset + 1}-${offset + load.subjects.length})` : ""
+                }`
+
     return (
         <section className="admin-page">
             <h1>Record review</h1>
@@ -904,13 +1009,14 @@ export default function ReviewQueuePage() {
                 it changes what every reader is told to trust, and it freezes the
                 record against further edits. Moving the review back to under review
                 afterwards does not unfreeze it. That is what{" "}
-                <Link to="/admin/curator-queue">Machine findings</Link> is not: it
+                {isAdmin ? <Link to="/admin/curator-queue">Machine findings</Link> : "Machine findings"} is not: it
                 triages what an automated reviewer raised, and endorses nothing.
                 Records are grouped below by the species or transition state they
                 belong to; reviewing still happens one record at a time.
             </p>
 
-            <div className="admin-filter">
+            <div className="admin-filters">
+                <div className="admin-filter">
                 <label htmlFor="review-filter">Showing</label>{" "}
                 <select
                     id="review-filter"
@@ -932,7 +1038,50 @@ export default function ReviewQueuePage() {
                         </option>
                     ))}
                 </select>
+                </div>
+                <div className="admin-filter">
+                <label htmlFor="review-record-type">Record type</label>{" "}
+                <select
+                    id="review-record-type"
+                    className="admin-role-select"
+                    value={recordTypeFilter}
+                    onChange={(e) => {
+                        setOffset(0)
+                        setRecordTypeFilter(e.target.value)
+                    }}
+                >
+                    <option value="">any record type</option>
+                    {RECORD_TYPE_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                </select>
+                </div>
+                <div className="admin-filter">
+                <label htmlFor="review-submission">Submission</label>{" "}
+                <select
+                    id="review-submission"
+                    className="admin-role-select"
+                    value={submissionFilter}
+                    onChange={(e) => {
+                        setOffset(0)
+                        setSubmissionFilter(e.target.value)
+                    }}
+                >
+                    <option value="">any submission</option>
+                    {submissions.map((x) => (
+                        <option key={x.id} value={String(x.id)}>{x.label}</option>
+                    ))}
+                </select>
+                </div>
             </div>
+
+            {/* Always mounted, so a count that arrives after a filter change is announced. */}
+            <p
+                role="status"
+                className={!resultText ? "admin-visually-hidden" : load.status === "ready" && load.subjects.length > 0 ? "admin-count" : undefined}
+            >
+                {resultText}
+            </p>
 
             {load.status === "loading" && <p role="status">Loading the queue…</p>}
             {load.status === "error" && (
@@ -962,30 +1111,9 @@ export default function ReviewQueuePage() {
                         </p>
                     ))}
 
-            {load.status === "ready" && load.subjects.length === 0 && (
-                <p role="status">
-                    {offset > 0
-                        ? "Nothing older than this. Go back for the newer subjects."
-                        : statusFilter === "not_reviewed"
-                          ? "Nothing is waiting. Every record has been looked at."
-                          : "No records match this filter."}
-                </p>
-            )}
 
             {load.status === "ready" && load.subjects.length > 0 && (
                 <>
-                    <p className="admin-count" role="status">
-                        {load.recordTotal} record{load.recordTotal === 1 ? "" : "s"}
-                        {statusFilter === "not_reviewed" ? " awaiting review" : ""}
-                        {", "}
-                        {load.subjectTotal} subject
-                        {load.subjectTotal === 1 ? "" : "s"}
-                        {offset > 0
-                            ? ` (showing subjects ${offset + 1}-${
-                                  offset + load.subjects.length
-                              })`
-                            : ""}
-                    </p>
                     {load.subjects.map((subject, index) => renderSubject(subject, index))}
                 </>
             )}

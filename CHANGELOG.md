@@ -31,6 +31,7 @@ dataset must never require a code release.
 - **Behaviour:** curator tasks carry `finding`, `finding_match` and `finding_audit_event_ids`, recovered from the stored review events by exact fingerprint (`source_audit_event`, `submission_audit_events` or `not_found`). The list returns them only with `include=findings`; the single-task routes always do. Tasks also carry `assigned_to_username` and `resolved_by_username`.
 - **Behaviour:** `GET /api/v1/admin/machine-review/curator-tasks` accepts `workflow_state` more than once and a new `state_group` (`open` or `terminal`); `total` is exact under the same filters.
 - **Behaviour:** each record on `GET /api/v1/record-reviews/queue` carries `machine_findings`: latest status, highest severity, finding count, review time, and the open curator task count and ids.
+- **Behaviour:** `GET /api/v1/record-reviews/queue` accepts `record_type` and `submission_id`; the subject and record totals follow the filter.
 - **Behaviour:** new `GET /api/v1/submissions/machine-review-overview` (curator or admin) pages every submission with its run count, latest run, and open and total curator task counts; filters `statuses`, `reviewed`, `has_open_tasks`.
 - **Schema:** no migration. tckdb-client 0.211.1 only updates its route ledger.
 

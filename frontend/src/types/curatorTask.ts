@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { madeUnderSchema } from "../domain/madeUnder"
+import { AdminMachineReviewFindingSchema } from "./machineReviewInspection"
 
 /**
  * Runtime + static types for the admin curator-task queue.
@@ -104,13 +105,19 @@ export const CuratorTaskSchema = z.object({
     findings_count: z.number().int(),
     source_audit_event_id: z.number().int().nullable().default(null),
     assigned_to: z.number().int().nullable().default(null),
+    assigned_to_username: z.string().nullable().default(null),
     created_at: z.string(),
     updated_at: z.string(),
     resolved_at: z.string().nullable().default(null),
     resolved_by: z.number().int().nullable().default(null),
+    resolved_by_username: z.string().nullable().default(null),
     resolution_note: z.string().nullable().default(null),
     // The rubric the record's latest stored machine review was made under, against the registry. Null: none stored.
     made_under: madeUnderSchema.nullable().default(null),
+    // The finding itself and how it was matched to a stored review; null/absent on a list that was not asked for them.
+    finding: AdminMachineReviewFindingSchema.nullable().default(null),
+    finding_match: z.string().nullable().default(null),
+    finding_audit_event_ids: z.array(z.number().int()).default([]),
 })
 export type CuratorTask = z.infer<typeof CuratorTaskSchema>
 

@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import CuratorQueuePage from "./CuratorQueuePage"
 import { AuthProvider } from "../components/AuthProvider"
+import * as fx from "../test/machineReviewFixtures"
 
 /**
  * Machine findings is the first surface in this app where a person acts
@@ -31,6 +32,7 @@ const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
 afterEach(() => {
     server.resetHandlers()
+    server.events.removeAllListeners()
     cleanup()
 })
 afterAll(() => server.close())
@@ -47,8 +49,17 @@ const admin = {
 }
 const plainUser = { ...admin, id: 2, username: "noah", full_name: null, role: "user" }
 
+const OVERVIEW = "/api/v1/submissions/machine-review-overview"
+const USERS = "/api/v1/admin/users"
+const bea = { ...admin, id: 5, username: "bea", email: "bea@example.com" }
+
+/** Sign in as `who`; also serve the two lists the filters read, which a test may override. */
 function meIs(who: Record<string, unknown>) {
-    server.use(http.get("/api/v1/auth/me", () => HttpResponse.json(who)))
+    server.use(
+        http.get(OVERVIEW, () => HttpResponse.json(fx.overviewPage([fx.overviewRow()]))),
+        http.get(USERS, () => HttpResponse.json({ items: [admin, bea].map((u) => ({ ...u, affiliation: null, created_at: "2026-01-01T00:00:00Z" })), total: 2, skip: 0, limit: 200 })),
+        http.get("/api/v1/auth/me", () => HttpResponse.json(who)),
+    )
 }
 
 /**
@@ -91,22 +102,36 @@ function otherTask(over: Record<string, unknown> = {}) {
     })
 }
 
-/** Serve a fixed queue. Returns a counter of how many times it was read. */
+const OPEN = ["untriaged", "needs_curator_review", "in_curator_review"]
+
+/** Serve a fixed queue, filtering and paging the way the route does. Returns a counter of reads. */
 function queueIs(items: Record<string, unknown>[]): { reads: number } {
     const counter = { reads: 0 }
     server.use(
-        http.get(QUEUE, () => {
+        http.get(QUEUE, ({ request }) => {
             counter.reads += 1
-            return HttpResponse.json({ items, total: items.length, skip: 0, limit: 50 })
+            const q = new URL(request.url).searchParams
+            const states = q.getAll("workflow_state")
+            const group = q.get("state_group")
+            const kept = items.filter((t) => {
+                const state = t.workflow_state as string
+                if (states.length > 0 && !states.includes(state)) return false
+                if (group === "open" && !OPEN.includes(state)) return false
+                if (group === "terminal" && OPEN.includes(state)) return false
+                return true
+            })
+            const skip = Number(q.get("offset") ?? 0)
+            const limit = Number(q.get("limit") ?? 50)
+            return HttpResponse.json({ items: kept.slice(skip, skip + limit), total: kept.length, skip, limit })
         }),
     )
     return counter
 }
 
-function renderPage() {
+function renderPage(path = "/admin/curator-queue") {
     return render(
         <AuthProvider>
-            <MemoryRouter>
+            <MemoryRouter initialEntries={[path]}>
                 <CuratorQueuePage />
             </MemoryRouter>
         </AuthProvider>,
@@ -154,7 +179,7 @@ function rowButtons(ref: string): HTMLElement[] {
 }
 
 function rowButton(ref: string, name: string): HTMLElement {
-    const found = rowButtons(ref).find((b) => (b.textContent ?? "").trim() === name)
+    const found = rowButtons(ref).find((b) => (b.childNodes[0]?.textContent ?? "").trim() === name)
     if (found === undefined) throw new Error(`no "${name}" button in row ${ref}`)
     return found
 }
@@ -180,12 +205,14 @@ function gate(): { held: Promise<void>; release: () => void } {
 describe("who can open the queue", () => {
     it("a signed-in non-admin is told, and the queue is never fetched", async () => {
         meIs(plainUser)
-        // Deliberately no QUEUE handler: `onUnhandledRequest: "error"` turns
-        // any request into a failure, so this asserts the page does not ask,
-        // not merely that it hid the answer.
+        // Every request is recorded: `onUnhandledRequest: "error"` only logs and turns the fetch into a network error,
+        // so it cannot tell a page that asked from one that did not.
+        const requested: string[] = []
+        server.events.on("request:start", ({ request }) => requested.push(new URL(request.url).pathname))
         renderPage()
 
         expect(await screen.findByRole("alert")).toHaveTextContent(/for administrators/i)
+        expect(requested.filter((path) => path.includes("machine-review"))).toEqual([])
         expect(screen.queryByRole("table")).not.toBeInTheDocument()
     })
 
@@ -244,83 +271,15 @@ describe("what the page says it is", () => {
         expect(screen.queryByRole("alert")).not.toBeInTheDocument()
     })
 
-    it("counts what it is showing, without comparing it to a different count", async () => {
+    it("counts from the server total, with the range on screen", async () => {
         meIs(admin)
-        // The backend's `total` counts every task, closed ones included,
-        // because the open filter sends no `workflow_state`. Printing
-        // "1 of 9" here would compare a filtered table against an
-        // unfiltered count and read as though 8 rows were missing.
         server.use(
-            http.get(QUEUE, () =>
-                HttpResponse.json({ items: [task()], total: 9, skip: 0, limit: 50 }),
-            ),
+            http.get(QUEUE, () => HttpResponse.json({ items: [task()], total: 132, skip: 0, limit: 50 })),
         )
         renderPage()
 
-        const count = await screen.findByText(/shown/)
-        expect(count).toHaveTextContent("1 shown")
-        expect(count).not.toHaveTextContent("9")
-        // And a one-row table is not a full page, so it must not claim
-        // work might be hidden.
+        expect(await screen.findByText("Showing 1–1 of 132 tasks")).toBeInTheDocument()
         expect(screen.queryByText(/there may be more/i)).not.toBeInTheDocument()
-    })
-
-    it("does compare against the total when the backend counted the same thing", async () => {
-        meIs(admin)
-        server.use(
-            http.get(QUEUE, ({ request }) => {
-                const filtered = new URL(request.url).searchParams.get("workflow_state")
-                return HttpResponse.json({
-                    items: filtered ? [task({ workflow_state: "untriaged" })] : [],
-                    total: filtered ? 4 : 0,
-                    skip: 0,
-                    limit: 50,
-                })
-            }),
-        )
-        const user = userEvent.setup()
-        renderPage()
-        await screen.findByText(/Nothing is waiting/i)
-        await user.selectOptions(screen.getByLabelText("Showing"), "untriaged")
-
-        // Under an exact state the backend counts exactly what the table
-        // shows, so "of 4" is a real statement about work not on screen.
-        expect(await screen.findByText(/shown of 4 in this state/)).toBeInTheDocument()
-    })
-
-    it("still warns about a full page when some of its rows were unreadable", async () => {
-        meIs(admin)
-        const rows = Array.from({ length: 50 }, (_, i) =>
-            i < 2
-                ? task({ id: 900 + i, workflow_state: "a_state_from_the_future" })
-                : task({ id: 100 + i, record_public_ref: `spc_${i}` }),
-        )
-        server.use(
-            http.get(QUEUE, () =>
-                HttpResponse.json({ items: rows, total: 200, skip: 0, limit: 50 }),
-            ),
-        )
-        renderPage()
-
-        // 48 rendered of 50 fetched. Comparing the RENDERED count against the
-        // page cap would drop the hint exactly when rows are being hidden.
-        await screen.findByRole("table")
-        expect(screen.getByText(/there may be more/i)).toBeInTheDocument()
-    })
-
-    it("says so when a full page might be hiding more work", async () => {
-        meIs(admin)
-        const fifty = Array.from({ length: 50 }, (_, i) =>
-            task({ id: 100 + i, record_public_ref: `spc_${i}` }),
-        )
-        server.use(
-            http.get(QUEUE, () =>
-                HttpResponse.json({ items: fifty, total: 200, skip: 0, limit: 50 }),
-            ),
-        )
-        renderPage()
-
-        expect(await screen.findByText(/there may be more/i)).toBeInTheDocument()
     })
 })
 
@@ -471,7 +430,7 @@ describe("how a row names the record it concerns", () => {
         ])
         const user = userEvent.setup()
         renderPage()
-        await user.selectOptions(await screen.findByLabelText("Showing"), "all")
+        await user.selectOptions(await screen.findByLabelText("State"), "all")
 
         // Three distinct labels, each asserted by value. Collapsing any two
         // of them loses the difference between "the machine was wrong" and
@@ -499,7 +458,7 @@ describe("the default view is the work, not the history", () => {
         expect(screen.queryByText("spc_closed")).not.toBeInTheDocument()
 
         const user = userEvent.setup()
-        await user.selectOptions(screen.getByLabelText("Showing"), "all")
+        await user.selectOptions(screen.getByLabelText("State"), "all")
         expect(await screen.findByText("spc_closed")).toBeInTheDocument()
     })
 
@@ -516,7 +475,7 @@ describe("the default view is the work, not the history", () => {
         await screen.findByText(/Nothing is waiting/i)
 
         const user = userEvent.setup()
-        await user.selectOptions(screen.getByLabelText("Showing"), "in_curator_review")
+        await user.selectOptions(screen.getByLabelText("State"), "in_curator_review")
         await screen.findByText(/No tasks match/i)
 
         // "open" is three states and the route filters on one, so only an
@@ -551,7 +510,7 @@ describe("acting on a task", () => {
         renderPage()
 
         const user = userEvent.setup()
-        await user.click(await screen.findByRole("button", { name: "Start review" }))
+        await user.click(await screen.findByRole("button", { name: /^Start review/ }))
 
         await waitFor(async () =>
             expect(await rowStateFor("spc_vu7cuk4s37szxaudjpf355tqda")).toBe("in review"),
@@ -561,7 +520,40 @@ describe("acting on a task", () => {
         // would let it claim somebody else did the work.
         expect(body).toEqual({})
         // A task already in review has nothing to start.
-        expect(screen.queryByRole("button", { name: "Start review" })).not.toBeInTheDocument()
+        expect(screen.queryByRole("button", { name: /^Start review/ })).not.toBeInTheDocument()
+    })
+
+    it("announces what a row action did and puts focus back on the row's Details button", async () => {
+        meIs(admin)
+        let started = false
+        server.use(
+            http.post(/\/curator-tasks\/\d+\/start-review$/, () => {
+                started = true
+                return HttpResponse.json(task({ workflow_state: "in_curator_review" }))
+            }),
+            http.get(QUEUE, () =>
+                HttpResponse.json({
+                    items: [task({ workflow_state: started ? "in_curator_review" : "needs_curator_review" })],
+                    total: 1,
+                    skip: 0,
+                    limit: 50,
+                }),
+            ),
+        )
+        renderPage()
+        const user = userEvent.setup()
+        await user.click(await screen.findByRole("button", { name: /^Start review/ }))
+        await waitFor(() => expect(document.body).toHaveTextContent("Review started."))
+        await waitFor(() => expect(screen.getByRole("button", { name: /^Details/ })).toHaveFocus())
+    })
+
+    it("labels a row's record type in words, not as the raw token", async () => {
+        meIs(admin)
+        queueIs([task({ record_type: "applied_energy_correction" })])
+        renderPage()
+        await screen.findByRole("table")
+        expect(bodyRows()[0][0]).toContain("Energy correction")
+        expect(bodyRows()[0][0]).not.toContain("applied_energy_correction")
     })
 
     it("re-reads the queue from the server after a write", async () => {
@@ -573,7 +565,7 @@ describe("acting on a task", () => {
         const before = counter.reads
 
         const user = userEvent.setup()
-        await user.click(screen.getByRole("button", { name: "Start review" }))
+        await user.click(screen.getByRole("button", { name: /^Start review/ }))
 
         // The server, not the page, decides whether the row still belongs
         // in this view. Patching the row locally duplicated that judgement
@@ -588,7 +580,7 @@ describe("acting on a task", () => {
         renderPage()
 
         const user = userEvent.setup()
-        await user.click(await screen.findByRole("button", { name: "Close…" }))
+        await user.click(await screen.findByRole("button", { name: /^Close…/ }))
 
         // No `/resolve` handler is registered: if the disabled button were
         // clickable the request would fail the unhandled-request guard.
@@ -607,10 +599,9 @@ describe("acting on a task", () => {
                 server.use(
                     http.get(QUEUE, () =>
                         HttpResponse.json({
-                            items: [
-                                task({ workflow_state: "dismissed_machine_finding" }),
-                            ],
-                            total: 1,
+                            // The server drops a closed task from the open view.
+                            items: [],
+                            total: 0,
                             skip: 0,
                             limit: 50,
                         }),
@@ -622,7 +613,7 @@ describe("acting on a task", () => {
         renderPage()
 
         const user = userEvent.setup()
-        await user.click(await screen.findByRole("button", { name: "Close…" }))
+        await user.click(await screen.findByRole("button", { name: /^Close…/ }))
         await user.selectOptions(
             screen.getByLabelText(/How it was settled/),
             "dismissed_machine_finding",
@@ -658,7 +649,7 @@ describe("acting on a task", () => {
         renderPage()
 
         const user = userEvent.setup()
-        await user.click(await screen.findByRole("button", { name: "Close…" }))
+        await user.click(await screen.findByRole("button", { name: /^Close…/ }))
         await user.type(screen.getByLabelText(/Why/), "fine as deposited")
         await user.click(screen.getByRole("button", { name: "Close task" }))
 
@@ -675,7 +666,7 @@ describe("acting on a task", () => {
         renderPage()
 
         const user = userEvent.setup()
-        await user.click(await screen.findByRole("button", { name: "Close…" }))
+        await user.click(await screen.findByRole("button", { name: /^Close…/ }))
         const choice = screen.getByLabelText(/How it was settled/)
 
         expect(screen.getByText(/nothing needs changing/i)).toBeInTheDocument()
@@ -709,8 +700,9 @@ describe("acting on a task", () => {
         renderPage()
 
         const user = userEvent.setup()
-        await user.selectOptions(await screen.findByLabelText("Showing"), "all")
-        await user.click(await screen.findByRole("button", { name: "Reopen" }))
+        await user.selectOptions(await screen.findByLabelText("State"), "all")
+        await user.click(await screen.findByRole("button", { name: /^Reopen…/ }))
+        await user.click(await screen.findByRole("button", { name: "Reopen task" }))
 
         await waitFor(async () =>
             expect(await rowStateFor("spc_vu7cuk4s37szxaudjpf355tqda")).toBe("needs review"),
@@ -740,7 +732,7 @@ describe("a view changed mid-flight is the view that wins", () => {
         // is still out. The refresh that follows must ask about the view
         // the curator is actually looking at.
         await user.click(rowButton("spc_vu7cuk4s37szxaudjpf355tqda", "Start review"))
-        await user.selectOptions(screen.getByLabelText("Showing"), "untriaged")
+        await user.selectOptions(screen.getByLabelText("State"), "untriaged")
 
         await waitFor(() => expect(asked.length).toBeGreaterThanOrEqual(3))
         expect(asked.at(-1)).toBe("untriaged")
@@ -773,7 +765,7 @@ describe("a view changed mid-flight is the view that wins", () => {
         renderPage()
 
         const user = userEvent.setup()
-        await user.selectOptions(await screen.findByLabelText("Showing"), "untriaged")
+        await user.selectOptions(await screen.findByLabelText("State"), "untriaged")
         expect(await screen.findByText("spc_current")).toBeInTheDocument()
 
         // The failure half of the sequence guard. Without it, a slow 500 on a
@@ -810,7 +802,7 @@ describe("a view changed mid-flight is the view that wins", () => {
         renderPage()
 
         const user = userEvent.setup()
-        await user.selectOptions(await screen.findByLabelText("Showing"), "untriaged")
+        await user.selectOptions(await screen.findByLabelText("State"), "untriaged")
         expect(await screen.findByText("spc_current")).toBeInTheDocument()
 
         // Give the superseded request time to come back and do damage.
@@ -938,7 +930,7 @@ describe("everything a row owns stays with that row", () => {
         )
         const user = userEvent.setup()
         renderPage()
-        await user.selectOptions(await screen.findByLabelText("Showing"), "all")
+        await user.selectOptions(await screen.findByLabelText("State"), "all")
         await user.click(rowButton("spc_vu7cuk4s37szxaudjpf355tqda", "Start review"))
 
         // The row must not keep reading "needs review" with a live
@@ -1002,7 +994,7 @@ describe("everything a row owns stays with that row", () => {
 
         const user = userEvent.setup()
         const ref = "spc_vu7cuk4s37szxaudjpf355tqda"
-        await user.click(await screen.findByRole("button", { name: "Start review" }))
+        await user.click(await screen.findByRole("button", { name: /^Start review/ }))
         expect(await screen.findByRole("alert")).toHaveTextContent("Someone else has it.")
 
         await user.click(rowButton(ref, "Start review"))
@@ -1036,12 +1028,12 @@ describe("everything a row owns stays with that row", () => {
         // The fast row's write has landed. If in-flight state were a single
         // page-level slot, that would have re-enabled the slow row's button
         // and a second click would send a second write.
-        await waitFor(() => expect(rowButton(slowRow, "Start review")).toBeDisabled())
+        await waitFor(() => expect(rowButton(slowRow, "Start review")).toHaveAttribute("aria-disabled", "true"))
         expect(slowHits).toBe(1)
 
         // Release, so nothing is left in flight when the test ends.
         slow.release()
-        await waitFor(() => expect(rowButton(slowRow, "Start review")).toBeEnabled())
+        await waitFor(() => expect(rowButton(slowRow, "Start review")).not.toHaveAttribute("aria-disabled", "true"))
     })
 
     it("disables a row's own buttons while its write is in flight", async () => {
@@ -1060,10 +1052,10 @@ describe("everything a row owns stays with that row", () => {
         const user = userEvent.setup()
         const ref = "spc_vu7cuk4s37szxaudjpf355tqda"
         await user.click(rowButton(ref, "Start review"))
-        expect(rowButton(ref, "Close…")).toBeDisabled()
+        expect(rowButton(ref, "Close…")).toHaveAttribute("aria-disabled", "true")
 
         write.release()
-        await waitFor(() => expect(rowButton(ref, "Close…")).toBeEnabled())
+        await waitFor(() => expect(rowButton(ref, "Close…")).not.toHaveAttribute("aria-disabled", "true"))
     })
 })
 
@@ -1090,8 +1082,8 @@ describe("the buttons say what is actually happening", () => {
         // Between the write returning and the list being re-read, the row on
         // screen is stale. Re-enabling there offers a button whose label
         // describes a state the server has already left.
-        expect(rowButton(ref, "Start review")).toBeDisabled()
-        await waitFor(() => expect(rowButton(ref, "Start review")).toBeEnabled())
+        expect(rowButton(ref, "Start review")).toHaveAttribute("aria-disabled", "true")
+        await waitFor(() => expect(rowButton(ref, "Start review")).not.toHaveAttribute("aria-disabled", "true"))
     })
 
     it("does not blank the table while a write is being re-read", async () => {
@@ -1126,16 +1118,17 @@ describe("the buttons say what is actually happening", () => {
         )
         const user = userEvent.setup()
         renderPage()
-        await user.selectOptions(await screen.findByLabelText("Showing"), "all")
+        await user.selectOptions(await screen.findByLabelText("State"), "all")
 
         const ref = "spc_vu7cuk4s37szxaudjpf355tqda"
-        await user.click(rowButton(ref, "Reopen"))
-        expect(rowButton(ref, "Reopen")).toBeDisabled()
+        await user.click(rowButton(ref, "Reopen…"))
+        await user.click(screen.getByRole("button", { name: "Reopen task" }))
+        expect(screen.getByRole("button", { name: "Reopen task" })).toHaveAttribute("aria-disabled", "true")
 
         // Release and wait out the re-read, so no request from this test
         // lands in the next one's handlers.
         write.release()
-        await waitFor(() => expect(rowButton(ref, "Reopen")).toBeEnabled())
+        await waitFor(() => expect(rowButton(ref, "Reopen…")).not.toHaveAttribute("aria-disabled", "true"))
     })
 
     it("disables Close task while its own write is out", async () => {
@@ -1151,18 +1144,18 @@ describe("the buttons say what is actually happening", () => {
         renderPage()
 
         const user = userEvent.setup()
-        await user.click(await screen.findByRole("button", { name: "Close…" }))
+        await user.click(await screen.findByRole("button", { name: /^Close…/ }))
         await user.type(screen.getByLabelText(/Why/), "fine as deposited")
         await user.click(screen.getByRole("button", { name: "Close task" }))
 
         // Without this a second click files the same reason twice.
-        expect(screen.getByRole("button", { name: "Close task" })).toBeDisabled()
+        expect(screen.getByRole("button", { name: "Close task" })).toHaveAttribute("aria-disabled", "true")
 
         // Release and wait out the re-read, as above. A saved resolve closes
         // the form; the row is re-enabled only once the re-read has landed.
         write.release()
         await waitFor(() => expect(screen.queryByRole("button", { name: "Close task" })).not.toBeInTheDocument())
-        await waitFor(() => expect(rowButton("spc_vu7cuk4s37szxaudjpf355tqda", "Close…")).toBeEnabled())
+        await waitFor(() => expect(rowButton("spc_vu7cuk4s37szxaudjpf355tqda", "Close…")).not.toHaveAttribute("aria-disabled", "true"))
         expect(reads.reads).toBe(2)
     })
 
@@ -1172,7 +1165,7 @@ describe("the buttons say what is actually happening", () => {
         renderPage()
 
         const user = userEvent.setup()
-        const close = await screen.findByRole("button", { name: "Close…" })
+        const close = await screen.findByRole("button", { name: /^Close…/ })
         expect(close).toHaveAttribute("aria-expanded", "false")
         await user.click(close)
         expect(close).toHaveAttribute("aria-expanded", "true")
@@ -1185,7 +1178,7 @@ describe("the buttons say what is actually happening", () => {
         renderPage()
 
         const user = userEvent.setup()
-        const close = await screen.findByRole("button", { name: "Close…" })
+        const close = await screen.findByRole("button", { name: /^Close…/ })
         await user.click(close)
         await user.type(screen.getByLabelText(/Why/), "some reason")
         await user.click(close)
@@ -1254,6 +1247,7 @@ describe("when the archive says something this build does not understand", () =>
         // guessing a colour would state a severity nobody asserted.
         const painted = screen.getByText("blocking")
         expect(painted.className).not.toMatch(/severity-/)
+        expect(painted.tagName).toBe("CODE")
     })
 
     it("one unreadable row costs that row, not the queue", async () => {
@@ -1300,7 +1294,7 @@ describe("when the archive says something this build does not understand", () =>
         renderPage()
 
         const user = userEvent.setup()
-        await user.click(await screen.findByRole("button", { name: "Start review" }))
+        await user.click(await screen.findByRole("button", { name: /^Start review/ }))
 
         const alert = await screen.findByRole("alert")
         expect(alert).toHaveTextContent(/was saved/i)
@@ -1321,7 +1315,7 @@ describe("when the archive says something this build does not understand", () =>
         renderPage()
 
         const user = userEvent.setup()
-        await user.click(await screen.findByRole("button", { name: "Close…" }))
+        await user.click(await screen.findByRole("button", { name: /^Close…/ }))
         await user.type(screen.getByLabelText(/Why/), "fine as deposited")
         await user.click(screen.getByRole("button", { name: "Close task" }))
 
@@ -1381,5 +1375,546 @@ describe("the rubric a finding's review was made under", () => {
         renderPage()
         const table = await screen.findByRole("table")
         expect(table.querySelector('[data-component="made-under"]')).toBeNull()
+    })
+})
+
+/* ------------------------------------------------------------------ *
+ * Filters, paging and details
+ * ------------------------------------------------------------------ */
+
+/** Record every list request's query string, answering with `items` and `total`. */
+function recordQueue(items: Record<string, unknown>[], total = items.length): URLSearchParams[] {
+    const seen: URLSearchParams[] = []
+    server.use(
+        http.get(QUEUE, ({ request }) => {
+            const q = new URL(request.url).searchParams
+            seen.push(q)
+            return HttpResponse.json({ items, total, skip: Number(q.get("offset") ?? 0), limit: 50 })
+        }),
+    )
+    return seen
+}
+
+const REF = "kin_4k2mq9x4ta8ndrwe5hvzcbj6y1"
+
+function serveTask(over: Record<string, unknown> = {}) {
+    const asked: string[] = []
+    server.use(
+        http.get(`${QUEUE}/:id`, ({ params }) => {
+            asked.push(String(params.id))
+            return HttpResponse.json(fx.curatorTask({ id: Number(params.id), ...over }))
+        }),
+    )
+    return asked
+}
+
+describe("paging and the exact total", () => {
+    it("asks for the open group, fifty at a time, from the start", async () => {
+        meIs(admin)
+        const seen = recordQueue([fx.curatorTask()], 132)
+        renderPage()
+        await screen.findByRole("table")
+        expect(seen[0].get("state_group")).toBe("open")
+        expect(seen[0].get("limit")).toBe("50")
+        expect(seen[0].get("offset")).toBe("0")
+        expect(seen[0].get("workflow_state")).toBeNull()
+        expect(screen.getByText("Showing 1–1 of 132 tasks")).toBeInTheDocument()
+    })
+
+    it("Next and Previous move the offset and the range line", async () => {
+        meIs(admin)
+        const rows = Array.from({ length: 50 }, (_, i) => fx.curatorTask({ id: 100 + i, record_public_ref: `kin_p1_${i}` }))
+        const seen: URLSearchParams[] = []
+        server.use(
+            http.get(QUEUE, ({ request }) => {
+                const q = new URL(request.url).searchParams
+                seen.push(q)
+                const offset = Number(q.get("offset"))
+                return HttpResponse.json({
+                    items: offset === 0 ? rows : [fx.curatorTask({ id: 900, record_public_ref: "kin_p2_0" })],
+                    total: 51,
+                    skip: offset,
+                    limit: 50,
+                })
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        expect(await screen.findByText("Showing 1–50 of 51 tasks")).toBeInTheDocument()
+        expect(screen.getByRole("button", { name: "Previous" })).toHaveAttribute("aria-disabled", "true")
+
+        await user.click(screen.getByRole("button", { name: "Next" }))
+        expect(await screen.findByText("Showing 51–51 of 51 tasks")).toBeInTheDocument()
+        expect(seen.at(-1)?.get("offset")).toBe("50")
+        expect(screen.getByRole("button", { name: "Next" })).toHaveAttribute("aria-disabled", "true")
+
+        await user.click(screen.getByRole("button", { name: "Previous" }))
+        await screen.findByText("Showing 1–50 of 51 tasks")
+        expect(seen.at(-1)?.get("offset")).toBe("0")
+    })
+
+    it("changing a filter goes back to the first page", async () => {
+        meIs(admin)
+        const seen: URLSearchParams[] = []
+        server.use(
+            http.get(QUEUE, ({ request }) => {
+                const q = new URL(request.url).searchParams
+                seen.push(q)
+                return HttpResponse.json({ items: [fx.curatorTask()], total: 120, skip: Number(q.get("offset")), limit: 50 })
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByRole("table")
+        await user.click(screen.getByRole("button", { name: "Next" }))
+        await waitFor(() => expect(seen.at(-1)?.get("offset")).toBe("50"))
+        await user.selectOptions(screen.getByLabelText("Severity"), "critical")
+        await waitFor(() => expect(seen.at(-1)?.get("highest_severity")).toBe("critical"))
+        expect(seen.at(-1)?.get("offset")).toBe("0")
+    })
+})
+
+describe("filters", () => {
+    it("severity, record type, submission and assignee are sent as the route names them", async () => {
+        meIs(admin)
+        const seen = recordQueue([fx.curatorTask()])
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByRole("table")
+
+        await user.selectOptions(screen.getByLabelText("Severity"), "warning")
+        await user.selectOptions(screen.getByLabelText("Record type"), "kinetics")
+        await user.selectOptions(await screen.findByRole("combobox", { name: "Submission" }), String(fx.SUBMISSION_ID))
+        await user.selectOptions(screen.getByLabelText("Assignee"), "me")
+
+        await waitFor(() => {
+            const q = seen.at(-1)!
+            expect(q.get("highest_severity")).toBe("warning")
+            expect(q.get("record_type")).toBe("kinetics")
+            expect(q.get("submission_id")).toBe(String(fx.SUBMISSION_ID))
+            expect(q.get("assigned_to")).toBe("1")
+        })
+        await user.selectOptions(screen.getByLabelText("Assignee"), "5")
+        await waitFor(() => expect(seen.at(-1)?.get("assigned_to")).toBe("5"))
+    })
+
+    it("closed means the terminal group, every task sends neither", async () => {
+        meIs(admin)
+        const seen = recordQueue([])
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText(/Nothing is waiting/i)
+        await user.selectOptions(screen.getByLabelText("State"), "closed")
+        await waitFor(() => expect(seen.at(-1)?.get("state_group")).toBe("terminal"))
+        await user.selectOptions(screen.getByLabelText("State"), "all")
+        await waitFor(() => {
+            expect(seen.at(-1)?.get("state_group")).toBeNull()
+            expect(seen.at(-1)?.get("workflow_state")).toBeNull()
+        })
+    })
+
+    it("a filter in the address is applied on load and shown in its control", async () => {
+        meIs(admin)
+        const seen = recordQueue([])
+        renderPage(`/admin/curator-queue?submission=${fx.SUBMISSION_ID}&severity=critical&state=closed`)
+        await screen.findByText(/No tasks match these filters/)
+        expect(seen[0].get("submission_id")).toBe(String(fx.SUBMISSION_ID))
+        expect(seen[0].get("highest_severity")).toBe("critical")
+        expect(seen[0].get("state_group")).toBe("terminal")
+        expect(screen.getByLabelText("Severity")).toHaveValue("critical")
+        expect(await screen.findByRole("combobox", { name: "Submission" })).toHaveValue(String(fx.SUBMISSION_ID))
+    })
+
+    it("a submission outside the list the filter offers is still selectable", async () => {
+        meIs(admin)
+        server.use(
+            http.get("/api/v1/submissions/:id", ({ params }) =>
+                HttpResponse.json(fx.submission({ id: Number(params.id), public_ref: "sub_old_one" })),
+            ),
+        )
+        recordQueue([])
+        renderPage("/admin/curator-queue?submission=777")
+        const select = await screen.findByRole("combobox", { name: "Submission" })
+        await waitFor(() => expect(select).toHaveValue("777"))
+        expect(within(select).getByRole("option", { name: /sub_old_one/ })).toBeInTheDocument()
+    })
+
+    it("a record in the address is a removable chip and is sent with its type", async () => {
+        meIs(admin)
+        const seen = recordQueue([fx.curatorTask()])
+        serveTask()
+        const user = userEvent.setup()
+        renderPage("/admin/curator-queue?record_type=kinetics&record=9001&task=41")
+        await screen.findByRole("table")
+        expect(seen[0].get("record_type")).toBe("kinetics")
+        expect(seen[0].get("record_id")).toBe("9001")
+        expect(document.querySelector(".admin-hint")).toHaveTextContent(`Only ${REF}`)
+        expect(await screen.findByRole("region", { name: /^Details for / })).toBeInTheDocument()
+
+        await user.click(screen.getByRole("link", { name: "Show all records" }))
+        await waitFor(() => expect(seen.at(-1)?.get("record_id")).toBeNull())
+    })
+
+    it("an empty filtered view does not say the queue is empty", async () => {
+        meIs(admin)
+        recordQueue([])
+        renderPage("/admin/curator-queue?severity=info")
+        expect(await screen.findByText("No tasks match these filters.")).toBeInTheDocument()
+        expect(screen.queryByText(/Nothing is waiting/)).toBeNull()
+    })
+})
+
+describe("a task's details", () => {
+    it("fetches the task and shows the finding, how it was matched, dates and assignee", async () => {
+        meIs(admin)
+        queueIs([fx.curatorTask({ assigned_to: 5, assigned_to_username: "bea" })])
+        const asked = serveTask({ assigned_to: 5, assigned_to_username: "bea" })
+        const user = userEvent.setup()
+        renderPage()
+
+        const button = await screen.findByRole("button", { name: /^Details/ })
+        expect(button).toHaveAttribute("aria-expanded", "false")
+        await user.click(button)
+        const detail = await screen.findByRole("region", { name: /^Details for / })
+        expect(button).toHaveAttribute("aria-expanded", "true")
+        expect(button).toHaveAttribute("aria-controls", detail.id)
+        expect(asked).toEqual(["41"])
+
+        const text = detail.textContent ?? ""
+        expect(text).toContain("REVIEWER_MESSAGE the rate constant is far above the collision limit")
+        expect(text).toContain("kinetics.a")
+        expect(text).toContain("REVIEWER_ACTION re-check the A factor units")
+        expect(text).toContain("kinetics")
+        expect(text).toContain("found in the review that raised the task")
+        expect(text).toContain("screened: needs attention")
+        expect(text).toContain("2026-09-14 10:00 UTC")
+        expect(text).toContain("2026-09-15 11:45 UTC")
+        expect(text).toContain("bea")
+        expect(within(detail).getByRole("link", { name: /Open this submission's machine review/ })).toHaveAttribute(
+            "href",
+            `/admin/machine-review-inspection?submission=${fx.SUBMISSION_ID}`,
+        )
+    })
+
+    it("says so when no stored review still holds the finding", async () => {
+        meIs(admin)
+        queueIs([fx.curatorTask()])
+        serveTask({ finding: null, finding_match: "not_found", finding_audit_event_ids: [] })
+        const user = userEvent.setup()
+        renderPage()
+        await user.click(await screen.findByRole("button", { name: /^Details/ }))
+        expect(await screen.findByText("No stored review of this submission still contains this finding.")).toBeInTheDocument()
+    })
+
+    it("notes a finding found in another review of the same submission", async () => {
+        meIs(admin)
+        queueIs([fx.curatorTask()])
+        serveTask({ finding_match: "submission_audit_events" })
+        const user = userEvent.setup()
+        renderPage()
+        await user.click(await screen.findByRole("button", { name: /^Details/ }))
+        expect(await screen.findByText(/found in another review of the same submission/)).toBeInTheDocument()
+    })
+
+    it("a closed task shows how it was settled, by whom and when", async () => {
+        meIs(admin)
+        const closed = {
+            workflow_state: "dismissed_machine_finding",
+            resolution_note: "RESOLUTION_NOTE the units were fine",
+            resolved_by: 5,
+            resolved_by_username: "bea",
+            resolved_at: "2026-09-16T08:05:00Z",
+        }
+        queueIs([fx.curatorTask(closed)])
+        serveTask(closed)
+        const user = userEvent.setup()
+        renderPage("/admin/curator-queue?state=closed")
+        await user.click(await screen.findByRole("button", { name: /^Details/ }))
+        const detail = await screen.findByRole("region", { name: /^Details for / })
+        expect(detail.textContent).toContain("dismissed")
+        expect(detail.textContent).toContain("RESOLUTION_NOTE the units were fine")
+        expect(detail.textContent).toContain("bea")
+        expect(detail.textContent).toContain("2026-09-16 08:05 UTC")
+    })
+
+    it("shows no row id in words, and the submission id only in the link", async () => {
+        meIs(admin)
+        queueIs([fx.curatorTask()])
+        serveTask()
+        const user = userEvent.setup()
+        renderPage()
+        await user.click(await screen.findByRole("button", { name: /^Details/ }))
+        await screen.findByRole("region", { name: /^Details for / })
+        const text = document.body.textContent ?? ""
+        for (const id of [fx.SUBMISSION_ID, fx.KINETICS_RECORD_ID, 7001]) expect(text).not.toContain(String(id))
+        // The submission filter's own option carries the id as its value; the link is the only other place.
+        const carriers = Array.from(document.body.querySelectorAll("*")).filter(
+            (el) =>
+                el.tagName !== "OPTION" &&
+                Array.from(el.attributes).some((a) => a.value.includes(String(fx.SUBMISSION_ID))),
+        )
+        expect(carriers).toHaveLength(1)
+        expect(carriers[0].tagName).toBe("A")
+    })
+
+    it("a detail that will not load says so and leaves the row alone", async () => {
+        meIs(admin)
+        queueIs([fx.curatorTask()])
+        server.use(http.get(`${QUEUE}/:id`, () => HttpResponse.json({ detail: "boom" }, { status: 500 })))
+        const user = userEvent.setup()
+        renderPage()
+        await user.click(await screen.findByRole("button", { name: /^Details/ }))
+        expect(await screen.findByText("Could not load this task's details.")).toBeInTheDocument()
+        expect(screen.getByRole("table")).toBeInTheDocument()
+    })
+})
+
+describe("assigning a task", () => {
+    it("posts the chosen admin, then shows the new assignee", async () => {
+        meIs(admin)
+        let assignee: string | null = null
+        server.use(
+            http.get(QUEUE, () =>
+                HttpResponse.json({
+                    items: [fx.curatorTask(assignee ? { assigned_to: 5, assigned_to_username: assignee } : {})],
+                    total: 1,
+                    skip: 0,
+                    limit: 50,
+                }),
+            ),
+        )
+        serveTask()
+        const posted: unknown[] = []
+        server.use(
+            http.post(`${QUEUE}/41/assign`, async ({ request }) => {
+                posted.push(await request.json())
+                assignee = "bea"
+                return HttpResponse.json(fx.curatorTask({ assigned_to: 5, assigned_to_username: "bea" }))
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await user.click(await screen.findByRole("button", { name: /^Details/ }))
+        await user.selectOptions(await screen.findByLabelText("Assign this task to"), "5")
+        await user.click(screen.getByRole("button", { name: "Save assignee" }))
+
+        await waitFor(() => expect(posted).toEqual([{ assignee_id: 5 }]))
+        await waitFor(() => expect(bodyRows()[0].join(" ")).toContain("bea"))
+    })
+
+    it("unassigning posts null", async () => {
+        meIs(admin)
+        queueIs([fx.curatorTask({ assigned_to: 5, assigned_to_username: "bea" })])
+        serveTask({ assigned_to: 5, assigned_to_username: "bea" })
+        const posted: unknown[] = []
+        server.use(
+            http.post(`${QUEUE}/41/assign`, async ({ request }) => {
+                posted.push(await request.json())
+                return HttpResponse.json(fx.curatorTask())
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await user.click(await screen.findByRole("button", { name: /^Details/ }))
+        await user.selectOptions(await screen.findByLabelText("Assign this task to"), "")
+        await user.click(screen.getByRole("button", { name: "Save assignee" }))
+        await waitFor(() => expect(posted).toEqual([{ assignee_id: null }]))
+    })
+
+    it("a closed task offers no assignment", async () => {
+        meIs(admin)
+        queueIs([fx.curatorTask({ workflow_state: "resolved_no_action" })])
+        serveTask({ workflow_state: "resolved_no_action" })
+        const user = userEvent.setup()
+        renderPage("/admin/curator-queue?state=closed")
+        await user.click(await screen.findByRole("button", { name: /^Details/ }))
+        await screen.findByRole("region", { name: /^Details for / })
+        expect(screen.queryByLabelText("Assign this task to")).toBeNull()
+    })
+
+    it("each row keeps its own choice", async () => {
+        meIs(admin)
+        queueIs([fx.curatorTask({ id: 41 }), fx.curatorTask({ id: 42, record_type: "calculation", record_public_ref: "calc_other" })])
+        serveTask()
+        const user = userEvent.setup()
+        renderPage()
+        const buttons = await screen.findAllByRole("button", { name: /^Details/ })
+        await user.click(buttons[0])
+        await user.selectOptions(await screen.findByLabelText("Assign this task to"), "5")
+        await user.click(screen.getAllByRole("button", { name: /^Details/ })[1])
+        const selects = await screen.findAllByLabelText("Assign this task to")
+        expect(selects).toHaveLength(2)
+        expect(selects[0]).toHaveValue("5")
+        expect(selects[1]).toHaveValue("")
+    })
+})
+
+describe("reopening a task", () => {
+    it("asks for the target state and whether to clear the assignee", async () => {
+        meIs(admin)
+        queueIs([fx.curatorTask({ workflow_state: "resolved_no_action", assigned_to: 5, assigned_to_username: "bea" })])
+        const posted: unknown[] = []
+        server.use(
+            http.post(`${QUEUE}/41/reopen`, async ({ request }) => {
+                posted.push(await request.json())
+                return HttpResponse.json(fx.curatorTask())
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage("/admin/curator-queue?state=closed")
+        const open = await screen.findByRole("button", { name: /^Reopen…/ })
+        expect(open).toHaveAttribute("aria-expanded", "false")
+        await user.click(open)
+        expect(open).toHaveAttribute("aria-expanded", "true")
+
+        const target = screen.getByLabelText("Reopen as")
+        expect(target).toHaveValue("needs_curator_review")
+        await user.selectOptions(target, "untriaged")
+        await user.click(screen.getByLabelText("Also clear the assignee"))
+        await user.click(screen.getByRole("button", { name: "Reopen task" }))
+        await waitFor(() => expect(posted).toEqual([{ target_state: "untriaged", clear_assignment: true }]))
+    })
+
+    it("the default keeps the assignee and reopens as needs review", async () => {
+        meIs(admin)
+        queueIs([fx.curatorTask({ workflow_state: "resolved_no_action" })])
+        const posted: unknown[] = []
+        server.use(
+            http.post(`${QUEUE}/41/reopen`, async ({ request }) => {
+                posted.push(await request.json())
+                return HttpResponse.json(fx.curatorTask())
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage("/admin/curator-queue?state=closed")
+        await user.click(await screen.findByRole("button", { name: /^Reopen…/ }))
+        await user.click(screen.getByRole("button", { name: "Reopen task" }))
+        await waitFor(() => expect(posted).toEqual([{ target_state: "needs_curator_review", clear_assignment: false }]))
+    })
+
+    it("drafts do not leak between rows", async () => {
+        meIs(admin)
+        queueIs([
+            fx.curatorTask({ id: 41, workflow_state: "resolved_no_action" }),
+            fx.curatorTask({ id: 42, workflow_state: "resolved_no_action", record_public_ref: "kin_other" }),
+        ])
+        const user = userEvent.setup()
+        renderPage("/admin/curator-queue?state=closed")
+        const opens = await screen.findAllByRole("button", { name: /^Reopen…/ })
+        await user.click(opens[0])
+        await user.click(screen.getByLabelText("Also clear the assignee"))
+        await user.click(screen.getAllByRole("button", { name: /^Reopen…/ })[1])
+        // Only one form is open at a time, and the new one starts from its defaults.
+        expect(screen.getAllByLabelText("Also clear the assignee")).toHaveLength(1)
+        expect(screen.getByLabelText("Also clear the assignee")).not.toBeChecked()
+    })
+})
+
+describe("reading the view and acting without losing the place", () => {
+    it("treats a fractional offset in the address as the first page", async () => {
+        meIs(admin)
+        const seen: string[] = []
+        server.use(
+            http.get(QUEUE, ({ request }) => {
+                seen.push(new URL(request.url).searchParams.get("offset") ?? "")
+                return HttpResponse.json({ items: [task()], total: 1, skip: 0, limit: 50 })
+            }),
+        )
+        renderPage("/admin/curator-queue?offset=1.5")
+        await screen.findByRole("table")
+        expect(seen).toEqual(["0"])
+    })
+
+    it("names the record in every row button, so a list of buttons says which is which", async () => {
+        meIs(admin)
+        queueIs([task()])
+        renderPage()
+        await screen.findByRole("table")
+        for (const verb of ["Details", "Start review", "Close…"]) {
+            expect(screen.getByRole("button", { name: `${verb} for spc_vu7cuk4s37szxaudjpf355tqda` })).toBeInTheDocument()
+        }
+    })
+
+    it("names a ref-less record's buttons by its kind and where it is shown", async () => {
+        meIs(admin)
+        queueIs([
+            task({
+                id: 43,
+                record_type: "applied_energy_correction",
+                record_public_ref: null,
+                container_type: "species_entry",
+                container_ref: "spe_abc",
+            }),
+        ])
+        renderPage()
+        await screen.findByRole("table")
+        for (const verb of ["Details", "Close…"]) {
+            expect(
+                screen.getByRole("button", { name: `${verb} for applied energy correction on spe_abc` }),
+            ).toBeInTheDocument()
+        }
+        await userEvent.click(screen.getByRole("button", { name: "Details for applied energy correction on spe_abc" }))
+        expect(
+            await screen.findByRole("region", { name: "Details for applied energy correction on spe_abc" }),
+        ).toBeInTheDocument()
+    })
+
+    it("says the linked task is not in this view, and offers closed tasks", async () => {
+        meIs(admin)
+        queueIs([])
+        renderPage("/admin/curator-queue?task=999")
+        await screen.findByText(/The linked task is not in this view/)
+        expect(screen.getByRole("link", { name: "Include closed tasks" })).toHaveAttribute("href", "/admin/curator-queue?state=all")
+    })
+
+    it.each(["all", "closed"])("does not offer closed tasks when the state filter is %s", async (state) => {
+        meIs(admin)
+        queueIs([])
+        renderPage(`/admin/curator-queue?state=${state}&task=999`)
+        await screen.findByText(/The linked task is not in this view/)
+        expect(screen.queryByRole("link", { name: "Include closed tasks" })).toBeNull()
+        expect(screen.queryByText(/Closed tasks are hidden/)).toBeNull()
+    })
+
+    it("keeps the count's live region mounted across a filter change", async () => {
+        meIs(admin)
+        queueIs([task()])
+        renderPage()
+        const region = (await screen.findByText(/^Showing 1–1 of 1 tasks/)).closest("[role=status]") as HTMLElement
+        const user = userEvent.setup()
+        await user.selectOptions(screen.getByLabelText("State"), "all")
+        await waitFor(() => expect(region).toHaveTextContent("Showing 1–1 of 1 tasks"))
+        expect(region.isConnected).toBe(true)
+    })
+
+    it("opens the close form in a full-width row, not in the Action cell", async () => {
+        meIs(admin)
+        queueIs([task()])
+        renderPage()
+        const user = userEvent.setup()
+        await user.click(await screen.findByRole("button", { name: /^Close…/ }))
+        const form = document.getElementById("resolve-form-41") as HTMLElement
+        const cell = form.closest("td") as HTMLElement
+        expect(cell.getAttribute("colspan")).toBe("7")
+    })
+
+    it("moves focus to the next row when the row acted on leaves the view", async () => {
+        meIs(admin)
+        queueIs([task(), otherTask()])
+        server.use(
+            http.post(`${QUEUE}/41/resolve`, () => {
+                server.use(
+                    http.get(QUEUE, () => HttpResponse.json({ items: [otherTask()], total: 1, skip: 0, limit: 50 })),
+                )
+                return HttpResponse.json(task({ workflow_state: "resolved_no_action" }))
+            }),
+        )
+        renderPage()
+        const user = userEvent.setup()
+        const closers = await screen.findAllByRole("button", { name: /^Close…/ })
+        await user.click(closers[0])
+        await user.type(screen.getByLabelText(/Why/), "dealt with")
+        await user.click(screen.getByRole("button", { name: "Close task" }))
+        await waitFor(() => expect(document.getElementById("task-details-btn-42")).toHaveFocus())
     })
 })

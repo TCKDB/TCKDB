@@ -1412,3 +1412,53 @@ def test_queue_machine_findings_do_not_cost_more_queries_for_a_longer_page(
     _seed(8)
     ten = _count()
     assert ten == two, f"the queue cost {two} statements for 2 records and {ten} for 10"
+
+
+def test_queue_filters_by_record_type_and_submission(client, db_session, login_as, _api_admin_user):
+    species = make_species(db_session)
+    other = make_species(db_session)
+    sub_a = _mr.new_submission(db_session, _api_admin_user)
+    sub_b = _mr.new_submission(db_session, _api_admin_user)
+    db_session.add_all(
+        [
+            RecordReview(
+                record_type=SubmissionRecordType.species,
+                record_id=species.id,
+                status=RecordReviewStatus.not_reviewed,
+                submission_id=sub_a.id,
+            ),
+            RecordReview(
+                record_type=SubmissionRecordType.species,
+                record_id=other.id,
+                status=RecordReviewStatus.not_reviewed,
+                submission_id=sub_b.id,
+            ),
+            RecordReview(
+                record_type=SubmissionRecordType.thermo,
+                record_id=species.id,
+                status=RecordReviewStatus.not_reviewed,
+                submission_id=sub_a.id,
+            ),
+        ]
+    )
+    db_session.flush()
+    login_as(_api_admin_user)
+
+    def queue(**params):
+        resp = client.get("/api/v1/record-reviews/queue", params={"limit": 200, **params})
+        assert resp.status_code == 200, resp.text
+        return resp.json()
+
+    thermo = queue(record_type="thermo")
+    assert thermo["record_total"] == 1
+    assert [r["record_type"] for s in thermo["subjects"] for r in s["records"]] == ["thermo"]
+
+    of_a = queue(submission_id=sub_a.id)
+    assert of_a["record_total"] == 2
+    assert {r["submission_id"] for s in of_a["subjects"] for r in s["records"]} == {sub_a.id}
+
+    both = queue(record_type="species", submission_id=sub_a.id)
+    assert both["record_total"] == 1
+
+    assert queue(submission_id=sub_a.id + 10_000)["record_total"] == 0
+    assert client.get("/api/v1/record-reviews/queue", params={"record_type": "not_a_type"}).status_code == 422

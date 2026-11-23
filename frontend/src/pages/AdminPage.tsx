@@ -129,7 +129,7 @@ export default function AdminPage() {
             </p>
 
             {/* There was an in-page nav here linking to Record review,
-                Machine findings and Machine-review inspection. It is gone:
+                Machine findings and Machine review inspection. It is gone:
                 the header's account menu offers all three from every route,
                 and a second copy of the same three links on one of those
                 routes is not navigation, it is a thing to keep in step.

@@ -1,8 +1,25 @@
-import { useState } from "react"
-import { Link } from "react-router-dom"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { fetchMachineReviewInspection } from "../api/machineReviewInspection"
+import { Fragment, useEffect, useRef, useState } from "react"
+import { Link, Navigate, useSearchParams } from "react-router-dom"
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query"
+import "../auth.css"
+import "../admin.css"
+import { fetchMachineReviewInspection, InspectionFetchError } from "../api/machineReviewInspection"
+import { listAdminUsers } from "../api/adminApi"
 import { AuthApiError } from "../api/authApi"
+import {
+    fetchSubmission,
+    listSubmissionAuditEvents,
+    listSubmissionMachineReviewOverview,
+    listSubmissionRecordLinks,
+    SUBMISSION_LIST_LIMIT,
+} from "../api/submissionsApi"
+import { Disclosure } from "../components/Disclosure"
+import { MachineFindingList } from "../components/MachineFindingList"
+import { MachineReviewStatusLabel } from "../components/MachineReviewStatusLabel"
+import { RecordLocationCell } from "../components/RecordLocationCell"
+import { adminDate, adminDateTime, STATUS_TOKENS, wordLabel, wordsFor } from "../domain/machineReviewWords"
+import { recordTypeGroupLabel, resolveRecordLocation } from "../domain/recordRoute"
+import { useAuth } from "../hooks/useAuth"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
 import {
     buildCuratorTasksForSubmission,
@@ -14,11 +31,15 @@ import {
 } from "../api/machineReviewRunApi"
 import {
     findingsConsidered,
+    severityClass,
     type CuratorTaskBuildResult,
 } from "../types/curatorTask"
-import {
-    overallHighestSeverity,
-    type MachineReviewStatus,
+import type {
+    AdminMachineReviewRecordInspection,
+    AdminMachineReviewRecordReview,
+    AdminMachineReviewRun,
+    AdminMachineReviewUnmappedFinding,
+    AdminSubmissionMachineReviewInspection,
 } from "../types/machineReviewInspection"
 import {
     knownRunStatus,
@@ -28,80 +49,18 @@ import {
 } from "../types/machineReviewRun"
 
 /**
- * Admin-only Submission Machine-Review Inspection panel.
+ * Admin-only machine-review inspection.
  *
- * Renders the response of
- * ``GET /api/v1/admin/submissions/{submission_id}/machine-review-inspection``.
- * This is a PRIVATE diagnostic view, not public trust / human review /
- * certification / moderation. Access is enforced by the backend
- * (``require_admin``); this page is expected to be mounted behind the admin
- * shell.
+ * Reads the stored machine reviews of one submission: what the reviewer found, record by record, what it said about no
+ * record in particular, and every run it made. This is a diagnostic view, not public trust, human review, certification
+ * or moderation. Every route behind it is admin-only on the server, so the page asks for the same role first.
  *
- * Future joins (submission status, uploader, human-review status, evidence
- * label/completeness, curator workflow_state) are intentionally NOT shown:
- * the endpoint does not return them and this slice adds no backend joins.
+ * A submission is chosen from a list and addressed as `?submission=<id>`. The id lives in the address only; the page
+ * names a submission by its public reference.
+ *
+ * The reviewer's findings, messages and summaries are shown as the reviewer's own words. Anything the depositor typed
+ * (the submission title) appears only in a field marked as deposited.
  */
-
-// Status badge text + disclaimer. The disclaimers are deliberately surfaced in
-// the UI (legend below the table), never docs-only, so an admin can never read
-// a machine status as a human-review verdict.
-const STATUS_META: Record<
-    MachineReviewStatus,
-    { label: string; color: string; disclaimer: string }
-> = {
-    not_run: {
-        label: "not run",
-        color: "#6b7280",
-        disclaimer: "No mapped machine review for this record.",
-    },
-    machine_screened_pass: {
-        label: "screened: pass",
-        color: "#15803d",
-        disclaimer: "Machine found no obvious issue; not human-approved.",
-    },
-    machine_screened_warning: {
-        label: "screened: warning",
-        color: "#b45309",
-        disclaimer: "Advisory warning; not rejected.",
-    },
-    machine_screened_needs_attention: {
-        label: "screened: needs attention",
-        color: "#b91c1c",
-        disclaimer: "Needs human attention; record is not hidden.",
-    },
-    machine_review_failed: {
-        label: "review failed",
-        color: "#6b7280",
-        disclaimer: "Reviewer failed; not a record failure.",
-    },
-}
-
-const OBSERVATION_PROMPTS = [
-    "Was the finding useful?",
-    "Was the status misleading?",
-    "Was this a false positive?",
-    "Was mapping correct?",
-    "Should this be curator-facing?",
-] as const
-
-function StatusBadge({ status }: { status: MachineReviewStatus }) {
-    const meta = STATUS_META[status]
-    return (
-        <span
-            title={meta.disclaimer}
-            style={{
-                background: meta.color,
-                color: "white",
-                borderRadius: "4px",
-                padding: "1px 6px",
-                fontSize: "0.8rem",
-                whiteSpace: "nowrap",
-            }}
-        >
-            {meta.label}
-        </span>
-    )
-}
 
 function dash(value: unknown): string {
     return value === null || value === undefined || value === "" ? "—" : String(value)
@@ -206,6 +165,7 @@ function MachineReviewRunner({ submissionId }: { submissionId: number }) {
     const queryClient = useQueryClient()
 
     async function run() {
+        if (state.kind === "running") return
         setState({ kind: "running" })
         let result: MachineReviewRunResult
         try {
@@ -234,8 +194,8 @@ function MachineReviewRunner({ submissionId }: { submissionId: number }) {
 
     return (
         <section>
-            <h3>Machine review</h3>
-            <p style={{ color: "#6b7280", marginTop: "-6px" }}>
+            <h2>Machine review</h2>
+            <p className="admin-hint">
                 A machine review is <strong>advisory</strong>. Nothing starts one
                 on upload; this control is the only thing that does. It endorses
                 nothing, and it is neither of the two things next to it: human
@@ -243,7 +203,7 @@ function MachineReviewRunner({ submissionId }: { submissionId: number }) {
                 moves when this runs. Running it again reviews this submission
                 again and records another result.
             </p>
-            <button type="button" onClick={run} disabled={state.kind === "running"}>
+            <button type="button" onClick={run} aria-disabled={state.kind === "running" ? "true" : undefined}>
                 {state.kind === "running"
                     ? "Running machine review…"
                     : "Run machine review for this submission"}
@@ -255,12 +215,8 @@ function MachineReviewRunner({ submissionId }: { submissionId: number }) {
                 that failed goes in the alert, and a REVIEW that failed is an
                 outcome and goes in the result region with every other
                 outcome. */}
-            <div
-                role="alert"
-                aria-label={RUN_ALERT_LABEL}
-                style={{ color: "#b91c1c" }}
-            >
-                {state.kind === "failed" ? <p>{state.message}</p> : null}
+            <div role="alert" aria-label={RUN_ALERT_LABEL}>
+                {state.kind === "failed" ? <p className="auth-error">{state.message}</p> : null}
             </div>
             <div role="status" aria-label={RUN_STATUS_LABEL}>
                 {state.kind === "done" ? <RunOutcome result={state.result} /> : null}
@@ -303,21 +259,13 @@ function RunOutcome({ result }: { result: MachineReviewRunResult }) {
           : `The review ran and recorded ${count} finding${count === 1 ? "" : "s"}.`
 
     return (
-        <div
-            // Framed, so the outcome reads as the answer to the button above
-            // it rather than as one more paragraph of this page's furniture.
-            style={{
-                borderLeft: "3px solid #6b7280",
-                paddingLeft: "12px",
-                marginTop: "12px",
-            }}
-        >
+        <div className="card">
             <p>{headline}</p>
             <ul>
                 <li>
                     status:{" "}
                     {known !== null ? (
-                        <StatusBadge status={known} />
+                        <MachineReviewStatusLabel status={known} />
                     ) : (
                         // Shown as it arrived rather than mapped onto one of
                         // the five this build knows, which would hand it
@@ -330,8 +278,8 @@ function RunOutcome({ result }: { result: MachineReviewRunResult }) {
                 <li>provider: {dash(result.provider)}</li>
                 <li>
                     {result.audit_event_recorded
-                        ? "written to the audit log, which is what the table above reads"
-                        : "not written to the audit log, so the table above will not show it"}
+                        ? "written to the audit log, which is what Reviewer runs above reads"
+                        : "not written to the audit log, so Reviewer runs above will not show it"}
                 </li>
             </ul>
             {failed && (
@@ -353,11 +301,11 @@ function RunOutcome({ result }: { result: MachineReviewRunResult }) {
             )}
             {result.summary !== null && result.summary !== result.failure_reason && (
                 <>
-                    <h4>reviewer&apos;s summary</h4>
+                    <p className="admin-hint">The reviewer&apos;s summary:</p>
                     {/* The reviewer's own words, advisory like everything else
                         it produced. Quoted plainly so it cannot be mistaken
                         for a statement this page is making. */}
-                    <blockquote style={{ margin: 0, color: "#374151" }}>
+                    <blockquote>
                         {result.summary}
                     </blockquote>
                 </>
@@ -460,15 +408,15 @@ function CuratorTaskBuilder({ submissionId }: { submissionId: number }) {
 
     return (
         <section>
-            <h3>Curator tasks</h3>
-            <p style={{ color: "#6b7280", marginTop: "-6px" }}>
+            <h2>Curator tasks</h2>
+            <p className="admin-hint">
                 Tasks are <strong>not</strong> created on upload. This builds them
                 from the warning and critical findings above, for this submission
                 only, and writes nothing but task rows: the submission&apos;s status
                 and every record&apos;s review state are untouched. A task is
                 advisory. It asks a person to look, and endorses nothing.
             </p>
-            <button type="button" onClick={build} disabled={state.kind === "running"}>
+            <button type="button" onClick={build} aria-disabled={state.kind === "running" ? "true" : undefined}>
                 {state.kind === "running"
                     ? "Building\u2026"
                     : "Build curator tasks for this submission"}
@@ -488,15 +436,11 @@ function CuratorTaskBuilder({ submissionId }: { submissionId: number }) {
                 the build here. Two unnamed status regions announce as the
                 same anonymous thing, so a screen-reader user hearing a
                 tally has no way to tell which button it answered. */}
-            <div
-                role="alert"
-                aria-label={BUILD_ALERT_LABEL}
-                style={{ color: "#b91c1c" }}
-            >
-                {state.kind === "failed" ? <p>{state.message}</p> : null}
+            <div role="alert" aria-label={BUILD_ALERT_LABEL}>
+                {state.kind === "failed" ? <p className="auth-error">{state.message}</p> : null}
             </div>
             <div role="status" aria-label={BUILD_STATUS_LABEL}>
-                {state.kind === "done" ? <BuildTally result={state.result} /> : null}
+                {state.kind === "done" ? <BuildTally result={state.result} submissionId={submissionId} /> : null}
             </div>
         </section>
     )
@@ -511,7 +455,7 @@ function CuratorTaskBuilder({ submissionId }: { submissionId: number }) {
  * server sends `task_ids`, and `CuratorTaskBuildResultSchema` drops it
  * before it can reach here.
  */
-function BuildTally({ result }: { result: CuratorTaskBuildResult }) {
+function BuildTally({ result, submissionId }: { result: CuratorTaskBuildResult; submissionId: number }) {
     const made = result.created_count
     const considered = findingsConsidered(result)
     const headline =
@@ -536,15 +480,7 @@ function BuildTally({ result }: { result: CuratorTaskBuildResult }) {
                   "finding mapped to a record."
 
     return (
-        <div
-            // Framed, so the tally reads as the answer to the button above
-            // it rather than as one more paragraph of this page's furniture.
-            style={{
-                borderLeft: "3px solid #6b7280",
-                paddingLeft: "12px",
-                marginTop: "12px",
-            }}
-        >
+        <div className="card">
             <p>{headline}</p>
             <ul>
                 <li>new tasks created: {result.created_count}</li>
@@ -568,7 +504,7 @@ function BuildTally({ result }: { result: CuratorTaskBuildResult }) {
             </ul>
             {result.warnings.length > 0 && (
                 <>
-                    <h4>build warnings</h4>
+                    <h3>build warnings</h3>
                     <ul>
                         {result.warnings.map((w, i) => (
                             <li key={i}>{w}</li>
@@ -577,10 +513,7 @@ function BuildTally({ result }: { result: CuratorTaskBuildResult }) {
                 </>
             )}
             <p>
-                <Link
-                    to="/admin/curator-queue"
-                    style={{ color: "#1d4ed8", textDecoration: "underline" }}
-                >
+                <Link to={`/admin/curator-queue?submission=${submissionId}`}>
                     Open Machine findings
                 </Link>
             </p>
@@ -588,290 +521,603 @@ function BuildTally({ result }: { result: CuratorTaskBuildResult }) {
     )
 }
 
-function MachineReviewInspectionPage() {
-    useDocumentTitle("Machine review inspection")
-    const [inputValue, setInputValue] = useState("")
-    const [submissionId, setSubmissionId] = useState<number | null>(null)
-    const [showRaw, setShowRaw] = useState(false)
-    // Maintainer observations are LOCAL ONLY in this slice — not persisted, not
-    // sent anywhere. They are a manual-evaluation scratchpad.
-    const [checks, setChecks] = useState<Record<string, boolean>>({})
-    const [note, setNote] = useState("")
 
+function plural(n: number, one: string, many = `${one}s`): string {
+    return `${n} ${n === 1 ? one : many}`
+}
+
+/** A submission id from `?submission=`: digits only, greater than zero. */
+function parseSubmissionParam(raw: string | null): { kind: "none" } | { kind: "bad" } | { kind: "ok"; id: number } {
+    if (raw === null || raw === "") return { kind: "none" }
+    if (!/^\d+$/.test(raw) || Number(raw) <= 0) return { kind: "bad" }
+    return { kind: "ok", id: Number(raw) }
+}
+
+const INSPECTION_PATH = "/admin/machine-review-inspection"
+const PAGE_LIMIT = 50
+
+type PickerFilter = "all" | "reviewed" | "open"
+
+function SubmissionPicker() {
+    // The view lives in the address, so Back and a shared link return to the same page of the same list.
+    const [params, setParams] = useSearchParams()
+    const showParam = params.get("show")
+    const filter: PickerFilter = showParam === "reviewed" || showParam === "open" ? showParam : "all"
+    const rawOffset = params.get("offset")
+    const offset = rawOffset !== null && /^\d+$/.test(rawOffset) ? Number(rawOffset) : 0
+    function setView(next: { show?: PickerFilter; offset?: number }) {
+        const merged = new URLSearchParams(params)
+        const show = next.show ?? filter
+        const at = next.offset ?? 0
+        if (show === "all") merged.delete("show")
+        else merged.set("show", show)
+        if (at === 0) merged.delete("offset")
+        else merged.set("offset", String(at))
+        setParams(merged, { replace: true })
+    }
     const query = useQuery({
-        queryKey: inspectionQueryKey(submissionId),
-        queryFn: () => fetchMachineReviewInspection(submissionId as number),
-        enabled: submissionId !== null,
+        queryKey: ["machine-review-overview", filter, offset],
+        queryFn: async () => ({
+            ...(await listSubmissionMachineReviewOverview({
+                offset,
+                limit: PAGE_LIMIT,
+                reviewed: filter === "reviewed" ? true : undefined,
+                hasOpenTasks: filter === "open" ? true : undefined,
+            })),
+            shownOffset: offset,
+        }),
+        // Keeps the table and the paging buttons mounted while the next page loads, so focus stays put.
+        placeholderData: keepPreviousData,
+    })
+    const page = query.data
+    const shownOffset = page?.shownOffset ?? offset
+
+    return (
+        <section aria-labelledby="picker-heading">
+            <h2 id="picker-heading">Choose a submission</h2>
+            <div className="admin-filter">
+                <label htmlFor="picker-filter">Show</label>{" "}
+                <select
+                    id="picker-filter"
+                    className="admin-role-select"
+                    value={filter}
+                    onChange={(e) => setView({ show: e.target.value as PickerFilter })}
+                >
+                    <option value="all">every submission</option>
+                    <option value="reviewed">reviewed only</option>
+                    <option value="open">with open tasks</option>
+                </select>
+            </div>
+
+            {query.isLoading && <p role="status">Loading the submissions…</p>}
+            {query.isError && <p className="auth-error" role="alert">The submissions could not be loaded.</p>}
+
+            {page && page.items.length === 0 && <p role="status">No submissions match.</p>}
+
+            {page && page.items.length > 0 && (
+                <>
+                    <p className="admin-count" role="status">
+                        Showing {shownOffset + 1}–{shownOffset + page.items.length} of {page.total} submissions
+                    </p>
+                    <div className="table-scroll">
+                        <table className="data-table" aria-label="Submissions">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Submission</th>
+                                    <th scope="col">Kind</th>
+                                    <th scope="col">Status</th>
+                                    <th scope="col">Submitted</th>
+                                    <th scope="col">Uploader</th>
+                                    <th scope="col">Machine review</th>
+                                    <th scope="col">Open tasks</th>
+                                    <th scope="col">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {page.items.map((row) => {
+                                    const run = row.machine_review.latest_run
+                                    return (
+                                        <tr key={row.id}>
+                                            <td><span className="data">{row.public_ref}</span></td>
+                                            <td>{wordLabel("submissionKind", row.submission_kind)}</td>
+                                            <td>{wordLabel("submissionStatus", row.status)}</td>
+                                            <td className="admin-date">{adminDate(row.submitted_at)}</td>
+                                            <td>
+                                                {row.created_by_username ?? <span className="admin-absent">not named</span>}
+                                            </td>
+                                            <td>
+                                                {row.machine_review.run_count === 0 ? (
+                                                    <span className="admin-absent">never reviewed</span>
+                                                ) : (
+                                                    <>
+                                                        {plural(row.machine_review.run_count, "run")}
+                                                        {run && run.status ? (
+                                                            <>
+                                                                , latest <MachineReviewStatusLabel status={run.status} />
+                                                                {run.highest_severity ? (
+                                                                    <>
+                                                                        , highest{" "}
+                                                                        <span className={severityClass(run.highest_severity) ?? undefined}>
+                                                                            {wordLabel("severity", run.highest_severity)}
+                                                                        </span>
+                                                                    </>
+                                                                ) : null}
+                                                            </>
+                                                        ) : null}
+                                                    </>
+                                                )}
+                                            </td>
+                                            <td>
+                                                {row.machine_review.open_task_count} open of {row.machine_review.task_count}
+                                            </td>
+                                            <td>
+                                                <Link
+                                                    to={`${INSPECTION_PATH}?submission=${row.id}`}
+                                                    aria-label={`Inspect ${row.public_ref}`}
+                                                >
+                                                    Inspect
+                                                </Link>
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
+            )}
+
+            {page && (page.items.length > 0 || offset > 0) && (
+                <div className="admin-paging">
+                    <button
+                        type="button"
+                        aria-disabled={offset === 0 ? "true" : undefined}
+                        onClick={() => offset > 0 && setView({ offset: Math.max(0, offset - PAGE_LIMIT) })}
+                    >
+                        Previous
+                    </button>{" "}
+                    <button
+                        type="button"
+                        aria-disabled={offset + PAGE_LIMIT >= page.total ? "true" : undefined}
+                        onClick={() => offset + PAGE_LIMIT < page.total && setView({ offset: offset + PAGE_LIMIT })}
+                    >
+                        Next
+                    </button>
+                </div>
+            )}
+        </section>
+    )
+}
+
+function isNotFound(error: unknown): boolean {
+    return (
+        (error instanceof InspectionFetchError || error instanceof AuthApiError) && error.status === 404
+    )
+}
+
+function SubmissionHeader({ submissionId }: { submissionId: number }) {
+    const submission = useQuery({ queryKey: ["submission", submissionId], queryFn: () => fetchSubmission(submissionId) })
+    const links = useQuery({
+        queryKey: ["submission-record-links", submissionId],
+        queryFn: () => listSubmissionRecordLinks(submissionId),
+    })
+    const events = useQuery({
+        queryKey: ["submission-audit-events", submissionId],
+        queryFn: () => listSubmissionAuditEvents(submissionId),
+    })
+    const users = useQuery({
+        queryKey: ["admin-users-for-uploader"],
+        queryFn: () => listAdminUsers({ limit: 200 }),
     })
 
-    function onSubmit(e: React.FormEvent) {
-        e.preventDefault()
-        const parsed = Number(inputValue)
-        if (Number.isInteger(parsed) && parsed > 0) {
-            setSubmissionId(parsed)
-        }
-    }
+    const s = submission.data
+    const uploader = s ? users.data?.items.find((u) => u.id === s.created_by)?.username : undefined
 
+    const counts = new Map<string, number>()
+    for (const link of links.data ?? []) counts.set(link.record_type, (counts.get(link.record_type) ?? 0) + 1)
+
+    return (
+        <>
+            <section aria-labelledby="header-heading">
+                <h2 id="header-heading">Submission</h2>
+                {submission.isLoading && <p role="status">Loading the submission…</p>}
+                {submission.isError && !isNotFound(submission.error) && (
+                    <p className="auth-error" role="alert">The submission could not be loaded.</p>
+                )}
+                {s && (
+                    <dl className="admin-facts">
+                        <dt>Submission</dt>
+                        <dd><span className="data">{s.public_ref}</span></dd>
+                        <dt>Kind</dt>
+                        <dd>{wordLabel("submissionKind", s.submission_kind)}</dd>
+                        <dt>Status</dt>
+                        <dd>{wordLabel("submissionStatus", s.status)}</dd>
+                        <dt>Submitted</dt>
+                        <dd>{adminDateTime(s.submitted_at)}</dd>
+                        <dt>Uploader</dt>
+                        <dd>{uploader ?? <span className="admin-absent">not named</span>}</dd>
+                        <dt>Title</dt>
+                        <dd data-testid="as-deposited">
+                            {s.title ? (
+                                <>
+                                    <span className="admin-hint">as deposited: </span>
+                                    <q>{s.title}</q>
+                                </>
+                            ) : (
+                                <span className="admin-absent">none was given</span>
+                            )}
+                        </dd>
+                        <dt>Records linked</dt>
+                        <dd>
+                            {links.isLoading ? (
+                                "Loading…"
+                            ) : counts.size === 0 ? (
+                                <span className="admin-absent">none</span>
+                            ) : (
+                                <ul className="admin-plain-list admin-tight-list">
+                                    {[...counts.entries()].map(([type, n]) => (
+                                        <li key={type}>
+                                            {recordTypeGroupLabel(type, n)} {n}
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                            {(links.data?.length ?? 0) >= SUBMISSION_LIST_LIMIT && (
+                                <p className="admin-hint">Counted from the first {SUBMISSION_LIST_LIMIT} links.</p>
+                            )}
+                        </dd>
+                    </dl>
+                )}
+            </section>
+
+            <section aria-label="Audit trail">
+                <Disclosure summary="Audit trail" count={events.data?.length}>
+                    {events.isLoading && <p role="status">Loading the audit trail…</p>}
+                    {events.isError && <p className="auth-error" role="alert">The audit trail could not be loaded.</p>}
+                    {events.data && events.data.length === 0 && <p>No events are recorded.</p>}
+                    {events.data && events.data.length > 0 && (
+                        <ul className="admin-plain-list">
+                            {events.data.map((e) => (
+                                <li key={e.id}>
+                                    {adminDateTime(e.created_at)} · {wordLabel("auditEventKind", e.event_kind)} ·{" "}
+                                    {wordLabel("actorKind", e.actor_kind)}
+                                    {e.from_status !== null || e.to_status !== null ? (
+                                        <>
+                                            {" "}· status:{" "}
+                                            {e.from_status ? wordLabel("submissionStatus", e.from_status) : "none"} →{" "}
+                                            {e.to_status ? wordLabel("submissionStatus", e.to_status) : "none"}
+                                        </>
+                                    ) : null}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </Disclosure>
+            </section>
+        </>
+    )
+}
+
+function priorityWords(priority: string | null): string {
+    return priority === null ? "none" : wordLabel("priority", priority)
+}
+
+function RunsSection({ runs }: { runs: AdminMachineReviewRun[] }) {
+    const ordered = [...runs].sort((a, b) => (b.reviewed_at ?? "").localeCompare(a.reviewed_at ?? ""))
+    return (
+        <section aria-labelledby="runs-heading">
+            <h2 id="runs-heading">Reviewer runs</h2>
+            {ordered.length === 0 ? (
+                <p>The reviewer has not been run on this submission.</p>
+            ) : (
+                <ul className="admin-plain-list">
+                    {ordered.map((run, i) => (
+                        <li key={i} className="card">
+                            <p>
+                                {adminDateTime(run.reviewed_at) || <span className="admin-absent">no date</span>}
+                                {run.parsed && run.status ? (
+                                    <>
+                                        {" "}· <MachineReviewStatusLabel status={run.status} />
+                                    </>
+                                ) : null}
+                            </p>
+                            {run.parsed ? (
+                                <>
+                                    <p>
+                                        Priority {priorityWords(run.curator_priority)} · model{" "}
+                                        {run.model ?? <span className="admin-absent">not named</span>} · provider{" "}
+                                        {run.provider ?? <span className="admin-absent">not named</span>}
+                                    </p>
+                                    <p>
+                                        {plural(run.findings_count, "finding")}: {run.mapped_findings_count} about a record,{" "}
+                                        {run.unmapped_findings_count} about none · highest severity{" "}
+                                        {run.highest_severity ? (
+                                            <span className={severityClass(run.highest_severity) ?? undefined}>
+                                                {wordLabel("severity", run.highest_severity)}
+                                            </span>
+                                        ) : (
+                                            <span className="admin-absent">none</span>
+                                        )}
+                                    </p>
+                                    {run.summary && (
+                                        <>
+                                            <p className="admin-hint">The reviewer&apos;s summary:</p>
+                                            <blockquote>{run.summary}</blockquote>
+                                        </>
+                                    )}
+                                </>
+                            ) : (
+                                <p>The stored result could not be read.</p>
+                            )}
+                            {run.parse_warnings.length > 0 && (
+                                <ul>
+                                    {run.parse_warnings.map((w, k) => (
+                                        <li key={k}>{w}</li>
+                                    ))}
+                                </ul>
+                            )}
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </section>
+    )
+}
+
+function ReviewHeadline({ review }: { review: AdminMachineReviewRecordReview }) {
+    return (
+        <p>
+            {adminDate(review.reviewed_at)} · <MachineReviewStatusLabel status={review.status} withMeaning /> · priority{" "}
+            {priorityWords(review.curator_priority)}
+        </p>
+    )
+}
+
+function RecordCard({ record }: { record: AdminMachineReviewRecordInspection }) {
+    const location = resolveRecordLocation(
+        record.record_type,
+        record.record_public_ref,
+        record.container_type,
+        record.container_ref,
+    )
+    const typeLabel = recordTypeGroupLabel(record.record_type, 1)
+    const reviews = record.all_record_reviews
+    const latest = reviews.find((r) => r.is_latest) ?? reviews[0]
+    const earlier = reviews.filter((r) => r !== latest)
+    const summary = record.latest_summary
+    const taskHref = (taskId: number) => {
+        const q = new URLSearchParams({ state: "all", record_type: record.record_type })
+        if (record.record_id !== null) q.set("record", String(record.record_id))
+        q.set("task", String(taskId))
+        return `/admin/curator-queue?${q.toString()}`
+    }
+    return (
+        <li className="card">
+            <h3>
+                <span className="admin-record-type">{typeLabel}</span> <RecordLocationCell location={location} />
+            </h3>
+            <dl className="admin-facts">
+                <dt>Latest review</dt>
+                <dd><MachineReviewStatusLabel status={summary.status} withMeaning /></dd>
+                <dt>Highest severity</dt>
+                <dd>
+                    {summary.highest_severity ? (
+                        <span className={severityClass(summary.highest_severity) ?? undefined}>
+                            {wordLabel("severity", summary.highest_severity)}
+                        </span>
+                    ) : (
+                        <span className="admin-absent">none</span>
+                    )}
+                </dd>
+                <dt>Curator priority</dt>
+                <dd>{priorityWords(summary.curator_priority)}</dd>
+                <dt>Reviewed</dt>
+                <dd>{adminDate(summary.reviewed_at) || <span className="admin-absent">no date</span>}</dd>
+                {latest && (
+                    <>
+                        <dt>Model</dt>
+                        <dd>{latest.model ?? <span className="admin-absent">not named</span>}</dd>
+                        <dt>Provider</dt>
+                        <dd>{latest.provider ?? <span className="admin-absent">not named</span>}</dd>
+                    </>
+                )}
+            </dl>
+            {latest && <MachineFindingList findings={latest.findings} taskHref={taskHref} />}
+            {earlier.length > 0 && (
+                <Disclosure summary="Earlier reviews" count={earlier.length}>
+                    <ul className="admin-plain-list">
+                        {earlier.map((review, i) => (
+                            <li key={i}>
+                                <ReviewHeadline review={review} />
+                                <MachineFindingList findings={review.findings} taskHref={taskHref} />
+                            </li>
+                        ))}
+                    </ul>
+                </Disclosure>
+            )}
+        </li>
+    )
+}
+
+function UnmappedSection({ findings }: { findings: AdminMachineReviewUnmappedFinding[] }) {
+    return (
+        <section aria-labelledby="unmapped-heading">
+            <h2 id="unmapped-heading">Findings about no record</h2>
+            <p className="admin-hint">
+                The reviewer raised these, but they could not be tied to a record in this submission.
+            </p>
+            {findings.length === 0 ? (
+                <p>There are none.</p>
+            ) : (
+                <ul className="admin-plain-list">
+                    {findings.map((f, i) => (
+                        <li key={i} className="card">
+                            <p>{wordLabel("unmappedReason", f.reason)}</p>
+                            {(f.cited_record_type !== null || f.cited_record_ref !== null) && (
+                                <p>
+                                    <span className="admin-hint">as the reviewer cited it: </span>
+                                    {f.cited_record_type !== null && <code>{f.cited_record_type}</code>}{" "}
+                                    {f.cited_record_ref !== null && <code>{f.cited_record_ref}</code>}
+                                </p>
+                            )}
+                            <MachineFindingList findings={[f]} />
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </section>
+    )
+}
+
+function Diagnostics({ data }: { data: AdminSubmissionMachineReviewInspection }) {
+    return (
+        <section aria-labelledby="diagnostics-heading">
+            <h2 id="diagnostics-heading">Diagnostics</h2>
+            <p className="admin-hint">
+                Mapping warnings are problems tying findings to records. Parse warnings are problems reading what the
+                reviewer returned.
+            </p>
+            <h3>Mapping warnings</h3>
+            {data.mapping_warnings.length === 0 ? (
+                <p>No mapping warnings.</p>
+            ) : (
+                <ul>{data.mapping_warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
+            )}
+            <h3>Parse warnings</h3>
+            {data.parse_warnings.length === 0 ? (
+                <p>No parse warnings.</p>
+            ) : (
+                <ul>{data.parse_warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
+            )}
+        </section>
+    )
+}
+
+function StatusLegend() {
+    return (
+        <Disclosure summary="What the statuses mean">
+            <dl className="admin-facts admin-legend">
+                {STATUS_TOKENS.map((token) => (
+                    <Fragment key={token}>
+                        <dt><MachineReviewStatusLabel status={token} /></dt>
+                        <dd>{wordsFor("status", token).meaning}</dd>
+                    </Fragment>
+                ))}
+            </dl>
+        </Disclosure>
+    )
+}
+
+function SubmissionInspection({ submissionId }: { submissionId: number }) {
+    const query = useQuery({
+        queryKey: inspectionQueryKey(submissionId),
+        queryFn: () => fetchMachineReviewInspection(submissionId),
+    })
     const data = query.data
 
     return (
-        <div style={{ maxWidth: "1000px" }}>
-            <h2>Submission Machine-Review Inspection</h2>
-            <p style={{ color: "#6b7280", marginTop: "-8px" }}>
-                Admin-only diagnostic view. This is <strong>not</strong> public trust,
-                human review, certification, or moderation.
-            </p>
-
-            <form onSubmit={onSubmit} style={{ marginBottom: "16px" }}>
-                <label>
-                    submission_id:{" "}
-                    <input
-                        type="number"
-                        min={1}
-                        value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
-                        placeholder="e.g. 123"
-                    />
-                </label>{" "}
-                <button type="submit">Inspect</button>
-            </form>
-
-            {submissionId === null && <p>Enter a submission id to inspect.</p>}
-            {query.isLoading && <p>Loading…</p>}
+        <>
+            <p className="admin-hint"><Link to={INSPECTION_PATH}>All submissions</Link></p>
             {query.isError && (
-                <p style={{ color: "#b91c1c" }}>
-                    Failed to load inspection for submission {submissionId}:{" "}
-                    {(query.error as Error).message}
+                <p className="auth-error" role="alert">
+                    {isNotFound(query.error)
+                        ? "No submission was found for this link."
+                        : "The machine-review inspection could not be loaded."}
                 </p>
             )}
+            {!isNotFound(query.error) && <SubmissionHeader submissionId={submissionId} />}
+            {query.isLoading && <p role="status">Loading the inspection…</p>}
 
             {data && (
                 <>
-                    {/* Submission header */}
-                    <section>
-                        <h3>Submission header</h3>
-                        <table>
-                            <tbody>
-                                <tr>
-                                    <td>submission_id</td>
-                                    <td>{data.submission_id}</td>
-                                </tr>
-                                <tr>
-                                    <td>status</td>
-                                    <td>— (not returned by endpoint)</td>
-                                </tr>
-                                <tr>
-                                    <td>uploaded by</td>
-                                    <td>— (not returned by endpoint)</td>
-                                </tr>
-                                <tr>
-                                    <td>submitted at</td>
-                                    <td>— (not returned by endpoint)</td>
-                                </tr>
-                                <tr>
-                                    <td>record links / audit events</td>
-                                    <td>— (not returned by endpoint)</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </section>
+                    <RunsSection runs={data.runs} />
 
-                    {/* Run summary */}
-                    <section>
-                        <h3>Machine-review run summary</h3>
-                        <p style={{ color: "#6b7280", marginTop: "-6px" }}>
-                            Diagnostic only — describes how the projection landed, not a
-                            verdict about the submission.
-                        </p>
-                        <ul>
-                            <li>records with mapped findings: {data.record_summaries.length}</li>
-                            <li>unmapped findings: {data.unmapped_findings_count}</li>
-                            <li>mapping warnings: {data.mapping_warnings.length}</li>
-                            <li>parse warnings: {data.parse_warnings.length}</li>
-                            <li>
-                                source audit events:{" "}
-                                {data.source_audit_event_ids.length > 0
-                                    ? data.source_audit_event_ids.join(", ")
-                                    : "none"}
-                            </li>
-                            <li>
-                                overall highest severity:{" "}
-                                {dash(overallHighestSeverity(data))}
-                            </li>
-                        </ul>
-                    </section>
-
-                    {/* Record summaries table */}
-                    <section>
-                        <h3>Record summaries</h3>
+                    <section aria-labelledby="records-heading">
+                        <h2 id="records-heading">Records</h2>
                         {data.record_summaries.length === 0 ? (
-                            <p>No records received mapped machine-review findings.</p>
+                            <p>No record received a mapped finding.</p>
                         ) : (
-                            <table border={1} cellPadding={4} style={{ borderCollapse: "collapse" }}>
-                                <thead>
-                                    <tr>
-                                        <th>record_type</th>
-                                        <th>record_public_ref</th>
-                                        <th>record_id</th>
-                                        <th>status</th>
-                                        <th>highest_severity</th>
-                                        <th>findings_count</th>
-                                        <th>model</th>
-                                        <th>provider</th>
-                                        <th>reviewed_at</th>
-                                        <th>all_record_reviews_count</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {data.record_summaries.map((r, i) => (
-                                        <tr key={`${r.record_type}:${r.record_public_ref ?? r.record_id ?? i}`}>
-                                            <td>{r.record_type}</td>
-                                            <td>{dash(r.record_public_ref)}</td>
-                                            <td>{dash(r.record_id)}</td>
-                                            <td>
-                                                <StatusBadge status={r.latest_summary.status} />
-                                            </td>
-                                            <td>{dash(r.latest_summary.highest_severity)}</td>
-                                            <td>{r.latest_summary.findings_count}</td>
-                                            <td>{dash(r.latest_summary.model)}</td>
-                                            <td>{dash(r.latest_summary.provider)}</td>
-                                            <td>{dash(r.latest_summary.reviewed_at)}</td>
-                                            <td>{r.all_record_reviews_count}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        )}
-
-                        {/* Badge legend with disclaimers — visible, not docs-only. */}
-                        <h4>Status legend</h4>
-                        <ul>
-                            {(Object.keys(STATUS_META) as MachineReviewStatus[]).map((s) => (
-                                <li key={s}>
-                                    <StatusBadge status={s} /> <code>{s}</code> —{" "}
-                                    {STATUS_META[s].disclaimer}
-                                </li>
-                            ))}
-                        </ul>
-                    </section>
-
-                    {/* The run comes first: it is what produces the findings
-                        the table above shows and the builder below reads.
-
-                        The key is PREFIXED, and that is not decoration. These
-                        are two children of one fragment, so React reconciles
-                        them as a keyed list, and giving both of them
-                        `key={data.submission_id}` makes two siblings share a
-                        key: with the bare id, walking
-                        7 -> 9 -> 7 left submission 9's run outcome mounted
-                        beside submission 7's empty one -- two status regions,
-                        the stale one still reading "recorded 3 findings"
-                        under the wrong submission's findings. That is the
-                        exact false report the key was added to prevent. */}
-                    <MachineReviewRunner
-                        key={`run-${data.submission_id}`}
-                        submissionId={data.submission_id}
-                    />
-
-                    <CuratorTaskBuilder
-                        key={data.submission_id}
-                        submissionId={data.submission_id}
-                    />
-
-                    {/* Diagnostics */}
-                    <section>
-                        <h3>Diagnostics</h3>
-                        <p style={{ color: "#6b7280", marginTop: "-6px" }}>
-                            mapping warnings = projection/mapping problems · parse warnings =
-                            provider/payload problems · unmapped findings do not apply to
-                            records.
-                        </p>
-                        <h4>mapping warnings</h4>
-                        {data.mapping_warnings.length === 0 ? (
-                            <p>No mapping warnings.</p>
-                        ) : (
-                            <ul>
-                                {data.mapping_warnings.map((w, i) => (
-                                    <li key={i}>{w}</li>
+                            <ul className="admin-plain-list">
+                                {data.record_summaries.map((record, i) => (
+                                    <RecordCard key={`${record.record_type}:${record.record_public_ref ?? record.record_id ?? i}`} record={record} />
                                 ))}
                             </ul>
                         )}
-                        <h4>parse warnings</h4>
-                        {data.parse_warnings.length === 0 ? (
-                            <p>No parse warnings.</p>
-                        ) : (
-                            <ul>
-                                {data.parse_warnings.map((w, i) => (
-                                    <li key={i}>{w}</li>
-                                ))}
-                            </ul>
-                        )}
-                        <p>unmapped findings (do not apply to records): {data.unmapped_findings_count}</p>
-                        <p>
-                            source audit events:{" "}
-                            {data.source_audit_event_ids.length > 0
-                                ? data.source_audit_event_ids.join(", ")
-                                : "none"}
-                        </p>
                     </section>
 
-                    {/* Raw JSON drawer */}
-                    <section>
-                        <h3>Raw admin diagnostic response</h3>
-                        <button type="button" onClick={() => setShowRaw((v) => !v)}>
-                            {showRaw ? "Hide" : "Show"} raw JSON
-                        </button>
-                        {showRaw && (
-                            <pre
-                                data-testid="raw-json"
-                                style={{
-                                    background: "#f3f4f6",
-                                    padding: "8px",
-                                    overflowX: "auto",
-                                }}
-                            >
-                                {JSON.stringify(data, null, 2)}
-                            </pre>
-                        )}
-                    </section>
+                    <UnmappedSection findings={data.unmapped_findings} />
+                    <Diagnostics data={data} />
 
-                    {/* Maintainer observations (local, non-persisted) */}
-                    <section>
-                        <h3>Maintainer observations</h3>
-                        <p style={{ color: "#6b7280", marginTop: "-6px" }}>
-                            Local scratchpad — <strong>not persisted</strong> and not sent
-                            anywhere in this slice.
-                        </p>
-                        <ul style={{ listStyle: "none", paddingLeft: 0 }}>
-                            {OBSERVATION_PROMPTS.map((prompt) => (
-                                <li key={prompt}>
-                                    <label>
-                                        <input
-                                            type="checkbox"
-                                            checked={checks[prompt] ?? false}
-                                            onChange={(e) =>
-                                                setChecks((c) => ({
-                                                    ...c,
-                                                    [prompt]: e.target.checked,
-                                                }))
-                                            }
-                                        />{" "}
-                                        {prompt}
-                                    </label>
-                                </li>
-                            ))}
-                        </ul>
-                        <textarea
-                            value={note}
-                            onChange={(e) => setNote(e.target.value)}
-                            placeholder="Free-text observation (not persisted)…"
-                            rows={4}
-                            style={{ width: "100%" }}
-                        />
-                    </section>
+                    {/* The run comes first: it produces the findings above and the builder below reads them.
+
+                        The key is PREFIXED, and that is not decoration. These are two children of one fragment, so React
+                        reconciles them as a keyed list, and giving both of them `key={data.submission_id}` makes two
+                        siblings share a key: with the bare id, walking 7 -> 9 -> 7 left submission 9's run outcome
+                        mounted beside submission 7's empty one, the stale one still reading "recorded 3 findings" under
+                        the wrong submission's findings. */}
+                    <MachineReviewRunner key={`run-${data.submission_id}`} submissionId={data.submission_id} />
+                    <CuratorTaskBuilder key={data.submission_id} submissionId={data.submission_id} />
+                    <StatusLegend />
                 </>
             )}
-        </div>
+        </>
+    )
+}
+
+function MachineReviewInspectionPage() {
+    useDocumentTitle("Machine review inspection")
+    const { state } = useAuth()
+    const [params] = useSearchParams()
+    const chosen = parseSubmissionParam(params.get("submission"))
+    // Choosing a submission swaps the picker for the inspection in place, so focus goes to the heading, as a page
+    // change would. The first render is left alone: a page opened by address keeps the browser's own focus.
+    const chosenId = chosen.kind === "ok" ? chosen.id : null
+    const lastChosen = useRef(chosenId)
+    useEffect(() => {
+        if (lastChosen.current === chosenId) return
+        lastChosen.current = chosenId
+        if (chosenId !== null) document.getElementById("inspection-heading")?.focus()
+    }, [chosenId])
+
+    if (state.status === "loading") {
+        return (
+            <section className="admin-page">
+                <h1>Machine review inspection</h1>
+                <p role="status">Checking your account…</p>
+            </section>
+        )
+    }
+    if (state.status === "unreachable") {
+        return (
+            <section className="admin-page">
+                <h1>Machine review inspection</h1>
+                <p className="auth-error" role="alert">
+                    The archive could not be reached, so your account could not be checked. This is not a sign that you
+                    are signed out.
+                </p>
+            </section>
+        )
+    }
+    if (state.status === "signed-out") return <Navigate to="/login" replace />
+    if (state.user.role !== "admin") {
+        return (
+            <section className="admin-page">
+                <h1>Machine review inspection</h1>
+                <p className="auth-error" role="alert">This page is for administrators.</p>
+            </section>
+        )
+    }
+
+    return (
+        <section className="admin-page">
+            <h1 id="inspection-heading" tabIndex={-1}>Machine review inspection</h1>
+            <p className="admin-lede">
+                What an automated reviewer said about one submission. This is advisory: it is <strong>not</strong> human
+                review, certification, or moderation, and nothing here changes what a reader is told to trust.
+            </p>
+            {chosen.kind === "bad" && <p className="auth-error" role="alert">That link does not name a submission.</p>}
+            {chosen.kind === "ok" ? <SubmissionInspection submissionId={chosen.id} /> : <SubmissionPicker />}
+        </section>
     )
 }
 
