@@ -37,6 +37,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.api.config import settings
 from app.api.deps import SessionLocal
 from app.api.server_faults import ServerFaultRoute
 from app.api.startup_checks import server_encoding, template_encoding
@@ -132,6 +133,68 @@ def _worker_status() -> dict:
         status["reason"] = (
             f"oldest queued job is {status['oldest_queued_age_seconds']}s old; "
             "nothing is claiming work"
+        )
+    else:
+        status["healthy"] = True
+        status["reason"] = None
+    return status
+
+
+#: Name of the inline thread started by ``app.workers.machine_review_worker.run_worker_thread``.
+_REVIEW_WORKER_THREAD_NAME = "machine-review-worker"
+
+
+def _machine_review_worker_status() -> dict:
+    """Report whether the in-process machine-review worker is running and claiming its queue.
+
+    The thread is expected only when the API runs inline workers and
+    ``AI_REVIEW_ASSISTANT_MODE`` is not ``off``; a queued in-process job older
+    than the lag threshold means nothing is claiming work.
+    """
+    inline = os.getenv("TCKDB_INLINE_WORKER", "false").lower() == "true"
+    enabled = settings.ai_review_assistant_mode != "off"
+    expected = inline and enabled
+    thread_alive = any(
+        thread.name == _REVIEW_WORKER_THREAD_NAME and thread.is_alive() for thread in threading.enumerate()
+    )
+    status: dict = {
+        "inline": inline,
+        "enabled": enabled,
+        "thread_alive": thread_alive if expected else None,
+    }
+
+    session = SessionLocal()
+    try:
+        row = session.execute(
+            text(
+                "SELECT count(*) AS queued, min(created_at) AS oldest"
+                "  FROM machine_review_job WHERE status = 'queued' AND executor = 'in_process'"
+            )
+        ).one()
+        oldest_age = None
+        if row.oldest is not None:
+            oldest = row.oldest
+            if oldest.tzinfo is None:
+                oldest = oldest.replace(tzinfo=timezone.utc)
+            oldest_age = (datetime.now(timezone.utc) - oldest).total_seconds()
+        status["queued"] = int(row.queued or 0)
+        status["oldest_queued_age_seconds"] = None if oldest_age is None else round(oldest_age, 1)
+        status["queue_stalled"] = bool(oldest_age is not None and oldest_age > _QUEUE_LAG_ALERT_SECONDS)
+    except SQLAlchemyError as exc:
+        logger.warning("worker status: machine_review_job query failed: %r", exc)
+        status["queued"] = None
+        status["oldest_queued_age_seconds"] = None
+        status["queue_stalled"] = None
+    finally:
+        session.close()
+
+    if expected and not thread_alive:
+        status["healthy"] = False
+        status["reason"] = "machine-review worker thread is not running"
+    elif status.get("queue_stalled"):
+        status["healthy"] = False
+        status["reason"] = (
+            f"oldest queued review job is {status['oldest_queued_age_seconds']}s old; nothing is claiming work"
         )
     else:
         status["healthy"] = True
@@ -674,7 +737,7 @@ def status():
     could not tell "the site is down" from "the site is up and telling me the
     worker died" -- which are different pages of the runbook.
 
-    Components: ``database``, ``worker``, ``artifact_storage``. Each is a hard
+    Components: ``database``, ``worker``, ``machine_review_worker``, ``artifact_storage``. Each is a hard
     dependency that can fail alone while the others stay green.
 
     Two verdict channels, and the difference is which one wakes somebody.
@@ -751,6 +814,7 @@ def status():
         session.close()
 
     components["worker"] = _worker_status()
+    components["machine_review_worker"] = _machine_review_worker_status()
     components["artifact_storage"] = _artifact_storage_status()
 
     unhealthy = sorted(

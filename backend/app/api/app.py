@@ -57,6 +57,10 @@ async def _lifespan(app: FastAPI):
     if os.getenv("TCKDB_INLINE_WORKER", "false").lower() == "true":
         from app.workers.upload_worker import run_worker_thread
         run_worker_thread()
+        if settings.ai_review_assistant_mode != "off":
+            from app.workers.machine_review_worker import run_worker_thread as run_review_worker_thread
+
+            run_review_worker_thread()
 
     # Opt-out for test fixtures and offline dev, which build the app hundreds
     # of times and have neither an object store to reach nor a reason to
