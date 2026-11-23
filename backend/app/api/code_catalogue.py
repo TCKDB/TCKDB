@@ -1768,6 +1768,29 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "Also raised by /lookup/calculations and /lookup/species-calculation (selection=lowest_energy) "
                 "when none of the matching calculations has a recorded energy."
             )),
+    ApiCode("machine_review_curator_requests_disabled", 403, Surface.coded_exception,
+            "backend/app/services/machine_review/jobs.py"),
+    ApiCode("machine_review_disabled", 409, Surface.coded_exception,
+            "backend/app/services/machine_review/jobs.py"),
+    ApiCode("machine_review_job_conflict", 409, Surface.coded_exception,
+            "backend/app/services/machine_review/jobs.py",
+            shape=Shape.relationship,
+            note=(
+                "The submission already has a queued or running job. context.open_job holds its status, provider_key, "
+                "step_count, cancel_requested, created_at and started_at; GET /machine-review/jobs?submission_id= lists it first."
+            )),
+    ApiCode("machine_review_job_not_cancellable", 409, Surface.coded_exception,
+            "backend/app/services/machine_review/jobs.py"),
+    ApiCode("machine_review_job_not_found", 404, Surface.coded_exception,
+            "backend/app/services/machine_review/jobs.py"),
+    ApiCode("machine_review_mode_off", 409, Surface.coded_exception,
+            "backend/app/services/machine_review/jobs.py"),
+    ApiCode("machine_review_not_allowed_for_user", 403, Surface.coded_exception,
+            "backend/app/services/machine_review/jobs.py"),
+    ApiCode("machine_review_provider_not_configured", 409, Surface.coded_exception,
+            "backend/app/services/machine_review/jobs.py"),
+    ApiCode("machine_review_remote_runner_unavailable", 409, Surface.coded_exception,
+            "backend/app/services/machine_review/jobs.py"),
     ApiCode("manifest_already_frozen", 409, Surface.message_prefix,
             "backend/app/services/release/manifest.py",
             note=(

@@ -2159,6 +2159,21 @@ class MachineReviewProviderKey(str, Enum):
     codex = "codex"
 
 
+class MachineReviewAvailability(str, Enum):
+    """Whether one reviewer backend may be asked for a review right now; the UI words come from this code.
+
+    Query-side only: never a column.
+    """
+
+    ok = "ok"
+    mode_off = "mode_off"
+    machine_review_disabled = "machine_review_disabled"
+    curator_requests_disabled = "curator_requests_disabled"
+    not_allowed_for_user = "not_allowed_for_user"
+    provider_not_configured = "provider_not_configured"
+    remote_runner_unavailable = "remote_runner_unavailable"
+
+
 class MachineReviewExecutor(str, Enum):
     """Which kind of worker may claim a machine-review job."""
 
