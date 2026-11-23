@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.212.0 - 2026-11-24
+
+`RejectionCode` gains the machine-review job codes: `MACHINE_REVIEW_JOB_CONFLICT`, `MACHINE_REVIEW_JOB_NOT_CANCELLABLE`, `MACHINE_REVIEW_JOB_NOT_FOUND`, `MACHINE_REVIEW_MODE_OFF`, `MACHINE_REVIEW_DISABLED`, `MACHINE_REVIEW_CURATOR_REQUESTS_DISABLED`, `MACHINE_REVIEW_NOT_ALLOWED_FOR_USER`, `MACHINE_REVIEW_PROVIDER_NOT_CONFIGURED` and `MACHINE_REVIEW_REMOTE_RUNNER_UNAVAILABLE`. The route ledger triages the five new curator routes under `/api/v1/machine-review` as curation workflow and the two admin switch routes under `/api/v1/admin/machine-review/settings` as admin only. No client behaviour changed.
+
 ## 0.211.1 - 2026-11-22
 
 No client behaviour changed. The route ledger triages the new curator route `GET /api/v1/submissions/machine-review-overview` as curation workflow.

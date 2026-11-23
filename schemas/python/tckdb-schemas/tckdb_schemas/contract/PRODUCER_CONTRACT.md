@@ -10095,6 +10095,7 @@ Every write route of the live application that the rule left out, with the reaso
 | `POST /api/v1/admin/machine-review/curator-tasks/{task_id}/start-review` | role-gated to admin |
 | `POST /api/v1/admin/machine-review/records/{record_type}/{record_id}/run-fake` | role-gated to admin |
 | `POST /api/v1/admin/machine-review/run-for-submission/{submission_id}` | role-gated to admin |
+| `PATCH /api/v1/admin/machine-review/settings` | role-gated to admin |
 | `POST /api/v1/admin/observations/{observation_ref}/identity` | role-gated to curator or admin |
 | `POST /api/v1/admin/record-deletions` | role-gated to admin |
 | `PATCH /api/v1/admin/users/{user_id}/role` | role-gated to admin |
@@ -10109,6 +10110,8 @@ Every write route of the live application that the rule left out, with the reaso
 | `POST /api/v1/curation/species-names` | role-gated to curator or admin |
 | `POST /api/v1/curation/species-names/{name_ref}/retire` | role-gated to curator or admin |
 | `POST /api/v1/curation/structure-evidence-findings` | role-gated to curator or admin |
+| `POST /api/v1/machine-review/jobs` | role-gated to curator or admin |
+| `POST /api/v1/machine-review/jobs/{job_id}/cancel` | role-gated to curator or admin |
 | `PATCH /api/v1/record-reviews/{record_type}/{record_id}` | role-gated to curator or admin |
 | `POST /api/v1/releases` | role-gated to curator or admin |
 | `POST /api/v1/releases/policies` | role-gated to curator or admin |

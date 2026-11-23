@@ -25,6 +25,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Machine-review jobs are requested through the API (Unreleased)
+
+- **Behaviour:** `POST /api/v1/machine-review/jobs` queues a machine review of a submission (curator or admin; 202). A second request while one is queued or running is a 409 `machine_review_job_conflict` whose `context.open_job` holds the open job's state; `GET /api/v1/machine-review/jobs?submission_id=` lists it first.
+- **Behaviour:** `GET /api/v1/machine-review/jobs/{job_id}?after_seq=` returns the job and its progress entries after that `seq`, `POST .../cancel` cancels a queued job or asks a running one to stop (409 `machine_review_job_not_cancellable` once it has ended), and `GET /api/v1/machine-review/providers` lists every reviewer backend with the caller's availability. The responses carry codes and timings only, never a transcript or a failure detail.
+- **Behaviour:** `GET` and `PATCH /api/v1/admin/machine-review/settings` read and set `machine_review_enabled` and `curator_requests_enabled` (admin only). A request refused by the deployment mode, a switch, the caller's role or the provider key carries a coded refusal: 403 `machine_review_curator_requests_disabled` and `machine_review_not_allowed_for_user`; 409 `machine_review_mode_off`, `machine_review_disabled`, `machine_review_provider_not_configured` and `machine_review_remote_runner_unavailable`. `GET /providers` reports `ok` exactly when the request would be accepted.
+- **Behaviour:** with `TCKDB_INLINE_WORKER=true` and `AI_REVIEW_ASSISTANT_MODE` not `off`, the API starts the machine-review worker thread, and `GET /api/v1/status` reports it as `components.machine_review_worker`.
+
 ## Machine-review findings are readable through the API (Unreleased)
 
 - **Behaviour:** `GET /api/v1/admin/submissions/{id}/machine-review-inspection` lists every review of each record (`all_record_reviews`, newest first, one `is_latest`) with the reviewer's findings (severity, category, message, evidence keys, recommended action, and the curator task raised for it), every stored run (`runs`, with the reviewer's summary, status, model, provider and counts, including runs whose payload could not be read), and the findings that mapped to no record (`unmapped_findings`, each with its reason). Each record also names its `container_type` / `container_ref`.

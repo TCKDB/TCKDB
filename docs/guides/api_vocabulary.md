@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 123 | 28 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 46 | `backend/app/services/public_refs.py` |
 | Trust check names | 174 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 379 | `backend/app/api/code_catalogue.py` |
-| **total** | **722** | |
+| Refusal codes a caller can receive | 388 | `backend/app/api/code_catalogue.py` |
+| **total** | **731** | |
 
 ## How a record is named
 
@@ -730,17 +730,19 @@ There is deliberately no definition column: the refusal already sent you a sente
 | --- | --- |
 | `invalid_idempotency_key` | a thing |
 
-### HTTP 403 (5 codes)
+### HTTP 403 (7 codes)
 
 | Code | Names |
 | --- | --- |
+| `machine_review_curator_requests_disabled` | a thing |
+| `machine_review_not_allowed_for_user` | a thing |
 | `record_self_approval` | a relationship — read `context` |
 | `rights_attestation_not_depositor` | a thing |
 | `rights_attestation_requires_curator` | a thing |
 | `submission_self_approval` | a relationship — read `context` |
 | `submission_supersede_not_owner` | a thing |
 
-### HTTP 404 (29 codes)
+### HTTP 404 (30 codes)
 
 | Code | Names |
 | --- | --- |
@@ -748,6 +750,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `handle_not_found` | a thing |
 | `hessian_not_found` | a thing |
 | `irc_result_not_found` | a thing |
+| `machine_review_job_not_found` | a thing |
 | `manifest_not_frozen` | a thing |
 | `owner_missing` | a thing |
 | `path_search_result_not_found` | a thing |
@@ -774,7 +777,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unknown_structure_member_ref` | a thing |
 | `unknown_transition_state_entry_ref` | a thing |
 
-### HTTP 409 (31 codes)
+### HTTP 409 (37 codes)
 
 | Code | Names |
 | --- | --- |
@@ -791,6 +794,12 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `energy_transfer_scope_columns_disagree` | a relationship — read `context` |
 | `idempotency_conflict` | a relationship — read `context` |
 | `last_admin_demotion` | a thing |
+| `machine_review_disabled` | a thing |
+| `machine_review_job_conflict` | a relationship — read `context` |
+| `machine_review_job_not_cancellable` | a thing |
+| `machine_review_mode_off` | a thing |
+| `machine_review_provider_not_configured` | a thing |
+| `machine_review_remote_runner_unavailable` | a thing |
 | `manifest_already_frozen` | a thing |
 | `network_solve_reported_requires_literature` | a thing |
 | `record_deletion_cited` | a relationship — read `context` |
