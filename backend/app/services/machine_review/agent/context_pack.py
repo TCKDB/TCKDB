@@ -460,6 +460,16 @@ def estimate_input_tokens(context: LLMPrecheckContext) -> int:
 
 def build_review_context_pack(session: Session, submission_id: int, *, max_input_tokens: int) -> LLMPrecheckContext:
     """Build the review context of a submission, cut to ``max_input_tokens`` estimated tokens."""
+    return build_review_context_bundle(session, submission_id, max_input_tokens=max_input_tokens)[0]
+
+
+def build_review_context_bundle(
+    session: Session, submission_id: int, *, max_input_tokens: int
+) -> tuple[LLMPrecheckContext, dict[tuple[str, str], LLMRecordSummary]]:
+    """The cut review context, plus the full summary of every linked record that still exists.
+
+    The map is keyed by ``(record_type, record_ref)`` and holds summaries the cap dropped from the context too.
+    """
     submission = session.get(Submission, submission_id)
     if submission is None:
         raise not_found("Submission", row_id=submission_id)
@@ -474,6 +484,7 @@ def build_review_context_pack(session: Session, submission_id: int, *, max_input
         LLMRecordRef(record_type=link.record_type.value, record_id=link.record_id, role=link.role) for link in links
     )
     summaries = tuple(entry[3] for entry in _summaries(session, links))
+    by_ref = {(item.record_type, item.record_ref): item for item in summaries}
     base = LLMPrecheckContext(
         submission_id=submission.id,
         submission_status=submission.status.value,
@@ -501,10 +512,11 @@ def build_review_context_pack(session: Session, submission_id: int, *, max_input
 
     # The estimate only shrinks as more is dropped, so the largest kept count that fits is found by bisection.
     if fits(len(summaries), len(refs)):
-        return pack(len(summaries), len(refs))
+        return pack(len(summaries), len(refs)), by_ref
     if fits(0, len(refs)):
-        return pack(_largest_fitting(len(summaries) - 1, lambda kept: fits(kept, len(refs))), len(refs))
-    return pack(0, _largest_fitting(len(refs) - 1, lambda kept: fits(0, kept)))
+        kept = _largest_fitting(len(summaries) - 1, lambda count: fits(count, len(refs)))
+        return pack(kept, len(refs)), by_ref
+    return pack(0, _largest_fitting(len(refs) - 1, lambda count: fits(0, count))), by_ref
 
 
 def _largest_fitting(high: int, fits: Any) -> int:
@@ -519,4 +531,4 @@ def _largest_fitting(high: int, fits: Any) -> int:
     return low
 
 
-__all__ = ["build_review_context_pack", "estimate_input_tokens"]
+__all__ = ["build_review_context_bundle", "build_review_context_pack", "estimate_input_tokens"]

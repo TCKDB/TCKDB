@@ -151,13 +151,13 @@ What is NOT worth reporting:
 """
 
 
-def _compact(value: Any) -> Any:
+def compact(value: Any) -> Any:
     """Drop empty containers and ``None`` so the message carries only what exists."""
     if isinstance(value, dict):
-        out = {k: _compact(v) for k, v in value.items()}
+        out = {k: compact(v) for k, v in value.items()}
         return {k: v for k, v in out.items() if v not in (None, {}, [])}
     if isinstance(value, list):
-        return [_compact(v) for v in value]
+        return [compact(v) for v in value]
     return value
 
 
@@ -188,10 +188,10 @@ def build_user_message(context: MachineReviewContext) -> str:
             {"record_type": link.record_type, "record_ref": str(link.record_id), "role": link.role}
             for link in precheck.record_refs
         ]
-        records = _compact([s.model_dump(mode="json") for s in precheck.record_summaries])
+        records = compact([s.model_dump(mode="json") for s in precheck.record_summaries])
         if records:
             payload["records"] = records
-        warnings = _compact([w.model_dump(mode="json") for w in precheck.submission_warnings])
+        warnings = compact([w.model_dump(mode="json") for w in precheck.submission_warnings])
         if warnings:
             payload["submission_warnings"] = warnings
         if precheck.omitted is not None:
@@ -203,4 +203,5 @@ __all__ = [
     "MACHINE_REVIEW_PROMPT",
     "MACHINE_REVIEW_SYSTEM_PROMPT",
     "build_user_message",
+    "compact",
 ]

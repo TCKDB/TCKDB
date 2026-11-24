@@ -336,3 +336,16 @@ def test_the_cap_is_met_with_few_renders_for_many_records(seeded, monkeypatch):
     small = build_review_context_pack(session, submission.id, max_input_tokens=cap)
     assert real(small) <= cap
     assert len(renders) <= 2 + 2 * 3
+
+
+def test_the_bundle_keeps_every_summary_the_cap_dropped_from_the_context(seeded):
+    from app.services.machine_review.agent.context_pack import build_review_context_bundle
+
+    session, submission, *_ = seeded
+    full = build_review_context_pack(session, submission.id, max_input_tokens=BIG)
+    cap = estimate_input_tokens(full) - 1
+    pack, summaries = build_review_context_bundle(session, submission.id, max_input_tokens=cap)
+    assert pack == build_review_context_pack(session, submission.id, max_input_tokens=cap)
+    assert len(pack.record_summaries) < len(full.record_summaries)
+    assert set(summaries) == {(s.record_type, s.record_ref) for s in full.record_summaries}
+    assert {(link.record_type, str(link.record_id)) for link in pack.record_refs} >= set(summaries)
