@@ -4,6 +4,7 @@ import "../auth.css"
 import "../admin.css"
 import { AuthApiError } from "../api/authApi"
 import { changeUserRole, isLastAdminRefusal, listAdminUsers } from "../api/adminApi"
+import { MachineReviewSettingsPanel } from "../components/MachineReviewSettingsPanel"
 import { StorageCapacityPanel } from "../components/StorageCapacityPanel"
 import { useAuth } from "../hooks/useAuth"
 import type { AdminUser } from "../types/admin"
@@ -138,6 +139,8 @@ export default function AdminPage() {
                 wrong half of it. */}
 
             <StorageCapacityPanel />
+
+            <MachineReviewSettingsPanel />
 
             <h2>Accounts</h2>
             {usersState.status === "loading" && <p>Loading accounts&hellip;</p>}

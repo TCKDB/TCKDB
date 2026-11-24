@@ -101,7 +101,7 @@ async function openMenuByKeyboard(name = "someone") {
 }
 
 describe("what the menu offers each role", () => {
-    it("a curator is offered record review, and nothing admin-only", async () => {
+    it("a curator is offered record review and machine review inspection, and nothing admin-only", async () => {
         meIs("curator")
         renderStatus()
         await openMenu()
@@ -110,9 +110,12 @@ describe("what the menu offers each role", () => {
             "href",
             "/review-queue",
         )
-        // The two are different gates: curator/admin for reviewing records,
-        // admin for everything under /admin.
-        for (const hidden of ["Machine findings", "Machine review inspection", "Administration"]) {
+        expect(screen.getByRole("menuitem", { name: "Machine review inspection" })).toHaveAttribute(
+            "href",
+            "/admin/machine-review-inspection",
+        )
+        // Curators and admins read reviews and request them; the curator-task queue and administration are admin-only.
+        for (const hidden of ["Machine findings", "Administration"]) {
             expect(screen.queryByRole("menuitem", { name: hidden })).not.toBeInTheDocument()
         }
     })
@@ -347,9 +350,9 @@ describe("the menu works with a keyboard alone", () => {
         renderStatus()
         const { user } = await openMenuByKeyboard()
 
-        // A curator's menu is exactly three items: Record review, Account,
-        // Sign out. Walking four steps proves both the order and the wrap.
-        const order = ["Record review", "Account", "Sign out", "Record review"]
+        // A curator's menu is exactly four items: Record review, Machine review
+        // inspection, Account, Sign out. Walking five steps proves both the order and the wrap.
+        const order = ["Record review", "Machine review inspection", "Account", "Sign out", "Record review"]
         await waitFor(() =>
             expect(screen.getByRole("menuitem", { name: "Record review" })).toHaveFocus(),
         )

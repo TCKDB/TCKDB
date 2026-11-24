@@ -1,9 +1,9 @@
 import { Fragment, useEffect, useRef, useState } from "react"
 import { Link, Navigate, useSearchParams } from "react-router-dom"
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import "../auth.css"
 import "../admin.css"
-import { fetchMachineReviewInspection, InspectionFetchError } from "../api/machineReviewInspection"
+import { fetchMachineReviewInspection, InspectionFetchError, inspectionQueryKey } from "../api/machineReviewInspection"
 import { listAdminUsers } from "../api/adminApi"
 import { AuthApiError } from "../api/authApi"
 import {
@@ -15,9 +15,11 @@ import {
 } from "../api/submissionsApi"
 import { Disclosure } from "../components/Disclosure"
 import { MachineFindingList } from "../components/MachineFindingList"
+import { MachineReviewerText } from "../components/MachineReviewerText"
+import { RequestMachineReview } from "../components/RequestMachineReview"
 import { MachineReviewStatusLabel } from "../components/MachineReviewStatusLabel"
 import { RecordLocationCell } from "../components/RecordLocationCell"
-import { adminDate, adminDateTime, STATUS_TOKENS, wordLabel, wordsFor } from "../domain/machineReviewWords"
+import { adminDate, adminDateTime, recommendationFor, STATUS_TOKENS, wordLabel, wordsFor } from "../domain/machineReviewWords"
 import { recordTypeGroupLabel, resolveRecordLocation } from "../domain/recordRoute"
 import { useAuth } from "../hooks/useAuth"
 import { useDocumentTitle } from "../hooks/useDocumentTitle"
@@ -25,10 +27,7 @@ import {
     buildCuratorTasksForSubmission,
     CuratorTaskResponseError,
 } from "../api/curatorTasksApi"
-import {
-    MachineReviewRunResponseError,
-    runMachineReviewForSubmission,
-} from "../api/machineReviewRunApi"
+import { listSubmissionJobs, submissionJobsKey } from "../api/machineReviewJobsApi"
 import {
     findingsConsidered,
     severityClass,
@@ -41,278 +40,25 @@ import type {
     AdminMachineReviewUnmappedFinding,
     AdminSubmissionMachineReviewInspection,
 } from "../types/machineReviewInspection"
-import {
-    knownRunStatus,
-    reviewDidNotStart,
-    reviewFailed,
-    type MachineReviewRunResult,
-} from "../types/machineReviewRun"
 
 /**
- * Admin-only machine-review inspection.
+ * Machine-review inspection, for curators and admins.
  *
  * Reads the stored machine reviews of one submission: what the reviewer found, record by record, what it said about no
- * record in particular, and every run it made. This is a diagnostic view, not public trust, human review, certification
- * or moderation. Every route behind it is admin-only on the server, so the page asks for the same role first.
+ * record in particular, and every run it made. It also requests a review and shows its progress. This is a diagnostic
+ * view, not public trust, human review, certification or moderation. The routes behind it are for curators and admins
+ * on the server, and the curator-task routes for admins only; the page asks for the same roles first.
  *
  * A submission is chosen from a list and addressed as `?submission=<id>`. The id lives in the address only; the page
  * names a submission by its public reference.
  *
- * The reviewer's findings, messages and summaries are shown as the reviewer's own words. Anything the depositor typed
+ * The reviewer's findings, messages and summaries are shown only inside a block labelled as the reviewer's. Anything the depositor typed
  * (the submission title) appears only in a field marked as deposited.
  */
 
-function dash(value: unknown): string {
-    return value === null || value === undefined || value === "" ? "—" : String(value)
-}
-
-/**
- * Accessible names for this page's four live regions.
- *
- * Named constants rather than four literals, because the run pair and the
- * build pair are otherwise distinguished only by wording a later edit could
- * quietly make identical, and two identically named status regions are the
- * same defect as two unnamed ones.
- */
-const RUN_ALERT_LABEL = "machine review request problem"
-const RUN_STATUS_LABEL = "machine review run outcome"
+/** Accessible names for the curator-task build's two live regions. */
 const BUILD_ALERT_LABEL = "curator task build problem"
 const BUILD_STATUS_LABEL = "curator task build result"
-
-/**
- * The react-query key the inspection below is cached under.
- *
- * Shared by the reader and by the run control that invalidates it after a
- * run. Written out twice, the two drift the day the key gains a member, and
- * the failure is silent: the invalidate matches nothing, the table keeps
- * showing the state from before the run, and the page looks like a run that
- * recorded nothing.
- */
-function inspectionQueryKey(submissionId: number | null) {
-    return ["machine-review-inspection", submissionId] as const
-}
-
-/**
- * What the run is doing right now.
- *
- * Four states rather than a pair of booleans, for the reason spelled out on
- * `BuildState` below. `done` here means the REQUEST came back with a result;
- * whether that result is a review that succeeded or one that failed is a
- * property of the result, not of this state.
- */
-type RunState =
-    | { kind: "idle" }
-    | { kind: "running" }
-    | { kind: "done"; result: MachineReviewRunResult }
-    | { kind: "failed"; message: string }
-
-/**
- * What to tell an admin when the RUN REQUEST did not come back with a result.
- *
- * Three failures with three different answers, mirroring `failureMessage`
- * below, and the distinction matters more here because a machine review
- * costs a provider call: an admin told "it did not run" presses the button
- * again, and if it did run they have now paid for two.
- *
- * Note what is NOT in here. A reply of `status: "machine_review_failed"` is
- * a 200 and never reaches this function: the review RAN, and its failure is
- * an outcome the archive recorded. Routing it here would tell an admin their
- * request broke when what happened is that a reviewer answered.
- */
-function runFailureMessage(error: unknown): string {
-    if (error instanceof MachineReviewRunResponseError) {
-        // 2xx. It ran; only the result was unreadable. The error already
-        // carries the whole sentence, including where to go and look.
-        return error.message
-    }
-    if (error instanceof AuthApiError) {
-        // The server answered with a refusal, so no review was started.
-        return `The review did not run: ${error.message}`
-    }
-    // No answer: offline, DNS, a dropped connection, a request that never
-    // left. The server may or may not have run a review and written it.
-    const detail = error instanceof Error ? error.message : String(error)
-    return (
-        `The run did not report back: ${detail}. A review may or may not have ` +
-        "happened; inspect this submission again before pressing it again."
-    )
-}
-
-/**
- * The one control that produces machine-review findings at all.
- *
- * Nothing else makes them. The machine-review stack "is not wired into
- * uploads or any public read", so before this button a deployment could hold
- * any number of submissions and zero machine reviews, the table above had
- * nothing to project, and the curator-task builder below it had nothing to
- * build from. It sits above that builder because that is the order of the
- * work: produce the findings, read them, then decide whether they deserve a
- * curator.
- *
- * **A result must never outlive its submission**, for exactly the reason
- * given at `CuratorTaskBuilder`, and through exactly the same mechanism:
- * `key={submissionId}` at the mount site. Walking to a submission this
- * session has not fetched, `query.data` goes undefined while it loads and
- * the parent unmounts the whole results block, so this component's state
- * dies with or without a key. Walking BACK to one already visited,
- * react-query answers from cache (`gcTime`, five minutes by default), data
- * never goes undefined, nothing unmounts, and the key is the only thing
- * left that drops the stale result. Covered by the tests that
- * walk 7 -> 9 and 7 -> 9 -> 7.
- */
-function MachineReviewRunner({ submissionId }: { submissionId: number }) {
-    const [state, setState] = useState<RunState>({ kind: "idle" })
-    const queryClient = useQueryClient()
-
-    async function run() {
-        if (state.kind === "running") return
-        setState({ kind: "running" })
-        let result: MachineReviewRunResult
-        try {
-            result = await runMachineReviewForSubmission(submissionId)
-        } catch (error) {
-            setState({ kind: "failed", message: runFailureMessage(error) })
-            return
-        }
-        setState({ kind: "done", result })
-
-        // The findings table above is a cached query, so without this the
-        // admin reads the run's own summary over a table still showing the
-        // archive as it was before the run -- most starkly "no records
-        // received mapped machine-review findings" directly beneath a line
-        // saying the run recorded nine. Invalidated even when the review
-        // failed: the request reached the server, and a failed review still
-        // records an audit event the projection reads.
-        //
-        // Outside the try on purpose. In it, a throw from the cache layer
-        // would be caught by the branch above and reported as a request
-        // failure, turning a run that succeeded into a red alert.
-        void queryClient.invalidateQueries({
-            queryKey: inspectionQueryKey(submissionId),
-        })
-    }
-
-    return (
-        <section>
-            <h2>Machine review</h2>
-            <p className="admin-hint">
-                A machine review is <strong>advisory</strong>. Nothing starts one
-                on upload; this control is the only thing that does. It endorses
-                nothing, and it is neither of the two things next to it: human
-                review of a record, and moderation of the submission. Neither
-                moves when this runs. Running it again reviews this submission
-                again and records another result.
-            </p>
-            <button type="button" onClick={run} aria-disabled={state.kind === "running" ? "true" : undefined}>
-                {state.kind === "running"
-                    ? "Running machine review…"
-                    : "Run machine review for this submission"}
-            </button>
-
-            {/* Two permanently mounted, initially empty live regions, for the
-                reason given at the build control below. The split is also the
-                page's honest line between the two kinds of bad news: a request
-                that failed goes in the alert, and a REVIEW that failed is an
-                outcome and goes in the result region with every other
-                outcome. */}
-            <div role="alert" aria-label={RUN_ALERT_LABEL}>
-                {state.kind === "failed" ? <p className="auth-error">{state.message}</p> : null}
-            </div>
-            <div role="status" aria-label={RUN_STATUS_LABEL}>
-                {state.kind === "done" ? <RunOutcome result={state.result} /> : null}
-            </div>
-        </section>
-    )
-}
-
-/**
- * What one run recorded, in wording an admin can act on.
- *
- * The thing this must not do is read as a request error when the reviewer
- * failed. `machine_review_failed` arrives on a 200: a review ran, the
- * reviewer did not manage to produce findings, and the archive wrote that
- * down. "Failed to run the review" would send an admin looking at the
- * network and the deployment for a fault that is in the reviewer, and the
- * `failure_reason` the server sent is the thing that actually says where.
- */
-function RunOutcome({ result }: { result: MachineReviewRunResult }) {
-    const failed = reviewFailed(result)
-    const known = knownRunStatus(result.status)
-    const count = result.findings_count
-
-    const headline = failed
-        ? // NOT "the review ran, and the reviewer failed". Several of the
-          // failures that land here never reached a reviewer at all -- a
-          // missing API key or an unreachable endpoint fails in this app, and
-          // telling an admin the reviewer failed would point them at the
-          // model when the fault is local configuration. What IS true of
-          // every failure on this path is that no usable result came back.
-          "The review did not produce a usable result. That is not a finding " +
-          "about this submission: no record was judged and nothing about the " +
-          "submission changed."
-        : reviewDidNotStart(result)
-          ? // Zero findings from a reviewer that looked and zero from one
-            // that is switched off are the same number and opposite news.
-            "No review happened. The machine reviewer is switched off in this " +
-            "deployment, so no provider was asked anything and nothing was " +
-            "recorded."
-          : `The review ran and recorded ${count} finding${count === 1 ? "" : "s"}.`
-
-    return (
-        <div className="card">
-            <p>{headline}</p>
-            <ul>
-                <li>
-                    status:{" "}
-                    {known !== null ? (
-                        <MachineReviewStatusLabel status={known} />
-                    ) : (
-                        // Shown as it arrived rather than mapped onto one of
-                        // the five this build knows, which would hand it
-                        // another status's disclaimer.
-                        <code>{result.status}</code>
-                    )}
-                </li>
-                <li>findings recorded: {count}</li>
-                <li>model: {dash(result.model)}</li>
-                <li>provider: {dash(result.provider)}</li>
-                <li>
-                    {result.audit_event_recorded
-                        ? "written to the audit log, which is what Reviewer runs above reads"
-                        : "not written to the audit log, so Reviewer runs above will not show it"}
-                </li>
-            </ul>
-            {failed && (
-                <p>
-                    {/* "Why the run failed", not "reason the reviewer gave".
-                        This text can come from the reviewer, but it can just
-                        as easily be this app's own ("Machine review could not
-                        be configured: ...") or a transport library's. Putting
-                        a configuration error in the reviewer's mouth blurs
-                        the three axes this page is careful about everywhere
-                        else. */}
-                    Why the run failed:{" "}
-                    {result.failure_reason !== null ? (
-                        result.failure_reason
-                    ) : (
-                        <em>no reason was recorded.</em>
-                    )}
-                </p>
-            )}
-            {result.summary !== null && result.summary !== result.failure_reason && (
-                <>
-                    <p className="admin-hint">The reviewer&apos;s summary:</p>
-                    {/* The reviewer's own words, advisory like everything else
-                        it produced. Quoted plainly so it cannot be mistaken
-                        for a statement this page is making. */}
-                    <blockquote>
-                        {result.summary}
-                    </blockquote>
-                </>
-            )}
-        </div>
-    )
-}
 
 /**
  * What the build is doing right now.
@@ -626,8 +372,20 @@ function SubmissionPicker() {
                                                 {row.created_by_username ?? <span className="admin-absent">not named</span>}
                                             </td>
                                             <td>
+                                                {row.machine_review.open_job !== null && (
+                                                    <>
+                                                        <strong>
+                                                            {row.machine_review.open_job.status === "queued"
+                                                                ? "review queued"
+                                                                : `review running (step ${row.machine_review.open_job.step_count})`}
+                                                        </strong>
+                                                        {row.machine_review.run_count > 0 ? ", " : ""}
+                                                    </>
+                                                )}
                                                 {row.machine_review.run_count === 0 ? (
-                                                    <span className="admin-absent">never reviewed</span>
+                                                    row.machine_review.open_job !== null ? null : (
+                                                        <span className="admin-absent">never reviewed</span>
+                                                    )
                                                 ) : (
                                                     <>
                                                         {plural(row.machine_review.run_count, "run")}
@@ -695,7 +453,7 @@ function isNotFound(error: unknown): boolean {
     )
 }
 
-function SubmissionHeader({ submissionId }: { submissionId: number }) {
+function SubmissionHeader({ submissionId, isAdmin }: { submissionId: number; isAdmin: boolean }) {
     const submission = useQuery({ queryKey: ["submission", submissionId], queryFn: () => fetchSubmission(submissionId) })
     const links = useQuery({
         queryKey: ["submission-record-links", submissionId],
@@ -708,6 +466,8 @@ function SubmissionHeader({ submissionId }: { submissionId: number }) {
     const users = useQuery({
         queryKey: ["admin-users-for-uploader"],
         queryFn: () => listAdminUsers({ limit: 200 }),
+        // The account list is an admin read; a curator is not named the uploader here.
+        enabled: isAdmin,
     })
 
     const s = submission.data
@@ -840,10 +600,9 @@ function RunsSection({ runs }: { runs: AdminMachineReviewRun[] }) {
                                         )}
                                     </p>
                                     {run.summary && (
-                                        <>
-                                            <p className="admin-hint">The reviewer&apos;s summary:</p>
+                                        <MachineReviewerText>
                                             <blockquote>{run.summary}</blockquote>
-                                        </>
+                                        </MachineReviewerText>
                                     )}
                                 </>
                             ) : (
@@ -873,7 +632,7 @@ function ReviewHeadline({ review }: { review: AdminMachineReviewRecordReview }) 
     )
 }
 
-function RecordCard({ record }: { record: AdminMachineReviewRecordInspection }) {
+function RecordCard({ record, isAdmin }: { record: AdminMachineReviewRecordInspection; isAdmin: boolean }) {
     const location = resolveRecordLocation(
         record.record_type,
         record.record_public_ref,
@@ -885,7 +644,8 @@ function RecordCard({ record }: { record: AdminMachineReviewRecordInspection }) 
     const latest = reviews.find((r) => r.is_latest) ?? reviews[0]
     const earlier = reviews.filter((r) => r !== latest)
     const summary = record.latest_summary
-    const taskHref = (taskId: number) => {
+    // The curator-task pages are admin-only, so a curator is given no link to them.
+    const taskHref = !isAdmin ? undefined : (taskId: number) => {
         const q = new URLSearchParams({ state: "all", record_type: record.record_type })
         if (record.record_id !== null) q.set("record", String(record.record_id))
         q.set("task", String(taskId))
@@ -954,11 +714,13 @@ function UnmappedSection({ findings }: { findings: AdminMachineReviewUnmappedFin
                         <li key={i} className="card">
                             <p>{wordLabel("unmappedReason", f.reason)}</p>
                             {(f.cited_record_type !== null || f.cited_record_ref !== null) && (
-                                <p>
-                                    <span className="admin-hint">as the reviewer cited it: </span>
-                                    {f.cited_record_type !== null && <code>{f.cited_record_type}</code>}{" "}
-                                    {f.cited_record_ref !== null && <code>{f.cited_record_ref}</code>}
-                                </p>
+                                <MachineReviewerText>
+                                    <p>
+                                        Cited:{" "}
+                                        {f.cited_record_type !== null && <code>{f.cited_record_type}</code>}{" "}
+                                        {f.cited_record_ref !== null && <code>{f.cited_record_ref}</code>}
+                                    </p>
+                                </MachineReviewerText>
                             )}
                             <MachineFindingList findings={[f]} />
                         </li>
@@ -981,7 +743,9 @@ function Diagnostics({ data }: { data: AdminSubmissionMachineReviewInspection })
             {data.mapping_warnings.length === 0 ? (
                 <p>No mapping warnings.</p>
             ) : (
-                <ul>{data.mapping_warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
+                <MachineReviewerText>
+                    <ul>{data.mapping_warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
+                </MachineReviewerText>
             )}
             <h3>Parse warnings</h3>
             {data.parse_warnings.length === 0 ? (
@@ -1008,7 +772,31 @@ function StatusLegend() {
     )
 }
 
-function SubmissionInspection({ submissionId }: { submissionId: number }) {
+/**
+ * The advice of the newest stored review, in the archive's words. It is advice, never approval: a person still decides.
+ * A failed review reads with the failure code of the job that recorded it; an unreadable one says so.
+ */
+function RecommendationLine({ submissionId, runs }: { submissionId: number; runs: AdminMachineReviewRun[] }) {
+    const jobs = useQuery({ queryKey: submissionJobsKey(submissionId), queryFn: () => listSubmissionJobs(submissionId) })
+    const latest = [...runs].sort((a, b) => (b.reviewed_at ?? "").localeCompare(a.reviewed_at ?? ""))[0]
+    if (latest === undefined) return null
+    let line: string | null
+    if (!latest.parsed || latest.status === null) {
+        line = "The latest machine review could not be read."
+    } else {
+        const code = jobs.data?.find((j) => j.audit_event_id !== null && j.audit_event_id === latest.audit_event_id)?.failure_code ?? null
+        line = recommendationFor(latest.status, code)
+    }
+    if (line === null) return null
+    return (
+        <p className="machine-review-recommendation" data-testid="recommendation">
+            <strong>{line}</strong>
+            {latest.reviewed_at && <span className="admin-hint"> · reviewed {adminDateTime(latest.reviewed_at)}</span>}
+        </p>
+    )
+}
+
+function SubmissionInspection({ submissionId, isAdmin }: { submissionId: number; isAdmin: boolean }) {
     const query = useQuery({
         queryKey: inspectionQueryKey(submissionId),
         queryFn: () => fetchMachineReviewInspection(submissionId),
@@ -1025,11 +813,23 @@ function SubmissionInspection({ submissionId }: { submissionId: number }) {
                         : "The machine-review inspection could not be loaded."}
                 </p>
             )}
-            {!isNotFound(query.error) && <SubmissionHeader submissionId={submissionId} />}
+            {!isNotFound(query.error) && <SubmissionHeader submissionId={submissionId} isAdmin={isAdmin} />}
             {query.isLoading && <p role="status">Loading the inspection…</p>}
 
             {data && (
                 <>
+                    <section aria-labelledby="machine-review-heading">
+                        <h2 id="machine-review-heading">Machine review</h2>
+                        <p className="admin-hint">
+                            A machine review is <strong>advisory</strong>. It endorses nothing, and it is neither human review of a
+                            record nor moderation of the submission: neither moves when one runs. Requesting another reviews this
+                            submission again and records another result.
+                        </p>
+                        <RecommendationLine submissionId={data.submission_id} runs={data.runs} />
+                        {/* Keyed by submission so a request or a running review never follows the viewer to another one. */}
+                        <RequestMachineReview key={`run-${data.submission_id}`} submissionId={data.submission_id} />
+                    </section>
+
                     <RunsSection runs={data.runs} />
 
                     <section aria-labelledby="records-heading">
@@ -1039,7 +839,7 @@ function SubmissionInspection({ submissionId }: { submissionId: number }) {
                         ) : (
                             <ul className="admin-plain-list">
                                 {data.record_summaries.map((record, i) => (
-                                    <RecordCard key={`${record.record_type}:${record.record_public_ref ?? record.record_id ?? i}`} record={record} />
+                                    <RecordCard key={`${record.record_type}:${record.record_public_ref ?? record.record_id ?? i}`} record={record} isAdmin={isAdmin} />
                                 ))}
                             </ul>
                         )}
@@ -1048,15 +848,7 @@ function SubmissionInspection({ submissionId }: { submissionId: number }) {
                     <UnmappedSection findings={data.unmapped_findings} />
                     <Diagnostics data={data} />
 
-                    {/* The run comes first: it produces the findings above and the builder below reads them.
-
-                        The key is PREFIXED, and that is not decoration. These are two children of one fragment, so React
-                        reconciles them as a keyed list, and giving both of them `key={data.submission_id}` makes two
-                        siblings share a key: with the bare id, walking 7 -> 9 -> 7 left submission 9's run outcome
-                        mounted beside submission 7's empty one, the stale one still reading "recorded 3 findings" under
-                        the wrong submission's findings. */}
-                    <MachineReviewRunner key={`run-${data.submission_id}`} submissionId={data.submission_id} />
-                    <CuratorTaskBuilder key={data.submission_id} submissionId={data.submission_id} />
+                    {isAdmin && <CuratorTaskBuilder key={data.submission_id} submissionId={data.submission_id} />}
                     <StatusLegend />
                 </>
             )}
@@ -1099,14 +891,15 @@ function MachineReviewInspectionPage() {
         )
     }
     if (state.status === "signed-out") return <Navigate to="/login" replace />
-    if (state.user.role !== "admin") {
+    if (state.user.role !== "admin" && state.user.role !== "curator") {
         return (
             <section className="admin-page">
                 <h1>Machine review inspection</h1>
-                <p className="auth-error" role="alert">This page is for administrators.</p>
+                <p className="auth-error" role="alert">This page is for curators and administrators.</p>
             </section>
         )
     }
+    const isAdmin = state.user.role === "admin"
 
     return (
         <section className="admin-page">
@@ -1116,7 +909,7 @@ function MachineReviewInspectionPage() {
                 review, certification, or moderation, and nothing here changes what a reader is told to trust.
             </p>
             {chosen.kind === "bad" && <p className="auth-error" role="alert">That link does not name a submission.</p>}
-            {chosen.kind === "ok" ? <SubmissionInspection submissionId={chosen.id} /> : <SubmissionPicker />}
+            {chosen.kind === "ok" ? <SubmissionInspection submissionId={chosen.id} isAdmin={isAdmin} /> : <SubmissionPicker />}
         </section>
     )
 }

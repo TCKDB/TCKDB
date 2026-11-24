@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { OpenJobSchema } from "./machineReviewJob"
 
 /**
  * The submission reads the machine-review pages use.
@@ -58,6 +59,7 @@ export const SubmissionOverviewRowSchema = z.object({
         open_task_count: z.number().int(),
         task_count: z.number().int(),
         latest_run: OverviewLatestRunSchema.nullable().default(null),
+        open_job: OpenJobSchema.nullable().default(null),
     }),
 })
 export type SubmissionOverviewRow = z.infer<typeof SubmissionOverviewRowSchema>

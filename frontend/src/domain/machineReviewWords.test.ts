@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest"
 import {
     adminDate,
     adminDateTime,
+    RECOMMENDATION_STATUSES,
+    recommendationFor,
     RECORD_TYPE_OPTIONS,
     wordsFor,
     type WordKind,
@@ -27,6 +29,11 @@ const KINDS: Array<[WordKind, string]> = [
     ["actorKind", "SubmissionActorKind"],
     ["recordType", "SubmissionRecordType"],
     ["taskState", "MachineReviewCuratorTaskState"],
+    ["jobStatus", "MachineReviewJobStatus"],
+    ["jobFailure", "MachineReviewJobFailure"],
+    ["availability", "MachineReviewAvailability"],
+    ["jobEventKind", "MachineReviewJobEventKind"],
+    ["providerKey", "MachineReviewProviderKey"],
 ]
 
 describe("machine-review wording", () => {
@@ -64,5 +71,22 @@ describe("machine-review wording", () => {
         const values = RECORD_TYPE_OPTIONS.map((o) => o.value)
         expect(new Set(values)).toEqual(new Set(schemas["SubmissionRecordType"].enum))
         for (const option of RECORD_TYPE_OPTIONS) expect(option.label).not.toMatch(/_/)
+    })
+
+    it("has a recommendation for exactly the three screened statuses", () => {
+        const statuses = schemas["app__db__models__common__MachineReviewStatus"].enum!
+        const screened = statuses.filter((v) => v.startsWith("machine_screened_"))
+        expect(new Set(RECOMMENDATION_STATUSES)).toEqual(new Set(screened))
+        for (const status of screened) expect(recommendationFor(status)).toMatch(/\(advisory\)$/)
+        expect(recommendationFor("machine_screened_pass")).toBe("Machine reviewer recommends approval (advisory)")
+        expect(recommendationFor("machine_screened_warning")).toBe("Machine reviewer recommends approval after reading its notes (advisory)")
+        expect(recommendationFor("machine_screened_needs_attention")).toBe("Machine reviewer does not recommend approval yet (advisory)")
+    })
+
+    it("gives a failed review the words for its failure code, and no recommendation to not_run or an unknown status", () => {
+        expect(recommendationFor("machine_review_failed", "provider_timeout")).toBe("Machine review did not finish: the reviewer took too long")
+        expect(recommendationFor("machine_review_failed", null)).toBe("Machine review did not finish")
+        expect(recommendationFor("not_run")).toBeNull()
+        expect(recommendationFor("machine_screened_nonsense")).toBeNull()
     })
 })

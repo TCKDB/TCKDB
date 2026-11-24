@@ -1,0 +1,60 @@
+import { wordLabel } from "./machineReviewWords"
+import { isOpenStatus, type Job, type JobEvent } from "../types/machineReviewJob"
+
+/**
+ * Wording and timing for a machine-review job's progress.
+ */
+
+/**
+ * An API timestamp as a Date. The backend sends naive UTC (no offset); `new Date` would read that as local time and
+ * be off by the viewer's UTC offset, so a string with no offset is read as UTC.
+ */
+export function parseApiInstant(iso: string | null | undefined): Date | null {
+    if (!iso) return null
+    const hasOffset = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(iso)
+    const date = new Date(hasOffset ? iso : `${iso}Z`)
+    return Number.isNaN(date.getTime()) ? null : date
+}
+
+/** Whole seconds from the job's start (its request while queued) to `now`, never negative. */
+export function elapsedSeconds(job: Pick<Job, "created_at" | "started_at" | "finished_at">, now: Date): number | null {
+    const from = parseApiInstant(job.started_at) ?? parseApiInstant(job.created_at)
+    if (from === null) return null
+    const to = parseApiInstant(job.finished_at) ?? now
+    return Math.max(0, Math.floor((to.getTime() - from.getTime()) / 1000))
+}
+
+export function formatElapsed(seconds: number): string {
+    const m = Math.floor(seconds / 60)
+    const s = seconds % 60
+    return m === 0 ? `${s} s` : `${m} min ${s} s`
+}
+
+/** What one progress entry says, in words. A lookup names its tool. */
+export function stepWords(event: JobEvent): string {
+    const base = wordLabel("jobEventKind", event.kind)
+    const tool = event.tool_name !== null && (event.kind === "tool_call" || event.kind === "tool_result")
+    return tool ? `${base} (${event.tool_name})` : base
+}
+
+/** The duration shown beside a step, only when the server recorded one. */
+export function stepDuration(event: JobEvent): string | null {
+    if (event.duration_ms === null) return null
+    return event.duration_ms < 1000 ? `${event.duration_ms} ms` : `${(event.duration_ms / 1000).toFixed(1)} s`
+}
+
+/**
+ * The sentence the progress region announces. It is a function of the status, the step count and the last step only,
+ * so it changes when a step lands and not on every poll.
+ */
+export function progressAnnouncement(job: Pick<Job, "status" | "step_count" | "cancel_requested">, last: JobEvent | null): string {
+    if (job.status === "queued") return "Machine review is queued."
+    if (job.status === "running") {
+        const stopping = job.cancel_requested ? " Stopping after this step." : ""
+        if (last === null || job.step_count === 0) return `Machine review is running.${stopping}`
+        return `Machine review is running. Step ${job.step_count}: ${stepWords(last)}.${stopping}`
+    }
+    return `Machine review ${wordLabel("jobStatus", job.status)}.`
+}
+
+export { isOpenStatus }

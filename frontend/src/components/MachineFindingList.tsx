@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom"
 import { wordsFor } from "../domain/machineReviewWords"
 import { severityClass } from "../types/curatorTask"
+import { MachineReviewerText } from "./MachineReviewerText"
 import { NewTabNote } from "./RecordLocationCell"
 
 export type FindingView = {
@@ -13,8 +14,8 @@ export type FindingView = {
 }
 
 /**
- * The findings of one review. Everything the reviewer wrote is quoted and labelled as the reviewer's, so none of it reads
- * as this archive's own statement. Severity is a word as well as a class.
+ * The findings of one review. Everything the reviewer wrote sits in a block labelled as the reviewer's, so none of it
+ * reads as this archive's own statement. Severity is a word as well as a class.
  *
  * `taskHref` turns a finding's curator task into a link; leave it out where the viewer has no queue to open.
  */
@@ -39,22 +40,21 @@ export function MachineFindingList({
                             </span>{" "}
                             · {category.known ? category.label : <code>{f.category}</code>}
                         </p>
-                        <p className="admin-hint">The reviewer wrote:</p>
-                        <blockquote>{f.message}</blockquote>
-                        {f.evidence_keys.length > 0 && (
-                            <p>
-                                Evidence:{" "}
-                                {f.evidence_keys.map((key, k) => (
-                                    <span key={key}>
-                                        {k > 0 ? ", " : ""}
-                                        <code>{key}</code>
-                                    </span>
-                                ))}
-                            </p>
-                        )}
-                        {f.recommended_action !== null && (
-                            <p>The reviewer suggests: {f.recommended_action}</p>
-                        )}
+                        <MachineReviewerText>
+                            <blockquote>{f.message}</blockquote>
+                            {f.evidence_keys.length > 0 && (
+                                <p>
+                                    Evidence:{" "}
+                                    {f.evidence_keys.map((key, k) => (
+                                        <span key={key}>
+                                            {k > 0 ? ", " : ""}
+                                            <code>{key}</code>
+                                        </span>
+                                    ))}
+                                </p>
+                            )}
+                            {f.recommended_action !== null && <p>Suggested action: {f.recommended_action}</p>}
+                        </MachineReviewerText>
                         {taskHref !== undefined && f.curator_task_id != null && (
                             <p>
                                 <Link to={taskHref(f.curator_task_id)} target="_blank" rel="noopener noreferrer">

@@ -1,11 +1,12 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import AdminPage from "./AdminPage"
 import { AuthProvider } from "../components/AuthProvider"
+import * as fx from "../test/machineReviewFixtures"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -18,9 +19,13 @@ afterAll(() => server.close())
 // a second `role="alert"` and the row-error assertions below become
 // ambiguous. `StorageCapacityPanel.test.tsx` covers the panel itself.
 beforeEach(() => {
-    server.use(http.get("/api/v1/admin/artifact-storage/capacity", () => HttpResponse.json({
-        storage_full: false, storage_full_observed_at: null, s3_code: null, refused_bytes: null,
-    })))
+    server.use(
+        http.get("/api/v1/admin/artifact-storage/capacity", () => HttpResponse.json({
+            storage_full: false, storage_full_observed_at: null, s3_code: null, refused_bytes: null,
+        })),
+        // Likewise the machine-review switches; `MachineReviewSettingsPanel.test.tsx` covers them.
+        http.get("/api/v1/admin/machine-review/settings", () => HttpResponse.json(fx.settings())),
+    )
 })
 
 const admin = {
@@ -199,4 +204,29 @@ describe("what the page does not show", () => {
             expect(hrefs).not.toContain(path)
         }
     })
+})
+
+describe("the machine-review switches on /admin", () => {
+  it("are offered to an admin and sit beside the storage panel", async () => {
+    meIs(admin)
+    usersAre([userRow({ id: 1, username: "ada", role: "admin" })])
+    renderPage()
+    expect(await screen.findByRole("checkbox", { name: "Curators may request reviews" })).toBeChecked()
+    expect(screen.getByRole("checkbox", { name: "Machine review on" })).toBeChecked()
+  })
+
+  it("send a PATCH with only the curator field when it is toggled", async () => {
+    meIs(admin)
+    usersAre([userRow({ id: 1, username: "ada", role: "admin" })])
+    const patches: unknown[] = []
+    server.use(http.patch("/api/v1/admin/machine-review/settings", async ({ request }) => {
+      const body = (await request.json()) as Record<string, unknown>
+      patches.push(body)
+      return HttpResponse.json(fx.settings(body))
+    }))
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole("checkbox", { name: "Curators may request reviews" }))
+    await waitFor(() => expect(patches).toEqual([{ curator_requests_enabled: false }]))
+  })
 })

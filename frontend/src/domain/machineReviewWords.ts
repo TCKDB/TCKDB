@@ -18,6 +18,11 @@ export type WordKind =
     | "actorKind"
     | "recordType"
     | "taskState"
+    | "jobStatus"
+    | "jobFailure"
+    | "availability"
+    | "jobEventKind"
+    | "providerKey"
 
 export type Words = { label: string; meaning: string; known: boolean }
 
@@ -120,6 +125,80 @@ const TABLES: Record<Exclude<WordKind, "recordType">, Table> = {
         resolved_human_reviewed: ["closed: reviewed elsewhere", "A person reviewed the record elsewhere. This queue did not review it."],
         dismissed_machine_finding: ["dismissed", "A false positive, or not actionable."],
     },
+    jobStatus: {
+        queued: ["queued", "Waiting for a reviewer to pick it up."],
+        running: ["running", "The reviewer is working on it."],
+        succeeded: ["finished", "The reviewer finished and the result is recorded."],
+        failed: ["did not finish", "The reviewer stopped before giving a result."],
+        cancelled: ["cancelled", "Stopped before a result was recorded."],
+    },
+    jobFailure: {
+        provider_unavailable: ["the reviewer could not be reached", "The model server did not answer."],
+        provider_timeout: ["the reviewer took too long", "The model server did not answer in time."],
+        budget_exhausted: ["the review ran out of steps or time", "The review used up its allowance before it could answer."],
+        invalid_output: ["the reviewer's answer could not be used", "The answer did not match the format the archive accepts."],
+        quota_exhausted: ["the reviewer's quota is used up", "The reviewing service refused for lack of quota."],
+        auth_failed: ["the reviewer refused our credentials", "The reviewing service did not accept the archive's access."],
+        worker_lost: ["the review was interrupted", "The process running the review stopped."],
+        config_error: ["the reviewer is not set up correctly", "The deployment does not match the reviewer that was asked for."],
+        internal_error: ["something went wrong in the archive", "The review failed for a reason on the archive's side."],
+        machine_review_disabled: ["machine review was switched off", "An administrator turned machine review off before this one started."],
+    },
+    availability: {
+        ok: ["available", "You may request this reviewer now."],
+        mode_off: ["machine review is off in this deployment", "No reviewer is configured here."],
+        machine_review_disabled: ["machine review is switched off", "An administrator has turned machine review off."],
+        curator_requests_disabled: ["curator requests are switched off", "An administrator has switched off review requests from curators."],
+        not_allowed_for_user: ["not available to your account", "This reviewer is not open to your role."],
+        provider_not_configured: ["not set up in this deployment", "This reviewer is not the one this deployment is configured for."],
+        remote_runner_unavailable: ["no remote runner is connected", "This reviewer runs on a separate machine that is not connected."],
+    },
+    jobEventKind: {
+        claimed: ["picked up by a reviewer", ""],
+        context_built: ["reading the submission", ""],
+        model_turn: ["asking the model", ""],
+        tool_call: ["looking something up", ""],
+        tool_result: ["reading what the lookup returned", ""],
+        retry: ["trying again", ""],
+        final_output: ["writing the answer", ""],
+        parse_failed: ["the answer could not be read", ""],
+        finished: ["finished", ""],
+    },
+    providerKey: {
+        fake: ["test reviewer", "A scripted reviewer that makes no model call."],
+        local: ["local model", "A model server run by this deployment."],
+        cloud: ["cloud model", "A hosted model service."],
+        claude_code: ["Claude Code", "Claude, run on a separate machine."],
+        codex: ["Codex", "Codex, run on a separate machine."],
+    },
+}
+
+/** Providers that send the submission to a service outside this deployment. */
+export const OUTSIDE_PROVIDERS: ReadonlySet<string> = new Set(["claude_code", "codex"])
+
+/**
+ * What the machine reviewer's status means for the curator, as advice and never as approval.
+ * `not_run` has no entry: nothing was reviewed, so nothing is recommended.
+ */
+const RECOMMENDATION: Record<string, string> = {
+    machine_screened_pass: "Machine reviewer recommends approval (advisory)",
+    machine_screened_warning: "Machine reviewer recommends approval after reading its notes (advisory)",
+    machine_screened_needs_attention: "Machine reviewer does not recommend approval yet (advisory)",
+}
+
+export const RECOMMENDATION_STATUSES: readonly string[] = Object.keys(RECOMMENDATION)
+
+/**
+ * The advice line for a stored status. A failed review reads "did not finish" with the words for `failureCode`;
+ * `not_run` and an unfamiliar status give `null`, so no line is shown that this build cannot vouch for.
+ */
+export function recommendationFor(status: string, failureCode: string | null = null): string | null {
+    if (status === "machine_review_failed") {
+        return failureCode === null
+            ? "Machine review did not finish"
+            : `Machine review did not finish: ${wordLabel("jobFailure", failureCode)}`
+    }
+    return RECOMMENDATION[status] ?? null
 }
 
 export function wordsFor(kind: WordKind, token: string): Words {

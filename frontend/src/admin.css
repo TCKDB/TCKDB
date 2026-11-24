@@ -585,6 +585,43 @@
     overflow-wrap: anywhere;
 }
 
+/* Text the machine reviewer wrote: set off under its own label, never styled as the page's voice. */
+.machine-reviewer-text {
+    padding: var(--s-2) var(--s-3);
+    border: 1px dashed var(--line-2);
+    border-radius: 4px;
+    background: var(--surface-sunken);
+}
+
+.machine-reviewer-label {
+    margin: 0 0 var(--s-1);
+    color: var(--muted);
+    font: var(--type-note-font);
+}
+
+.machine-reviewer-text > :last-child {
+    margin-bottom: 0;
+}
+
+/* The steps of a running or finished review, and the advice line above the records. */
+.machine-review-steps {
+    margin: var(--s-2) 0;
+    padding-left: var(--s-5);
+}
+
+.machine-review-result h3 {
+    margin: var(--s-3) 0 var(--s-1);
+}
+
+.machine-review-request,
+.machine-review-progress {
+    overflow-wrap: anywhere;
+}
+
+.machine-review-recommendation {
+    margin: var(--s-3) 0;
+}
+
 /* The detail row opens under its task, across every column. */
 .admin-task-detail > td {
     background: var(--surface-sunken);

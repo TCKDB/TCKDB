@@ -3,7 +3,7 @@ import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { MemoryRouter } from "react-router-dom"
+import { MemoryRouter, useLocation } from "react-router-dom"
 import ReviewQueuePage from "./ReviewQueuePage"
 import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels, setAt } from "../test/depositorSentinel"
 import { AuthProvider } from "../components/AuthProvider"
@@ -66,6 +66,7 @@ const plainUser = { ...curator, id: 3, username: "noah", role: "user" }
 function meIs(who: Record<string, unknown>) {
     server.use(
         http.get("/api/v1/submissions/machine-review-overview", () => HttpResponse.json(fx.overviewPage())),
+        http.get("/api/v1/machine-review/providers", () => HttpResponse.json(fx.providers())),
         http.get("/api/v1/auth/me", () => HttpResponse.json(who)),
     )
 }
@@ -2067,7 +2068,8 @@ describe("machine findings on a record", () => {
         queueIs([subject([row({ machine_findings: fx.machineFindings({ status: "not_run", highest_severity: null, findings_count: 0, open_task_count: 0, open_task_ids: [], reviewed_at: null }) })])])
         renderPage()
         await screen.findByText("spe_h2o")
-        expect(document.body.textContent).not.toMatch(/screened|machine-finding|machine review/i)
+        expect(document.body.textContent).not.toMatch(/screened|machine-finding/i)
+        expect(document.querySelector(".review-machine-findings")).toBeNull()
     })
 
     it("a server that sends no machine_findings still renders the record", async () => {
@@ -2169,5 +2171,135 @@ describe("ReviewQueuePage reproducibility detail", () => {
         const name = region.getAttribute("aria-label")!
         expect(name).toBe("Reproducibility of the thermochemistry record")
         expect(name).not.toContain("free text from a depositor")
+    })
+})
+
+describe("requesting a machine review from the queue", () => {
+    const JOBS = "/api/v1/machine-review/jobs"
+    const PROVIDERS = "/api/v1/machine-review/providers"
+
+    function Where() {
+        return <p data-testid="where">{useLocation().pathname + useLocation().search}</p>
+    }
+
+    function renderWithLocation() {
+        return render(
+            <AuthProvider>
+                <MemoryRouter initialEntries={["/review-queue"]}>
+                    <Where />
+                    <ReviewQueuePage />
+                </MemoryRouter>
+            </AuthProvider>,
+        )
+    }
+
+    function servePosts(): unknown[] {
+        const posts: unknown[] = []
+        server.use(
+            http.post(JOBS, async ({ request }) => {
+                posts.push(await request.json())
+                return HttpResponse.json(fx.job({ status: "queued" }), { status: 202 })
+            }),
+        )
+        return posts
+    }
+
+    it("is offered on a record with a submission and disabled with a reason on one without", async () => {
+        meIs(curator)
+        queueIs([subject([record(), record({ id: 12, record_type: "kinetics", submission_id: null })])])
+        renderWithLocation()
+        await screen.findByText("spe_h2o")
+        const buttons = await screen.findAllByRole("button", { name: "Request machine review" })
+        expect(buttons).toHaveLength(2)
+        await waitFor(() => expect(buttons[0]).not.toHaveAttribute("aria-disabled"))
+        expect(buttons[1]).toHaveAttribute("aria-disabled", "true")
+        expect(buttons[1]).toHaveAccessibleDescription(/This record is not linked to a submission/)
+    })
+
+    it("sends one request and goes to the inspection page when exactly one reviewer is available", async () => {
+        meIs(curator)
+        queueIs([subject([record()])])
+        const posts = servePosts()
+        const user = userEvent.setup()
+        renderWithLocation()
+        const button = await screen.findByRole("button", { name: "Request machine review" })
+        await waitFor(() => expect(button).not.toHaveAttribute("aria-disabled"))
+        await user.click(button)
+        await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/admin/machine-review-inspection?submission=7"))
+        expect(posts).toEqual([{ submission_id: 7, provider_key: "fake" }])
+    })
+
+    it("goes to the same page when a review is already running", async () => {
+        meIs(curator)
+        queueIs([subject([record()])])
+        server.use(
+            http.post(JOBS, () =>
+                HttpResponse.json({ detail: "This submission already has a machine review queued or running.", code: "machine_review_job_conflict", context: {} }, { status: 409 }),
+            ),
+            http.get(JOBS, () => HttpResponse.json(fx.jobPage([fx.job({ status: "running", finished_at: null })]))),
+        )
+        const user = userEvent.setup()
+        renderWithLocation()
+        const button = await screen.findByRole("button", { name: "Request machine review" })
+        await waitFor(() => expect(button).not.toHaveAttribute("aria-disabled"))
+        await user.click(button)
+        await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/admin/machine-review-inspection?submission=7"))
+    })
+
+    it("says why when a curator's requests are switched off, and sends nothing", async () => {
+        meIs(curator)
+        queueIs([subject([record()])])
+        const off = { fake: "curator_requests_disabled", local: "curator_requests_disabled", cloud: "curator_requests_disabled", claude_code: "curator_requests_disabled", codex: "curator_requests_disabled" }
+        server.use(http.get(PROVIDERS, () => HttpResponse.json(fx.providers(off))))
+        const posts = servePosts()
+        const user = userEvent.setup()
+        renderWithLocation()
+        const button = await screen.findByRole("button", { name: "Request machine review" })
+        await waitFor(() => expect(button).toHaveAccessibleDescription(/curator requests are switched off/))
+        expect(button).toHaveAttribute("aria-disabled", "true")
+        await user.click(button)
+        expect(posts).toEqual([])
+        expect(screen.getByTestId("where")).toHaveTextContent("/review-queue")
+    })
+
+    it("an admin is not held by the curator switch", async () => {
+        meIs(admin)
+        queueIs([subject([record()])])
+        renderWithLocation()
+        const button = await screen.findByRole("button", { name: "Request machine review" })
+        await waitFor(() => expect(button).not.toHaveAttribute("aria-disabled"))
+    })
+
+    it("links to the inspection page to choose when more than one reviewer is available", async () => {
+        meIs(curator)
+        queueIs([subject([record()])])
+        server.use(http.get(PROVIDERS, () => HttpResponse.json(fx.providers({ local: "ok" }))))
+        renderWithLocation()
+        const link = await screen.findByRole("link", { name: "Choose a reviewer…" })
+        expect(link).toHaveAttribute("href", "/admin/machine-review-inspection?submission=7")
+        expect(screen.queryByRole("button", { name: "Request machine review" })).toBeNull()
+    })
+
+    it("reads the reviewers once, and not at all when no record has a submission", async () => {
+        meIs(curator)
+        let reads = 0
+        server.use(http.get(PROVIDERS, () => { reads += 1; return HttpResponse.json(fx.providers()) }))
+        queueIs([subject([record({ submission_id: null }), record({ id: 13, record_type: "kinetics", submission_id: null })])])
+        renderWithLocation()
+        await screen.findByText("spe_h2o")
+        expect(reads).toBe(0)
+        cleanup()
+        queueIs([subject([record(), record({ id: 14, record_type: "kinetics" })])])
+        renderWithLocation()
+        await waitFor(() => expect(reads).toBe(1))
+        await screen.findAllByRole("button", { name: "Request machine review" })
+        expect(reads).toBe(1)
+    })
+
+    it("a plain user sees no queue and so no request", async () => {
+        meIs(plainUser)
+        renderWithLocation()
+        expect(await screen.findByRole("alert")).toBeInTheDocument()
+        expect(screen.queryByRole("button", { name: "Request machine review" })).toBeNull()
     })
 })
