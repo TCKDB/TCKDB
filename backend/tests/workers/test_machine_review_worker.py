@@ -633,3 +633,63 @@ def test_garbled_local_content_fails_as_invalid_output_with_a_parse_failed_event
     job = _reload(db_session, job)
     assert job.status is S.failed and job.failure_code is MachineReviewJobFailure.invalid_output
     assert _kinds(db_session, job).count(K.parse_failed) == 1
+
+
+def _cite_reply(record_ref: str) -> dict:
+    import json
+
+    answer = json.dumps(
+        {
+            "format": {"name": "machine_review", "version": 2},
+            "status": "machine_screened_warning",
+            "curator_priority": "medium",
+            "summary": "One advisory finding.",
+            "findings": [
+                {
+                    "severity": "warning",
+                    "category": "schema_gap",
+                    "record_type": "calculation",
+                    "record_ref": record_ref,
+                    "message": "A quantity has no field to hold it.",
+                    "evidence_keys": ["schema_gap.unmapped_quantity"],
+                    "recommended_action": "Decide whether to model it.",
+                }
+            ],
+            "retrieval_sources": [],
+        }
+    )
+    return _pass_reply(answer)
+
+
+def _capped_cite_job(db_session, local_stub, **settings_extra):
+    from tests.services._llm_stub_server import StubResponse
+
+    server = local_stub(StubResponse(body=_cite_reply("777")))
+    settings_obj = _local_settings(server.base_url, **settings_extra)
+    submission, job = _local_job(db_session, settings_obj)
+    link_record(
+        db_session, submission=submission, record_type=SubmissionRecordType.calculation, record_id=777, role="primary"
+    )
+    db_session.flush()
+    return submission, job, settings_obj
+
+
+def test_a_finding_citing_a_ref_the_cap_dropped_fails_as_invalid_output(db_session, factory, local_stub):
+    submission, job, settings_obj = _capped_cite_job(db_session, local_stub, llm_precheck_max_input_tokens=1)
+
+    _local_cycle(factory, settings_obj)
+
+    job = _reload(db_session, job)
+    assert job.status is S.failed and job.failure_code is MachineReviewJobFailure.invalid_output
+    assert _kinds(db_session, job).count(K.parse_failed) == 1
+    assert "not offered" in job.failure_detail
+
+
+def test_the_same_finding_citing_a_kept_ref_succeeds(db_session, factory, local_stub):
+    submission, job, settings_obj = _capped_cite_job(db_session, local_stub, llm_precheck_max_input_tokens=16000)
+
+    _local_cycle(factory, settings_obj)
+
+    job = _reload(db_session, job)
+    assert job.status is S.succeeded and job.failure_code is None
+    assert K.parse_failed not in _kinds(db_session, job)

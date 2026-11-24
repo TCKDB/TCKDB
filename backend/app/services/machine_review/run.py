@@ -64,6 +64,7 @@ from app.services.machine_review.providers.factory import (
 )
 from app.services.machine_review.providers.interface import (
     MachineReviewContext,
+    MachineReviewPayloadTypeError,
     MachineReviewProvider,
     MachineReviewProviderAuthError,
     MachineReviewProviderConfigurationError,
@@ -329,7 +330,7 @@ def _failure_code_for(exc: BaseException) -> MachineReviewJobFailure:
             ModelOutputTruncatedError,
             ModelRefusedError,
             ValueError,
-            TypeError,
+            MachineReviewPayloadTypeError,
         ),
     ):
         return MachineReviewJobFailure.invalid_output

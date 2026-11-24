@@ -39,13 +39,17 @@ class LLMRecordSummary(BaseModel):
     """What the reviewer is shown about one linked record.
 
     ``values`` are the record's own stored numbers, booleans and vocabulary values (column names carry the
-    units); ``levels_of_theory`` and ``software`` are labels keyed by the column that references them.
+    units); ``subject`` is the canonical species or reaction the record is about; ``parents`` name other offered
+    records it links to as ``record_type:record_ref``; ``levels_of_theory`` and ``software`` (software and workflow
+    tool) are labels keyed by the column that references them.
     """
 
     model_config = ConfigDict(frozen=True)
 
     record_type: str
     record_ref: str
+    subject: dict[str, str] = Field(default_factory=dict)
+    parents: dict[str, str] = Field(default_factory=dict)
     values: dict[str, float | int | bool | str] = Field(default_factory=dict)
     levels_of_theory: dict[str, str] = Field(default_factory=dict)
     software: dict[str, str] = Field(default_factory=dict)

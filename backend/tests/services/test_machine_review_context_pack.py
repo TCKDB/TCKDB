@@ -23,11 +23,16 @@ from app.services.machine_review.query import SCIENTIFIC_CHECK_PROVIDER
 from app.services.submission import create_submission, link_record
 from tests.services._machine_review_job_support import make_user
 from tests.services.scientific_read._factories import (
+    make_calculation,
+    make_chem_reaction,
+    make_kinetics,
     make_lot,
+    make_reaction_entry,
     make_software_release,
     make_species,
     make_species_entry,
     make_thermo_scalar,
+    make_workflow_tool_release,
 )
 
 CODE = "n_imag_contradicts_minimum"
@@ -166,3 +171,118 @@ def test_the_pack_is_identical_across_two_builds(seeded):
     first = build_review_context_pack(session, submission.id, max_input_tokens=BIG)
     second = build_review_context_pack(session, submission.id, max_input_tokens=BIG)
     assert first == second
+
+
+def _check_row(record_id, runner, findings, *, at):
+    return RecordMachineReviewRow(
+        record_type=RT.thermo,
+        record_id=record_id,
+        status=MachineReviewStatus.machine_screened_warning,
+        findings_json=findings,
+        model=runner,
+        provider=SCIENTIFIC_CHECK_PROVIDER,
+        context_hash="b" * 64,
+        context_schema_version=1,
+        prompt_name="p",
+        prompt_version=1,
+        rubric_name="r",
+        rubric_version=1,
+        reviewed_at=at,
+    )
+
+
+def test_each_check_runner_keeps_its_own_latest_findings(seeded):
+    session, submission, _, _, thermo = seeded
+    critical = [{"severity": "critical", "category": "thermo", "message": "KIRCHHOFF-CRITICAL"}]
+    session.add(_check_row(thermo.id, "kirchhoff_consistency", critical, at=datetime(2026, 2, 1)))
+    session.add(_check_row(thermo.id, "gibbs_self_consistency", [], at=datetime(2026, 3, 1)))
+    session.flush()
+    pack = build_review_context_pack(session, submission.id, max_input_tokens=BIG)
+    messages = [f.message for f in _summary(pack, "thermo").deterministic_findings]
+    assert messages[0] == "KIRCHHOFF-CRITICAL"
+    assert FINDING_SENTINEL in messages
+
+
+def test_levels_differing_only_in_solvent_or_dispersion_get_different_labels(seeded):
+    session, submission, _, entry, thermo = seeded
+    plain = make_lot(session, method="b3lyp", basis="def2tzvp")
+    solvated = make_lot(session, method="b3lyp", basis="def2tzvp", dispersion="d3bj", solvent="water")
+    thermo.energy_level_of_theory_id = plain.id
+    other = make_thermo_scalar(session, species_entry=entry, h298_kj_mol=-1.0)
+    other.energy_level_of_theory_id = solvated.id
+    link_record(session, submission=submission, record_type=RT.thermo, record_id=other.id)
+    session.flush()
+    pack = build_review_context_pack(session, submission.id, max_input_tokens=BIG)
+    labels = {
+        s.levels_of_theory["energy_level_of_theory_id"]
+        for s in pack.record_summaries
+        if s.record_type == "thermo" and "energy_level_of_theory_id" in s.levels_of_theory
+    }
+    assert len(labels) == 2
+    assert any("water" in label and "d3bj" in label for label in labels)
+
+
+def test_a_calculation_with_a_curation_row_shows_no_record_review_keys(seeded):
+    from app.db.models.common import RecordReviewStatus
+    from app.db.models.record_review import RecordReview
+
+    session, submission, _, entry, _ = seeded
+    calc = make_calculation(session, species_entry_id=entry.id)
+    session.add(RecordReview(record_type=RT.calculation, record_id=calc.id, status=RecordReviewStatus.under_review))
+    link_record(session, submission=submission, record_type=RT.calculation, record_id=calc.id)
+    session.flush()
+    pack = build_review_context_pack(session, submission.id, max_input_tokens=BIG)
+    summary = _summary(pack, "calculation")
+    assert not [key for key in summary.values if key.startswith("record_review") or key.endswith("record_id")]
+    assert "under_review" not in build_user_message(MachineReviewContext.from_llm_precheck_context(pack))
+
+
+def test_the_molecular_property_scalar_carries_its_unit_and_rmsd_is_named_in_angstrom():
+    from app.services.machine_review.agent.context_pack import _RENAMED_COLUMNS, _UNIT_TEXT_COLUMNS
+
+    assert ("molecular_property_observation", "scalar_unit") in _UNIT_TEXT_COLUMNS
+    assert _RENAMED_COLUMNS[("calc_geometry_validation", "rmsd")] == "rmsd_angstrom"
+
+
+def test_subject_parents_and_workflow_tool_are_shown_without_ids(seeded):
+    session, submission, species, entry, thermo = seeded
+    release = make_workflow_tool_release(session, name="arkane", version="3.0")
+    thermo.workflow_tool_release_id = release.id
+    session.flush()
+    pack = build_review_context_pack(session, submission.id, max_input_tokens=BIG)
+    summary = _summary(pack, "thermo")
+    assert summary.subject["smiles"] == species.smiles
+    assert summary.subject["inchi_key"] == species.inchi_key
+    assert summary.parents["species_entry_id"] == f"species_entry:{entry.id}"
+    assert summary.software["workflow_tool_release_id"] == "arkane 3.0"
+
+
+def test_a_kinetics_summary_names_its_reaction(seeded):
+    session, submission, species, entry, _ = seeded
+    product = make_species(session, smiles="[H][H]")
+    product_entry = make_species_entry(session, product)
+    reaction = make_chem_reaction(session, reactants=[species], products=[product])
+    reaction_entry = make_reaction_entry(
+        session, reaction=reaction, reactant_entries=[entry], product_entries=[product_entry]
+    )
+    kinetics = make_kinetics(session, reaction_entry=reaction_entry)
+    link_record(session, submission=submission, record_type=RT.kinetics, record_id=kinetics.id)
+    session.flush()
+    pack = build_review_context_pack(session, submission.id, max_input_tokens=BIG)
+    equation = _summary(pack, "kinetics").subject["reaction"]
+    assert species.smiles in equation and "[H][H]" in equation and "=>" in equation
+
+
+def test_the_cap_is_met_with_few_renders_for_many_records(seeded, monkeypatch):
+    from app.services.machine_review.agent import context_pack as module
+
+    session, submission, *_ = seeded
+    renders = []
+    real = module.estimate_input_tokens
+    monkeypatch.setattr(module, "estimate_input_tokens", lambda c: renders.append(1) or real(c))
+    full = build_review_context_pack(session, submission.id, max_input_tokens=BIG)
+    renders.clear()
+    cap = real(full) - 1
+    small = build_review_context_pack(session, submission.id, max_input_tokens=cap)
+    assert real(small) <= cap
+    assert len(renders) <= 2 + 2 * 3

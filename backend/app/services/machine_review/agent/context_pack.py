@@ -1,10 +1,13 @@
 """Build the context pack a machine reviewer reviews over, and cut it to a token budget.
 
-For each record linked to a submission the pack carries its own stored numbers (column names carry the units), the
-level of theory and software it cites, TCKDB's own deterministic check findings, and the deposit warnings as TCKDB
-words them. It never carries a string, text or JSON column, so a depositor's notes and labels cannot reach the model
-except through the title and summary, which the prompt marks untrusted. Primary and foreign keys never appear; a record
-is named only by its offered ``record_ref``.
+For each record linked to a submission the pack carries its own stored numbers (column names carry the units, and
+the few unit-bearing columns whose name does not are renamed or paired with their unit), the level of theory,
+software and workflow tool it cites, TCKDB's own deterministic check findings, the deposit warnings as TCKDB words
+them, and the chemical subject TCKDB canonicalised (species SMILES and InChIKey, reaction equation). It carries no
+other string, text or JSON column, so a depositor's notes and labels cannot reach the model except through the title
+and summary, which the prompt marks untrusted. Primary and foreign keys never appear; a record is named only by its
+offered ``record_ref``, and a link to another offered record is a ``(record_type, record_ref)`` pair. Curation state
+is never read.
 
 The pack is deterministic for a given database state. When it would exceed ``max_input_tokens`` (estimated as characters
 divided by four, over the system prompt plus the rendered user message), the lowest-priority summaries are dropped first,
@@ -20,15 +23,19 @@ from typing import Any
 from sqlalchemy import Boolean, Float, Integer, Numeric, select
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy import inspect as sa_inspect
-from sqlalchemy.orm import RelationshipDirection, Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import not_found
+from app.chemistry.level_label import render_level_label
 from app.db.models.common import SubmissionRecordType
 from app.db.models.deposit_warning import DepositWarning
 from app.db.models.level_of_theory import LevelOfTheory
+from app.db.models.reaction import ChemReaction, ReactionEntry
 from app.db.models.record_machine_review import RecordMachineReviewRow
 from app.db.models.software import SoftwareRelease
+from app.db.models.species import Species, SpeciesEntry
 from app.db.models.submission import Submission, SubmissionRecordLink
+from app.db.models.workflow import WorkflowToolRelease
 from app.services.deposit_warning_messages import render_message
 from app.services.deposit_warnings import current_warnings, deposit_warnings_for
 from app.services.llm_precheck.schemas import (
@@ -45,6 +52,7 @@ from app.services.machine_review.query import SCIENTIFIC_CHECK_PROVIDER, _latest
 from app.services.record_models import RECORD_MODELS
 
 _MAX_LABEL_CHARS = 64
+_MAX_LEVEL_LABEL_CHARS = 160
 _MAX_FINDING_CHARS = 240
 _MAX_WARNING_CHARS = 400
 _MAX_FINDINGS_PER_RECORD = 5
@@ -54,6 +62,41 @@ _MAX_VALUES_PER_RECORD = 80
 _CHARS_PER_TOKEN = 4
 
 _VALUE_TYPES = (Float, Integer, Numeric, Boolean, SAEnum)
+
+#: Result-child relationships whose columns are shown beside the record's own. Curation overlays are not listed.
+_CHILD_RELATIONSHIPS = frozenset(
+    {
+        "sp_result",
+        "composite_result",
+        "opt_result",
+        "freq_result",
+        "scan_result",
+        "irc_result",
+        "path_search_result",
+        "scf_stability",
+        "hessian",
+        "wavefunction_diagnostic",
+        "spin_diagnostic",
+        "geometry_validation",
+        "model_declaration",
+        "nasa",
+        "wilhoit",
+        "applied_group_additivity",
+        "falloff",
+        "chebyshev",
+    }
+)
+
+#: Text columns that qualify a number and are constrained by TCKDB, so they are shown with it.
+_UNIT_TEXT_COLUMNS = frozenset({("molecular_property_observation", "scalar_unit")})
+
+#: Columns whose name carries no unit, and the key the pack shows them under.
+_RENAMED_COLUMNS = {
+    ("calc_geometry_validation", "rmsd"): "rmsd_angstrom",
+    ("calc_geometry_validation", "rmsd_warning_threshold"): "rmsd_warning_threshold_angstrom",
+}
+
+_SEVERITY_RANK = {"critical": 0, "warning": 1, "info": 2}
 
 #: Which kinds of record the reviewer should see first; anything not listed comes last, in link order.
 _TYPE_ORDER = (
@@ -89,13 +132,17 @@ def _own_values(row: Any, *, prefix: str = "") -> dict[str, float | int | bool |
     """The row's non-key numeric, boolean and vocabulary columns that hold a value."""
     values: dict[str, float | int | bool | str] = {}
     mapper = sa_inspect(type(row))
+    table = mapper.local_table.name
     for column in mapper.columns:
-        if column.primary_key or column.foreign_keys or not isinstance(column.type, _VALUE_TYPES):
+        if column.primary_key or column.foreign_keys:
+            continue
+        is_unit_text = (table, column.key) in _UNIT_TEXT_COLUMNS
+        if not (isinstance(column.type, _VALUE_TYPES) or is_unit_text):
             continue
         value = getattr(row, mapper.get_property_by_column(column).key)
         if value is None:
             continue
-        if isinstance(value, bool):
+        if is_unit_text or isinstance(value, bool):
             pass
         elif hasattr(value, "value") and not isinstance(value, (int, float)):
             value = value.value
@@ -109,52 +156,178 @@ def _own_values(row: Any, *, prefix: str = "") -> dict[str, float | int | bool |
                 continue
             if not math.isfinite(value):
                 continue
-        values[f"{prefix}{column.key}"] = value
+        values[f"{prefix}{_RENAMED_COLUMNS.get((table, column.key), column.key)}"] = value
     return values
+
+
+def _child_names(model: type) -> list[str]:
+    return sorted(
+        relationship.key for relationship in sa_inspect(model).relationships if relationship.key in _CHILD_RELATIONSHIPS
+    )
 
 
 def _record_values(row: Any) -> dict[str, float | int | bool | str]:
     values = _own_values(row)
-    mapper = sa_inspect(type(row))
-    for relationship in sorted(mapper.relationships, key=lambda r: r.key):
-        if relationship.direction is not RelationshipDirection.ONETOMANY or relationship.uselist:
-            continue
-        child = getattr(row, relationship.key)
+    for name in _child_names(type(row)):
+        child = getattr(row, name)
         if child is not None:
-            values.update(_own_values(child, prefix=f"{relationship.key}."))
+            values.update(_own_values(child, prefix=f"{name}."))
     return dict(list(values.items())[:_MAX_VALUES_PER_RECORD])
 
 
-def _referenced_labels(session: Session, row: Any) -> tuple[dict[str, str], dict[str, str]]:
-    """Level-of-theory and software labels for the row's foreign keys to those tables."""
-    levels: dict[str, str] = {}
-    software: dict[str, str] = {}
+class _Provenance:
+    """Level-of-theory, software and workflow-tool rows for a set of records, fetched once per type."""
+
+    def __init__(self, session: Session, rows: list[Any]) -> None:
+        wanted: dict[str, set[int]] = {"level_of_theory": set(), "software_release": set(), "workflow_tool_release": set()}
+        for row in rows:
+            for _, target, ident in _foreign_keys(row):
+                if target in wanted:
+                    wanted[target].add(ident)
+        self.levels = {
+            r.id: r
+            for r in session.scalars(select(LevelOfTheory).where(LevelOfTheory.id.in_(wanted["level_of_theory"])))
+        }
+        self.software = {
+            r.id: r
+            for r in session.scalars(
+                select(SoftwareRelease)
+                .where(SoftwareRelease.id.in_(wanted["software_release"]))
+                .options(selectinload(SoftwareRelease.software))
+            )
+        }
+        self.tools = {
+            r.id: r
+            for r in session.scalars(
+                select(WorkflowToolRelease)
+                .where(WorkflowToolRelease.id.in_(wanted["workflow_tool_release"]))
+                .options(selectinload(WorkflowToolRelease.workflow_tool))
+            )
+        }
+
+
+def _foreign_keys(row: Any):
+    """``(column key, target table, value)`` for each non-null foreign key of the row."""
     mapper = sa_inspect(type(row))
     for column in mapper.columns:
+        ident = getattr(row, mapper.get_property_by_column(column).key)
+        if ident is None:
+            continue
         for foreign_key in column.foreign_keys:
-            target = foreign_key.column.table.name
-            if target not in ("level_of_theory", "software_release"):
-                continue
-            ident = getattr(row, mapper.get_property_by_column(column).key)
-            if ident is None:
-                continue
-            if target == "level_of_theory":
-                lot = session.get(LevelOfTheory, ident)
-                if lot is not None:
-                    label = f"{lot.method}/{lot.basis}" if lot.basis else lot.method
-                    levels[column.key] = _clip(label, _MAX_LABEL_CHARS)
-            else:
-                release = session.get(SoftwareRelease, ident)
-                if release is not None:
-                    name = release.software.name
-                    software[column.key] = _clip(f"{name} {release.version}" if release.version else name, _MAX_LABEL_CHARS)
-    return levels, software
+            yield column.key, foreign_key.column.table.name, ident
+
+
+def _release_label(name: str, version: str | None) -> str:
+    return _clip(f"{name} {version}" if version else name, _MAX_LABEL_CHARS)
+
+
+def _level_label(lot: LevelOfTheory) -> str:
+    return _clip(
+        render_level_label(
+            method=lot.method,
+            basis=lot.basis,
+            aux_basis=lot.aux_basis,
+            cabs_basis=lot.cabs_basis,
+            dispersion=lot.dispersion,
+            solvent=lot.solvent,
+            solvent_model=lot.solvent_model,
+            spin_treatment=lot.spin_treatment,
+            core_treatment=lot.core_treatment,
+            relativistic_hamiltonian=lot.relativistic_hamiltonian,
+            pno_truncation=lot.pno_truncation,
+            ri_approximation=lot.ri_approximation,
+        ),
+        _MAX_LEVEL_LABEL_CHARS,
+    )
+
+
+def _referenced_labels(
+    provenance: _Provenance, row: Any
+) -> tuple[dict[str, str], dict[str, str], bool]:
+    """Level-of-theory labels, software and workflow-tool labels, and whether a literature source is cited."""
+    levels: dict[str, str] = {}
+    software: dict[str, str] = {}
+    has_literature = False
+    for key, target, ident in _foreign_keys(row):
+        if target == "level_of_theory" and ident in provenance.levels:
+            levels[key] = _level_label(provenance.levels[ident])
+        elif target == "software_release" and ident in provenance.software:
+            release = provenance.software[ident]
+            software[key] = _release_label(release.software.name, release.version)
+        elif target == "workflow_tool_release" and ident in provenance.tools:
+            release = provenance.tools[ident]
+            software[key] = _release_label(release.workflow_tool.name, release.version)
+        elif target == "literature":
+            has_literature = True
+    return levels, software, has_literature
+
+
+class _Subjects:
+    """The canonical species and reaction a record is about, cached across the pack."""
+
+    def __init__(self, session: Session, offered: set[tuple[str, int]]) -> None:
+        self._session = session
+        self._offered = offered
+        self._tables = {model.__tablename__: record_type.value for record_type, model in RECORD_MODELS.items()}
+        self._reactions: dict[int, str | None] = {}
+
+    def _species(self, row: Any) -> Species | None:
+        if isinstance(row, Species):
+            return row
+        species_id = getattr(row, "species_id", None)
+        entry_id = getattr(row, "species_entry_id", None)
+        if species_id is None and entry_id is not None:
+            entry = self._session.get(SpeciesEntry, entry_id)
+            species_id = entry.species_id if entry is not None else None
+        return self._session.get(Species, species_id) if species_id is not None else None
+
+    def _reaction_equation(self, reaction_id: int) -> str | None:
+        if reaction_id not in self._reactions:
+            reaction = self._session.get(ChemReaction, reaction_id)
+            text = None
+            if reaction is not None:
+                sides: dict[str, list[str]] = {"reactant": [], "product": []}
+                for participant in sorted(reaction.participants, key=lambda p: (p.role.value, p.species_id)):
+                    smiles = participant.species.smiles
+                    sides[participant.role.value].append(
+                        smiles if participant.stoichiometry == 1 else f"{participant.stoichiometry} {smiles}"
+                    )
+                arrow = " <=> " if reaction.reversible else " => "
+                text = _clip(f"{' + '.join(sides['reactant'])}{arrow}{' + '.join(sides['product'])}", 400)
+            self._reactions[reaction_id] = text
+        return self._reactions[reaction_id]
+
+    def subject(self, row: Any) -> dict[str, str]:
+        out: dict[str, str] = {}
+        species = self._species(row)
+        if species is not None:
+            out["smiles"] = species.smiles
+            out["inchi_key"] = species.inchi_key
+        reaction_id = row.id if isinstance(row, ChemReaction) else getattr(row, "reaction_id", None)
+        entry_id = getattr(row, "reaction_entry_id", None)
+        if reaction_id is None and entry_id is not None:
+            entry = self._session.get(ReactionEntry, entry_id)
+            reaction_id = entry.reaction_id if entry is not None else None
+        if reaction_id is not None:
+            equation = self._reaction_equation(reaction_id)
+            if equation:
+                out["reaction"] = equation
+        return out
+
+    def parents(self, row: Any) -> dict[str, str]:
+        """Links to other records of the pack, as ``record_type:record_ref`` under the linking column."""
+        out: dict[str, str] = {}
+        for key, target, ident in _foreign_keys(row):
+            record_type = self._tables.get(target)
+            if record_type is not None and (record_type, ident) in self._offered:
+                out[key] = f"{record_type}:{ident}"
+        return out
 
 
 def _findings_by_record(
     session: Session, record_type: SubmissionRecordType, ids: list[int]
 ) -> dict[int, tuple[LLMFindingSummary, ...]]:
-    """The latest deterministic check findings per record (the newest check row wins)."""
+    """Findings of the latest row of each check runner per record, most severe first."""
     rows = session.scalars(
         select(RecordMachineReviewRow)
         .where(
@@ -164,16 +337,17 @@ def _findings_by_record(
         )
         .order_by(*_latest_first_order_by())
     )
-    out: dict[int, tuple[LLMFindingSummary, ...]] = {}
+    seen: set[tuple[int, str | None]] = set()
+    found: dict[int, list[LLMFindingSummary]] = defaultdict(list)
     for row in rows:
-        if row.record_id in out:
+        if (row.record_id, row.model) in seen:
             continue
-        found: list[LLMFindingSummary] = []
+        seen.add((row.record_id, row.model))
         for item in row.findings_json or []:
             if not isinstance(item, dict) or not isinstance(item.get("message"), str):
                 continue
             keys = item.get("evidence_keys")
-            found.append(
+            found[row.record_id].append(
                 LLMFindingSummary(
                     severity=item.get("severity") if isinstance(item.get("severity"), str) else None,
                     category=item.get("category") if isinstance(item.get("category"), str) else None,
@@ -183,8 +357,14 @@ def _findings_by_record(
                     ),
                 )
             )
-        out[row.record_id] = tuple(found[:_MAX_FINDINGS_PER_RECORD])
-    return out
+    return {
+        record_id: tuple(
+            sorted(items, key=lambda f: _SEVERITY_RANK.get(f.severity or "", len(_SEVERITY_RANK)))[
+                :_MAX_FINDINGS_PER_RECORD
+            ]
+        )
+        for record_id, items in found.items()
+    }
 
 
 def _submission_warnings(session: Session, submission_id: int) -> tuple[LLMWarningSummary, ...]:
@@ -207,6 +387,7 @@ def _submission_warnings(session: Session, submission_id: int) -> tuple[LLMWarni
 
 def _summaries(session: Session, links: list[SubmissionRecordLink]) -> list[tuple[bool, int, int, LLMRecordSummary]]:
     """``(quiet, type_rank, link_id, summary)`` for every linked record that still exists."""
+    subjects = _Subjects(session, {(link.record_type.value, link.record_id) for link in links})
     by_type: dict[SubmissionRecordType, list[SubmissionRecordLink]] = defaultdict(list)
     for link in links:
         by_type[link.record_type].append(link)
@@ -216,14 +397,21 @@ def _summaries(session: Session, links: list[SubmissionRecordLink]) -> list[tupl
         if model is None:
             continue
         ids = sorted({link.record_id for link in group})
-        rows = {row.id: row for row in session.scalars(select(model).where(model.id.in_(ids)))}
+        query = select(model).where(model.id.in_(ids))
+        for name in _child_names(model):
+            query = query.options(selectinload(getattr(model, name)))
+        rows = {row.id: row for row in session.scalars(query)}
+        provenance = _Provenance(session, list(rows.values()))
         findings = _findings_by_record(session, record_type, ids)
         warnings = deposit_warnings_for(session, record_type, ids)
         for link in group:
             row = rows.get(link.record_id)
             if row is None:
                 continue
-            levels, software = _referenced_labels(session, row)
+            levels, software, has_literature = _referenced_labels(provenance, row)
+            values = _record_values(row)
+            if has_literature:
+                values["has_literature"] = True
             record_findings = findings.get(link.record_id, ())
             record_warnings = tuple(
                 LLMWarningSummary(code=item.code, message=_clip(item.message, _MAX_WARNING_CHARS))
@@ -232,7 +420,9 @@ def _summaries(session: Session, links: list[SubmissionRecordLink]) -> list[tupl
             summary = LLMRecordSummary(
                 record_type=record_type.value,
                 record_ref=str(link.record_id),
-                values=_record_values(row),
+                subject=subjects.subject(row),
+                parents=subjects.parents(row),
+                values=values,
                 levels_of_theory=levels,
                 software=software,
                 deterministic_findings=record_findings,
@@ -289,15 +479,27 @@ def build_review_context_pack(session: Session, submission_id: int, *, max_input
             update={"record_refs": refs[:kept_refs], "record_summaries": summaries[:kept_summaries], "omitted": omitted}
         )
 
-    candidate = pack(len(summaries), len(refs))
-    for drop in range(len(summaries) + len(refs) + 1):
-        if drop <= len(summaries):
-            candidate = pack(len(summaries) - drop, len(refs))
+    def fits(kept_summaries: int, kept_refs: int) -> bool:
+        return estimate_input_tokens(pack(kept_summaries, kept_refs)) <= max_input_tokens
+
+    # The estimate only shrinks as more is dropped, so the largest kept count that fits is found by bisection.
+    if fits(len(summaries), len(refs)):
+        return pack(len(summaries), len(refs))
+    if fits(0, len(refs)):
+        return pack(_largest_fitting(len(summaries) - 1, lambda kept: fits(kept, len(refs))), len(refs))
+    return pack(0, _largest_fitting(len(refs) - 1, lambda kept: fits(0, kept)))
+
+
+def _largest_fitting(high: int, fits: Any) -> int:
+    """The largest ``kept`` in ``[0, high]`` with ``fits(kept)``, given that ``fits(0)`` holds or that 0 is the floor."""
+    low = 0
+    while low < high:
+        middle = (low + high + 1) // 2
+        if fits(middle):
+            low = middle
         else:
-            candidate = pack(0, len(refs) - (drop - len(summaries)))
-        if estimate_input_tokens(candidate) <= max_input_tokens:
-            return candidate
-    return candidate
+            high = middle - 1
+    return low
 
 
 __all__ = ["build_review_context_pack", "estimate_input_tokens"]

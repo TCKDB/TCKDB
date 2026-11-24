@@ -127,6 +127,10 @@ _PROVIDER_RESERVED_STATUSES: frozenset[MachineReviewStatus] = frozenset(
 )
 
 
+class MachineReviewPayloadTypeError(TypeError):
+    """The model's payload parsed but was not a JSON object."""
+
+
 class ReservedMachineReviewStatusError(ValueError):
     """A provider claimed a status that only the runner may set.
 
@@ -165,7 +169,7 @@ def parse_machine_review_payload(
     if isinstance(raw, str):
         raw = json.loads(raw)
     if not isinstance(raw, dict):
-        raise TypeError(
+        raise MachineReviewPayloadTypeError(
             "machine-review payload must be a JSON object, got "
             f"{type(raw).__name__}."
         )

@@ -631,3 +631,13 @@ def test_a_failed_audit_write_leaves_a_usable_session(
     # the next statement raises PendingRollbackError.
     assert db_session.scalar(select(func.count()).select_from(RecordReview)) >= 0
 
+
+
+def test_a_bare_type_error_from_a_provider_is_an_internal_error_not_invalid_output():
+    from app.db.models.common import MachineReviewJobFailure
+    from app.services.machine_review.providers.interface import MachineReviewPayloadTypeError
+    from app.services.machine_review.run import _failure_code_for
+
+    assert _failure_code_for(TypeError("unexpected keyword argument")) is MachineReviewJobFailure.internal_error
+    assert _failure_code_for(MachineReviewPayloadTypeError("not an object")) is MachineReviewJobFailure.invalid_output
+    assert _failure_code_for(ValueError("bad shape")) is MachineReviewJobFailure.invalid_output
