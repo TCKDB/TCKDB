@@ -88,9 +88,10 @@ _CHILD_RELATIONSHIPS = frozenset(
     }
 )
 
-#: Free-text unit columns shown only when the value is a short unit token, so no depositor sentence passes.
-_UNIT_TEXT_COLUMNS = frozenset({("molecular_property_observation", "scalar_unit")})
-_UNIT_TOKEN = re.compile(r"[A-Za-z0-9/^*.\-]{1,16}")
+#: Free-text unit columns shown only when the value is a short unit token, so no depositor sentence passes,
+#: mapped to the value columns that are left out with a withheld unit: a number without its unit is never shown.
+_UNIT_TEXT_COLUMNS = {("molecular_property_observation", "scalar_unit"): ("scalar_value", "scalar_uncertainty")}
+_UNIT_TOKEN = re.compile(r"[A-Za-z0-9/^*.\-\u00c5\u00b5\u03bc\u00b2\u00b3\u00b9\u207b\u00b7_]{1,16}")
 
 #: Columns with no documented unit, left out of the pack.
 _OMITTED_COLUMNS = frozenset({("calc_scf_stability", "lowest_eigenvalue")})
@@ -138,6 +139,7 @@ def _clip(text: str, limit: int) -> str:
 def _own_values(row: Any, *, prefix: str = "") -> dict[str, float | int | bool | str]:
     """The row's non-key numeric, boolean and vocabulary columns that hold a value."""
     values: dict[str, float | int | bool | str] = {}
+    withheld: set[str] = set()
     mapper = sa_inspect(type(row))
     table = mapper.local_table.name
     for column in mapper.columns:
@@ -153,6 +155,7 @@ def _own_values(row: Any, *, prefix: str = "") -> dict[str, float | int | bool |
             continue
         if is_unit_text:
             if not (isinstance(value, str) and _UNIT_TOKEN.fullmatch(value)):
+                withheld.update(_UNIT_TEXT_COLUMNS[(table, column.key)])
                 continue
         elif isinstance(value, bool):
             pass
@@ -169,6 +172,8 @@ def _own_values(row: Any, *, prefix: str = "") -> dict[str, float | int | bool |
             if not math.isfinite(value):
                 continue
         values[f"{prefix}{_RENAMED_COLUMNS.get((table, column.key), column.key)}"] = value
+    for key in withheld:
+        values.pop(f"{prefix}{key}", None)
     return values
 
 
