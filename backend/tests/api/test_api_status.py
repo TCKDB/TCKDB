@@ -1288,9 +1288,12 @@ def test_review_worker_not_expected_here_is_not_judged(monkeypatch, db_session, 
     assert status["healthy"] is True
 
 
-@pytest.mark.parametrize("executor,stalled", [("in_process", True), ("remote_runner", False)])
+@pytest.mark.parametrize(
+    "mode,executor,stalled",
+    [("test", "in_process", True), ("test", "remote_runner", False), ("off", "in_process", False)],
+)
 def test_a_stale_queued_review_job_flags_a_stalled_queue(
-    monkeypatch, db_session, _api_admin_user, executor, stalled
+    monkeypatch, db_session, _api_admin_user, mode, executor, stalled
 ) -> None:
     from datetime import datetime, timedelta
 
@@ -1298,7 +1301,7 @@ def test_a_stale_queued_review_job_flags_a_stalled_queue(
     from app.db.models.machine_review_job import MachineReviewJob
     from app.services.submission import create_submission
 
-    _review_mode(monkeypatch, "test", inline=False)
+    _review_mode(monkeypatch, mode, inline=False)
     submission = create_submission(
         db_session, created_by=_api_admin_user, submission_kind=SubmissionKind.thermo, title="t", summary="s"
     )
@@ -1317,8 +1320,8 @@ def test_a_stale_queued_review_job_flags_a_stalled_queue(
 
     status = health._machine_review_worker_status()
 
-    assert status["queue_stalled"] is stalled
-    assert status["queued"] == (1 if stalled else 0)
+    assert status["queue_stalled"] is (executor == "in_process")
+    assert status["queued"] == (1 if executor == "in_process" else 0)
     assert status["healthy"] is not stalled
 
 

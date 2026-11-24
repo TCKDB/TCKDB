@@ -32333,6 +32333,8 @@
             "$ref": "#/components/schemas/MachineReviewProviderKey"
           },
           "submission_id": {
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
             "title": "Submission Id",
             "type": "integer"
           }

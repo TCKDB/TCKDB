@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.db.models.common import (
     MachineReviewAvailability,
@@ -25,7 +25,7 @@ class MachineReviewJobCreateRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    submission_id: int
+    submission_id: int = Field(ge=1, le=2**63 - 1)
     provider_key: MachineReviewProviderKey
 
 

@@ -15,6 +15,7 @@ from app.db.models.machine_review_job import MachineReviewJob, MachineReviewJobE
 from app.services.machine_review import jobs
 from tests.api._machine_review_job_routes_support import (  # noqa: F401
     JOBS,
+    PROVIDERS,
     anon_client,
     fake_mode,
     job_count,
@@ -57,7 +58,7 @@ def test_curator_and_admin_succeed_where_a_plain_user_and_anonymous_are_refused(
     assert client.get(JOBS, params={"submission_id": submission.id}).status_code == 200
 
 
-@pytest.mark.parametrize("method,path", [("get", f"{JOBS}/1"), ("get", JOBS), ("post", f"{JOBS}/1/cancel")])
+@pytest.mark.parametrize("method,path", [("get", f"{JOBS}/1"), ("get", JOBS), ("post", f"{JOBS}/1/cancel"), ("get", PROVIDERS)])
 def test_other_job_routes_refuse_a_plain_user_and_anonymous(client, anon_client, method, path):
     assert getattr(client, method)(path).status_code == 403
     assert getattr(anon_client, method)(path).status_code == 401
@@ -75,6 +76,8 @@ def test_request_body_is_strict(client, login_as, _api_curator_user, submission)
     bad = {"submission_id": submission.id, "provider_key": "fake", "extra": 1}
     assert client.post(JOBS, json=bad).status_code == 422
     assert client.post(JOBS, json={"submission_id": submission.id, "provider_key": "nope"}).status_code == 422
+    for bad_id in (2**70, 0, -1):
+        assert client.post(JOBS, json={"submission_id": bad_id, "provider_key": "fake"}).status_code == 422
 
 
 def _running_job_with_events(db_session, submission, user_id, n=5):

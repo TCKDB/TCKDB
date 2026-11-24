@@ -191,7 +191,7 @@ def _machine_review_worker_status() -> dict:
     if expected and not thread_alive:
         status["healthy"] = False
         status["reason"] = "machine-review worker thread is not running"
-    elif status.get("queue_stalled"):
+    elif enabled and status.get("queue_stalled"):
         status["healthy"] = False
         status["reason"] = (
             f"oldest queued review job is {status['oldest_queued_age_seconds']}s old; nothing is claiming work"
