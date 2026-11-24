@@ -506,3 +506,130 @@ def test_identity_on_a_stored_review_comes_from_the_job_and_not_from_the_model(c
     details = session.get(SubmissionAuditEvent, job.audit_event_id).details_json
     assert details["model"] == job.model == "fake_test/machine-review"
     assert details["provider"] == "ScriptedFakeMachineReviewAgent"
+
+
+# --- local provider through a stub server ---------------------------------------
+
+
+def _local_settings(base_url: str, **extra):
+    from app.api.config import Settings
+
+    return Settings(
+        ai_review_assistant_mode="local",
+        llm_precheck_model="gguf/stub-model",
+        llm_precheck_base_url=base_url,
+        llm_precheck_timeout_seconds=extra.pop("llm_precheck_timeout_seconds", 5),
+        **extra,
+    )
+
+
+def _local_job(db_session, settings_obj):
+    admin = make_user(db_session, "local-admin", AppUserRole.admin)
+    submission = make_submission(db_session, admin.id)
+    job = jobs.create_job(
+        db_session,
+        submission_id=submission.id,
+        requester=admin,
+        provider_key=MachineReviewProviderKey.local,
+        settings_obj=settings_obj,
+    )
+    return submission, job
+
+
+def _pass_reply(content: str | None = None) -> dict:
+    import json
+
+    answer = content or json.dumps(
+        {
+            "format": {"name": "machine_review", "version": 2},
+            "status": "machine_screened_pass",
+            "curator_priority": None,
+            "summary": "Nothing needs a curator.",
+            "findings": [],
+            "retrieval_sources": [],
+        }
+    )
+    return {"choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": answer}}]}
+
+
+@pytest.fixture
+def local_stub():
+    from tests.services._llm_stub_server import StubServer
+
+    servers = []
+
+    def make(*script):
+        server = StubServer(list(script)).start()
+        servers.append(server)
+        return server
+
+    yield make
+    for server in servers:
+        server.stop()
+
+
+def _local_cycle(factory, settings_obj):
+    return worker.process_one_cycle(factory, settings_obj, heartbeat=False)
+
+
+def test_a_local_job_against_the_stub_succeeds_with_one_audit_event(db_session, factory, local_stub):
+    from tests.services._llm_stub_server import StubResponse
+
+    server = local_stub(StubResponse(body=_pass_reply()))
+    settings_obj = _local_settings(server.base_url)
+    submission, job = _local_job(db_session, settings_obj)
+
+    assert _local_cycle(factory, settings_obj) is True
+
+    job = _reload(db_session, job)
+    assert job.status is S.succeeded
+    assert len(server.requests) == 1
+    audit = db_session.get(SubmissionAuditEvent, job.audit_event_id)
+    assert audit.details_json["model"] == "gguf/stub-model"
+    assert len(_audit_events(db_session, submission)) == 1
+    assert job.budget_json["thinking_budget_tokens"] == 1024
+
+
+def test_a_refused_port_fails_as_provider_unavailable_with_a_failed_audit_event(db_session, factory, monkeypatch):
+    from app.services.machine_review.providers import factory as provider_factory
+    from tests.services._llm_stub_server import refused_base_url
+
+    monkeypatch.setattr(provider_factory, "_LOCAL_CONNECT_TIMEOUT_SECONDS", 2.0)
+
+    settings_obj = _local_settings(refused_base_url())
+    submission, job = _local_job(db_session, settings_obj)
+
+    _local_cycle(factory, settings_obj)
+
+    job = _reload(db_session, job)
+    assert job.status is S.failed and job.failure_code is MachineReviewJobFailure.provider_unavailable
+    assert db_session.get(SubmissionAuditEvent, job.audit_event_id).details_json["status"] == "machine_review_failed"
+    assert len(_audit_events(db_session, submission)) == 1
+
+
+def test_a_slow_server_fails_as_provider_timeout(db_session, factory, local_stub):
+    from tests.services._llm_stub_server import StubResponse
+
+    server = local_stub(StubResponse(body=_pass_reply(), delay=2.5))
+    settings_obj = _local_settings(server.base_url, llm_precheck_timeout_seconds=1)
+    _, job = _local_job(db_session, settings_obj)
+
+    _local_cycle(factory, settings_obj)
+
+    job = _reload(db_session, job)
+    assert job.status is S.failed and job.failure_code is MachineReviewJobFailure.provider_timeout
+    assert len(server.requests) == 1
+
+
+def test_garbled_local_content_fails_as_invalid_output_with_a_parse_failed_event(db_session, factory, local_stub):
+    from tests.services._llm_stub_server import StubResponse
+
+    server = local_stub(StubResponse(body=_pass_reply("this is not json")))
+    settings_obj = _local_settings(server.base_url)
+    _, job = _local_job(db_session, settings_obj)
+
+    _local_cycle(factory, settings_obj)
+
+    job = _reload(db_session, job)
+    assert job.status is S.failed and job.failure_code is MachineReviewJobFailure.invalid_output
+    assert _kinds(db_session, job).count(K.parse_failed) == 1

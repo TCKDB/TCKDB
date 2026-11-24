@@ -382,10 +382,14 @@ def test_configuration_error_becomes_an_advisory_failed_result(
     assert len(_review_events(db_session, submission.id)) == 1
 
 
-def test_unimplemented_local_mode_becomes_an_advisory_failed_result(
-    db_session, _api_test_user
+def test_an_unreachable_local_server_becomes_an_advisory_failed_result(
+    db_session, _api_test_user, monkeypatch
 ):
-    """Local mode still raises ``NotImplementedError``; the run absorbs it."""
+    """A local server that cannot be reached is an advisory failure with one audit event."""
+    from app.services.machine_review.providers import factory as provider_factory
+    from tests.services._llm_stub_server import refused_base_url
+
+    monkeypatch.setattr(provider_factory, "_LOCAL_CONNECT_TIMEOUT_SECONDS", 2.0)
     submission = _seed_submission(db_session, _api_test_user)
 
     outcome = run_machine_review_for_submission(
@@ -394,12 +398,12 @@ def test_unimplemented_local_mode_becomes_an_advisory_failed_result(
         settings_obj=Settings(
             ai_review_assistant_mode="local",
             llm_precheck_model="some-local-model",
-            llm_precheck_base_url="http://localhost:1234/v1",
+            llm_precheck_base_url=refused_base_url(),
         ),
     )
 
     assert outcome.status is MachineReviewStatus.machine_review_failed
-    assert "NotImplementedError" in (outcome.failure_reason or "")
+    assert "MachineReviewProviderUnavailableError" in (outcome.failure_reason or "")
     assert outcome.audit_event_recorded is True
 
 

@@ -283,9 +283,15 @@ class Settings(BaseSettings):
     llm_precheck_model: str | None = None
     llm_precheck_api_key_env: str | None = None
     llm_precheck_base_url: str | None = None
-    llm_precheck_timeout_seconds: int = 30
-    llm_precheck_max_input_tokens: int = 6000
+    # Seconds one model call may take; a local 9B review takes 20-60 s.
+    llm_precheck_timeout_seconds: int = 180
+    # Estimated tokens (characters / 4) of the review context; lowest-priority records are dropped to fit.
+    llm_precheck_max_input_tokens: int = 16000
     llm_precheck_max_output_tokens: int = 1200
+    # Local reviewer only: cap on reasoning tokens per call, sent as thinking_budget_tokens.
+    llm_precheck_thinking_budget_tokens: int = Field(1024, ge=0)
+    # Local reviewer only: json_schema for servers that enforce a schema, json_object for those that do not.
+    llm_precheck_structured_output: Literal["json_schema", "json_object"] = "json_schema"
     llm_precheck_include_artifact_text: bool = False
     llm_precheck_include_coordinates: bool = False
     llm_precheck_store_full_context: bool = False

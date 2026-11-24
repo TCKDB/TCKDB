@@ -332,6 +332,7 @@ def claim_next_job(
     job.budget_json = {
         "max_input_tokens": settings_obj.llm_precheck_max_input_tokens,
         "max_output_tokens": settings_obj.llm_precheck_max_output_tokens,
+        "thinking_budget_tokens": settings_obj.llm_precheck_thinking_budget_tokens,
         "timeout_seconds": settings_obj.llm_precheck_timeout_seconds,
     }
     session.flush()

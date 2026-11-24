@@ -1,0 +1,28 @@
+{
+  "_fixture_note": "Hand-built: a server that inlines its thinking as a leading think block in content.",
+  "id": "chatcmpl-FixtureLlama",
+  "object": "chat.completion",
+  "created": 1789000000,
+  "model": "gguf/fixture-model",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": "<think>\nREASONING-SENTINEL inline thought.\n</think>\n\n{\"format\":{\"name\":\"machine_review\",\"version\":2},\"status\":\"machine_screened_warning\",\"curator_priority\":\"medium\",\"summary\":\"One transition state carries no evidence that it is the saddle for the reaction it is attached to.\",\"findings\":[{\"severity\":\"warning\",\"category\":\"transition_state_validation\",\"record_type\":\"transition_state_entry\",\"record_ref\":\"9\",\"message\":\"The transition state has one imaginary mode but nothing records whether that mode is the reaction coordinate, and no IRC connectivity conclusion is present.\",\"evidence_keys\":[\"missing_checks.reaction_coordinate_declared\"],\"recommended_action\":\"Ask the depositor to declare the reaction-coordinate mode index, or to deposit the IRC connectivity conclusion.\"},{\"severity\":\"info\",\"category\":\"provenance\",\"record_type\":\"calculation\",\"record_ref\":\"111\",\"message\":\"The Hessian method is not stated, so the imaginary-mode tolerance basis is an assumed program default.\",\"evidence_keys\":[],\"recommended_action\":null}],\"retrieval_sources\":[]}"
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 812,
+    "completion_tokens": 420,
+    "total_tokens": 1232
+  },
+  "timings": {
+    "prompt_n": 812,
+    "prompt_per_second": 790.0,
+    "predicted_n": 420,
+    "predicted_per_second": 63.0
+  }
+}

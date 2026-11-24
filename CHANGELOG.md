@@ -25,6 +25,14 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Local machine review and the review context pack (Unreleased)
+
+- **Behaviour:** `AI_REVIEW_ASSISTANT_MODE=local` now makes one call to the OpenAI-compatible server at `LLM_PRECHECK_BASE_URL` (llama.cpp, Ollama, vLLM), asking for JSON that matches the format 2 schema. Reasoning stays on, capped per request by `thinking_budget_tokens`, and `max_tokens` is `LLM_PRECHECK_MAX_OUTPUT_TOKENS` plus twice the thinking budget. A leading `<think>` block in the answer is stripped. No key is needed; `LLM_PRECHECK_API_KEY_ENV`, when set, must name a non-empty variable.
+- **Failure codes:** an unreachable server or a 5xx fails the job as `provider_unavailable` (no retries, 5 s connect timeout), a read timeout as `provider_timeout`, a 401 or 403 as `auth_failed`, and a reply that is truncated, refused, not JSON or off-contract as `invalid_output`. Anything else stays `internal_error`.
+- **Review context:** the reviewer is now shown each linked record's stored numbers, the level of theory and software it cites, TCKDB's own check findings and the deposit warnings as TCKDB words them. String, text and JSON columns and all ids are left out. The context is cut to `LLM_PRECHECK_MAX_INPUT_TOKENS` (estimated as characters / 4): lowest-priority records go first and the context says how many were left out.
+- **Configuration:** new `LLM_PRECHECK_THINKING_BUDGET_TOKENS` (default 1024) and `LLM_PRECHECK_STRUCTURED_OUTPUT` (`json_schema` or `json_object`, default `json_schema`; local reviewer only). `LLM_PRECHECK_MAX_INPUT_TOKENS` now defaults to 16000 and is read. `LLM_PRECHECK_TIMEOUT_SECONDS` now defaults to 180.
+- **Migration:** none.
+
 ## Machine-review output is format 2 (Unreleased)
 
 - **Behaviour:** the reviewer's answer is `machine_review` format 2: `summary` is required (at most 280 characters), at most 10 findings (message at most 240, evidence keys at most 8 of 64, recommended action at most 200), and `retrieval_sources` (at most 10 keys of 64) replaces `used_rag`. A finding may cite only a `(record_type, record_ref)` pair the context offered, or neither; otherwise the review fails as `invalid_output`. Stored format 1 reviews are no longer read: they show as unparsed until re-run: `python scripts/ops/rerun_machine_reviews.py --requested-by ADMIN` prints the plan, and adding `--commit --i-know-this-is-deployed --process` queues and runs the jobs. The prompt is version 2.

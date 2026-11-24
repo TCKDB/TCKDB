@@ -9,8 +9,9 @@ provider:
   over the default OpenAI-compatible transport, passing every configured value
   through (base URL, output ceiling, timeout). Nothing is called at build time;
   the model call happens when a review is actually requested.
-* ``local`` -> validates required config (model + base URL), then raises
-  :class:`NotImplementedError` — no local call is implemented in this slice.
+* ``local`` -> validates required config (model + base URL, and the key variable when one is named), then builds a
+  :class:`~app.services.machine_review.providers.local.LocalMachineReviewProvider` with no retries and a short
+  connect timeout. Nothing is called at build time.
 * ``test``  -> refuses: the fake provider is test-only and is reached via
   :func:`~app.services.machine_review.providers.fake.build_fake_machine_review_provider`,
   never through deployment config.
@@ -42,6 +43,13 @@ from app.services.machine_review.providers.interface import (
 #: construction, not a variable name -- and the one thing an operator is most
 #: likely to put in this setting by mistake is the key itself.
 _ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+#: Sent as the bearer token when a local server needs none; not a secret.
+_NO_KEY_PLACEHOLDER = "not-needed"
+
+#: Seconds to wait for a local server to accept a connection before reporting it unavailable.
+_LOCAL_CONNECT_TIMEOUT_SECONDS = 5.0
 
 
 def _safe_env_name(value: str) -> str:
@@ -88,7 +96,7 @@ def _validate_cloud_config(settings_obj: Any) -> None:
 
 
 def _validate_local_config(settings_obj: Any) -> None:
-    """Require model + base URL for local mode."""
+    """Require model + base URL for local mode; a named key variable must be set and non-empty."""
     if not settings_obj.llm_precheck_model:
         raise MachineReviewProviderConfigurationError(
             "Local mode requires LLM_PRECHECK_MODEL to be set."
@@ -96,6 +104,13 @@ def _validate_local_config(settings_obj: Any) -> None:
     if not settings_obj.llm_precheck_base_url:
         raise MachineReviewProviderConfigurationError(
             "Local mode requires LLM_PRECHECK_BASE_URL to be set."
+        )
+    key_env = settings_obj.llm_precheck_api_key_env
+    if key_env and not os.environ.get(key_env):
+        raise MachineReviewProviderConfigurationError(
+            "Local mode requires the environment variable named by "
+            f"LLM_PRECHECK_API_KEY_ENV ({_safe_env_name(key_env)}) to be set "
+            "and non-empty."
         )
 
 
@@ -107,8 +122,8 @@ def build_machine_review_provider(
     Off returns the disabled provider. Test returns the scripted fake agent under
     ``DEPLOYMENT_MODE=local`` and refuses otherwise. Cloud validates its configuration and
     returns a real provider -- constructing one calls nothing; the model is
-    reached only when a review is requested. Local still validates and raises
-    :class:`NotImplementedError`, which is a later slice.
+    reached only when a review is requested. Local does the same against the
+    configured base URL.
     """
     mode = settings_obj.ai_review_assistant_mode
 
@@ -150,9 +165,27 @@ def build_machine_review_provider(
 
     if mode == "local":
         _validate_local_config(settings_obj)
-        raise NotImplementedError(
-            "Local machine-review provider is not implemented yet; "
-            "no local model call is made."
+        from app.services.machine_review.providers.local import (
+            LocalMachineReviewProvider,
+        )
+        from app.services.machine_review.providers.openai_transport import (
+            OpenAICompatibleClient,
+        )
+
+        key_env = settings_obj.llm_precheck_api_key_env
+        return LocalMachineReviewProvider(
+            client=OpenAICompatibleClient(
+                # A local server usually has no key; the SDK still needs a non-empty string.
+                api_key=os.environ[key_env] if key_env else _NO_KEY_PLACEHOLDER,
+                base_url=settings_obj.llm_precheck_base_url,
+                max_retries=0,
+                connect_timeout_seconds=_LOCAL_CONNECT_TIMEOUT_SECONDS,
+            ),
+            model=settings_obj.llm_precheck_model,
+            structured_output=settings_obj.llm_precheck_structured_output,
+            max_output_tokens=settings_obj.llm_precheck_max_output_tokens,
+            thinking_budget_tokens=settings_obj.llm_precheck_thinking_budget_tokens,
+            timeout_seconds=float(settings_obj.llm_precheck_timeout_seconds),
         )
 
     if mode == "test":

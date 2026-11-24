@@ -3,8 +3,7 @@
 These cover the producer side only — provider interface, disabled/off provider,
 the test-only fake v2 provider, the factory, config validation, and the
 strict-parse / serialization boundary. No real online/local model calls exist;
-cloud mode validates config and builds the real provider; local still
-validates and raises ``NotImplementedError``.
+cloud and local modes validate config and build the real provider.
 
 Config namespace note: ``AI_REVIEW_ASSISTANT_MODE`` + ``LLM_PRECHECK_*`` is the
 implementation/config namespace; ``MachineReviewProviderResult`` is the output
@@ -38,6 +37,7 @@ from app.services.machine_review.providers import (
     parse_machine_review_payload,
 )
 from app.services.machine_review.providers.fake import ScriptedFakeMachineReviewAgent
+from app.services.machine_review.providers.local import LocalMachineReviewProvider
 from app.services.machine_review.schemas import (
     MACHINE_REVIEW_FORMAT,
     MachineReviewCategory,
@@ -182,7 +182,7 @@ def test_no_mode_yields_a_fake_outside_local_deployments():
             )
             try:
                 provider = build_machine_review_provider(settings)
-            except (NotImplementedError, MachineReviewProviderConfigurationError):
+            except MachineReviewProviderConfigurationError:
                 continue
             assert not isinstance(provider, (FakeMachineReviewProvider, ScriptedFakeMachineReviewAgent))
 
@@ -420,16 +420,15 @@ def test_local_mode_requires_base_url_and_model_config():
         build_machine_review_provider(settings)
 
 
-def test_local_mode_real_call_not_implemented_yet():
-    """With valid local config, the factory raises NotImplementedError, no call."""
+def test_local_mode_with_valid_config_builds_the_local_provider():
+    """With valid local config, the factory builds the local provider and calls nothing."""
     settings = Settings(
         ai_review_assistant_mode="local",
         llm_precheck_model="vendor/model",
         llm_precheck_base_url="http://localhost:11434",
     )
 
-    with pytest.raises(NotImplementedError, match="no local model call"):
-        build_machine_review_provider(settings)
+    assert isinstance(build_machine_review_provider(settings), LocalMachineReviewProvider)
 
 
 # --------------------------------------------------------------------------- #
