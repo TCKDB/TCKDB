@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.api.config import settings
 from app.api.deps import SessionLocal
+from app.db.models.app_user import AppUser
 from app.db.models.common import (
     MachineReviewJobEventKind,
     MachineReviewJobFailure,
@@ -111,7 +112,9 @@ def process_one_cycle(
             return False
         job_id, attempt = job.id, job.attempts
         submission_id, provider_key, job_model = job.submission_id, job.provider_key, job.model
-        if not read_machine_review_switches(session, settings_obj).review_allowed:
+        switches = read_machine_review_switches(session, settings_obj)
+        requester = session.get(AppUser, job.requested_by)
+        if not switches.review_allowed or (requester is not None and jobs.curator_switch_refuses(switches, requester)):
             jobs.finish_job(
                 session,
                 job_id,

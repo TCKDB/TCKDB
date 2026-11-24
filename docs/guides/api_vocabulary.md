@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 123 | 28 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 46 | `backend/app/services/public_refs.py` |
 | Trust check names | 174 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 388 | `backend/app/api/code_catalogue.py` |
-| **total** | **731** | |
+| Refusal codes a caller can receive | 389 | `backend/app/api/code_catalogue.py` |
+| **total** | **732** | |
 
 ## How a record is named
 
@@ -730,11 +730,12 @@ There is deliberately no definition column: the refusal already sent you a sente
 | --- | --- |
 | `invalid_idempotency_key` | a thing |
 
-### HTTP 403 (7 codes)
+### HTTP 403 (8 codes)
 
 | Code | Names |
 | --- | --- |
 | `machine_review_curator_requests_disabled` | a thing |
+| `machine_review_job_not_owned` | a thing |
 | `machine_review_not_allowed_for_user` | a thing |
 | `record_self_approval` | a relationship — read `context` |
 | `rights_attestation_not_depositor` | a thing |

@@ -1783,6 +1783,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/machine_review/jobs.py"),
     ApiCode("machine_review_job_not_found", 404, Surface.coded_exception,
             "backend/app/services/machine_review/jobs.py"),
+    ApiCode("machine_review_job_not_owned", 403, Surface.coded_exception,
+            "backend/app/services/machine_review/jobs.py"),
     ApiCode("machine_review_mode_off", 409, Surface.coded_exception,
             "backend/app/services/machine_review/jobs.py"),
     ApiCode("machine_review_not_allowed_for_user", 403, Surface.coded_exception,

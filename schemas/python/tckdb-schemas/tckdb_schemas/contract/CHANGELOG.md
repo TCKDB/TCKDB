@@ -2,7 +2,7 @@
 
 ## 0.177.4 - 2026-11-24
 
-No schema changed. The producer contract lists the machine-review job and settings write routes, and the refusal-code list gains the nine `machine_review_*` codes.
+No schema changed. The producer contract lists the machine-review job and settings write routes, and the refusal-code list gains the ten `machine_review_*` codes.
 
 ## 0.177.3 - 2026-11-22
 

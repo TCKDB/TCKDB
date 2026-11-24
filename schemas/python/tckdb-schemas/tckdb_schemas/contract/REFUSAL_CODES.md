@@ -2043,6 +2043,7 @@ Refusals a client can receive that no producer route's code path was traced to: 
 - `machine_review_job_conflict` (409)
 - `machine_review_job_not_cancellable` (409)
 - `machine_review_job_not_found` (404)
+- `machine_review_job_not_owned` (403)
 - `machine_review_mode_off` (409)
 - `machine_review_not_allowed_for_user` (403)
 - `machine_review_provider_not_configured` (409)

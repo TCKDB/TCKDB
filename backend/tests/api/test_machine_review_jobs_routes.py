@@ -7,7 +7,9 @@ import pytest
 from sqlalchemy import select
 
 from app.api.config import settings as app_settings
+from app.db.models.app_user import AppUser
 from app.db.models.common import (
+    AppUserRole,
     MachineReviewJobEventKind,
     MachineReviewJobStatus,
 )
@@ -162,3 +164,46 @@ def test_cancel_queued_running_terminal_and_unknown(client, db_session, login_as
     missing = client.post(f"{JOBS}/999999/cancel")
     assert missing.status_code == 404 and missing.json()["code"] == "machine_review_job_not_found"
     assert client.get(f"{JOBS}/999999").json()["code"] == "machine_review_job_not_found"
+
+
+def _other_curator(db_session) -> int:
+    other = AppUser(username="othercurator", role=AppUserRole.curator)
+    db_session.add(other)
+    db_session.flush()
+    return other.id
+
+
+def test_a_curator_cancels_their_own_job(client, db_session, login_as, _api_curator_user, submission):
+    login_as(_api_curator_user)
+    job = _post(client, submission).json()
+
+    response = client.post(f"{JOBS}/{job['id']}/cancel")
+
+    assert (response.status_code, response.json()["status"]) == (200, "cancelled")
+
+
+def test_a_curator_cannot_cancel_another_curators_job(client, db_session, login_as, _api_curator_user, submission):
+    other = _other_curator(db_session)
+    login_as(other)
+    job = _post(client, submission).json()
+    login_as(_api_curator_user)
+
+    response = client.post(f"{JOBS}/{job['id']}/cancel")
+
+    assert response.status_code == 403
+    body = response.json()
+    assert body["code"] == "machine_review_job_not_owned"
+    assert not {k for k in keys_anywhere(body.get("context", {})) if k == "id" or k.endswith("_id")}
+    row = db_session.get(MachineReviewJob, job["id"])
+    db_session.refresh(row)
+    assert (row.status, row.cancel_requested, row.finished_at) == (MachineReviewJobStatus.queued, False, None)
+
+
+def test_an_admin_cancels_any_job(client, db_session, login_as, _api_curator_user, _api_admin_user, submission):
+    login_as(_api_curator_user)
+    job = _post(client, submission).json()
+    login_as(_api_admin_user)
+
+    response = client.post(f"{JOBS}/{job['id']}/cancel")
+
+    assert (response.status_code, response.json()["status"]) == (200, "cancelled")

@@ -147,6 +147,9 @@ _REVIEW_WORKER_THREAD_NAME = "machine-review-worker"
 def _machine_review_worker_status() -> dict:
     """Report whether the in-process machine-review worker is running and claiming its queue.
 
+    Problems are listed under ``warnings``; the block is always ``healthy`` so
+    machine review, being advisory, never degrades ``/status``.
+
     The thread is expected only when the API runs inline workers and
     ``AI_REVIEW_ASSISTANT_MODE`` is not ``off``; a queued in-process job older
     than the lag threshold means nothing is claiming work.
@@ -188,17 +191,19 @@ def _machine_review_worker_status() -> dict:
     finally:
         session.close()
 
+    # Advisory feature: a dead thread or a stalled queue is reported as a
+    # warning and never as ``healthy: false``, so it cannot reach ``degraded``.
+    status["healthy"] = True
+    status["reason"] = None
+    status["warnings"] = []
     if expected and not thread_alive:
-        status["healthy"] = False
         status["reason"] = "machine-review worker thread is not running"
+        status["warnings"].append({"code": "machine_review_worker_not_running", "summary": status["reason"]})
     elif enabled and status.get("queue_stalled"):
-        status["healthy"] = False
         status["reason"] = (
             f"oldest queued review job is {status['oldest_queued_age_seconds']}s old; nothing is claiming work"
         )
-    else:
-        status["healthy"] = True
-        status["reason"] = None
+        status["warnings"].append({"code": "machine_review_queue_stalled", "summary": status["reason"]})
     return status
 
 

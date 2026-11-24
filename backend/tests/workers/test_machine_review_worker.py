@@ -152,6 +152,52 @@ def test_switch_on_twin_succeeds(ctx, factory):
     assert _reload(session, job).status is S.succeeded
 
 
+def _queued_job_by(session, role, name):
+    user = make_user(session, name, role)
+    submission = make_submission(session, user.id)
+    job = jobs.create_job(
+        session,
+        submission_id=submission.id,
+        requester=user,
+        provider_key=MachineReviewProviderKey.fake,
+        settings_obj=FAKE_SETTINGS,
+    )
+    return user, submission, job
+
+
+def test_curator_switch_off_at_claim_cancels_a_curator_job(db_session, factory):
+    admin = make_user(db_session, "switch-admin", AppUserRole.admin)
+    _, submission, job = _queued_job_by(db_session, AppUserRole.curator, "claim-curator")
+    write_machine_review_switches(db_session, actor=admin, curator_requests_enabled=False)
+
+    assert _cycle(factory) is True
+
+    job = _reload(db_session, job)
+    assert (job.status, job.failure_code, job.audit_event_id) == (S.cancelled, MachineReviewJobFailure.machine_review_disabled, None)
+    assert _kinds(db_session, job) == [K.claimed, K.finished]
+    assert _audit_events(db_session, submission) == []
+
+
+def test_curator_switch_off_still_runs_an_admin_job(db_session, factory):
+    admin = make_user(db_session, "switch-admin", AppUserRole.admin)
+    _, _, job = _queued_job_by(db_session, AppUserRole.admin, "claim-admin")
+    write_machine_review_switches(db_session, actor=admin, curator_requests_enabled=False)
+
+    assert _cycle(factory) is True
+
+    assert _reload(db_session, job).status is S.succeeded
+
+
+def test_curator_switch_on_runs_a_curator_job(db_session, factory):
+    admin = make_user(db_session, "switch-admin", AppUserRole.admin)
+    _, _, job = _queued_job_by(db_session, AppUserRole.curator, "claim-curator")
+    write_machine_review_switches(db_session, actor=admin, curator_requests_enabled=True)
+
+    assert _cycle(factory) is True
+
+    assert _reload(db_session, job).status is S.succeeded
+
+
 def test_a_raising_provider_fails_with_internal_error_and_a_failed_audit_event(ctx, factory):
     session, _, submission, job = ctx
 

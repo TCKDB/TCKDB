@@ -92768,7 +92768,7 @@
     },
     "/api/v1/machine-review/jobs/{job_id}/cancel": {
       "post": {
-        "description": "Cancel a queued job now, or ask a running one to stop at its next step; 409 once it has ended.",
+        "description": "Cancel a queued job now, or ask a running one to stop at its next step.\n\nA curator may cancel only their own jobs (403); 409 once the job has ended.",
         "operationId": "cancel_job_api_v1_machine_review_jobs__job_id__cancel_post",
         "parameters": [
           {

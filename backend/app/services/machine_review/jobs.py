@@ -52,6 +52,7 @@ def _utcnow() -> datetime:
 
 CONFLICT_CODE = "machine_review_job_conflict"
 NOT_CANCELLABLE_CODE = "machine_review_job_not_cancellable"
+NOT_OWNED_CODE = "machine_review_job_not_owned"
 
 
 class MachineReviewJobConflict(MachineReviewJobError):
@@ -106,6 +107,13 @@ class MachineReviewJobNotCancellable(MachineReviewJobError):
         super().__init__(message, status=409, code=NOT_CANCELLABLE_CODE)
 
 
+class MachineReviewJobNotOwned(MachineReviewJobError):
+    """A curator tried to cancel a job another user requested."""
+
+    def __init__(self) -> None:
+        super().__init__("Only the requester or an admin may cancel this machine review job.", status=403, code=NOT_OWNED_CODE)
+
+
 def provider_availability(
     session: Session,
     requester: AppUser,
@@ -124,6 +132,11 @@ def list_provider_availability(
     return {key: _availability(switches, requester, key, settings_obj) for key in MachineReviewProviderKey}
 
 
+def curator_switch_refuses(switches: MachineReviewSwitches, requester: AppUser) -> bool:
+    """Whether the curator switch is off and ``requester`` is a curator; an admin is never refused by it."""
+    return requester.role is AppUserRole.curator and not switches.curator_requests_enabled
+
+
 def _availability(
     switches: MachineReviewSwitches,
     requester: AppUser,
@@ -136,7 +149,7 @@ def _availability(
         return MachineReviewAvailability.not_allowed_for_user
     if not switches.machine_review_enabled:
         return MachineReviewAvailability.machine_review_disabled
-    if requester.role is AppUserRole.curator and not switches.curator_requests_enabled:
+    if curator_switch_refuses(switches, requester):
         return MachineReviewAvailability.curator_requests_disabled
     if provider_key in _REMOTE_KEYS:
         if requester.role is not AppUserRole.admin:
@@ -368,8 +381,11 @@ def reap_expired(session: Session, now: datetime | None = None) -> int:
     return len(jobs)
 
 
-def request_cancel(session: Session, job_id: int) -> MachineReviewJob:
-    """Cancel a queued job now, or ask a running job to stop at its next step."""
+def request_cancel(session: Session, job_id: int, *, actor: AppUser | None = None) -> MachineReviewJob:
+    """Cancel a queued job now, or ask a running job to stop at its next step.
+
+    When ``actor`` is given, a non-admin may cancel only a job they requested.
+    """
     job = session.scalar(
         select(MachineReviewJob)
         .where(MachineReviewJob.id == job_id)
@@ -378,6 +394,8 @@ def request_cancel(session: Session, job_id: int) -> MachineReviewJob:
     )
     if job is None:
         raise NotFoundError("Machine review job not found.", code="machine_review_job_not_found")
+    if actor is not None and actor.role is not AppUserRole.admin and job.requested_by != actor.id:
+        raise MachineReviewJobNotOwned()
     if job.status is MachineReviewJobStatus.queued:
         now = _utcnow()
         job.status = MachineReviewJobStatus.cancelled
@@ -451,9 +469,11 @@ __all__ = [
     "MachineReviewJobConflict",
     "MachineReviewJobError",
     "MachineReviewJobNotCancellable",
+    "MachineReviewJobNotOwned",
     "MachineReviewUnavailable",
     "append_event",
     "claim_next_job",
+    "curator_switch_refuses",
     "create_job",
     "finish_job",
     "get_job",

@@ -226,6 +226,7 @@ class RejectionCode(str, Enum):
     MACHINE_REVIEW_JOB_CONFLICT = "machine_review_job_conflict"
     MACHINE_REVIEW_JOB_NOT_CANCELLABLE = "machine_review_job_not_cancellable"
     MACHINE_REVIEW_JOB_NOT_FOUND = "machine_review_job_not_found"
+    MACHINE_REVIEW_JOB_NOT_OWNED = "machine_review_job_not_owned"
     MACHINE_REVIEW_MODE_OFF = "machine_review_mode_off"
     MACHINE_REVIEW_NOT_ALLOWED_FOR_USER = "machine_review_not_allowed_for_user"
     MACHINE_REVIEW_PROVIDER_NOT_CONFIGURED = "machine_review_provider_not_configured"
@@ -987,6 +988,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.MACHINE_REVIEW_JOB_CONFLICT: frozenset({409}),
     RejectionCode.MACHINE_REVIEW_JOB_NOT_CANCELLABLE: frozenset({409}),
     RejectionCode.MACHINE_REVIEW_JOB_NOT_FOUND: frozenset({404}),
+    RejectionCode.MACHINE_REVIEW_JOB_NOT_OWNED: frozenset({403}),
     RejectionCode.MACHINE_REVIEW_MODE_OFF: frozenset({409}),
     RejectionCode.MACHINE_REVIEW_NOT_ALLOWED_FOR_USER: frozenset({403}),
     RejectionCode.MACHINE_REVIEW_PROVIDER_NOT_CONFIGURED: frozenset({409}),

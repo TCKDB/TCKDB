@@ -106,10 +106,13 @@ def get_job_progress(
 def cancel_job(
     job_id: int = _JOB_ID,
     session: Session = Depends(get_write_db, scope="function"),
-    _user: AppUser = Depends(require_curator_or_admin),
+    user: AppUser = Depends(require_curator_or_admin),
 ) -> MachineReviewJobRead:
-    """Cancel a queued job now, or ask a running one to stop at its next step; 409 once it has ended."""
-    job = jobs.request_cancel(session, job_id)
+    """Cancel a queued job now, or ask a running one to stop at its next step.
+
+    A curator may cancel only their own jobs (403); 409 once the job has ended.
+    """
+    job = jobs.request_cancel(session, job_id, actor=user)
     return _read(job, _usernames(session, [job]))
 
 

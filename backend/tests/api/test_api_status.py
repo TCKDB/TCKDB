@@ -1246,15 +1246,40 @@ def _review_mode(monkeypatch, mode: str, inline: bool = True) -> None:
     monkeypatch.setenv("TCKDB_INLINE_WORKER", "true" if inline else "false")
 
 
-def test_review_worker_with_no_live_thread_is_unhealthy(monkeypatch, db_session) -> None:
+def test_review_worker_with_no_live_thread_warns_and_stays_healthy(monkeypatch, db_session) -> None:
     _review_mode(monkeypatch, "test")
     monkeypatch.setattr(threading, "enumerate", lambda: [])
 
     status = health._machine_review_worker_status()
 
     assert (status["inline"], status["enabled"], status["thread_alive"]) == (True, True, False)
-    assert status["healthy"] is False
+    assert status["healthy"] is True
     assert "not running" in status["reason"]
+    assert [w["code"] for w in status["warnings"]] == ["machine_review_worker_not_running"]
+
+
+def test_a_dead_review_worker_does_not_degrade_status(client, monkeypatch, healthy_storage) -> None:
+    _review_mode(monkeypatch, "test")
+    monkeypatch.setattr(health, "_worker_status", lambda: {"healthy": True, "reason": None})
+    monkeypatch.setattr(threading, "enumerate", lambda: [])
+
+    body = client.get("/api/v1/status").json()
+
+    assert body["status"] == "ok"
+    assert "machine_review_worker" not in body["degraded"]
+    assert [w["code"] for w in body["warnings"] if w["component"] == "machine_review_worker"] == [
+        "machine_review_worker_not_running"
+    ]
+    assert body["components"]["machine_review_worker"]["healthy"] is True
+
+
+def test_a_live_review_worker_raises_no_warning(client, monkeypatch, healthy_storage) -> None:
+    _review_mode(monkeypatch, "off")
+    monkeypatch.setattr(health, "_worker_status", lambda: {"healthy": True, "reason": None})
+
+    body = client.get("/api/v1/status").json()
+
+    assert [w for w in body["warnings"] if w["component"] == "machine_review_worker"] == []
 
 
 def test_review_worker_with_a_live_thread_is_healthy(monkeypatch, db_session) -> None:
@@ -1275,6 +1300,7 @@ def test_review_worker_with_a_live_thread_is_healthy(monkeypatch, db_session) ->
         worker.join(timeout=5)
 
     assert (status["thread_alive"], status["healthy"], status["reason"]) == (True, True, None)
+    assert status["warnings"] == []
 
 
 @pytest.mark.parametrize("mode,inline", [("off", True), ("test", False)])
@@ -1322,7 +1348,8 @@ def test_a_stale_queued_review_job_flags_a_stalled_queue(
 
     assert status["queue_stalled"] is (executor == "in_process")
     assert status["queued"] == (1 if executor == "in_process" else 0)
-    assert status["healthy"] is not stalled
+    assert status["healthy"] is True
+    assert [w["code"] for w in status["warnings"]] == (["machine_review_queue_stalled"] if stalled else [])
 
 
 class _Borrowed:
