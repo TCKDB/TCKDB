@@ -255,3 +255,82 @@ def test_extract_turn_returns_content_reasoning_and_usage():
     assert turn.reasoning_content.startswith("REASONING-SENTINEL")
     assert turn.finish_reason == "stop"
     assert turn.usage["prompt_tokens"] == 812
+
+
+# --- tool-call transport -------------------------------------------------------
+
+TOOL_TURN = json.loads((_FIXTURES / "llama_server_tool_call_turn.json").read_text())
+
+
+def _raw_chat(server: StubServer, **kwargs):
+    from app.services.machine_review.providers.factory import build_machine_review_provider as build
+
+    provider = build(settings_for(server.base_url))
+    base = {
+        "model": MODEL,
+        "messages": [{"role": "user", "content": "hi"}],
+        "max_output_tokens": 100,
+        "timeout_seconds": 5,
+    }
+    base.update(kwargs)
+    return provider._client.chat(**base)
+
+
+def test_extract_turn_reads_a_tool_call_reply_with_empty_content():
+    from app.services.machine_review.providers.openai_transport import ToolCall
+
+    turn = extract_turn(TOOL_TURN)
+    assert turn.content == ""
+    assert turn.tool_calls == (
+        ToolCall(id="call_fixture_1", name="get_record", arguments='{"record_type":"calculation","record_ref":"111"}'),
+    )
+    assert turn.finish_reason == "tool_calls"
+
+
+def test_empty_content_without_tool_calls_still_raises():
+    body = json.loads(json.dumps(TOOL_TURN))
+    del body["choices"][0]["message"]["tool_calls"]
+    with pytest.raises(ValueError):
+        extract_turn(body)
+
+
+def test_a_missing_tool_call_id_is_numbered():
+    body = json.loads(json.dumps(TOOL_TURN))
+    del body["choices"][0]["message"]["tool_calls"][0]["id"]
+    assert extract_turn(body).tool_calls[0].id == "call_1"
+
+
+def test_chat_omits_response_format_when_none_and_sends_tools(stub):
+    server = stub(ok(TOOL_TURN))
+    tools = [{"type": "function", "function": {"name": "get_record", "parameters": {"type": "object"}}}]
+    _raw_chat(server, tools=tools)
+    body = server.requests[0].body
+    assert "response_format" not in body
+    assert body["tools"] == tools
+    twin = stub(ok())
+    _raw_chat(twin, response_format={"type": "json_object"})
+    assert twin.requests[0].body["response_format"] == {"type": "json_object"}
+    assert "tools" not in twin.requests[0].body
+
+
+def test_a_rejection_naming_tools_on_a_tools_request_is_tools_unsupported(stub):
+    from app.services.machine_review.providers.openai_transport import ToolsUnsupportedError
+
+    tools = [{"type": "function", "function": {"name": "get_record", "parameters": {"type": "object"}}}]
+    body = {"error": {"message": "tools param requires --jinja flag"}}
+    for status in (400, 500):
+        with pytest.raises(ToolsUnsupportedError):
+            _raw_chat(stub(StubResponse(body=body, status=status)), tools=tools)
+    # twin: the same 500 without tools stays an unavailable server
+    with pytest.raises(MachineReviewProviderUnavailableError):
+        _raw_chat(stub(StubResponse(body=body, status=500)))
+
+
+def test_a_context_size_rejection_is_context_exceeded_and_maps_to_budget_exhausted(stub):
+    from app.services.machine_review.providers.openai_transport import ModelContextExceededError
+
+    body = {"error": {"type": "exceed_context_size_error", "message": "request (40000 tokens) exceeds the available context size"}}
+    with pytest.raises(ModelContextExceededError) as caught:
+        _raw_chat(stub(StubResponse(body=body, status=400)))
+    assert _failure_code_for(caught.value) is F.budget_exhausted
+    assert not isinstance(caught.value, ValueError)

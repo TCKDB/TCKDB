@@ -54,7 +54,8 @@ from app.api.config import settings as app_settings
 from app.api.errors import NotFoundError
 from app.db.models.common import MachineReviewJobFailure
 from app.db.models.submission import Submission, SubmissionAuditEvent
-from app.services.machine_review.agent.context_pack import build_review_context_pack
+from app.services.llm_precheck.schemas import LLMRecordSummary
+from app.services.machine_review.agent.context_pack import build_review_context_bundle, build_review_context_pack
 from app.services.machine_review.offer import offer_violation, offered_refs_from_context
 from app.services.machine_review.providers.disabled import (
     DisabledMachineReviewProvider,
@@ -72,7 +73,11 @@ from app.services.machine_review.providers.interface import (
     MachineReviewProviderUnavailableError,
     ReservedMachineReviewStatusError,
 )
-from app.services.machine_review.providers.openai_transport import ModelOutputTruncatedError, ModelRefusedError
+from app.services.machine_review.providers.openai_transport import (
+    ModelContextExceededError,
+    ModelOutputTruncatedError,
+    ModelRefusedError,
+)
 from app.services.machine_review.schemas import (
     MACHINE_REVIEW_FORMAT,
     SUMMARY_MAX_CHARS,
@@ -282,6 +287,10 @@ class MachineReviewCancelled(Exception):
     """Raised by a provider that stopped because the job was cancelled."""
 
 
+class ReviewBudgetExhausted(Exception):
+    """A run used up its time or room before it could answer; the message is built from codes, never model text."""
+
+
 def resolve_provider(
     settings_obj: Any,
     provider: MachineReviewProvider | None = None,
@@ -300,6 +309,16 @@ def resolve_provider(
         return None, _failure_text("Machine review could not be configured", exc, settings_obj)
 
 
+def build_review_context_with_records(
+    session: Session, submission_id: int, settings_obj: Any = app_settings
+) -> tuple[MachineReviewContext, dict[tuple[str, str], LLMRecordSummary]]:
+    """The review context plus the full summary of every linked record, keyed by ``(record_type, record_ref)``."""
+    pack, summaries = build_review_context_bundle(
+        session, submission_id, max_input_tokens=settings_obj.llm_precheck_max_input_tokens
+    )
+    return MachineReviewContext.from_llm_precheck_context(pack), summaries
+
+
 def build_review_context(
     session: Session, submission_id: int, settings_obj: Any = app_settings
 ) -> MachineReviewContext:
@@ -313,6 +332,8 @@ def build_review_context(
 
 def _failure_code_for(exc: BaseException) -> MachineReviewJobFailure:
     """The job failure code for an exception a provider raised."""
+    if isinstance(exc, (ReviewBudgetExhausted, ModelContextExceededError)):
+        return MachineReviewJobFailure.budget_exhausted
     if isinstance(exc, MachineReviewProviderUnavailableError):
         return MachineReviewJobFailure.provider_unavailable
     if isinstance(exc, MachineReviewProviderTimeoutError):
@@ -505,6 +526,7 @@ def run_machine_review_for_submission(
 __all__ = [
     "MachineReviewCancelled",
     "MachineReviewRunOutcome",
+    "ReviewBudgetExhausted",
     "build_review_context",
     "invoke_provider",
     "record_review",

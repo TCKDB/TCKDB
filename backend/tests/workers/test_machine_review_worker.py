@@ -523,8 +523,8 @@ def _local_settings(base_url: str, **extra):
     )
 
 
-def _local_job(db_session, settings_obj):
-    admin = make_user(db_session, "local-admin", AppUserRole.admin)
+def _local_job(db_session, settings_obj, username="local-admin"):
+    admin = make_user(db_session, username, AppUserRole.admin)
     submission = make_submission(db_session, admin.id)
     job = jobs.create_job(
         db_session,
@@ -583,11 +583,14 @@ def test_a_local_job_against_the_stub_succeeds_with_one_audit_event(db_session, 
 
     job = _reload(db_session, job)
     assert job.status is S.succeeded
-    assert len(server.requests) == 1
+    assert len(server.requests) == 2
     audit = db_session.get(SubmissionAuditEvent, job.audit_event_id)
     assert audit.details_json["model"] == "gguf/stub-model"
     assert len(_audit_events(db_session, submission)) == 1
     assert job.budget_json["thinking_budget_tokens"] == 1024
+    assert job.budget_json["max_steps"] == 6
+    assert job.budget_json["max_tool_calls"] == 10
+    assert job.budget_json["run_wall_seconds"] == 900
 
 
 def test_a_refused_port_fails_as_provider_unavailable_with_a_failed_audit_event(db_session, factory, monkeypatch):
@@ -693,3 +696,249 @@ def test_the_same_finding_citing_a_kept_ref_succeeds(db_session, factory, local_
     job = _reload(db_session, job)
     assert job.status is S.succeeded and job.failure_code is None
     assert K.parse_failed not in _kinds(db_session, job)
+
+
+# --- the agent loop through a stub server ----------------------------------------
+
+
+def _tool_reply(record_type: str, record_ref: str, *, usage=(100, 20)) -> dict:
+    import json
+
+    return {
+        "choices": [
+            {
+                "index": 0,
+                "finish_reason": "tool_calls",
+                "message": {
+                    "role": "assistant",
+                    "content": "",
+                    "reasoning_content": "REASONING-SENTINEL",
+                    "tool_calls": [
+                        {
+                            "id": "call_1",
+                            "type": "function",
+                            "function": {
+                                "name": "get_record",
+                                "arguments": json.dumps({"record_type": record_type, "record_ref": record_ref}),
+                            },
+                        }
+                    ],
+                },
+            }
+        ],
+        "usage": {"prompt_tokens": usage[0], "completion_tokens": usage[1]},
+    }
+
+
+def _with_usage(reply: dict, usage=(100, 20)) -> dict:
+    return {**reply, "usage": {"prompt_tokens": usage[0], "completion_tokens": usage[1]}}
+
+
+def _events(session, job):
+    session.expire_all()
+    return list(
+        session.scalars(
+            select(MachineReviewJobEvent).where(MachineReviewJobEvent.job_id == job.id).order_by(MachineReviewJobEvent.seq)
+        )
+    )
+
+
+def _tool_steps(session, job):
+    return [(e.kind, e.status_code) for e in _events(session, job) if e.kind in (K.tool_call, K.tool_result)]
+
+
+import itertools
+
+_AGENT_USERS = itertools.count()
+
+
+def _agent_job(db_session, local_stub, script, **settings_extra):
+    from tests.services._llm_stub_server import StubResponse
+
+    server = local_stub(*[StubResponse(**step) if isinstance(step, dict) else step for step in script])
+    settings_obj = _local_settings(server.base_url, **settings_extra)
+    submission, job = _local_job(db_session, settings_obj, username=f"agent-admin-{next(_AGENT_USERS)}")
+    link_record(
+        db_session, submission=submission, record_type=SubmissionRecordType.calculation, record_id=777, role="primary"
+    )
+    db_session.flush()
+    return server, submission, job, settings_obj
+
+
+def test_a_lookup_of_an_unoffered_ref_is_refused_and_the_offered_twin_is_not(db_session, factory, local_stub):
+    results = {}
+    for label, ref in (("unoffered", "999"), ("offered", "777")):
+        server, submission, job, settings_obj = _agent_job(
+            db_session,
+            local_stub,
+            [
+                {"body": _tool_reply("calculation", ref)},
+                {"body": _with_usage(_pass_reply("done thinking"))},
+                {"body": _with_usage(_pass_reply())},
+            ],
+        )
+        _local_cycle(factory, settings_obj)
+        job = _reload(db_session, job)
+        assert job.status is S.succeeded
+        results[label] = (_tool_steps(db_session, job), len(server.requests), job)
+    assert results["unoffered"][0] == [(K.tool_call, "ok"), (K.tool_result, "refused")]
+    assert results["offered"][0] == [(K.tool_call, "ok"), (K.tool_result, "not_available")]
+    server_count, job = results["unoffered"][1], results["unoffered"][2]
+    assert server_count == 3
+    kinds = _kinds(db_session, job)
+    assert kinds[:2] == [K.claimed, K.context_built] and kinds[-2:] == [K.final_output, K.finished]
+    assert kinds.count(K.model_turn) == 3
+    seqs = [e.seq for e in _events(db_session, job)]
+    assert seqs == list(range(1, len(seqs) + 1))
+    assert job.step_count == 3
+    assert (job.tokens_in, job.tokens_out) == (300, 60)
+
+
+def test_a_linked_record_with_a_summary_is_returned_ok(db_session, factory, local_stub):
+    from tests.services._llm_stub_server import StubResponse
+    from tests.services.scientific_read._factories import make_species, make_species_entry, make_thermo_scalar
+
+    admin = make_user(db_session, "agent-ok-admin", AppUserRole.admin)
+    thermo = make_thermo_scalar(db_session, species_entry=make_species_entry(db_session, make_species(db_session)), h298_kj_mol=-1.0)
+    server = local_stub(
+        StubResponse(body=_tool_reply("thermo", str(thermo.id))),
+        StubResponse(body=_pass_reply("x")),
+        StubResponse(body=_pass_reply()),
+    )
+    settings_obj = _local_settings(server.base_url)
+    submission = make_submission(db_session, admin.id)
+    job = jobs.create_job(
+        db_session, submission_id=submission.id, requester=admin, provider_key=MachineReviewProviderKey.local,
+        settings_obj=settings_obj,
+    )
+    link_record(db_session, submission=submission, record_type=SubmissionRecordType.thermo, record_id=thermo.id, role="primary")
+    db_session.flush()
+    _local_cycle(factory, settings_obj)
+    job = _reload(db_session, job)
+    assert job.status is S.succeeded
+    assert _tool_steps(db_session, job) == [(K.tool_call, "ok"), (K.tool_result, "ok")]
+
+
+def test_event_detail_is_stored_only_when_full_context_storage_is_on(db_session, factory, local_stub):
+    stored = {}
+    for label, flag in (("off", False), ("on", True)):
+        server, _, job, settings_obj = _agent_job(
+            db_session,
+            local_stub,
+            [{"body": _tool_reply("calculation", "777")}, {"body": _pass_reply("x")}, {"body": _pass_reply()}],
+            llm_precheck_store_full_context=flag,
+        )
+        _local_cycle(factory, settings_obj)
+        job = _reload(db_session, job)
+        stored[label] = [(e.kind, e.detail_json) for e in _events(db_session, job)]
+    assert all(detail is None for _, detail in stored["off"])
+    assert all(detail is not None for kind, detail in stored["on"] if kind is K.model_turn)
+
+
+def test_an_exhausted_wall_budget_fails_without_a_review_and_the_twin_records_one(db_session, factory, local_stub):
+    outcome = {}
+    for label, wall in (("tight", 1), ("generous", 900)):
+        server, submission, job, settings_obj = _agent_job(
+            db_session,
+            local_stub,
+            [{"body": _tool_reply("calculation", "777"), "delay": 1.3}, {"body": _pass_reply("x")}, {"body": _pass_reply()}],
+            llm_precheck_run_wall_seconds=wall,
+        )
+        _local_cycle(factory, settings_obj)
+        job = _reload(db_session, job)
+        outcome[label] = (job.status, job.failure_code, job.audit_event_id is None, len(_audit_events(db_session, submission)))
+    assert outcome["tight"] == (S.failed, MachineReviewJobFailure.budget_exhausted, True, 0)
+    assert outcome["generous"] == (S.succeeded, None, False, 1)
+
+
+def test_a_server_that_rejects_tools_gets_one_single_shot_request_instead(db_session, factory, local_stub):
+    from tests.services._llm_stub_server import StubResponse
+
+    server, submission, job, settings_obj = _agent_job(
+        db_session,
+        local_stub,
+        [
+            StubResponse(body={"error": {"message": "tools param requires --jinja flag"}}, status=500),
+            StubResponse(body=_pass_reply()),
+        ],
+    )
+    _local_cycle(factory, settings_obj)
+    job = _reload(db_session, job)
+    assert job.status is S.succeeded
+    assert len(server.requests) == 2 and "tools" not in server.requests[1].body
+    events = _events(db_session, job)
+    assert [e.status_code for e in events if e.kind is K.model_turn] == ["tools_unsupported"]
+    assert not any(e.kind is K.tool_call for e in events)
+    assert len(_audit_events(db_session, submission)) == 1
+
+
+def _tool_reply_named(name: str) -> dict:
+    reply = _tool_reply("calculation", "777")
+    reply["choices"][0]["message"]["tool_calls"][0]["function"]["name"] = name
+    return reply
+
+
+@pytest.mark.parametrize("name", ["MODELTEXT_rm", "MODELTEXT_" + "x" * 100])
+def test_an_invented_tool_name_is_never_stored_as_a_tool_name(db_session, factory, local_stub, name):
+    server, submission, job, settings_obj = _agent_job(
+        db_session,
+        local_stub,
+        [{"body": _tool_reply_named(name)}, {"body": _pass_reply("x")}, {"body": _pass_reply()}],
+    )
+    _local_cycle(factory, settings_obj)
+    job = _reload(db_session, job)
+    assert job.status is S.succeeded
+    events = _events(db_session, job)
+    steps = [(e.kind, e.tool_name, e.status_code) for e in events if e.kind in (K.tool_call, K.tool_result)]
+    assert steps == [(K.tool_call, None, "ok"), (K.tool_result, None, "unknown_tool")]
+    assert not any(e.tool_name and "MODELTEXT" in e.tool_name for e in events)
+
+
+def test_a_known_tool_keeps_its_name_on_the_events(db_session, factory, local_stub):
+    server, submission, job, settings_obj = _agent_job(
+        db_session, local_stub, [{"body": _tool_reply("calculation", "777")}, {"body": _pass_reply("x")}, {"body": _pass_reply()}]
+    )
+    _local_cycle(factory, settings_obj)
+    names = [e.tool_name for e in _events(db_session, _reload(db_session, job)) if e.kind in (K.tool_call, K.tool_result)]
+    assert names == ["get_record", "get_record"]
+
+
+def test_a_budget_exhausted_job_keeps_the_tokens_it_spent_and_the_event_agrees(db_session, factory, local_stub):
+    server, submission, job, settings_obj = _agent_job(
+        db_session,
+        local_stub,
+        [{"body": _tool_reply("calculation", "777")}, {"body": _pass_reply("x"), "delay": 1.5}, {"body": _pass_reply()}],
+        llm_precheck_run_wall_seconds=1,
+    )
+    _local_cycle(factory, settings_obj)
+    job = _reload(db_session, job)
+    assert (job.status, job.failure_code) == (S.failed, MachineReviewJobFailure.budget_exhausted)
+    assert (job.tokens_in, job.tokens_out) == (100, 20)
+    turns = [e.status_code for e in _events(db_session, job) if e.kind is K.model_turn]
+    assert turns == ["ok", "budget_exhausted"]
+
+
+def test_cancel_during_the_tool_phase_cancels_with_no_further_requests_and_no_audit_event(
+    db_session, factory, local_stub, monkeypatch
+):
+    from app.db.models.app_user import AppUser
+    from app.services.machine_review.agent.tools import ToolRegistry
+
+    server, submission, job, settings_obj = _agent_job(
+        db_session, local_stub, [{"body": _tool_reply("calculation", "777")}, {"body": _pass_reply()}]
+    )
+    actor = db_session.get(AppUser, submission.created_by)
+    real = ToolRegistry.execute
+
+    def execute(self, name, arguments_text):
+        with factory() as other:
+            jobs.request_cancel(other, job.id, actor=actor)
+            other.commit()
+        return real(self, name, arguments_text)
+
+    monkeypatch.setattr(ToolRegistry, "execute", execute)
+    _local_cycle(factory, settings_obj)
+    job = _reload(db_session, job)
+    assert job.status is S.cancelled and job.audit_event_id is None
+    assert len(server.requests) == 1
+    assert _audit_events(db_session, submission) == []

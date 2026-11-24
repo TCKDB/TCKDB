@@ -9,8 +9,17 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from typing import Any, Literal, Protocol
 
+from app.services.machine_review.agent.loop import (
+    THINKING_ALLOWANCE_FACTOR,
+    Emit,
+    LoopResult,
+    RunBudget,
+    run_review_loop,
+)
+from app.services.machine_review.agent.tools import ToolRegistry
 from app.services.machine_review.providers.interface import (
     MachineReviewContext,
     parse_machine_review_payload,
@@ -24,9 +33,6 @@ from app.services.machine_review.schemas import MachineReviewProviderResult, pro
 
 logger = logging.getLogger(__name__)
 
-#: Reasoning can overshoot its budget, so ``max_tokens`` leaves this many budgets of room beside the answer.
-THINKING_ALLOWANCE_FACTOR = 2
-
 #: Schema name sent with a ``json_schema`` response format.
 _SCHEMA_NAME = "machine_review"
 
@@ -39,9 +45,9 @@ class MachineReviewChatClient(Protocol):
         *,
         model: str,
         messages: list[dict[str, Any]],
-        response_format: dict[str, Any],
         max_output_tokens: int,
         timeout_seconds: float,
+        response_format: dict[str, Any] | None = None,
         extra_body: dict[str, Any] | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> ChatTurn: ...
@@ -74,6 +80,30 @@ class LocalMachineReviewProvider:
             "type": "json_schema",
             "json_schema": {"name": _SCHEMA_NAME, "strict": True, "schema": provider_output_json_schema()},
         }
+
+    def run_agent(
+        self,
+        context: MachineReviewContext,
+        *,
+        registry: ToolRegistry,
+        budget: RunBudget,
+        emit: Emit,
+        cancelled: Callable[[], bool],
+    ) -> LoopResult:
+        """Run the tool loop on ``context`` and return the final answer text, unparsed."""
+        return run_review_loop(
+            self._client,
+            model=self._model,
+            messages=[
+                {"role": "system", "content": MACHINE_REVIEW_SYSTEM_PROMPT},
+                {"role": "user", "content": build_user_message(context)},
+            ],
+            registry=registry,
+            budget=budget,
+            response_format=self._response_format(),
+            emit=emit,
+            cancelled=cancelled,
+        )
 
     def review_submission(self, context: MachineReviewContext) -> MachineReviewProviderResult:
         """Run one review and return the validated result."""

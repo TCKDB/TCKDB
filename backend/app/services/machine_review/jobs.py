@@ -334,6 +334,9 @@ def claim_next_job(
         "max_output_tokens": settings_obj.llm_precheck_max_output_tokens,
         "thinking_budget_tokens": settings_obj.llm_precheck_thinking_budget_tokens,
         "timeout_seconds": settings_obj.llm_precheck_timeout_seconds,
+        "max_steps": settings_obj.llm_precheck_max_steps,
+        "max_tool_calls": settings_obj.llm_precheck_max_tool_calls,
+        "run_wall_seconds": settings_obj.llm_precheck_run_wall_seconds,
     }
     session.flush()
     append_event(
