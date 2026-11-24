@@ -1,6 +1,6 @@
 {
   "case": "case_transition_state_validation_critical_with_recommended_action",
-  "description": "A v2 payload expressing what v1 could not: the transition_state_validation category (absent from LLMFindingCategory), critical severity, and a recommended_action. Maps to one transition_state_entry record summary (machine_screened_needs_attention) and builds one needs_curator_review task.",
+  "description": "A format 2 payload using the transition_state_validation category, critical severity and a recommended_action. Maps to one transition_state_entry record summary (machine_screened_needs_attention) and builds one needs_curator_review task.",
   "linked_records": [
     {
       "record_type": "transition_state_entry",

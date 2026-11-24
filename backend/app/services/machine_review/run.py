@@ -444,7 +444,8 @@ def run_machine_review_for_submission(
                     result, offered_refs=offered_refs_from_context(context), returned_sources=frozenset()
                 )
                 if violation is not None:
-                    result, reason = None, _clip(f"Machine review output was invalid: {violation}", _MAX_FAILURE_TEXT_CHARS)
+                    reason = _clip(f"Machine review output was invalid: {violation}", _MAX_FAILURE_TEXT_CHARS)
+                    result = None
 
     outcome, _ = record_review(
         session,

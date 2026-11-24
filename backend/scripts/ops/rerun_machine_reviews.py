@@ -39,7 +39,9 @@ _PROVIDER_FOR_MODE = {"test": "fake", "cloud": "cloud", "local": "local"}
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--requested-by", required=True, metavar="USERNAME", help="an admin user recorded as the requester")
+    parser.add_argument(
+        "--requested-by", required=True, metavar="USERNAME", help="an admin user recorded as the requester"
+    )
     parser.add_argument(
         "--provider",
         choices=("local", "cloud", "fake"),
@@ -84,7 +86,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     provider_name = args.provider or _PROVIDER_FOR_MODE.get(settings.ai_review_assistant_mode)
-    if provider_name is None:
+    if provider_name is None and args.commit:
         print("No provider: AI_REVIEW_ASSISTANT_MODE is off. Set it, or pass --provider.", file=sys.stderr)
         return 2
 
@@ -103,6 +105,8 @@ def main(argv: list[str] | None = None) -> int:
 
         if not args.commit:
             print("\nPlan only -- nothing was queued. Re-run with --commit to queue the jobs.")
+            if provider_name is None:
+                print("--commit will need AI_REVIEW_ASSISTANT_MODE set or --provider.")
             return 0
 
         report = queue_reruns(

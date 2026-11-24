@@ -33,11 +33,8 @@ def offer_violation(
         if finding.record_type is None or finding.record_ref is None:
             return f"Finding {index} sets only one of record_type and record_ref."
         if (finding.record_type, finding.record_ref) not in offered_refs:
-            return (
-                f"Finding {index} cites a record_type and record_ref that were not offered: "
-                f"{finding.record_type!r}, {finding.record_ref!r}."
-            )
+            return f"Finding {index} cites a record_type/record_ref pair that was not offered."
     for source in result.retrieval_sources:
         if source not in returned_sources:
-            return f"retrieval_sources names a source that was not returned by a search: {source!r}."
+            return "retrieval_sources names a source that was not returned by a search."
     return None

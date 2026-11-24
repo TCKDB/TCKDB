@@ -454,6 +454,7 @@ def test_single_shot_provider_citing_an_unlinked_record_fails_as_invalid_output(
 
     job = _reload(session, job)
     assert (job.status, job.failure_code) == (S.failed, MachineReviewJobFailure.invalid_output)
+    assert _kinds(session, job).count(K.parse_failed) == 1
     assert len(_failed_audit_events(session, submission)) == 1
 
 

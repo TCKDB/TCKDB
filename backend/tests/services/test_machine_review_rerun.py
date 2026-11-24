@@ -64,8 +64,7 @@ def test_find_returns_exactly_the_submissions_whose_latest_review_is_the_previou
 
     found = {s.id for s in find_submissions_with_previous_format_review(db_session)}
 
-    assert a.id in found and d.id in found
-    assert b.id not in found and c.id not in found and e.id not in found
+    assert found == {a.id, d.id}
 
 
 def test_queue_creates_one_job_per_stale_submission_and_skips_one_with_an_open_job(db_session):
@@ -117,6 +116,13 @@ def test_script_help_runs_without_a_database_environment():
 
 
 def _run_script(db_session, monkeypatch, capsys, *argv):
+    from app.api.config import settings
+
+    monkeypatch.setattr(settings, "ai_review_assistant_mode", "test")
+    return _run_script_keep_mode(db_session, monkeypatch, capsys, *argv)
+
+
+def _run_script_keep_mode(db_session, monkeypatch, capsys, *argv):
     from sqlalchemy.orm import sessionmaker
 
     from app.api import deps
@@ -125,7 +131,6 @@ def _run_script(db_session, monkeypatch, capsys, *argv):
 
     factory = sessionmaker(bind=db_session.get_bind(), expire_on_commit=False, join_transaction_mode="create_savepoint")
     monkeypatch.setattr(deps, "SessionLocal", factory)
-    monkeypatch.setattr(settings, "ai_review_assistant_mode", "test")
     monkeypatch.setattr(settings, "deployment_mode", "local")
     code = script.main(list(argv))
     return code, capsys.readouterr()
@@ -157,5 +162,25 @@ def test_script_refuses_a_requester_who_is_not_an_admin_with_exit_2(db_session, 
         db_session, monkeypatch, capsys, "--requested-by", curator.username, "--commit", "--i-know-this-is-deployed"
     )
 
+    assert code == 2
+    assert _job_count(db_session, a) == 0
+
+
+def test_script_plan_lists_submissions_when_the_assistant_mode_is_off(db_session, monkeypatch, capsys):
+    from app.api.config import settings
+
+    admin, a, *_ = _seed(db_session)
+
+    def off(session, monkeypatch, capsys, *argv):
+        monkeypatch.setattr(settings, "ai_review_assistant_mode", "off")
+        return _run_script_keep_mode(session, monkeypatch, capsys, *argv)
+
+    code, out = off(db_session, monkeypatch, capsys, "--requested-by", admin.username)
+    assert code == 0 and a.public_ref in out.out
+    assert "--commit will need" in out.out
+
+    code, _ = off(
+        db_session, monkeypatch, capsys, "--requested-by", admin.username, "--commit", "--i-know-this-is-deployed"
+    )
     assert code == 2
     assert _job_count(db_session, a) == 0

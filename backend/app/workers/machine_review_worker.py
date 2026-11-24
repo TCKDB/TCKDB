@@ -43,6 +43,8 @@ from app.services.machine_review.providers.interface import (
 )
 from app.services.machine_review.run import (
     MachineReviewCancelled,
+    _MAX_FAILURE_TEXT_CHARS,
+    _MAX_MODEL_CHARS,
     _clip,
     _failure_text,
     build_review_context,
@@ -219,9 +221,10 @@ def _run_claimed_job(
             return
         submission = session.get_one(Submission, submission_id)
         if result is not None:
+            stamped_model = job_model or settings_obj.llm_precheck_model
             result = result.model_copy(
                 update={
-                    "model": _clip(job_model or settings_obj.llm_precheck_model, 128) if (job_model or settings_obj.llm_precheck_model) else None,
+                    "model": _clip(stamped_model, _MAX_MODEL_CHARS) if stamped_model else None,
                     "provider": provider_name,
                 }
             )
@@ -313,7 +316,7 @@ def _offer_violation(result: MachineReviewProviderResult, context: MachineReview
     violation = offer_violation(result, offered_refs=offered_refs_from_context(context), returned_sources=frozenset())
     if violation is None:
         return None
-    return _clip(f"Machine review output was invalid: {violation}", 2000)
+    return _clip(f"Machine review output was invalid: {violation}", _MAX_FAILURE_TEXT_CHARS)
 
 
 def run_worker_thread(

@@ -30,8 +30,9 @@ Strict schema enforcement is supported by only some of the endpoints above,
 and this transport's whole point is that it does not care which one it is
 talking to. The model's output is untrusted either way: the real boundary is
 :func:`~app.services.machine_review.providers.interface.parse_machine_review_payload`,
-whose ``extra="forbid"`` refuses a mutation field and whose ``Literal[False]``
-refuses a RAG claim. ``json_object`` makes a well-formed answer likelier; it is
+whose ``extra="forbid"`` refuses mutation fields and over-cap text. A review
+that cites an unoffered record pair or an unreturned retrieval source is failed
+by ``offer.py``. ``json_object`` makes a well-formed answer likelier; it is
 not what makes an answer safe.
 
 The key is read from the environment variable named by

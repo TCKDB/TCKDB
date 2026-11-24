@@ -292,7 +292,7 @@ def _tighten(node: Any) -> Any:
         return [_tighten(v) for v in node]
     if not isinstance(node, dict):
         return node
-    node = {k: _tighten(v) if k in {"properties", "items", "anyOf"} else v for k, v in node.items()}
+    node = {k: _tighten(v) if k in {"items", "anyOf"} else v for k, v in node.items()}
     if "properties" in node:
         node["properties"] = {name: _tighten(sub) for name, sub in node["properties"].items()}
     if node.get("type") == "object" and "properties" in node:

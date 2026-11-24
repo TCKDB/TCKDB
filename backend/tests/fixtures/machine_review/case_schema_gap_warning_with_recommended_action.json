@@ -1,6 +1,6 @@
 {
   "case": "case_schema_gap_warning_with_recommended_action",
-  "description": "A v2 payload using the schema_gap category (also absent from the v1 vocabulary), warning severity, with a recommended_action. Maps to one calculation record summary (machine_screened_warning) and builds one needs_curator_review task.",
+  "description": "A format 2 payload using the schema_gap category, warning severity, with a recommended_action. Maps to one calculation record summary (machine_screened_warning) and builds one needs_curator_review task.",
   "linked_records": [
     {
       "record_type": "calculation",

@@ -17,8 +17,9 @@ three are the reason for the shape:
 
 **What the provider trusts and what it does not.** The model's output is
 untrusted: it goes through :func:`parse_machine_review_payload`, the single
-strict boundary, whose ``extra="forbid"`` refuses any mutation field and whose
-``Literal[False]`` refuses a RAG claim. What the provider does *not* take from
+strict boundary, whose ``extra="forbid"`` refuses mutation fields and over-cap text. A review
+that cites an unoffered record pair or an unreturned retrieval source is failed
+by ``offer.py``. What the provider does *not* take from
 the model is its own identity -- ``model`` and ``provider`` are stamped from
 configuration afterwards, overwriting whatever the payload claimed. A reviewer
 reading a stored review needs to know which model produced it, and the model is

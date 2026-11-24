@@ -85,8 +85,8 @@ Each finding is:
   "recommended_action": what a curator might do about it, or null
 }
 
-Length limits. Text over a limit is cut off in the middle of a word, so write
-well under each one:
+Length limits. Text over a limit is either cut off in the middle of a word or
+makes the whole review fail, so write well under each one:
 
 - "summary": one sentence, at most 280 characters.
 - "findings": at most 10 items.

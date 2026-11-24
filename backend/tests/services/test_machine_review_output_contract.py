@@ -119,9 +119,12 @@ def test_offer_violation_unoffered_pair_vs_offered_pair():
     assert offer_violation(_result(), offered_refs=_OFFERED, returned_sources=frozenset()) is None
 
 
-def test_offer_violation_names_the_field_not_a_row_id():
-    text = offer_violation(_result(record_ref="777"), offered_refs=_OFFERED, returned_sources=frozenset())
+def test_offer_violation_names_the_field_and_does_not_echo_the_model_values():
+    result = _result(record_ref="777")
+    text = offer_violation(result, offered_refs=_OFFERED, returned_sources=frozenset())
     assert "record_ref" in text
+    assert "777" not in text
+    assert result.findings[0].record_type not in text
 
 
 def test_offer_violation_half_pair_is_a_violation():
