@@ -184,14 +184,17 @@ def test_user_message_carries_records_warnings_and_the_omission_note():
     assert "records" not in payload["submission"] and "omitted" not in payload["submission"]
 
 
-#: SHA-256 of the tool schemas plus the final-turn instruction, the words the agent loop adds to a review.
-_AGENT_WORDS_SHA256 = "38d42d9dd15cd6c131c7baa66524145b018f6e2b1a3768d2c9bc09685b7e1794"
+#: SHA-256 of the tool schemas, the guidance preamble and the final-turn instruction, the words the agent loop adds to a review.
+_AGENT_WORDS_SHA256 = "435db9970ade81c77efb43d496fe8dc25fe2f3f64dc671423c0d8586c3453d40"
 
 
 def test_the_agent_words_are_pinned_and_ascii():
+    from app.services.machine_review.agent.guidance import GuidanceEntry, GuidanceIndex
     from app.services.machine_review.agent.loop import FINAL_TURN_INSTRUCTION
-    from app.services.machine_review.agent.tools import ToolRegistry
+    from app.services.machine_review.agent.tools import GUIDANCE_PREAMBLE, ToolRegistry
 
-    words = json.dumps(ToolRegistry(frozenset(), {}).schemas(), sort_keys=True) + FINAL_TURN_INSTRUCTION
+    guidance = GuidanceIndex([GuidanceEntry(source_key="k", kind="check", title="t", text="x")])
+    schemas = ToolRegistry(frozenset(), {}, guidance=guidance).schemas()
+    words = json.dumps(schemas, sort_keys=True) + GUIDANCE_PREAMBLE + FINAL_TURN_INSTRUCTION
     assert words.isascii()
     assert hashlib.sha256(words.encode("utf-8")).hexdigest() == _AGENT_WORDS_SHA256
