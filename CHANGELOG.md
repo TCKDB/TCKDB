@@ -25,6 +25,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Machine-review output is format 2 (Unreleased)
+
+- **Behaviour:** the reviewer's answer is `machine_review` format 2: `summary` is required (at most 280 characters), at most 10 findings (message at most 240, evidence keys at most 8 of 64, recommended action at most 200), and `retrieval_sources` (at most 10 keys of 64) replaces `used_rag`. A finding may cite only a `(record_type, record_ref)` pair the context offered, or neither; otherwise the review fails as `invalid_output`. Stored format 1 reviews are no longer read: they show as unparsed until re-run: `python scripts/ops/rerun_machine_reviews.py --requested-by ADMIN` prints the plan, and adding `--commit --i-know-this-is-deployed --process` queues and runs the jobs. The prompt is version 2.
+- **API:** `GET /api/v1/submissions/{id}/ai-review-summary` returns `retrieval_source_count` in place of `used_rag`.
+- **Migration:** none.
+
 ## Machine-review jobs are requested through the API (Unreleased)
 
 - **Behaviour:** `POST /api/v1/machine-review/jobs` queues a machine review of a submission (curator or admin; 202). A second request while one is queued or running is a 409 `machine_review_job_conflict` whose `context.open_job` holds the open job's state; `GET /api/v1/machine-review/jobs?submission_id=` lists it first.

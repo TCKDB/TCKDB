@@ -9,7 +9,7 @@ persistence, or public exposure exists:
   (``RecordReviewStatus``) and submission precheck (``SubmissionPrecheckLabel``),
 * the result/finding models carry no mutation-payload field,
 * ``evidence_keys`` are accepted as pointers only,
-* ``used_rag`` is constrained ``False`` for the MVP.
+* ``retrieval_sources`` replaces the former RAG flag.
 
 No database, provider, RAG, or public read-API is involved.
 """
@@ -258,23 +258,16 @@ def test_evidence_keys_accepted_as_pointer_strings():
 
 
 # --------------------------------------------------------------------------- #
-# used_rag constrained False for the MVP
+# retrieval_sources replaces the RAG flag
 # --------------------------------------------------------------------------- #
 
 
-def test_used_rag_defaults_false():
-    """used_rag defaults to False."""
+def test_retrieval_sources_default_empty_and_used_rag_is_gone():
+    """The read model lists retrieval sources, empty by default, and has no RAG flag."""
     result = MachineReviewResult(status=MachineReviewStatus.machine_screened_pass)
-    assert result.used_rag is False
-
-
-def test_used_rag_true_is_rejected():
-    """A provider claiming RAG usage fails validation in the MVP."""
+    assert result.retrieval_sources == ()
     with pytest.raises(ValidationError):
-        MachineReviewResult(
-            status=MachineReviewStatus.machine_screened_pass,
-            used_rag=True,
-        )
+        MachineReviewResult(status=MachineReviewStatus.machine_screened_pass, used_rag=False)
 
 
 # --------------------------------------------------------------------------- #

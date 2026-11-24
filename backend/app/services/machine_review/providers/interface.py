@@ -137,8 +137,8 @@ def parse_machine_review_payload(
     The single trust boundary for provider output. ``raw`` may be a JSON string
     (parsed with :func:`json.loads`) or an already-decoded ``dict``. The result
     is validated against :class:`MachineReviewProviderResult`, whose
-    ``extra="forbid"`` / ``Literal[False]`` ``used_rag`` constraints reject any
-    mutation payload or RAG claim, and then against
+    ``extra="forbid"`` and length caps reject any mutation payload or
+    over-long text, and then against
     :data:`_PROVIDER_RESERVED_STATUSES`.
 
     **The narrowing lives here and not on the model** because the runner builds

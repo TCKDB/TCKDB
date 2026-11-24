@@ -157,6 +157,28 @@ def test_latest_run_is_the_newest_event_and_null_when_unreviewed(
     assert run["audit_event_id"] == runs[0]["audit_event_id"]
 
 
+def test_a_stored_previous_format_run_is_unparsed_and_its_current_twin_is_parsed(
+    client, db_session, login_as, _api_admin_user, _api_curator_user, monkeypatch
+):
+    login_as(_api_admin_user)
+    previous_format, species = _reviewed_submission(client, db_session, monkeypatch, _api_admin_user)
+    current_format, _ = _reviewed_submission(client, db_session, monkeypatch, _api_admin_user)
+    stored = db_session.scalars(
+        select(SubmissionAuditEvent).where(
+            SubmissionAuditEvent.submission_id == previous_format.id,
+            SubmissionAuditEvent.event_kind == SubmissionAuditEventKind.llm_precheck_recorded,
+        )
+    ).one()
+    stored.details_json = {**stored.details_json, "format": {"name": "machine_review", "version": 1}}
+    db_session.flush()
+    login_as(_api_curator_user)
+
+    items = _by_id(client.get(_URL).json())
+
+    assert items[previous_format.id]["machine_review"]["latest_run"]["parsed"] is False
+    assert items[current_format.id]["machine_review"]["latest_run"]["parsed"] is True
+
+
 def test_latest_run_follows_created_at_before_the_id(
     client, db_session, login_as, _api_admin_user, _api_curator_user, monkeypatch
 ):

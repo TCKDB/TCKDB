@@ -52,7 +52,7 @@ def _finding(species_id: int, message: str) -> MachineReviewProviderFinding:
         severity=MachineReviewSeverity.warning,
         category=MachineReviewCategory.provenance,
         record_type="species",
-        record_id=species_id,
+        record_ref=str(species_id),
         message=message,
         evidence_keys=("k",),
     )
@@ -68,7 +68,6 @@ def _record(db_session, submission, *findings):
             summary="s",
             findings=findings,
             model="m",
-            used_rag=False,
         ),
         provider="p",
     )
@@ -178,7 +177,7 @@ def _as_service_finding(f: MachineReviewProviderFinding):
 
     return MachineReviewFinding(
         severity=f.severity, category=f.category, record_type=f.record_type,
-        record_ref=str(f.record_id), message=f.message, evidence_keys=f.evidence_keys,
+        record_ref=f.record_ref, message=f.message, evidence_keys=f.evidence_keys,
         recommended_action=f.recommended_action,
     )
 

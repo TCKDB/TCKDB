@@ -1,0 +1,44 @@
+{
+  "case": "case_stored_previous_format_parse_warning",
+  "description": "A payload stored under the previous format version is not read; the adapter degrades to an unknown-format parse warning with no record summaries and no tasks.",
+  "linked_records": [
+    {
+      "record_type": "kinetics",
+      "record_id": 9001,
+      "role": "primary"
+    }
+  ],
+  "audit_event_details_json": {
+    "format": {
+      "name": "machine_review",
+      "version": 1
+    },
+    "status": "machine_screened_warning",
+    "curator_priority": "medium",
+    "summary": "One advisory warning.",
+    "findings": [
+      {
+        "severity": "warning",
+        "category": "provenance",
+        "record_type": "kinetics",
+        "record_ref": "9001",
+        "record_id": 9001,
+        "message": "Provenance is thin.",
+        "evidence_keys": [
+          "prov.missing"
+        ],
+        "recommended_action": null
+      }
+    ],
+    "model": "fake_test/machine-review",
+    "provider": "FakeMachineReviewProvider"
+  },
+  "expected": {
+    "record_summary_count": 0,
+    "unmapped_findings_count": 0,
+    "mapping_warnings_count": 0,
+    "parse_warnings_count": 1,
+    "created_tasks": 0,
+    "parse_warning_contains": "unknown format"
+  }
+}

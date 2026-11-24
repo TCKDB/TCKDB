@@ -9,15 +9,21 @@
     }
   ],
   "audit_event_details_json": {
-    "format": {"name": "machine_review", "version": 1},
+    "format": {
+      "name": "machine_review",
+      "version": 2
+    },
     "status": "not-a-real-status",
-    "findings": []
+    "findings": [],
+    "summary": "Reviewer summary for this case.",
+    "retrieval_sources": []
   },
   "expected": {
     "record_summary_count": 0,
     "unmapped_findings_count": 0,
     "mapping_warnings_count": 0,
     "parse_warnings_count": 1,
-    "created_tasks": 0
+    "created_tasks": 0,
+    "parse_warning_contains": "failed contract validation"
   }
 }

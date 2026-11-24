@@ -90,7 +90,6 @@ def _details(
         summary="advisory summary",
         findings=findings,
         model=model,
-        used_rag=False,
     )
     payload = machine_review_result_to_details_json(result)
     if provider is not None:
@@ -109,7 +108,7 @@ def _record_finding(
         severity=severity,
         category=MachineReviewCategory.provenance,
         record_type=record_type,
-        record_id=record_id,
+        record_ref=None if record_id is None else str(record_id),
         message="Missing source artifact summary.",
         evidence_keys=("missing_checks.source_artifact_present",),
     )
@@ -261,7 +260,7 @@ def test_inspection_does_not_fan_out_submission_scoped_findings():
         severity=MachineReviewSeverity.critical,
         category=MachineReviewCategory.consistency,
         record_type=None,
-        record_id=None,
+        record_ref=None,
         message="Submission-level concern across the bundle.",
     )
     event = _mr_event(

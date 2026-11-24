@@ -1,0 +1,30 @@
+{
+  "case": "case_used_rag_true_rejected",
+  "description": "The removed used_rag key is not part of format 2; extra=forbid refuses the payload and the adapter degrades to a contract-validation parse warning with no record reviews and no tasks.",
+  "linked_records": [
+    {
+      "record_type": "kinetics",
+      "record_id": 9001,
+      "role": "primary"
+    }
+  ],
+  "audit_event_details_json": {
+    "format": {
+      "name": "machine_review",
+      "version": 2
+    },
+    "status": "machine_screened_warning",
+    "findings": [],
+    "summary": "Reviewer summary for this case.",
+    "used_rag": true,
+    "retrieval_sources": []
+  },
+  "expected": {
+    "record_summary_count": 0,
+    "unmapped_findings_count": 0,
+    "mapping_warnings_count": 0,
+    "parse_warnings_count": 1,
+    "created_tasks": 0,
+    "parse_warning_contains": "failed contract validation"
+  }
+}

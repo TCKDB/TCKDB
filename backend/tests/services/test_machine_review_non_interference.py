@@ -473,13 +473,12 @@ def test_machine_review_result_is_advisory_only(db_session, _api_test_user):
                 severity=MachineReviewSeverity.warning,
                 category=MachineReviewCategory.provenance,
                 record_type="calculation",
-                record_id=calc.id,
+                record_ref=str(calc.id),
                 message="Missing source artifact summary.",
                 evidence_keys=("missing_checks.source_artifact_present",),
             ),
         ),
         model="fake_test/fixed",
-        used_rag=False,
     )
 
     result = run_machine_review_for_submission(

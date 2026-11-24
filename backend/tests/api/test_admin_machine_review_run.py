@@ -35,13 +35,13 @@ from sqlalchemy.orm import Session
 from app.api.app import create_app
 from app.api.config import Settings
 from app.api.deps import get_db, get_write_db
-from app.db.models.common import SubmissionAuditEventKind, SubmissionKind
+from app.db.models.common import SubmissionAuditEventKind, SubmissionKind, SubmissionRecordType
 from app.db.models.submission import Submission, SubmissionAuditEvent
 from app.services.machine_review.providers.fake import (
     build_fake_machine_review_provider,
     make_warning_result,
 )
-from app.services.submission import create_submission
+from app.services.submission import create_submission, link_record
 
 _BASE = "/api/v1/admin/machine-review/run-for-submission"
 
@@ -234,6 +234,10 @@ def test_successful_run_returns_the_review_and_records_it(
     fixed = make_warning_result(record_type="calculation", record_ref="7")
     _use_provider(monkeypatch, build_fake_machine_review_provider(fixed))
     submission = _new_submission(db_session, _api_admin_user)
+    link_record(
+        db_session, submission=submission, record_type=SubmissionRecordType.calculation, record_id=7, role="primary"
+    )
+    db_session.flush()
     login_as(_api_admin_user)
 
     resp = client.post(f"{_BASE}/{submission.id}")
@@ -251,7 +255,7 @@ def test_successful_run_returns_the_review_and_records_it(
 
     events = _review_events(db_session, submission.id)
     assert len(events) == 1
-    assert events[0].details_json["format"] == {"name": "machine_review", "version": 1}
+    assert events[0].details_json["format"] == {"name": "machine_review", "version": 2}
 
 
 def test_successful_run_does_not_mutate_submission_status(
@@ -334,7 +338,7 @@ def test_provider_failure_still_records_the_attempt(
     events = _review_events(db_session, submission.id)
     assert len(events) == 1
     assert events[0].details_json["status"] == "machine_review_failed"
-    assert events[0].details_json["format"] == {"name": "machine_review", "version": 1}
+    assert events[0].details_json["format"] == {"name": "machine_review", "version": 2}
 
 
 def test_provider_failure_does_not_mutate_submission_status(

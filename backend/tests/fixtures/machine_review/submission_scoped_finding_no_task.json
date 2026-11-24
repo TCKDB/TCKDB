@@ -1,6 +1,6 @@
 {
   "case": "submission_scoped_finding_no_task",
-  "description": "A finding with no record_type/record_id is submission-scoped. It is a diagnostic only (counted in unmapped_findings), never fanned out to a record, and never produces a task. Submission-scoped is expected, so it carries no mapping warning.",
+  "description": "A finding with record_type and record_ref both null is submission-scoped. It is a diagnostic only (counted in unmapped_findings), never fanned out to a record, and never produces a task. Submission-scoped is expected, so it carries no mapping warning.",
   "linked_records": [
     {
       "record_type": "kinetics",
@@ -9,7 +9,10 @@
     }
   ],
   "audit_event_details_json": {
-    "format": {"name": "machine_review", "version": 1},
+    "format": {
+      "name": "machine_review",
+      "version": 2
+    },
     "status": "machine_screened_warning",
     "summary": "A submission-wide provenance concern with no specific record.",
     "findings": [
@@ -24,7 +27,7 @@
     ],
     "model": "fake_test/machine-review",
     "provider": "FakeMachineReviewProvider",
-    "used_rag": false
+    "retrieval_sources": []
   },
   "expected": {
     "record_summary_count": 0,

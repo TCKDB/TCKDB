@@ -33,7 +33,7 @@ from app.services.trust.models import EvidenceRubric
 from app.services.trust.rubrics import RUBRICS
 
 #: Active machine-review prompt (private constant; no config system yet).
-ACTIVE_MACHINE_REVIEW_PROMPT: VersionRef = VersionRef(name="machine_review", version=1)
+ACTIVE_MACHINE_REVIEW_PROMPT: VersionRef = VersionRef(name="machine_review", version=2)
 
 # THE CURRENCY RULE, now structural. A machine review is stamped with exactly one
 # rubric: the one that graded the record (reviewer family, per record type),

@@ -1,0 +1,28 @@
+{
+  "case": "case_unknown_schema_version_parse_warning",
+  "description": "An unknown format version (a future version 3) is not read as the current one; the adapter degrades to a parse warning with no record summaries and no tasks.",
+  "linked_records": [
+    {
+      "record_type": "kinetics",
+      "record_id": 9001,
+      "role": "primary"
+    }
+  ],
+  "audit_event_details_json": {
+    "format": {
+      "name": "machine_review",
+      "version": 3
+    },
+    "status": "machine_screened_warning",
+    "findings": [],
+    "summary": "Reviewer summary for this case."
+  },
+  "expected": {
+    "record_summary_count": 0,
+    "unmapped_findings_count": 0,
+    "mapping_warnings_count": 0,
+    "parse_warnings_count": 1,
+    "created_tasks": 0,
+    "parse_warning_contains": "unknown format"
+  }
+}

@@ -163,7 +163,7 @@ class SubmissionAIReviewSummaryRead(BaseModel):
     label: str | None = None
     summary: str | None = None
     model: str | None = None
-    used_rag: bool | None = None
+    retrieval_source_count: int | None = None
     created_at: datetime
     finding_counts: SubmissionAIReviewFindingCounts
 

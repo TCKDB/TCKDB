@@ -63,7 +63,7 @@ _ACTIVE_RUBRICS = (
 
 def test_active_machine_review_recipe_preserves_the_prompt():
     """The prompt is the documented private constant: a name beside an integer version."""
-    assert ACTIVE_MACHINE_REVIEW_PROMPT == VersionRef(name="machine_review", version=1)
+    assert ACTIVE_MACHINE_REVIEW_PROMPT == VersionRef(name="machine_review", version=2)
 
 
 def test_active_rubric_is_read_from_the_trust_rubric_registry():

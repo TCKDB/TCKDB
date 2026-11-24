@@ -40,5 +40,4 @@ class DisabledMachineReviewProvider:
             findings=(),
             model=None,
             provider=type(self).__name__,
-            used_rag=False,
         )

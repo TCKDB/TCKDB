@@ -94,7 +94,7 @@ def _record_finding(
         severity=severity,
         category=MachineReviewCategory.provenance,
         record_type=record_type,
-        record_id=record_id,
+        record_ref=None if record_id is None else str(record_id),
         message="Missing source artifact summary.",
         evidence_keys=("missing_checks.source_artifact_present",),
     )
@@ -114,7 +114,6 @@ def _record_mr_event(
         summary="advisory",
         findings=findings,
         model="fake_test/simple-v1",
-        used_rag=False,
     )
     event = record_machine_review_audit_event(
         db_session,
@@ -640,7 +639,12 @@ def test_inspection_lists_unmapped_findings_with_reason(
         seed.finding("species", None, message="Which species?"),  # two linked -> ambiguous
         seed.finding("species", s1.id, message="Mapped concern."),
     )
-    seed.run_review(client, monkeypatch, submission.id, seed.result(findings))
+    # Stored events can cite pairs a run would refuse; the read side labels each one.
+    record_machine_review_audit_event(
+        db_session, submission=submission, result=seed.result(findings), provider="FakeMachineReviewProvider"
+    )
+    db_session.flush()
+    client._db_session.expire_all()
 
     body = client.get(_url(submission.id)).json()
 

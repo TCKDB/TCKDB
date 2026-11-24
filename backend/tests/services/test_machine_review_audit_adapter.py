@@ -90,8 +90,7 @@ def _details(
 
     Mirrors ``record_machine_review_audit_event``: a provider-contract dump
     (``schema_version`` marker included) with the optional ``provider`` key.
-    ``used_rag`` is set on the dump, since the contract refuses ``True`` at
-    construction.
+    ``used_rag`` adds a key the contract does not have, which it refuses.
     """
     result = MachineReviewProviderResult(
         format=MACHINE_REVIEW_FORMAT,
@@ -122,7 +121,7 @@ def _record_finding(
         severity=severity,
         category=category,
         record_type=record_type,
-        record_id=record_id,
+        record_ref=None if record_id is None else str(record_id),
         message=message,
         evidence_keys=("missing_checks.source_artifact_present",),
     )
@@ -264,7 +263,7 @@ def test_submission_scoped_finding_does_not_create_record_review():
         severity=MachineReviewSeverity.critical,
         category=MachineReviewCategory.consistency,
         record_type=None,
-        record_id=None,
+        record_ref=None,
         message="Submission-level concern across the bundle.",
     )
     event = _AuditEvent(
@@ -313,6 +312,24 @@ def test_unlinked_record_finding_does_not_create_record_review():
 # --------------------------------------------------------------------------- #
 # Only the current format is read: anything else is refused, not guessed at
 # --------------------------------------------------------------------------- #
+
+
+def test_a_stored_previous_format_payload_is_unreadable_and_its_current_twin_is_read():
+    """A payload stored under format 1 is an unknown format; the same content under format 2 parses.
+
+    Kills: a reader for the previous format surviving the registry swap.
+    """
+    current = _details(findings=(_record_finding(),))
+    previous = {**current, "format": {"name": "machine_review", "version": 1}, "used_rag": False}
+    previous["findings"] = [{**f, "record_id": 1} for f in previous["findings"]]
+
+    stored = machine_review_result_from_audit_event(previous)
+    assert stored.result is None
+    assert len(stored.parse_warnings) == 1 and "unknown format" in stored.parse_warnings[0]
+
+    parsed = machine_review_result_from_audit_event({**current, "retrieval_sources": ["guidance.a"]})
+    assert parsed.parse_warnings == ()
+    assert parsed.result is not None and parsed.result.retrieval_sources == ("guidance.a",)
 
 
 def test_a_payload_without_the_format_marker_is_an_unknown_format():
@@ -382,8 +399,8 @@ def test_missing_details_json_returns_parse_warning_not_exception():
     assert len(projection.parse_warnings) == 1
 
 
-def test_rag_payload_is_rejected_as_parse_warning():
-    """RAG is a non-goal; a payload claiming RAG degrades, it does not project."""
+def test_payload_with_the_removed_rag_flag_is_rejected_as_parse_warning():
+    """A payload still carrying the removed ``used_rag`` key degrades, it does not project."""
     event = _AuditEvent(
         details_json=_details(
             findings=(_record_finding(),),

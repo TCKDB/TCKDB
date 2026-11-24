@@ -99,7 +99,7 @@ def test_disabled_provider_returns_not_run_v2_result():
     assert result.format == MACHINE_REVIEW_FORMAT
     assert result.status is MachineReviewStatus.not_run
     assert result.findings == ()
-    assert result.used_rag is False
+    assert result.retrieval_sources == ()
     assert result.summary == "AI Review Assistant is disabled / not run"
 
 
@@ -118,7 +118,7 @@ def test_fake_v2_provider_returns_valid_machine_review_v2_payload():
     assert result.format == MACHINE_REVIEW_FORMAT
     assert result.status is MachineReviewStatus.machine_screened_pass
     assert "2 linked record(s)" in (result.summary or "")
-    assert result.used_rag is False
+    assert result.retrieval_sources == ()
 
 
 def test_fake_v2_provider_returns_configured_fixed_result():
@@ -440,13 +440,12 @@ def test_local_mode_real_call_not_implemented_yet():
 def _valid_v2_payload() -> dict:
     """A minimal valid v2 payload dict."""
     return {
-        "format": {"name": "machine_review", "version": 1},
+        "format": {"name": "machine_review", "version": 2},
         "status": "machine_screened_warning",
         "summary": "boundary test",
         "findings": [],
         "model": "vendor/model",
         "provider": "VendorProvider",
-        "used_rag": False,
     }
 
 
@@ -463,10 +462,10 @@ def test_parse_helper_accepts_dict_and_json_string():
     assert from_dict.status is MachineReviewStatus.machine_screened_warning
 
 
-def test_provider_result_rejects_used_rag_true():
-    """A payload claiming RAG fails validation (used_rag is Literal[False])."""
+def test_provider_result_rejects_the_removed_used_rag_key():
+    """A payload carrying the removed ``used_rag`` key fails validation."""
     payload = _valid_v2_payload()
-    payload["used_rag"] = True
+    payload["used_rag"] = False
 
     with pytest.raises(ValidationError):
         parse_machine_review_payload(payload)

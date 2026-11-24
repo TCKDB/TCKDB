@@ -68,8 +68,7 @@ def finding(
         severity=severity,
         category=category,
         record_type=record_type,
-        record_ref=record_ref,
-        record_id=record_id,
+        record_ref=record_ref if record_ref is not None else (None if record_id is None else str(record_id)),
         message=message,
         evidence_keys=evidence_keys,
         recommended_action=recommended_action,
@@ -91,7 +90,6 @@ def result(
         findings=findings,
         model="fake_test/machine-review",
         provider="FakeMachineReviewProvider",
-        used_rag=False,
     )
 
 

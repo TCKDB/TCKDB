@@ -52,7 +52,6 @@ def make_pass_result(
         findings=(),
         model=_FAKE_MODEL,
         provider=_FAKE_PROVIDER_NAME,
-        used_rag=False,
     )
 
 
@@ -89,7 +88,6 @@ def make_warning_result(
         ),
         model=_FAKE_MODEL,
         provider=_FAKE_PROVIDER_NAME,
-        used_rag=False,
     )
 
 
@@ -126,7 +124,6 @@ def make_critical_result(
         ),
         model=_FAKE_MODEL,
         provider=_FAKE_PROVIDER_NAME,
-        used_rag=False,
     )
 
 
@@ -143,7 +140,6 @@ def make_failed_result(
         findings=(),
         model=_FAKE_MODEL,
         provider=_FAKE_PROVIDER_NAME,
-        used_rag=False,
     )
 
 
@@ -172,7 +168,7 @@ class FakeMachineReviewProvider:
 
         precheck = context.precheck_context
         if precheck is None or not precheck.record_refs:
-            return make_warning_result(record_type="submission", record_ref=None)
+            return make_warning_result(record_type=None, record_ref=None)
 
         return make_pass_result(
             summary=(
