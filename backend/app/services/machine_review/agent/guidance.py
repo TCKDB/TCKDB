@@ -12,6 +12,7 @@ import re
 from collections import Counter
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any
 
 #: Longest ``source_key``, the cap ``retrieval_sources`` items carry.
@@ -36,6 +37,9 @@ class GuidanceEntry:
     text: str
     fields: Mapping[str, Any] = field(default_factory=dict)
     codes: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "fields", MappingProxyType(dict(self.fields)))
 
 
 class GuidanceIndex:

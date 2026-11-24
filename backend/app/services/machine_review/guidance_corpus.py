@@ -26,7 +26,7 @@ def _threshold_entry(threshold: Any) -> GuidanceEntry:
     if hasattr(threshold, "value"):
         fields["value"] = threshold.value
     else:
-        fields["values"] = [list(pair) for pair in threshold.values]
+        fields["values"] = tuple(tuple(pair) for pair in threshold.values)
         fields["fallback"] = threshold.fallback
     return GuidanceEntry(
         source_key=f"threshold:{threshold.name}",

@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
+from app.services.machine_review.agent import guidance as agent_guidance
 from app.services.machine_review.agent.guidance import GuidanceEntry, GuidanceIndex
 from app.services.machine_review.guidance_corpus import (
     build_guidance_entries,
     default_guidance_index,
     guidance_seed_codes,
 )
-
-KEY_MAX_CHARS = 64
+from app.services.machine_review.schemas import KEY_MAX_CHARS
 
 
 @pytest.fixture(scope="module")
@@ -26,6 +26,10 @@ def index():
 
 def _entry(key, text="some text", kind="check", codes=()):
     return GuidanceEntry(source_key=key, kind=kind, title=key, text=text, codes=codes)
+
+
+def test_the_agent_key_cap_matches_the_output_contract():
+    assert agent_guidance.KEY_MAX_CHARS == KEY_MAX_CHARS
 
 
 def test_every_entry_has_a_unique_short_key_and_text(entries):

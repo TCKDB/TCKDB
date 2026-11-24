@@ -7,6 +7,7 @@ to it and nothing is committed past the test.
 
 from __future__ import annotations
 
+import json
 import threading
 from datetime import timedelta
 
@@ -951,8 +952,6 @@ WARNING_KEY = f"warning:{WARNING_CODE}"
 
 
 def _search_reply(query: str) -> dict:
-    import json
-
     reply = _tool_reply("calculation", "777")
     function = reply["choices"][0]["message"]["tool_calls"][0]["function"]
     function["name"], function["arguments"] = "search_guidance", json.dumps({"query": query})
@@ -960,8 +959,6 @@ def _search_reply(query: str) -> dict:
 
 
 def _sources_reply(*keys: str) -> dict:
-    import json
-
     return _pass_reply(
         json.dumps(
             {
@@ -1063,7 +1060,6 @@ def _tools_rejected():
 def test_the_no_tools_fallback_shows_the_warning_guidance_and_it_is_citable(db_session, factory, local_stub):
     from tests.services._llm_stub_server import StubResponse
 
-    server = None
     server, submission, job, settings_obj = _warned_job(db_session, local_stub, [{}])
     server.script[:] = [StubResponse(body=_tools_rejected(), status=500), StubResponse(body=_sources_reply(WARNING_KEY))]
     status, code, failed, job = _outcome(db_session, factory, job, submission, settings_obj)
@@ -1081,10 +1077,5 @@ def test_the_no_tools_fallback_without_a_warning_has_no_guidance_and_the_key_is_
     server.script[:] = [StubResponse(body=_tools_rejected(), status=500), StubResponse(body=_sources_reply(WARNING_KEY))]
     status, code, failed, job = _outcome(db_session, factory, job, submission, settings_obj)
     assert (status, code, failed) == (S.failed, MachineReviewJobFailure.invalid_output, 1)
-    assert WARNING_KEY not in json_dump(server.requests[1].body["messages"])
+    assert WARNING_KEY not in json.dumps(server.requests[1].body["messages"])
 
-
-def json_dump(value) -> str:
-    import json
-
-    return json.dumps(value)
