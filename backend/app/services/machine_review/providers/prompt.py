@@ -151,21 +151,34 @@ What is NOT worth reporting:
 """
 
 
+def _compact(value: Any) -> Any:
+    """Drop empty containers and ``None`` so the message carries only what exists."""
+    if isinstance(value, dict):
+        out = {k: _compact(v) for k, v in value.items()}
+        return {k: v for k, v in out.items() if v not in (None, {}, [])}
+    if isinstance(value, list):
+        return [_compact(v) for v in value]
+    return value
+
+
 def build_user_message(context: MachineReviewContext) -> str:
     """Render the review context as the user turn.
 
     JSON rather than prose so the model sees the same field names the contract
     uses. The depositor's title and summary sit under ``untrusted_depositor_text``;
     ``offered_record_refs`` lists the only record pairs a finding may cite, with
-    ``record_ref`` as a string. Compact separators keep the token cost down; the
-    context is already small by construction (``llm_precheck.context_builder``
-    assembles metadata and record refs, never artifact text or coordinates).
+    ``record_ref`` as a string. ``records`` holds the per-record summaries of the
+    context pack, ``submission_warnings`` the deposit warnings no record took, and
+    ``omitted`` says what the size limit cut. Compact separators keep the token cost
+    down.
     """
     payload: dict[str, Any] = {"submission_id": context.submission_id}
     precheck = context.precheck_context
     if precheck is not None:
         payload["submission"] = precheck.model_dump(
-            mode="json", exclude_none=True, exclude={"title", "summary", "record_refs"}
+            mode="json",
+            exclude_none=True,
+            exclude={"title", "summary", "record_refs", "record_summaries", "submission_warnings", "omitted"},
         )
         payload["untrusted_depositor_text"] = {
             "title": precheck.title,
@@ -175,6 +188,14 @@ def build_user_message(context: MachineReviewContext) -> str:
             {"record_type": link.record_type, "record_ref": str(link.record_id), "role": link.role}
             for link in precheck.record_refs
         ]
+        records = _compact([s.model_dump(mode="json") for s in precheck.record_summaries])
+        if records:
+            payload["records"] = records
+        warnings = _compact([w.model_dump(mode="json") for w in precheck.submission_warnings])
+        if warnings:
+            payload["submission_warnings"] = warnings
+        if precheck.omitted is not None:
+            payload["omitted"] = precheck.omitted.model_dump(mode="json")
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 

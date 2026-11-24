@@ -1,6 +1,7 @@
 """Submission context for machine review.
 
-Holds only :class:`LLMPrecheckContext` and the builder that assembles it. It performs no online API calls, local model
+Holds the context types a machine-review provider reviews over; the builder is
+:func:`app.services.machine_review.agent.context_pack.build_review_context_pack`. It performs no online API calls, local model
 calls, RAG lookups, upload workflow wiring, or public read integration; the runner lives in
 :mod:`app.services.machine_review`.
 """
