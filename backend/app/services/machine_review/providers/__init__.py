@@ -5,10 +5,9 @@ audit-adapter dispatch. This package contains the provider interface, the
 disabled/off provider, a test-only fake provider, the deployer-facing
 factory, and the strict-parse / serialization boundary helpers.
 
-It performs **no** real online or local model calls, no persistence, no
-upload/precheck wiring, no automatic task creation, and no public exposure.
-Cloud/local modes validate configuration and then raise ``NotImplementedError``
-until the real providers land.
+Cloud and local modes validate configuration and build a provider that makes one
+OpenAI-compatible chat call when a review is requested; building one calls nothing.
+The package does no persistence, no automatic task creation and no public exposure.
 
 Config namespace: ``AI_REVIEW_ASSISTANT_MODE`` + ``LLM_PRECHECK_*`` (no parallel
 ``MACHINE_REVIEW_*`` env vars). Output contract:

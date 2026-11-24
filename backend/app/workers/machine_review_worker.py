@@ -172,7 +172,7 @@ def _run_claimed_job(
 
     try:
         with session_factory() as session:
-            context = build_review_context(session, submission_id)
+            context = build_review_context(session, submission_id, settings_obj)
             job = session.get_one(MachineReviewJob, job_id)
             job.context_hash = _context_hash(context)
             jobs.append_event(
@@ -199,11 +199,14 @@ def _run_claimed_job(
                 else:
                     if _cancel_requested(session_factory, job_id):
                         raise MachineReviewCancelled
-                    result, reason = invoke_provider(selected, context, settings_obj)
+                    result, reason, call_code = invoke_provider(selected, context, settings_obj)
                     if result is not None:
                         violation = _offer_violation(result, context)
                         if violation is not None:
-                            result, reason, parse_failed = None, violation, True
+                            result, reason, call_code = None, violation, MachineReviewJobFailure.invalid_output
+                    if result is None and call_code is not None:
+                        code = call_code
+                        parse_failed = call_code is MachineReviewJobFailure.invalid_output
             except MachineReviewCancelled:
                 with session_factory() as session:
                     jobs.finish_job(

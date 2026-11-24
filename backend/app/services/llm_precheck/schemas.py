@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -15,6 +13,58 @@ class LLMRecordRef(BaseModel):
     record_type: str
     record_id: int
     role: str | None = None
+
+
+class LLMFindingSummary(BaseModel):
+    """One deterministic check finding, as TCKDB's own check wrote it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    severity: str | None = None
+    category: str | None = None
+    message: str
+    evidence_keys: tuple[str, ...] = ()
+
+
+class LLMWarningSummary(BaseModel):
+    """One deposit warning: its code and the sentence TCKDB renders for it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    code: str
+    message: str
+
+
+class LLMRecordSummary(BaseModel):
+    """What the reviewer is shown about one linked record.
+
+    ``values`` are the record's own stored numbers, booleans and vocabulary values (column names carry the
+    units); ``subject`` is the canonical species or reaction the record is about; ``parents`` name other offered
+    records it links to as ``record_type:record_ref``; ``levels_of_theory`` and ``software`` (software and workflow
+    tool) are labels keyed by the column that references them.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    record_type: str
+    record_ref: str
+    subject: dict[str, str] = Field(default_factory=dict)
+    parents: dict[str, str] = Field(default_factory=dict)
+    values: dict[str, float | int | bool | str] = Field(default_factory=dict)
+    levels_of_theory: dict[str, str] = Field(default_factory=dict)
+    software: dict[str, str] = Field(default_factory=dict)
+    deterministic_findings: tuple[LLMFindingSummary, ...] = ()
+    deposit_warnings: tuple[LLMWarningSummary, ...] = ()
+
+
+class LLMOmission(BaseModel):
+    """What the token cap cut from the pack."""
+
+    model_config = ConfigDict(frozen=True)
+
+    summaries_omitted: int = 0
+    refs_omitted: int = 0
+    note: str
 
 
 class LLMPrecheckContext(BaseModel):
@@ -29,7 +79,9 @@ class LLMPrecheckContext(BaseModel):
     title: str | None = None
     summary: str | None = None
     record_refs: tuple[LLMRecordRef, ...] = Field(default_factory=tuple)
-    trust_summaries: tuple[dict[str, Any], ...] = Field(default_factory=tuple)
+    record_summaries: tuple[LLMRecordSummary, ...] = Field(default_factory=tuple)
+    submission_warnings: tuple[LLMWarningSummary, ...] = Field(default_factory=tuple)
+    omitted: LLMOmission | None = None
     included_artifact_text: bool = False
     included_coordinates: bool = False
     included_private_notes: bool = False

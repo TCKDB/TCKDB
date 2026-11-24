@@ -42,10 +42,15 @@ in an exception message.
 
 from __future__ import annotations
 
+import re
+from dataclasses import dataclass
 from typing import Any
 
 from app.services.machine_review.providers.interface import (
+    MachineReviewProviderAuthError,
     MachineReviewProviderConfigurationError,
+    MachineReviewProviderTimeoutError,
+    MachineReviewProviderUnavailableError,
 )
 
 #: OpenAI's own endpoint. Overridable per instance, which is the whole point:
@@ -88,6 +93,8 @@ class OpenAICompatibleClient:
         *,
         api_key: str,
         base_url: str | None = None,
+        max_retries: int | None = None,
+        connect_timeout_seconds: float | None = None,
     ) -> None:
         """``base_url=None`` means OpenAI's own endpoint.
 
@@ -95,19 +102,83 @@ class OpenAICompatibleClient:
         configuration can pass ``settings.llm_precheck_base_url`` straight
         through: it is ``str | None``, and an unset setting must mean "the
         default", not a crash. One place decides what the default is.
+
+        ``max_retries=None`` keeps the SDK's own retry policy; the local reviewer passes 0 so a
+        down server is reported at once. ``connect_timeout_seconds`` bounds only the connection
+        attempt, so an unreachable host fails fast while a long generation still gets its full
+        read timeout.
         """
         try:
             from openai import OpenAI
         except ModuleNotFoundError as exc:  # pragma: no cover - install-shaped
             raise MachineReviewProviderConfigurationError(
-                "Cloud machine review needs the 'llm' extra for its HTTP "
+                "Machine review needs the 'llm' extra for its HTTP "
                 "transport: install the backend with the [llm] extra, or "
                 "inject a client that satisfies MachineReviewModelClient."
             ) from exc
+        kwargs: dict[str, Any] = {}
+        if max_retries is not None:
+            kwargs["max_retries"] = max_retries
+        self._connect_timeout_seconds = connect_timeout_seconds
         self._client = OpenAI(
             api_key=api_key,
             base_url=base_url or DEFAULT_API_BASE_URL,
+            **kwargs,
         )
+
+    def chat(
+        self,
+        *,
+        model: str,
+        messages: list[dict[str, Any]],
+        response_format: dict[str, Any],
+        max_output_tokens: int,
+        timeout_seconds: float,
+        extra_body: dict[str, Any] | None = None,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> "ChatTurn":
+        """Send one chat request and return the reply turn.
+
+        Transport faults become the provider errors the worker maps to failure codes: a refused or
+        timed-out connection and a 5xx are unavailable, a read timeout is a timeout, a 401 or 403
+        is an auth failure. Anything else propagates unchanged.
+        """
+        import openai
+
+        request: dict[str, Any] = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": max_output_tokens,
+            "response_format": response_format,
+            "timeout": openai.Timeout(timeout_seconds, connect=self._connect_timeout_seconds or timeout_seconds),
+        }
+        if extra_body:
+            request["extra_body"] = extra_body
+        if tools:
+            request["tools"] = tools
+        try:
+            response = self._client.chat.completions.create(**request)
+        except openai.APITimeoutError as exc:
+            # A timeout is a subclass of a connection error; only a read timeout means the server was reached.
+            # By class name: the SDK bundles its own HTTP client, so its exception classes are not importable stably.
+            if "ConnectTimeout" in {cls.__name__ for cls in type(exc.__cause__).__mro__}:
+                raise MachineReviewProviderUnavailableError(
+                    "The model server did not accept the connection in time."
+                ) from exc
+            raise MachineReviewProviderTimeoutError("The model server did not answer within the timeout.") from exc
+        except openai.APIConnectionError as exc:
+            raise MachineReviewProviderUnavailableError("The model server could not be reached.") from exc
+        except openai.APIStatusError as exc:
+            if exc.status_code in (401, 403):
+                raise MachineReviewProviderAuthError(
+                    f"The model server refused the credentials (HTTP {exc.status_code})."
+                ) from exc
+            if exc.status_code >= 500:
+                raise MachineReviewProviderUnavailableError(
+                    f"The model server answered HTTP {exc.status_code}."
+                ) from exc
+            raise
+        return extract_turn(response.model_dump())
 
     def complete(
         self,
@@ -148,18 +219,21 @@ class OpenAICompatibleClient:
         return extract_text(response.model_dump())
 
 
-def extract_text(payload: Any) -> str:
-    """Return the assistant message text of a chat-completions response.
+@dataclass(frozen=True)
+class ChatTurn:
+    """One assistant reply: the answer, any separate reasoning, and what the server reported."""
 
-    Split out from the request so a recorded response fixture exercises exactly
-    the same extraction CI cannot otherwise reach.
+    content: str
+    reasoning_content: str | None
+    finish_reason: str | None
+    usage: dict[str, Any] | None
 
-    The order of the checks is deliberate. Truncation and refusal are both
-    tested BEFORE the text is returned, because each produces a reply that
-    still carries content -- incomplete JSON in one case, an explanation in the
-    other -- and handing either on would launder a known, named fault into a
-    generic parse failure one layer up.
-    """
+
+_LEADING_THINK = re.compile(r"\A\s*<think>(.*?)</think>", re.DOTALL)
+
+
+def _first_choice(payload: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return ``(choice, message)`` of a chat-completions response, or raise ``ValueError``."""
     if not isinstance(payload, dict):
         raise ValueError(
             "Model response was not a JSON object; cannot extract reply text."
@@ -176,17 +250,45 @@ def extract_text(payload: Any) -> str:
     message = choice.get("message")
     if not isinstance(message, dict):
         raise ValueError("Model response choice carried no 'message' object.")
+    return choice, message
 
+
+def _check_complete(choice: dict[str, Any], message: dict[str, Any], *, thinking_note: bool) -> None:
+    """Raise the named fault for a refused or cut-off reply.
+
+    Both are tested before the text is returned, because each still carries content (incomplete
+    JSON, or an explanation) that would otherwise be reported as a generic parse failure.
+    """
     refusal = message.get("refusal")
     if isinstance(refusal, str) and refusal:
         raise ModelRefusedError(f"Model declined to review: {refusal}")
 
     if choice.get("finish_reason") == "length":
+        hint = "Raise LLM_PRECHECK_MAX_OUTPUT_TOKENS."
+        if thinking_note:
+            hint = (
+                "The reply was spent on reasoning; lower LLM_PRECHECK_THINKING_BUDGET_TOKENS "
+                "or raise LLM_PRECHECK_MAX_OUTPUT_TOKENS."
+            )
         raise ModelOutputTruncatedError(
-            "Model response was cut off at the output token ceiling; the "
-            "review is incomplete. Raise LLM_PRECHECK_MAX_OUTPUT_TOKENS."
+            f"Model response was cut off at the output token ceiling; the review is incomplete. {hint}"
         )
 
+
+def extract_text(payload: Any) -> str:
+    """Return the assistant message text of a chat-completions response.
+
+    Split out from the request so a recorded response fixture exercises exactly
+    the same extraction CI cannot otherwise reach.
+
+    The order of the checks is deliberate. Truncation and refusal are both
+    tested BEFORE the text is returned, because each produces a reply that
+    still carries content -- incomplete JSON in one case, an explanation in the
+    other -- and handing either on would launder a known, named fault into a
+    generic parse failure one layer up.
+    """
+    choice, message = _first_choice(payload)
+    _check_complete(choice, message, thinking_note=False)
     content = message.get("content")
     if not isinstance(content, str) or not content.strip():
         raise ValueError(
@@ -195,10 +297,51 @@ def extract_text(payload: Any) -> str:
     return content
 
 
+def extract_turn(payload: Any) -> ChatTurn:
+    """Return the reply turn of a chat-completions response.
+
+    Same checks, in the same order, as :func:`extract_text`. A server that reports its reasoning
+    separately fills ``reasoning_content``; one that inlines it as a leading ``<think>`` block has
+    the block stripped from ``content`` (an unclosed block is an error, because everything after it
+    is unusable). The reasoning is returned, never interpreted.
+    """
+    choice, message = _first_choice(payload)
+    reasoning = message.get("reasoning_content")
+    reasoning = reasoning if isinstance(reasoning, str) and reasoning else None
+    content = message.get("content")
+    has_content = isinstance(content, str) and bool(content.strip())
+    _check_complete(choice, message, thinking_note=not has_content and reasoning is not None)
+    if not has_content:
+        raise ValueError(
+            "Model response carried no message content; nothing to review with."
+        )
+    assert isinstance(content, str)
+    match = _LEADING_THINK.match(content)
+    if match is not None:
+        reasoning = reasoning or match.group(1).strip() or None
+        content = content[match.end():].lstrip()
+    elif content.lstrip().startswith("<think>"):
+        raise ValueError("Model response opened a <think> block that was never closed.")
+    if not content.strip():
+        raise ValueError(
+            "Model response carried no message content; nothing to review with."
+        )
+    usage = payload.get("usage")
+    finish = choice.get("finish_reason")
+    return ChatTurn(
+        content=content,
+        reasoning_content=reasoning,
+        finish_reason=finish if isinstance(finish, str) else None,
+        usage=usage if isinstance(usage, dict) else None,
+    )
+
+
 __all__ = [
     "DEFAULT_API_BASE_URL",
+    "ChatTurn",
     "ModelOutputTruncatedError",
     "ModelRefusedError",
     "OpenAICompatibleClient",
     "extract_text",
+    "extract_turn",
 ]

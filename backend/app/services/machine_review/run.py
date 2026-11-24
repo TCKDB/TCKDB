@@ -42,16 +42,19 @@ is no provider payload to carry it.
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 from typing import Any
 
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.api.config import settings as app_settings
 from app.api.errors import NotFoundError
+from app.db.models.common import MachineReviewJobFailure
 from app.db.models.submission import Submission, SubmissionAuditEvent
-from app.services.llm_precheck.context_builder import build_llm_precheck_context
+from app.services.machine_review.agent.context_pack import build_review_context_pack
 from app.services.machine_review.offer import offer_violation, offered_refs_from_context
 from app.services.machine_review.providers.disabled import (
     DisabledMachineReviewProvider,
@@ -61,8 +64,15 @@ from app.services.machine_review.providers.factory import (
 )
 from app.services.machine_review.providers.interface import (
     MachineReviewContext,
+    MachineReviewPayloadTypeError,
     MachineReviewProvider,
+    MachineReviewProviderAuthError,
+    MachineReviewProviderConfigurationError,
+    MachineReviewProviderTimeoutError,
+    MachineReviewProviderUnavailableError,
+    ReservedMachineReviewStatusError,
 )
+from app.services.machine_review.providers.openai_transport import ModelOutputTruncatedError, ModelRefusedError
 from app.services.machine_review.schemas import (
     MACHINE_REVIEW_FORMAT,
     SUMMARY_MAX_CHARS,
@@ -290,21 +300,51 @@ def resolve_provider(
         return None, _failure_text("Machine review could not be configured", exc, settings_obj)
 
 
-def build_review_context(session: Session, submission_id: int) -> MachineReviewContext:
-    """Build the review context of a submission."""
+def build_review_context(
+    session: Session, submission_id: int, settings_obj: Any = app_settings
+) -> MachineReviewContext:
+    """Build the review context of a submission, cut to ``LLM_PRECHECK_MAX_INPUT_TOKENS``."""
     return MachineReviewContext.from_llm_precheck_context(
-        build_llm_precheck_context(session, submission_id)
+        build_review_context_pack(
+            session, submission_id, max_input_tokens=settings_obj.llm_precheck_max_input_tokens
+        )
     )
+
+
+def _failure_code_for(exc: BaseException) -> MachineReviewJobFailure:
+    """The job failure code for an exception a provider raised."""
+    if isinstance(exc, MachineReviewProviderUnavailableError):
+        return MachineReviewJobFailure.provider_unavailable
+    if isinstance(exc, MachineReviewProviderTimeoutError):
+        return MachineReviewJobFailure.provider_timeout
+    if isinstance(exc, MachineReviewProviderAuthError):
+        return MachineReviewJobFailure.auth_failed
+    if isinstance(exc, MachineReviewProviderConfigurationError):
+        return MachineReviewJobFailure.config_error
+    if isinstance(
+        exc,
+        (
+            json.JSONDecodeError,
+            ValidationError,
+            ReservedMachineReviewStatusError,
+            ModelOutputTruncatedError,
+            ModelRefusedError,
+            ValueError,
+            MachineReviewPayloadTypeError,
+        ),
+    ):
+        return MachineReviewJobFailure.invalid_output
+    return MachineReviewJobFailure.internal_error
 
 
 def invoke_provider(
     selected: MachineReviewProvider,
     context: MachineReviewContext,
     settings_obj: Any,
-) -> tuple[MachineReviewProviderResult | None, str | None]:
-    """Ask ``selected`` for a review; return ``(result, None)`` or ``(None, failure_reason)``.
+) -> tuple[MachineReviewProviderResult | None, str | None, MachineReviewJobFailure | None]:
+    """Ask ``selected`` for a review; return ``(result, None, None)`` or ``(None, failure_reason, failure_code)``.
 
-    Touches no database. Every exception becomes a failure reason, except
+    Touches no database. Every exception becomes a failure reason and code, except
     :class:`MachineReviewCancelled`, which passes through untouched.
     """
     try:
@@ -312,7 +352,7 @@ def invoke_provider(
     except MachineReviewCancelled:
         raise
     except Exception as exc:
-        return None, _failure_text("Machine review failed to review", exc, settings_obj)
+        return None, _failure_text("Machine review failed to review", exc, settings_obj), _failure_code_for(exc)
 
     if not isinstance(result, MachineReviewProviderResult):
         # A type check, not a parse. Re-validating an object that is already
@@ -320,13 +360,17 @@ def invoke_provider(
         # boundary next to ``parse_machine_review_payload`` -- and a second
         # boundary that coerces is how a payload the strict one would have
         # refused gets in anyway. So this refuses; it does not repair.
-        return None, _clip(
-            "Machine review provider returned "
-            f"{type(result).__name__}, not a validated "
-            "MachineReviewProviderResult.",
-            _MAX_FAILURE_TEXT_CHARS,
+        return (
+            None,
+            _clip(
+                "Machine review provider returned "
+                f"{type(result).__name__}, not a validated "
+                "MachineReviewProviderResult.",
+                _MAX_FAILURE_TEXT_CHARS,
+            ),
+            MachineReviewJobFailure.internal_error,
         )
-    return result, None
+    return result, None, None
 
 
 def record_review(
@@ -430,12 +474,12 @@ def run_machine_review_for_submission(
 
     result: MachineReviewProviderResult | None = None
     try:
-        context = build_review_context(session, submission_id)
+        context = build_review_context(session, submission_id, settings_obj)
     except Exception as exc:
         reason = _failure_text("Machine review failed to review", exc, settings_obj)
     else:
         try:
-            result, reason = invoke_provider(selected, context, settings_obj)
+            result, reason, _ = invoke_provider(selected, context, settings_obj)
         except MachineReviewCancelled:
             result, reason = None, "Machine review was cancelled."
         else:

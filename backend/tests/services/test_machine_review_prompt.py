@@ -159,3 +159,26 @@ def test_depositor_text_appears_only_under_the_untrusted_block():
     }
     del payload["untrusted_depositor_text"]
     assert "TITLE-MARKER" not in json.dumps(payload) and "SUMMARY-MARKER" not in json.dumps(payload)
+
+
+def test_user_message_carries_records_warnings_and_the_omission_note():
+    from app.services.llm_precheck.schemas import (
+        LLMOmission,
+        LLMRecordSummary,
+        LLMWarningSummary,
+    )
+
+    context = MachineReviewContext.from_llm_precheck_context(
+        _context().precheck_context.model_copy(
+            update={
+                "record_summaries": (LLMRecordSummary(record_type="kinetics", record_ref="41", values={"ea_kj_mol": 12.5}),),
+                "submission_warnings": (LLMWarningSummary(code="a_code", message="A TCKDB sentence."),),
+                "omitted": LLMOmission(summaries_omitted=2, refs_omitted=0, note="cut"),
+            }
+        )
+    )
+    payload = json.loads(build_user_message(context))
+    assert payload["records"] == [{"record_type": "kinetics", "record_ref": "41", "values": {"ea_kj_mol": 12.5}}]
+    assert payload["submission_warnings"][0]["code"] == "a_code"
+    assert payload["omitted"]["summaries_omitted"] == 2
+    assert "records" not in payload["submission"] and "omitted" not in payload["submission"]

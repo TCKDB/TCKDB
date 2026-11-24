@@ -3,10 +3,9 @@
 This module defines the *producer* boundary for machine review (the consumer
 side — adapter, mapping, inspection, curator tasks — already exists). It holds:
 
-* :class:`MachineReviewContext` — a minimal internal context a provider reviews
-  over. In this foundation slice it simply wraps/references the existing
-  :class:`~app.services.llm_precheck.schemas.LLMPrecheckContext`; the richer
-  context builder is a later slice and is deliberately *not* built here.
+* :class:`MachineReviewContext` — the context a provider reviews over: the submission id and the
+  :class:`~app.services.llm_precheck.schemas.LLMPrecheckContext` built by
+  :func:`~app.services.machine_review.agent.context_pack.build_review_context_pack`.
 * :class:`MachineReviewProvider` — the provider protocol. Every provider returns
   a validated :class:`~app.services.machine_review.schemas.MachineReviewProviderResult`.
 * :class:`MachineReviewProviderConfigurationError` — raised when a configured
@@ -46,15 +45,24 @@ class MachineReviewProviderConfigurationError(RuntimeError):
     """Raised when a configured machine-review mode is not usable."""
 
 
+class MachineReviewProviderUnavailableError(RuntimeError):
+    """The model server could not be reached, or answered with a server error."""
+
+
+class MachineReviewProviderTimeoutError(RuntimeError):
+    """The model server was reached but did not answer within the timeout."""
+
+
+class MachineReviewProviderAuthError(RuntimeError):
+    """The model server refused the credentials."""
+
+
 class MachineReviewContext(BaseModel):
     """Minimal internal context a machine-review provider reviews over.
 
-    Intentionally thin for this foundation slice: it carries the
-    ``submission_id`` and optionally references the existing
-    :class:`LLMPrecheckContext` so a future provider has the compact submission
-    metadata + record refs already assembled by
-    :func:`~app.services.llm_precheck.context_builder.build_llm_precheck_context`.
-    The deeper, evidence-rich context builder is a later slice.
+    Carries the ``submission_id`` and the :class:`LLMPrecheckContext` assembled by
+    :func:`~app.services.machine_review.agent.context_pack.build_review_context_pack`:
+    submission metadata, the offered record refs and per-record summaries.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -119,6 +127,10 @@ _PROVIDER_RESERVED_STATUSES: frozenset[MachineReviewStatus] = frozenset(
 )
 
 
+class MachineReviewPayloadTypeError(TypeError):
+    """The model's payload parsed but was not a JSON object."""
+
+
 class ReservedMachineReviewStatusError(ValueError):
     """A provider claimed a status that only the runner may set.
 
@@ -157,7 +169,7 @@ def parse_machine_review_payload(
     if isinstance(raw, str):
         raw = json.loads(raw)
     if not isinstance(raw, dict):
-        raise TypeError(
+        raise MachineReviewPayloadTypeError(
             "machine-review payload must be a JSON object, got "
             f"{type(raw).__name__}."
         )
