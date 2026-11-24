@@ -1,15 +1,16 @@
 """Shared seeding for the machine-review read-surface tests.
 
-Everything goes through the real path: a provider is substituted at the factory
-the runner calls, then the admin run route writes the audit event and the admin
-build route writes the curator tasks. Nothing here hand-writes an audit row for
-a review that is meant to be a real one.
+Everything goes through the real path: the job route queues a review, one
+worker cycle runs it with a substituted provider and writes the audit event, and
+the admin build route writes the curator tasks. Nothing here hand-writes an
+audit row for a review that is meant to be a real one.
 """
 
 from __future__ import annotations
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
+from app.api.config import settings as app_settings
 from app.db.models.common import SubmissionKind, SubmissionRecordType
 from app.db.models.submission import Submission
 from app.services.machine_review.providers.fake import FakeMachineReviewProvider
@@ -23,8 +24,9 @@ from app.services.machine_review.schemas import (
     MachineReviewStatus,
 )
 from app.services.submission import create_submission, link_record
+from app.workers import machine_review_worker
 
-RUN_URL = "/api/v1/admin/machine-review/run-for-submission"
+JOBS_URL = "/api/v1/machine-review/jobs"
 BUILD_URL = "/api/v1/admin/machine-review/curator-tasks/build-for-submission"
 TASKS_URL = "/api/v1/admin/machine-review/curator-tasks"
 INSPECT_URL = "/api/v1/admin/submissions/{}/machine-review-inspection"
@@ -100,16 +102,43 @@ def use_provider(monkeypatch, provider) -> None:
     )
 
 
-def run_review(client, monkeypatch, submission_id: int, fixed: MachineReviewProviderResult) -> dict:
-    """POST the real admin run route with a fixed provider result (caller is admin)."""
-    use_provider(monkeypatch, FakeMachineReviewProvider(fixed_result=fixed))
-    resp = client.post(f"{RUN_URL}/{submission_id}")
-    assert resp.status_code == 200, resp.text
-    assert resp.json()["audit_event_recorded"] is True
+class _RaisingProvider:
+    """Stands in for a transport that cannot reach the model."""
+
+    def review_submission(self, context):
+        raise RuntimeError("upstream endpoint unreachable")
+
+
+def run_review(
+    client,
+    monkeypatch,
+    submission_id: int,
+    fixed: MachineReviewProviderResult | None = None,
+    *,
+    expect: str = "succeeded",
+) -> dict:
+    """Queue a review through the job route and run it in one worker cycle.
+
+    ``fixed`` is the provider's answer; ``expect="failed"`` makes the provider raise.
+    Returns the job as the job route reads it after the cycle.
+    """
+    monkeypatch.setattr(app_settings, "ai_review_assistant_mode", "test")
+    monkeypatch.setattr(app_settings, "deployment_mode", "local")
+    session = client._db_session
+    provider = _RaisingProvider() if expect == "failed" else FakeMachineReviewProvider(fixed_result=fixed)
+    queued = client.post(JOBS_URL, json={"submission_id": submission_id, "provider_key": "fake"})
+    assert queued.status_code == 202, queued.text
+    factory = sessionmaker(bind=session.get_bind(), expire_on_commit=False, join_transaction_mode="create_savepoint")
+    assert machine_review_worker.process_one_cycle(factory, app_settings, heartbeat=False, provider=provider)
     # A real request gets a fresh session; the harness shares one, whose loaded
     # ``submission.audit_events`` would not see the event just written.
-    client._db_session.expire_all()
-    return resp.json()
+    session.expire_all()
+    job = client.get(f"{JOBS_URL}/{queued.json()['id']}")
+    assert job.status_code == 200, job.text
+    assert job.json()["status"] == expect, job.text
+    if expect == "succeeded":
+        assert job.json()["audit_event_id"] is not None
+    return job.json()
 
 
 def build_tasks(client, submission_id: int) -> dict:

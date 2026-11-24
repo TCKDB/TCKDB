@@ -87,10 +87,15 @@ function pagesFor(role: AppUserRole): MenuPage[] {
     }
     if (role === "admin") {
         pages.push({ label: "Machine findings", to: "/admin/curator-queue" })
+    }
+    if (role === "curator" || role === "admin") {
+        // The path keeps its /admin prefix, though a curator may open it.
         pages.push({
             label: "Machine review inspection",
             to: "/admin/machine-review-inspection",
         })
+    }
+    if (role === "admin") {
         pages.push({ label: "Administration", to: "/admin" })
     }
     return pages

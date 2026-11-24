@@ -50,6 +50,7 @@ from app.schemas.entities.submission import (
     SubmissionApproveRequest,
     SubmissionAuditEventRead,
     SubmissionMachineReviewLatestRunRead,
+    SubmissionMachineReviewOpenJobRead,
     SubmissionMachineReviewOverviewRead,
     SubmissionMachineReviewStateRead,
     SubmissionRead,
@@ -230,6 +231,18 @@ def machine_review_overview(
                             findings_count=r.latest_run.findings_count,
                             model=r.latest_run.model,
                             provider=r.latest_run.provider,
+                        )
+                    ),
+                    open_job=(
+                        None
+                        if r.open_job is None
+                        else SubmissionMachineReviewOpenJobRead(
+                            id=r.open_job.id,
+                            status=r.open_job.status,
+                            step_count=r.open_job.step_count,
+                            cancel_requested=r.open_job.cancel_requested,
+                            created_at=r.open_job.created_at,
+                            started_at=r.open_job.started_at,
                         )
                     ),
                     open_task_count=r.open_task_count,

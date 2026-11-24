@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Link, Navigate } from "react-router-dom"
+import { Link, Navigate, useNavigate } from "react-router-dom"
 import "../auth.css"
 import "../admin.css"
 import { AuthApiError } from "../api/authApi"
+import { listProviders, requestMachineReview } from "../api/machineReviewJobsApi"
 import { listSubmissionMachineReviewOverview } from "../api/submissionsApi"
 import {
     RecordReviewResponseError,
@@ -13,7 +14,9 @@ import { spinWord } from "../domain/chemistryFormat"
 import { Formula } from "../components/Formula"
 import { ReactionEquation } from "../components/ReactionEquation"
 import { facetChips } from "../domain/recordFacets"
-import { adminDate, RECORD_TYPE_OPTIONS, wordLabel } from "../domain/machineReviewWords"
+import { blockingAvailability, okProviders } from "../domain/machineReviewProviders"
+import { adminDate, RECORD_TYPE_OPTIONS, wordLabel, wordsFor } from "../domain/machineReviewWords"
+import type { Provider } from "../types/machineReviewJob"
 import { MachineReviewStatusLabel } from "../components/MachineReviewStatusLabel"
 import {
     recordRoute,
@@ -513,6 +516,12 @@ export default function ReviewQueuePage() {
     const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
     // Rows whose reproducibility detail is open; several may be open at once, and each loads only when opened.
     const [reproOpen, setReproOpen] = useState<ReadonlySet<number>>(new Set())
+    // The reviewers on offer, read once and only when a row can be reviewed; `null` until read; a failed read sets `providersFailed`.
+    const [providers, setProviders] = useState<Provider[] | null>(null)
+    const [providersFailed, setProvidersFailed] = useState(false)
+    const [requesting, setRequesting] = useState<ReadonlySet<number>>(new Set())
+    const providersRead = useRef(false)
+    const navigate = useNavigate()
 
     const role = state.status === "signed-in" ? state.user.role : null
     const canReview = role === "curator" || role === "admin"
@@ -602,6 +611,14 @@ export default function ReviewQueuePage() {
             live = false
         }
     }, [canReview])
+
+    const anyReviewable =
+        load.status === "ready" && load.subjects.some((subject) => subject.records.some((r) => r.submission_id !== null))
+    useEffect(() => {
+        if (!canReview || !anyReviewable || providersRead.current) return
+        providersRead.current = true
+        listProviders().then(setProviders, () => setProvidersFailed(true))
+    }, [canReview, anyReviewable])
 
     if (state.status === "loading") {
         return (
@@ -749,6 +766,79 @@ export default function ReviewQueuePage() {
         }
     }
 
+    function goToReview(submissionId: number) {
+        void navigate(`/admin/machine-review-inspection?submission=${submissionId}`)
+    }
+
+    async function requestReview(row: ReviewQueueRecord, submissionId: number, providerKey: string) {
+        const rowId = keyOf(row)
+        setRequesting((current) => new Set(current).add(rowId))
+        setRowError(rowId, null)
+        try {
+            await requestMachineReview(submissionId, providerKey)
+            goToReview(submissionId)
+        } catch (caught) {
+            setRowError(rowId, {
+                message: caught instanceof AuthApiError ? `The review could not be requested: ${caught.message}` : "The review could not be requested.",
+                recordLabel: labelOf(row),
+            })
+        } finally {
+            setRequesting((current) => {
+                const next = new Set(current)
+                next.delete(rowId)
+                return next
+            })
+        }
+    }
+
+    /** The row's "Request machine review" action: a request, a way to choose a reviewer, or a reason it is not offered. */
+    function renderRequestReview(row: ReviewQueueRecord) {
+        const rowId = keyOf(row)
+        const reasonId = `request-review-reason-${rowId}`
+        const ok = providers === null ? [] : okProviders(providers)
+        let reason: string | null = null
+        if (row.submission_id === null) reason = "This record is not linked to a submission"
+        else if (providersFailed) reason = "The reviewers on offer could not be read"
+        else if (providers === null) reason = null
+        else if (ok.length === 0) {
+            const why = blockingAvailability(providers)
+            if (why === null) reason = "No reviewer is available"
+            else {
+                const words = wordsFor("availability", why)
+                reason = words.meaning !== "" ? words.meaning : words.label.charAt(0).toUpperCase() + words.label.slice(1)
+            }
+        }
+        if (row.submission_id !== null && ok.length > 1) {
+            return (
+                <Link to={`/admin/machine-review-inspection?submission=${row.submission_id}`} aria-describedby={`review-record-${rowId}`}>
+                    Choose a reviewer…
+                </Link>
+            )
+        }
+        const submissionId = row.submission_id
+        const unavailable = reason !== null || providers === null || requesting.has(rowId)
+        return (
+            <>
+                <button
+                    type="button"
+                    aria-disabled={unavailable ? "true" : undefined}
+                    aria-describedby={reason !== null ? `review-record-${rowId} ${reasonId}` : `review-record-${rowId}`}
+                    onClick={() => {
+                        if (unavailable || submissionId === null || ok.length !== 1) return
+                        void requestReview(row, submissionId, ok[0].provider_key)
+                    }}
+                >
+                    Request machine review
+                </button>
+                {reason !== null && (
+                    <span id={reasonId} className="admin-hint">
+                        {reason}
+                    </span>
+                )}
+            </>
+        )
+    }
+
     /**
      * The record's latest machine review, in a line. Nothing for a record that was never reviewed. The curator task
      * link goes to the admin-only queue, so a curator is told who handles them instead.
@@ -846,6 +936,7 @@ export default function ReviewQueuePage() {
                         >
                             Reproducibility…
                         </button>
+                        {renderRequestReview(row)}
                         {options.length > 0 ? (
                             <button
                                 type="button"

@@ -288,7 +288,10 @@
 
 /* A paging button with nothing to page to. It stays focusable and says so in the
    accessibility tree through aria-disabled; this is what a sighted reader sees. */
-.admin-paging button[aria-disabled="true"] {
+.admin-paging button[aria-disabled="true"],
+.machine-review-request button[aria-disabled="true"],
+.machine-review-progress button[aria-disabled="true"],
+.review-record-row-right button[aria-disabled="true"] {
     color: var(--muted);
     cursor: not-allowed;
     opacity: 0.55;
@@ -585,6 +588,48 @@
     overflow-wrap: anywhere;
 }
 
+/* Text the machine reviewer wrote: set off under its own label, never styled as the page's voice. */
+.machine-reviewer-text {
+    padding: var(--s-2) var(--s-3);
+    border: 1px dashed var(--line-2);
+    border-radius: 4px;
+    background: var(--surface-sunken);
+    overflow-wrap: anywhere;
+}
+
+.machine-reviewer-label {
+    margin: 0 0 var(--s-1);
+    color: var(--muted);
+    font: var(--type-note-font);
+}
+
+.machine-reviewer-text blockquote {
+    margin: 0;
+}
+
+.machine-reviewer-text > :last-child {
+    margin-bottom: 0;
+}
+
+/* The steps of a running or finished review, and the advice line above the records. */
+.machine-review-steps {
+    margin: var(--s-2) 0;
+    padding-left: var(--s-5);
+}
+
+.machine-review-result h3 {
+    margin: var(--s-3) 0 var(--s-1);
+}
+
+.machine-review-request,
+.machine-review-progress {
+    overflow-wrap: anywhere;
+}
+
+.machine-review-recommendation {
+    margin: var(--s-3) 0;
+}
+
 /* The detail row opens under its task, across every column. */
 .admin-task-detail > td {
     background: var(--surface-sunken);
@@ -653,4 +698,10 @@
     margin-left: var(--s-2);
     padding-left: var(--s-3);
     border-left: 2px solid var(--control-border);
+}
+
+/* The curator switch while machine review is off: focusable, but it decides nothing. */
+.machine-review-switch-idle {
+    cursor: not-allowed;
+    opacity: 0.55;
 }

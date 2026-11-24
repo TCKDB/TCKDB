@@ -31,6 +31,14 @@ dataset must never require a code release.
 - **API:** `GET /api/v1/submissions/{id}/ai-review-summary` returns `retrieval_source_count` in place of `used_rag`.
 - **Migration:** none.
 
+## Machine review is requested by curators and shown with progress (Unreleased)
+
+- **API:** `POST /api/v1/admin/machine-review/run-for-submission/{submission_id}` is removed; request a review with `POST /api/v1/machine-review/jobs` and read its progress with `GET /api/v1/machine-review/jobs/{job_id}`.
+- **API:** `GET /api/v1/admin/submissions/{id}/machine-review-inspection` is open to curators as well as admins. For a curator, the `summary` of a failed run is `null`; the job's `failure_code` says what went wrong.
+- **API:** each item of `GET /api/v1/submissions/machine-review-overview` carries `machine_review.open_job` (`id`, `status`, `step_count`, `cancel_requested`, `created_at`, `started_at`), or `null` when no job is queued or running.
+- **Behaviour:** the inspection page, the review queue and the admin page show the request button, the running job's steps, the advisory recommendation and the two machine-review switches.
+- **Migration:** none.
+
 ## Machine-review jobs are requested through the API (Unreleased)
 
 - **Behaviour:** `POST /api/v1/machine-review/jobs` queues a machine review of a submission (curator or admin; 202). A second request while one is queued or running is a 409 `machine_review_job_conflict` whose `context.open_job` holds the open job's state; `GET /api/v1/machine-review/jobs?submission_id=` lists it first.

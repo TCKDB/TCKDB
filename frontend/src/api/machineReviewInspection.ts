@@ -4,14 +4,19 @@ import {
 } from "../types/machineReviewInspection"
 
 /**
- * API client for the admin-only machine-review inspection endpoint.
+ * API client for the machine-review inspection endpoint.
  *
- * Auth: this is an ADMIN-ONLY endpoint (``require_admin`` on the backend).
- * Human admins authenticate with the session cookie set by ``POST /auth/login``
+ * Auth: curators and admins (``require_curator_or_admin`` on the backend).
+ * Callers authenticate with the session cookie set by ``POST /auth/login``
  * (see ``backend/app/api/deps.py``), so requests are sent with
  * ``credentials: "include"``. The backend is the access-control authority: a
- * non-admin or anonymous caller gets 403/401 regardless of what the UI shows.
+ * plain user or anonymous caller gets 403/401 regardless of what the UI shows.
  */
+
+/** The react-query key the inspection of one submission is cached under; whatever changes it invalidates this. */
+export function inspectionQueryKey(submissionId: number | null) {
+    return ["machine-review-inspection", submissionId] as const
+}
 
 /**
  * Base URL for the backend API. Same-origin by default (the admin shell is
@@ -34,7 +39,7 @@ export class InspectionFetchError extends Error {
  *
  * @param submissionId numeric submission id
  * @returns the validated inspection response
- * @throws InspectionFetchError on a non-2xx response (401/403 = not admin,
+ * @throws InspectionFetchError on a non-2xx response (401/403 = not a curator or admin,
  *         404 = submission not found, etc.)
  */
 export async function fetchMachineReviewInspection(

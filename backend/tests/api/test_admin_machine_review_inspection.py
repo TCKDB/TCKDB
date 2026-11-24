@@ -1,10 +1,10 @@
-"""Tests for the admin-only submission machine-review inspection endpoint.
+"""Tests for the curator-or-admin submission machine-review inspection endpoint.
 
 ``GET /api/v1/admin/submissions/{submission_id}/machine-review-inspection`` is a
 private/debugging surface: it projects a submission's existing
 ``llm_precheck_recorded`` audit events onto the records linked to that
-submission, reusing the private machine-review stack. It is **admin-only** (the
-stricter of the two existing gates) and must never imply that machine review is
+submission, reusing the private machine-review stack. It is for **curators and
+admins** and must never imply that machine review is
 public scientific trust — it does not touch the public ``TrustFragment`` or the
 scientific read routes, and it mutates nothing.
 
@@ -151,18 +151,37 @@ def test_admin_submission_machine_review_inspection_requires_auth(
     assert resp.status_code == 401, resp.text
 
 
-def test_admin_submission_machine_review_inspection_requires_admin(
-    client, db_session, login_as, _api_test_user, _api_curator_user
+def test_admin_submission_machine_review_inspection_is_for_curators_and_admins(
+    client, db_session, login_as, _api_test_user, _api_curator_user, _api_admin_user
 ):
-    """Normal users and curators are forbidden; the gate is admin-only."""
+    """A plain user is forbidden; a curator and an admin may read."""
     submission = _new_submission(db_session, _api_test_user)
 
     # Default actor is role=user.
     assert client.get(_url(submission.id)).status_code == 403
 
-    # Curators are also forbidden — this debugging surface is admin-only.
     login_as(_api_curator_user)
-    assert client.get(_url(submission.id)).status_code == 403
+    assert client.get(_url(submission.id)).status_code == 200
+    login_as(_api_admin_user)
+    assert client.get(_url(submission.id)).status_code == 200
+
+
+def test_a_curator_does_not_read_the_raw_text_of_a_failed_run(
+    client, db_session, login_as, _api_curator_user, _api_admin_user, monkeypatch
+):
+    """A failed run's stored summary is the exception text; only an admin reads it."""
+    submission = _new_submission(db_session, _api_admin_user)
+    login_as(_api_admin_user)
+    seed.run_review(client, monkeypatch, submission.id, expect="failed")
+
+    admin_runs = client.get(_url(submission.id)).json()["runs"]
+    login_as(_api_curator_user)
+    curator_runs = client.get(_url(submission.id)).json()["runs"]
+
+    assert [r["status"] for r in admin_runs] == ["machine_review_failed"]
+    assert "RuntimeError" in admin_runs[0]["summary"]
+    assert [r["status"] for r in curator_runs] == ["machine_review_failed"]
+    assert curator_runs[0]["summary"] is None
 
 
 # --------------------------------------------------------------------------- #
@@ -601,12 +620,7 @@ def test_inspection_returns_runs_with_reviewer_summary(
     )
     seed.run_review(client, monkeypatch, submission.id, ok)
 
-    class _Raising:
-        def review_submission(self, context):
-            raise RuntimeError("upstream endpoint unreachable")
-
-    seed.use_provider(monkeypatch, _Raising())
-    assert client.post(f"{seed.RUN_URL}/{submission.id}").status_code == 200
+    seed.run_review(client, monkeypatch, submission.id, expect="failed")
 
     runs = client.get(_url(submission.id)).json()["runs"]
 

@@ -5,7 +5,7 @@
    "tests/api/test_admin_machine_review_curator_tasks.py": 2,
    "tests/api/test_admin_machine_review_inspection.py": 2,
    "tests/api/test_admin_machine_review_persisted_readback.py": 1,
-   "tests/api/test_admin_machine_review_run.py": 2,
+   "tests/api/test_machine_review_job_end_to_end.py": 2,
    "tests/api/test_admin_machine_review_trigger.py": 1,
    "tests/api/test_api_additional_calculation_edges.py": 2,
    "tests/api/test_api_applied_correction_reuse.py": 2,

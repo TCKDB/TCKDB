@@ -265,6 +265,7 @@ export function overviewRow(over: Json = {}): Json {
         title: "DEPOSITOR_TITLE",
         machine_review: {
             run_count: 2,
+            open_job: null,
             open_task_count: 2,
             task_count: 5,
             latest_run: {
@@ -347,6 +348,92 @@ export function reviewQueueRecord(over: Json = {}): Json {
         note: null,
         actor_may_approve: true,
         machine_findings: machineFindings(),
+        ...over,
+    }
+}
+
+export const JOB_ID = 424242
+
+export function job(over: Json = {}): Json {
+    return {
+        id: JOB_ID,
+        submission_id: SUBMISSION_ID,
+        requested_by: 3,
+        requested_by_username: "cora",
+        provider_key: "fake",
+        executor: "in_process",
+        status: "succeeded",
+        cancel_requested: false,
+        failure_code: null,
+        step_count: 4,
+        model: "fake_test/machine-review",
+        prompt_name: "machine_review",
+        prompt_version: 2,
+        audit_event_id: 7001,
+        created_at: "2026-11-24T10:00:00",
+        started_at: "2026-11-24T10:00:01",
+        finished_at: "2026-11-24T10:00:07",
+        ...over,
+    }
+}
+
+export function jobEvent(over: Json = {}): Json {
+    return {
+        seq: 1,
+        kind: "claimed",
+        tool_name: null,
+        status_code: null,
+        started_at: null,
+        duration_ms: null,
+        ...over,
+    }
+}
+
+export const JOB_EVENT_KINDS = ["claimed", "context_built", "model_turn", "final_output", "finished"]
+
+export function jobDetail(over: Json = {}): Json {
+    return {
+        ...job(),
+        events: JOB_EVENT_KINDS.slice(0, 4).map((kind, i) => jobEvent({ seq: i + 1, kind })),
+        ...over,
+    }
+}
+
+export function openJob(over: Json = {}): Json {
+    return {
+        id: JOB_ID,
+        status: "running",
+        step_count: 2,
+        cancel_requested: false,
+        created_at: "2026-11-24T10:00:00",
+        started_at: "2026-11-24T10:00:01",
+        ...over,
+    }
+}
+
+export function jobPage(items: Json[] = [job()]): Json {
+    return { items, total: items.length, skip: 0, limit: 50 }
+}
+
+export function providers(over: Record<string, string> = {}): Json {
+    const base: Record<string, string> = {
+        fake: "ok",
+        local: "provider_not_configured",
+        cloud: "provider_not_configured",
+        claude_code: "remote_runner_unavailable",
+        codex: "remote_runner_unavailable",
+        ...over,
+    }
+    return { providers: Object.entries(base).map(([provider_key, availability]) => ({ provider_key, availability })) }
+}
+
+export function settings(over: Json = {}): Json {
+    return {
+        machine_review_enabled: true,
+        curator_requests_enabled: true,
+        assistant_mode: "test",
+        review_allowed: true,
+        curator_allowed: true,
         ...over,
     }
 }

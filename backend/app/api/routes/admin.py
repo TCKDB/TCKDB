@@ -2,9 +2,9 @@
 
 Scope in v1 is intentionally tiny: role changes plus a private machine-review
 inspection endpoint.  Everything here is gated behind the ``admin`` role —
-curators cannot promote each other, and the machine-review inspection endpoint
-is deliberately admin-only (the stricter of the two existing gates) because it
-is a debugging surface, not public scientific trust.
+curators cannot promote each other — except the machine-review inspection read,
+which curators may also use. It is a private surface, not public scientific
+trust.
 """
 
 from __future__ import annotations
@@ -74,7 +74,6 @@ from app.services.machine_review import (
     start_curator_task_review,
 )
 from app.services.machine_review.made_under import machine_review_made_under
-from app.services.machine_review.run import run_machine_review_for_submission
 from app.services.machine_review.schemas import CuratorPriority
 from app.services.observation_identity_attach import attach_observation_identity
 from app.services.record_containers import (
@@ -314,7 +313,8 @@ class AdminMachineReviewRunRead(BaseModel):
     """One stored reviewer run over the whole submission.
 
     ``summary`` is the reviewer's own text, or the redacted failure text on a
-    failed run. ``parsed`` is false when the stored payload could not be read;
+    failed run for an administrator. A curator gets ``null`` for a failed run's
+    summary and reads the job's ``failure_code`` instead. ``parsed`` is false when the stored payload could not be read;
     then ``status`` is ``null`` and ``parse_warnings`` says why.
     """
 
@@ -551,10 +551,10 @@ def _to_admin_inspection_response(
 )
 def inspect_submission_machine_review(
     submission_id: int,
-    _admin: AppUser = Depends(require_admin),
+    user: AppUser = Depends(require_curator_or_admin),
     session: Session = Depends(get_db),
 ) -> AdminSubmissionMachineReviewInspectionResponse:
-    """Inspect machine-review projections for one submission (admin only).
+    """Inspect machine-review projections for one submission (curator or admin).
 
     Loads the submission (404 if missing), then projects its machine-review
     audit events onto its linked records via the private inspection service.
@@ -584,7 +584,14 @@ def inspect_submission_machine_review(
     public_refs = resolve_record_public_refs_by_name(session, keys)
     containers = resolve_record_containers_by_name(session, keys)
     task_ids = curator_task_ids_by_fingerprint(session, submission.id)
-    return _to_admin_inspection_response(inspection, public_refs, containers, task_ids)
+    response = _to_admin_inspection_response(inspection, public_refs, containers, task_ids)
+    if user.role is not AppUserRole.admin:
+        # A failed run's stored summary is the exception text, which can quote
+        # model output; it is the admin-only ``failure_detail`` content.
+        for run in response.runs:
+            if run.status is MachineReviewStatus.machine_review_failed:
+                run.summary = None
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -1064,101 +1071,6 @@ def build_curator_tasks_for_submission_endpoint(
         skipped_terminal_count=result.skipped_terminal_count,
         task_ids=result.task_ids,
         warnings=result.warnings,
-    )
-
-
-# ---------------------------------------------------------------------------
-# Explicit machine-review run for one submission (admin only)
-# ---------------------------------------------------------------------------
-#
-# The producer half of the pair above. ``build-for-submission`` turns existing
-# machine-review audit events into curator tasks; this is what *writes* one of
-# those events, by actually asking the configured provider for a review. Before
-# it existed the provider was reachable only from tests, so the queue that
-# ``build-for-submission`` fills was empty on every real deployment.
-#
-# Advisory, and a separate axis from both human ``record_review`` and
-# submission moderation: the handler writes one ``submission_audit_event`` and
-# nothing else. It endorses nothing and approves nothing.
-#
-# A provider failure is a 200 carrying ``machine_review_failed``, not a 5xx.
-# The distinction is the point of the whole layer: the server did its job by
-# asking and recording the answer, and "the reviewer could not review" is an
-# answer a curator needs to see, not an error the admin should have to retry
-# past. A 5xx would also lose the audit event the failure just wrote.
-
-
-class AdminMachineReviewRunResponse(BaseModel):
-    """Result of one explicit machine-review run (advisory; endorses nothing).
-
-    ``extra="forbid"`` so it can carry no mutation instruction. It deliberately
-    does **not** expose the id of the audit event that was written:
-    whether the run was journalled is actionable,
-    which internal row it landed in is not.
-
-    ``failure_reason`` is non-``null`` only when ``status`` is
-    ``machine_review_failed``, and then it names what went wrong -- a missing
-    configuration, a transport failure, a truncated or refused answer, a
-    contract violation. On that path it repeats ``summary``, because the
-    recorded v2 payload has no error field and the reason must live in
-    ``summary`` to be persisted at all.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    submission_id: int
-    #: A :class:`~app.services.machine_review.schemas.MachineReviewStatus`
-    #: value. Typed as ``str`` so the advisory machine-review vocabulary can
-    #: never be mistaken on the wire for a human-review or moderation state.
-    status: str
-    findings_count: int
-    summary: str | None = None
-    model: str | None = None
-    provider: str | None = None
-    audit_event_recorded: bool
-    failure_reason: str | None = None
-
-
-@router.post(
-    "/machine-review/run-for-submission/{submission_id}",
-    response_model=AdminMachineReviewRunResponse,
-)
-def run_machine_review_for_submission_endpoint(
-    submission_id: int,
-    _admin: AppUser = Depends(require_admin),
-    session: Session = Depends(get_write_db, scope="function"),
-) -> AdminMachineReviewRunResponse:
-    """Explicitly run machine review for one submission (admin only).
-
-    Loads the submission (404 if missing), builds the review context, asks the
-    configured provider for an advisory review, and records exactly one
-    ``submission_audit_event`` carrying the validated v2 payload. In off mode
-    the disabled provider returns ``not_run`` and no event is written.
-
-    Explicit/admin-triggered only -- this never runs on upload, and no
-    background worker calls it. Writes only the audit event:
-    ``submission.status``, the moderation columns, ``record_review`` (human
-    trust) and curator tasks are all untouched. The result is advisory and
-    endorses nothing; turning findings into curator tasks is the separate
-    ``curator-tasks/build-for-submission`` call.
-
-    A provider failure is reported as a 200 with
-    ``status="machine_review_failed"`` and a ``failure_reason``, not as a 5xx.
-    """
-    submission = session.get(Submission, submission_id)
-    if submission is None:
-        raise HTTPException(status_code=404, detail="Submission not found.")
-
-    outcome = run_machine_review_for_submission(session, submission.id)
-    return AdminMachineReviewRunResponse(
-        submission_id=submission.id,
-        status=outcome.status.value,
-        findings_count=outcome.findings_count,
-        summary=outcome.summary,
-        model=outcome.model,
-        provider=outcome.provider,
-        audit_event_recorded=outcome.audit_event_recorded,
-        failure_reason=outcome.failure_reason,
     )
 
 
