@@ -18,6 +18,7 @@ import json
 import logging
 import threading
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
@@ -34,6 +35,8 @@ from app.db.models.common import (
 from app.db.models.machine_review_job import MachineReviewJob
 from app.db.models.submission import Submission
 from app.services.machine_review import jobs
+from app.services.machine_review.agent.loop import LoopResult, RunBudget
+from app.services.machine_review.agent.tools import ToolRegistry
 from app.services.machine_review.offer import offer_violation, offered_refs_from_context
 from app.services.machine_review.providers.fake import ScriptedFakeMachineReviewAgent
 from app.services.machine_review.providers.interface import (
@@ -41,13 +44,17 @@ from app.services.machine_review.providers.interface import (
     MachineReviewProvider,
     parse_machine_review_payload,
 )
+from app.services.machine_review.providers.local import LocalMachineReviewProvider
+from app.services.machine_review.providers.openai_transport import ModelContextExceededError
 from app.services.machine_review.run import (
     _MAX_FAILURE_TEXT_CHARS,
     _MAX_MODEL_CHARS,
     MachineReviewCancelled,
+    ReviewBudgetExhausted,
     _clip,
+    _failure_code_for,
     _failure_text,
-    build_review_context,
+    build_review_context_with_records,
     invoke_provider,
     record_review,
     resolve_provider,
@@ -169,10 +176,12 @@ def _run_claimed_job(
     code = MachineReviewJobFailure.internal_error
     parse_failed = False
     provider_name: str | None = None
+    summaries: dict[tuple[str, str], Any] = {}
+    tokens: tuple[int, int] | None = None
 
     try:
         with session_factory() as session:
-            context = build_review_context(session, submission_id, settings_obj)
+            context, summaries = build_review_context_with_records(session, submission_id, settings_obj)
             job = session.get_one(MachineReviewJob, job_id)
             job.context_hash = _context_hash(context)
             jobs.append_event(
@@ -196,6 +205,25 @@ def _run_claimed_job(
                     result, reason, parse_failed = _run_scripted(
                         session_factory, settings_obj, selected, context, job_id
                     )
+                elif isinstance(selected, LocalMachineReviewProvider):
+                    agent = _run_agent(session_factory, settings_obj, selected, context, summaries, job_id)
+                    result, reason, parse_failed, tokens = agent.result, agent.reason, agent.parse_failed, agent.tokens
+                    if agent.budget_exhausted:
+                        with session_factory() as session:
+                            _store_tokens(session.get_one(MachineReviewJob, job_id), tokens)
+                            jobs.finish_job(
+                                session,
+                                job_id,
+                                attempt,
+                                status=MachineReviewJobStatus.failed,
+                                failure_code=MachineReviewJobFailure.budget_exhausted,
+                                failure_detail="The review ran out of time or room before it could answer.",
+                                settings_obj=settings_obj,
+                            )
+                            session.commit()
+                        return
+                    if agent.code is not None:
+                        code = agent.code
                 else:
                     if _cancel_requested(session_factory, job_id):
                         raise MachineReviewCancelled
@@ -241,6 +269,7 @@ def _run_claimed_job(
             model=job_model,
         )
         job = session.get_one(MachineReviewJob, job_id)
+        _store_tokens(job, tokens)
         jobs.append_event(
             session,
             job,
@@ -265,6 +294,11 @@ def _run_claimed_job(
             session.commit()
         else:
             session.rollback()
+
+
+def _store_tokens(job: MachineReviewJob, tokens: tuple[int, int] | None) -> None:
+    if tokens is not None:
+        job.tokens_in, job.tokens_out = tokens
 
 
 def _cancel_requested(session_factory: Callable[[], Session], job_id: int) -> bool:
@@ -309,6 +343,86 @@ def _run_scripted(
     if violation is not None:
         return None, violation, True
     return result, None, False
+
+
+@dataclass
+class _AgentRun:
+    result: MachineReviewProviderResult | None = None
+    reason: str | None = None
+    parse_failed: bool = False
+    code: MachineReviewJobFailure | None = None
+    budget_exhausted: bool = False
+    tokens: tuple[int, int] | None = None
+
+
+def _run_agent(
+    session_factory: Callable[[], Session],
+    settings_obj: Any,
+    provider: LocalMachineReviewProvider,
+    context: MachineReviewContext,
+    summaries: dict[tuple[str, str], Any],
+    job_id: int,
+) -> _AgentRun:
+    """Run the tool loop with one short transaction per event; no session is open during a model call."""
+    registry = ToolRegistry(offered=offered_refs_from_context(context), summaries=summaries)
+    budget = RunBudget.from_settings(settings_obj)
+    seen = {"turns": 0}
+
+    def emit(
+        kind: MachineReviewJobEventKind,
+        *,
+        tool_name: str | None = None,
+        status_code: str,
+        started_at: datetime,
+        duration_ms: int,
+        detail: dict[str, Any] | None,
+    ) -> None:
+        with session_factory() as session:
+            job = session.get_one(MachineReviewJob, job_id)
+            if kind is MachineReviewJobEventKind.model_turn:
+                seen["turns"] += 1
+                job.step_count = seen["turns"]
+            jobs.append_event(
+                session,
+                job,
+                kind,
+                tool_name=tool_name,
+                outcome=status_code,
+                started_at=started_at,
+                duration_ms=duration_ms,
+                detail=detail,
+                settings_obj=settings_obj,
+            )
+            session.commit()
+
+    def cancelled() -> bool:
+        return _cancel_requested(session_factory, job_id)
+
+    try:
+        loop: LoopResult = provider.run_agent(
+            context, registry=registry, budget=budget, emit=emit, cancelled=cancelled
+        )
+    except MachineReviewCancelled:
+        raise
+    except (ReviewBudgetExhausted, ModelContextExceededError):
+        return _AgentRun(budget_exhausted=True)
+    except Exception as exc:
+        return _AgentRun(
+            reason=_failure_text("Machine review failed to review", exc, settings_obj), code=_failure_code_for(exc)
+        )
+    tokens = (loop.tokens_in, loop.tokens_out)
+    try:
+        result = parse_machine_review_payload(loop.text)
+    except Exception as exc:
+        return _AgentRun(
+            reason=_failure_text("Machine review output was invalid", exc, settings_obj),
+            parse_failed=True,
+            tokens=tokens,
+        )
+    violation = _offer_violation(result, context)
+    if violation is not None:
+        return _AgentRun(reason=violation, parse_failed=True, tokens=tokens)
+    return _AgentRun(result=result, tokens=tokens)
 
 
 def _offer_violation(result: MachineReviewProviderResult, context: MachineReviewContext) -> str | None:

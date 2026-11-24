@@ -290,6 +290,12 @@ class Settings(BaseSettings):
     llm_precheck_max_output_tokens: int = 1200
     # Local reviewer only: cap on reasoning tokens per call, sent as thinking_budget_tokens.
     llm_precheck_thinking_budget_tokens: int = Field(1024, ge=0)
+    # Local reviewer only: model calls per review, including the final answer.
+    llm_precheck_max_steps: int = Field(6, ge=2)
+    # Local reviewer only: tool calls per review.
+    llm_precheck_max_tool_calls: int = Field(10, ge=0)
+    # Local reviewer only: seconds one review may take in all.
+    llm_precheck_run_wall_seconds: int = Field(900, ge=1)
     # Local reviewer only: json_schema for servers that enforce a schema, json_object for those that do not.
     llm_precheck_structured_output: Literal["json_schema", "json_object"] = "json_schema"
     llm_precheck_include_artifact_text: bool = False
