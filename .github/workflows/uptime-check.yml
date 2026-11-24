@@ -66,8 +66,9 @@ name: uptime-check
 #   /status carries two verdict fields. `degraded` lists components that are
 #   BROKEN; this job pushes urgent and exits 1 on it, every fifteen minutes
 #   until it clears. `warnings` lists things that are TRUE BUT NOT YET BROKEN
-#   -- today, an object store whose remaining room has fallen below the
-#   largest artifact TCKDB accepts.
+#   -- an object store whose remaining room has fallen below the
+#   largest artifact TCKDB accepts, or a machine-review worker that is not
+#   running or not claiming its queue.
 #
 #   A warning is pushed at Priority: low, the heartbeat still reports SUCCESS,
 #   and the job still exits 0. Routing it any other way would page an operator

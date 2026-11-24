@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.177.4 - 2026-11-24
+
+No schema changed. The producer contract lists the machine-review job and settings write routes, and the refusal-code list gains the ten `machine_review_*` codes.
+
 ## 0.177.3 - 2026-11-22
 
 No schema changed. The producer contract lists the admin-only `POST /api/v1/admin/record-deletions` route, and the refusal-code list gains `record_deleted` (410) and the four `record_deletion_*` codes.

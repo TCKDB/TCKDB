@@ -76,9 +76,10 @@
 # WARNINGS ARE A SEPARATE, QUIETER CHANNEL
 #   /status carries two verdict fields. `degraded` lists components that are
 #   BROKEN, and this script pages on it at Priority: high. `warnings` lists
-#   things that are TRUE BUT NOT YET BROKEN -- today, an object store whose
-#   remaining room has fallen below the largest artifact TCKDB accepts, which
-#   is worth knowing about hours before the first upload fails.
+#   things that are TRUE BUT NOT YET BROKEN -- an object store whose
+#   remaining room has fallen below the largest artifact TCKDB accepts (worth
+#   knowing about hours before the first upload fails), or a machine-review
+#   worker that is not running or not claiming its queue.
 #
 #   A warning is pushed at Priority: low, does NOT change the verdict, and
 #   does NOT change the exit code. That separation is the whole point: an

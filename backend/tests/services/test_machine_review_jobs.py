@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from app.api.config import Settings
 from app.db.models.common import (
     AppUserRole,
+    MachineReviewAvailability,
     MachineReviewExecutor,
     MachineReviewJobEventKind,
     MachineReviewJobFailure,
@@ -66,7 +67,7 @@ def test_second_open_job_for_a_submission_raises_and_leaves_one_row(ctx):
 def test_a_new_job_is_allowed_once_the_first_is_terminal(ctx):
     session, admin, _, _, submission = ctx
     first = _create(session, submission, admin)
-    jobs.request_cancel(session, first.id)
+    jobs.request_cancel(session, first.id, actor=admin)
 
     second = _create(session, submission, admin)
 
@@ -102,6 +103,16 @@ def test_machine_review_switch_off_refuses_admin_and_curator(ctx):
     assert _reason(session, submission, curator) == "machine_review_disabled"
     write_machine_review_switches(session, actor=admin, machine_review_enabled=True)
     assert _create(session, submission, curator).requested_by == curator.id
+
+
+def test_inactive_curator_is_refused_and_active_twin_accepted(ctx):
+    session, _, curator, _, submission = ctx
+    curator.is_active = False
+    session.flush()
+    assert _reason(session, submission, curator) == "not_allowed_for_user"
+    curator.is_active = True
+    session.flush()
+    assert _create(session, submission, curator).status is MachineReviewJobStatus.queued
 
 
 def test_curator_switch_off_refuses_curator_but_not_admin(ctx):
@@ -187,16 +198,16 @@ def test_remote_runner_job_is_not_claimed_in_process(ctx):
 def test_cancel_queued_running_and_terminal(ctx):
     session, admin, _, _, submission = ctx
     queued = _create(session, submission, admin)
-    assert jobs.request_cancel(session, queued.id).status is MachineReviewJobStatus.cancelled
+    assert jobs.request_cancel(session, queued.id, actor=admin).status is MachineReviewJobStatus.cancelled
 
     running = _create(session, submission, admin)
     jobs.claim_next_job(session, settings_obj=FAKE_SETTINGS)
-    after = jobs.request_cancel(session, running.id)
+    after = jobs.request_cancel(session, running.id, actor=admin)
     assert after.status is MachineReviewJobStatus.running and after.cancel_requested
     assert jobs.is_cancel_requested(session, running.id)
 
     with pytest.raises(jobs.MachineReviewJobNotCancellable):
-        jobs.request_cancel(session, queued.id)
+        jobs.request_cancel(session, queued.id, actor=admin)
 
 
 def test_reaper_requeues_once_then_fails_worker_lost(ctx):
@@ -227,7 +238,7 @@ def test_reaper_cancels_an_expired_job_with_a_cancel_request(ctx):
     job = _create(session, submission, admin)
     t0 = job.created_at
     jobs.claim_next_job(session, now=t0, settings_obj=FAKE_SETTINGS)
-    jobs.request_cancel(session, job.id)
+    jobs.request_cancel(session, job.id, actor=admin)
 
     assert jobs.reap_expired(session, t0 + jobs.LEASE_DURATION + timedelta(seconds=1)) == 1
     session.refresh(job)
@@ -294,3 +305,117 @@ def test_failure_detail_is_clipped(ctx):
         failure_code=MachineReviewJobFailure.internal_error, failure_detail="x" * 5000,
     )
     assert len(job.failure_detail) == 2000
+
+
+# ---------------------------------------------------------------------------
+# Availability and the refusal vocabulary
+# ---------------------------------------------------------------------------
+
+Avail = MachineReviewAvailability
+_ALL_KEYS = list(MachineReviewProviderKey)
+
+
+def _availability(session, user, key, settings_obj=FAKE_SETTINGS):
+    return jobs.provider_availability(session, user, key, settings_obj)
+
+
+def test_curator_never_gets_a_remote_key_but_gets_fake(ctx):
+    session, admin, curator, *_ = ctx
+    for key in (MachineReviewProviderKey.claude_code, MachineReviewProviderKey.codex):
+        assert _availability(session, curator, key) is Avail.not_allowed_for_user
+        assert _availability(session, admin, key) is Avail.remote_runner_unavailable
+    assert _availability(session, curator, FAKE) is Avail.ok
+    assert _availability(session, admin, FAKE) is Avail.ok
+
+
+def test_availability_follows_the_switches_and_mode(ctx):
+    session, admin, curator, plain, _ = ctx
+    assert _availability(session, plain, FAKE) is Avail.not_allowed_for_user
+    assert _availability(session, admin, FAKE, OFF_SETTINGS) is Avail.mode_off
+    assert _availability(session, admin, MachineReviewProviderKey.cloud) is Avail.provider_not_configured
+    write_machine_review_switches(session, actor=admin, curator_requests_enabled=False)
+    assert _availability(session, curator, FAKE) is Avail.curator_requests_disabled
+    assert _availability(session, admin, FAKE) is Avail.ok
+    write_machine_review_switches(session, actor=admin, machine_review_enabled=False)
+    assert _availability(session, admin, FAKE) is Avail.machine_review_disabled
+
+
+def test_list_provider_availability_names_every_key(ctx):
+    session, _, curator, *_ = ctx
+    listed = jobs.list_provider_availability(session, curator, FAKE_SETTINGS)
+    assert list(listed) == _ALL_KEYS
+    assert listed[FAKE] is Avail.ok
+
+
+@pytest.mark.parametrize("role", ["admin", "curator", "plain"])
+@pytest.mark.parametrize("switches", [(True, True), (True, False), (False, True)])
+@pytest.mark.parametrize("which", ["test", "off", "cloud"])
+def test_create_job_refuses_exactly_what_availability_reports(ctx, role, switches, which):
+    session, admin, curator, plain, submission = ctx
+    user = {"admin": admin, "curator": curator, "plain": plain}[role]
+    settings_obj = {"test": FAKE_SETTINGS, "off": OFF_SETTINGS, "cloud": CLOUD_SETTINGS}[which]
+    write_machine_review_switches(
+        session, actor=admin, machine_review_enabled=switches[0], curator_requests_enabled=switches[1]
+    )
+    for key in _ALL_KEYS:
+        expected = _availability(session, user, key, settings_obj)
+        if expected is Avail.ok:
+            job = _create(session, submission, user, key, settings_obj)
+            jobs.request_cancel(session, job.id, actor=admin)
+        else:
+            assert _reason(session, submission, user, key=key, settings_obj=settings_obj) == expected.value
+
+
+_STATUS_AND_CODE = {
+    "mode_off": (409, "machine_review_mode_off"),
+    "machine_review_disabled": (409, "machine_review_disabled"),
+    "curator_requests_disabled": (403, "machine_review_curator_requests_disabled"),
+    "not_allowed_for_user": (403, "machine_review_not_allowed_for_user"),
+    "provider_not_configured": (409, "machine_review_provider_not_configured"),
+    "remote_runner_unavailable": (409, "machine_review_remote_runner_unavailable"),
+}
+
+
+@pytest.mark.parametrize("reason", sorted(_STATUS_AND_CODE))
+def test_each_refusal_carries_its_status_and_code(reason):
+    error = jobs.MachineReviewUnavailable(reason)
+    assert (error.status, error.code) == _STATUS_AND_CODE[reason]
+    assert error.reason == reason
+
+
+def test_reasons_are_the_availability_vocabulary_without_ok():
+    assert set(jobs.MachineReviewUnavailable.REASONS) == {a.value for a in Avail} - {"ok"}
+
+
+def test_conflict_and_not_cancellable_carry_status_code_and_an_id_free_context(ctx):
+    session, admin, _, _, submission = ctx
+    first = _create(session, submission, admin)
+    with pytest.raises(jobs.MachineReviewJobConflict) as raised:
+        _create(session, submission, admin)
+    assert (raised.value.status, raised.value.code) == (409, "machine_review_job_conflict")
+    open_job = raised.value.context["open_job"]
+    assert set(open_job) == {"status", "provider_key", "step_count", "cancel_requested", "created_at", "started_at"}
+    assert open_job["created_at"] == first.created_at.isoformat()
+    jobs.request_cancel(session, first.id, actor=admin)
+    with pytest.raises(jobs.MachineReviewJobNotCancellable) as raised:
+        jobs.request_cancel(session, first.id, actor=admin)
+    assert (raised.value.status, raised.value.code) == (409, "machine_review_job_not_cancellable")
+
+
+def test_get_list_and_events_read_back_in_order(ctx):
+    session, admin, _, _, submission = ctx
+    first = _create(session, submission, admin)
+    jobs.request_cancel(session, first.id, actor=admin)
+    second = _create(session, submission, admin)
+    for _ in range(3):
+        jobs.append_event(session, second, MachineReviewJobEventKind.model_turn, outcome="ok")
+
+    assert jobs.get_job(session, second.id).id == second.id
+    rows, total = jobs.list_jobs(session, submission.id, offset=0, limit=10)
+    assert [j.id for j in rows] == [second.id, first.id] and total == 2
+    assert [e.seq for e in jobs.list_events(session, second.id, after_seq=1)] == [2, 3]
+    from app.api.errors import NotFoundError
+
+    with pytest.raises(NotFoundError) as missing:
+        jobs.get_job(session, -1)
+    assert missing.value.code == "machine_review_job_not_found"

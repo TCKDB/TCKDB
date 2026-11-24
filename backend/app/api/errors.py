@@ -91,6 +91,16 @@ class SubmissionSelfApprovalForbidden(SelfApprovalForbidden):
     """``submission_self_approval``: the actor uploaded this submission."""
 
 
+class MachineReviewJobError(DomainError):
+    """A refused machine-review job operation; the HTTP status, stable code and context (no row ids) ride on it."""
+
+    def __init__(self, message: str, *, status: int, code: str, context: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.status = status
+        self.code = code
+        self.context = dict(context or {})
+
+
 class NotFoundError(Exception):
     """Explicit 404 raised by service code.
 
@@ -340,6 +350,14 @@ def _not_found_handler(_request: Request, exc: NotFoundError) -> JSONResponse:
             context=getattr(exc, "context", None),
             fallback_code="resource_not_found",
         ),
+    )
+
+
+def _machine_review_job_error_handler(_request: Request, exc: MachineReviewJobError) -> JSONResponse:
+    """A machine-review job request refused; the status and code ride on the exception."""
+    return JSONResponse(
+        status_code=exc.status,
+        content=error_envelope(str(exc), code=exc.code, context=exc.context, fallback_code="domain_error"),
     )
 
 
@@ -986,6 +1004,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(DomainError, _domain_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(RecordReviewConflict, _record_review_conflict_handler)  # type: ignore[arg-type]
     app.add_exception_handler(SelfApprovalForbidden, _self_approval_forbidden_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(MachineReviewJobError, _machine_review_job_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(NotFoundError, _not_found_handler)  # type: ignore[arg-type]
     app.add_exception_handler(RecordDeletionError, _record_deletion_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(DataIntegrityError, _data_integrity_error_handler)  # type: ignore[arg-type]

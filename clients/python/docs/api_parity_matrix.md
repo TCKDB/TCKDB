@@ -13,8 +13,8 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 |---|---|
 | typed | 132 |
 | raw_only | 109 |
-| not_applicable | 52 |
-| **total** | **293** |
+| not_applicable | 59 |
+| **total** | **300** |
 
 ## Typed coverage
 
@@ -368,6 +368,8 @@ Admin, auth, and curator-internal surface that a producer/consumer client is not
 | `POST /api/v1/admin/machine-review/curator-tasks/{task_id}/start-review` | yes | — | — | — | — |
 | `POST /api/v1/admin/machine-review/records/{record_type}/{record_id}/run-fake` | yes | — | — | — | — |
 | `POST /api/v1/admin/machine-review/run-for-submission/{submission_id}` | yes | — | — | — | — |
+| `GET /api/v1/admin/machine-review/settings` | yes | — | — | — | — |
+| `PATCH /api/v1/admin/machine-review/settings` | yes | — | — | — | — |
 | `GET /api/v1/admin/record-deletions` | yes | — | — | — | — |
 | `GET /api/v1/admin/record-deletions/{public_ref}` | yes | — | — | — | — |
 | `GET /api/v1/admin/submissions/{submission_id}/machine-review-inspection` | yes | — | — | — | — |
@@ -387,6 +389,11 @@ Admin, auth, and curator-internal surface that a producer/consumer client is not
 | `POST /api/v1/curation/species-names/{name_ref}/retire` | yes | — | — | — | — |
 | `GET /api/v1/curation/structure-evidence-findings` | yes | — | — | — | — |
 | `POST /api/v1/curation/structure-evidence-findings` | yes | — | — | — | — |
+| `GET /api/v1/machine-review/jobs` | yes | — | — | — | — |
+| `POST /api/v1/machine-review/jobs` | yes | — | — | — | — |
+| `GET /api/v1/machine-review/jobs/{job_id}` | yes | — | — | — | — |
+| `POST /api/v1/machine-review/jobs/{job_id}/cancel` | yes | — | — | — | — |
+| `GET /api/v1/machine-review/providers` | yes | — | — | — | — |
 | `GET /api/v1/record-reviews` | yes | — | — | — | — |
 | `GET /api/v1/record-reviews/queue` | yes | — | — | — | — |
 | `GET /api/v1/record-reviews/{record_type}/{record_id}` | yes | — | — | — | — |

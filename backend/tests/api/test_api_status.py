@@ -1232,3 +1232,182 @@ def test_seaweedfs_with_room_raises_no_warning(
 )
 def test_reported_endpoint_is_reduced_to_scheme_host_port(raw, expected) -> None:
     assert health._sanitized_endpoint(raw) == expected
+
+
+# ---------------------------------------------------------------------------
+# Machine-review worker
+# ---------------------------------------------------------------------------
+
+
+def _review_mode(monkeypatch, mode: str, inline: bool = True) -> None:
+    from app.api.config import settings as app_settings
+
+    monkeypatch.setattr(app_settings, "ai_review_assistant_mode", mode)
+    monkeypatch.setenv("TCKDB_INLINE_WORKER", "true" if inline else "false")
+
+
+def test_review_worker_with_no_live_thread_warns_and_stays_healthy(monkeypatch, db_session) -> None:
+    _review_mode(monkeypatch, "test")
+    monkeypatch.setattr(threading, "enumerate", lambda: [])
+
+    status = health._machine_review_worker_status()
+
+    assert (status["inline"], status["enabled"], status["thread_alive"]) == (True, True, False)
+    assert status["healthy"] is True
+    assert "not running" in status["reason"]
+    assert [w["code"] for w in status["warnings"]] == ["machine_review_worker_not_running"]
+
+
+def test_a_dead_review_worker_does_not_degrade_status(client, monkeypatch, healthy_storage) -> None:
+    _review_mode(monkeypatch, "test")
+    monkeypatch.setattr(health, "_worker_status", lambda: {"healthy": True, "reason": None})
+    monkeypatch.setattr(threading, "enumerate", lambda: [])
+
+    body = client.get("/api/v1/status").json()
+
+    assert body["status"] == "ok"
+    assert "machine_review_worker" not in body["degraded"]
+    assert [w["code"] for w in body["warnings"] if w["component"] == "machine_review_worker"] == [
+        "machine_review_worker_not_running"
+    ]
+    assert body["components"]["machine_review_worker"]["healthy"] is True
+
+
+def test_a_live_review_worker_raises_no_warning(client, monkeypatch, healthy_storage) -> None:
+    _review_mode(monkeypatch, "test")
+    monkeypatch.setattr(health, "_worker_status", lambda: {"healthy": True, "reason": None})
+    started, stop = threading.Event(), threading.Event()
+
+    def _park() -> None:
+        started.set()
+        stop.wait(timeout=10)
+
+    worker = threading.Thread(target=_park, name="machine-review-worker", daemon=True)
+    worker.start()
+    started.wait(timeout=5)
+    try:
+        body = client.get("/api/v1/status").json()
+    finally:
+        stop.set()
+        worker.join(timeout=5)
+
+    assert body["components"]["machine_review_worker"]["warnings"] == []
+    assert body["degraded"] == []
+    assert body["status"] == "ok"
+
+
+def test_the_stalled_queue_warning_summary_does_not_change_with_the_age(monkeypatch, db_session, _api_admin_user) -> None:
+    from datetime import datetime, timedelta
+
+    from app.db.models.common import SubmissionKind
+    from app.db.models.machine_review_job import MachineReviewJob
+    from app.services.submission import create_submission
+
+    _review_mode(monkeypatch, "test", inline=False)
+    submission = create_submission(
+        db_session, created_by=_api_admin_user, submission_kind=SubmissionKind.thermo, title="t", summary="s"
+    )
+    db_session.flush()
+    job = MachineReviewJob(
+        submission_id=submission.id,
+        requested_by=_api_admin_user,
+        provider_key="fake",
+        executor="in_process",
+        created_at=datetime.utcnow() - timedelta(seconds=10_000),
+    )
+    db_session.add(job)
+    db_session.flush()
+    monkeypatch.setattr(health, "SessionLocal", lambda: _Borrowed(db_session))
+
+    first = health._machine_review_worker_status()
+    job.created_at = datetime.utcnow() - timedelta(seconds=20_000)
+    db_session.flush()
+    second = health._machine_review_worker_status()
+
+    (w1,), (w2,) = first["warnings"], second["warnings"]
+    assert w1["summary"] == w2["summary"]
+    assert w2["oldest_queued_age_seconds"] > w1["oldest_queued_age_seconds"]
+    assert first["reason"] != second["reason"]
+
+
+def test_review_worker_with_a_live_thread_is_healthy(monkeypatch, db_session) -> None:
+    _review_mode(monkeypatch, "test")
+    started, stop = threading.Event(), threading.Event()
+
+    def _park() -> None:
+        started.set()
+        stop.wait(timeout=10)
+
+    worker = threading.Thread(target=_park, name="machine-review-worker", daemon=True)
+    worker.start()
+    started.wait(timeout=5)
+    try:
+        status = health._machine_review_worker_status()
+    finally:
+        stop.set()
+        worker.join(timeout=5)
+
+    assert (status["thread_alive"], status["healthy"], status["reason"]) == (True, True, None)
+    assert status["warnings"] == []
+
+
+@pytest.mark.parametrize("mode,inline", [("off", True), ("test", False)])
+def test_review_worker_not_expected_here_is_not_judged(monkeypatch, db_session, mode, inline) -> None:
+    _review_mode(monkeypatch, mode, inline)
+    monkeypatch.setattr(threading, "enumerate", lambda: [])
+
+    status = health._machine_review_worker_status()
+
+    assert status["thread_alive"] is None
+    assert status["healthy"] is True
+
+
+@pytest.mark.parametrize(
+    "mode,executor,stalled",
+    [("test", "in_process", True), ("test", "remote_runner", False), ("off", "in_process", False)],
+)
+def test_a_stale_queued_review_job_flags_a_stalled_queue(
+    monkeypatch, db_session, _api_admin_user, mode, executor, stalled
+) -> None:
+    from datetime import datetime, timedelta
+
+    from app.db.models.common import SubmissionKind
+    from app.db.models.machine_review_job import MachineReviewJob
+    from app.services.submission import create_submission
+
+    _review_mode(monkeypatch, mode, inline=False)
+    submission = create_submission(
+        db_session, created_by=_api_admin_user, submission_kind=SubmissionKind.thermo, title="t", summary="s"
+    )
+    db_session.flush()
+    db_session.add(
+        MachineReviewJob(
+            submission_id=submission.id,
+            requested_by=_api_admin_user,
+            provider_key="fake" if executor == "in_process" else "codex",
+            executor=executor,
+            created_at=datetime.utcnow() - timedelta(seconds=10_000),
+        )
+    )
+    db_session.flush()
+    monkeypatch.setattr(health, "SessionLocal", lambda: _Borrowed(db_session))
+
+    status = health._machine_review_worker_status()
+
+    assert status["queue_stalled"] is (executor == "in_process")
+    assert status["queued"] == (1 if executor == "in_process" else 0)
+    assert status["healthy"] is True
+    assert [w["code"] for w in status["warnings"]] == (["machine_review_queue_stalled"] if stalled else [])
+
+
+class _Borrowed:
+    """Lend the test session to code that closes the session it is given."""
+
+    def __init__(self, session) -> None:
+        self._session = session
+
+    def execute(self, *args, **kwargs):
+        return self._session.execute(*args, **kwargs)
+
+    def close(self) -> None:
+        pass

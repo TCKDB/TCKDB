@@ -16,10 +16,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.config import settings as app_settings
-from app.api.errors import DomainError, NotFoundError
+from app.api.errors import MachineReviewJobError, NotFoundError
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     AppUserRole,
+    MachineReviewAvailability,
     MachineReviewExecutor,
     MachineReviewJobEventKind,
     MachineReviewJobFailure,
@@ -30,7 +31,7 @@ from app.db.models.machine_review_job import MachineReviewJob, MachineReviewJobE
 from app.db.models.submission import Submission, SubmissionAuditEvent
 from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_PROMPT
 from app.services.machine_review.run import _clip, _configured_model, _redact_secrets
-from app.services.machine_review.switches import read_machine_review_switches
+from app.services.machine_review.switches import MachineReviewSwitches, read_machine_review_switches
 
 LEASE_DURATION = timedelta(minutes=5)
 _OPEN_INDEX = "ux_machine_review_job_open_submission"
@@ -49,40 +50,126 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-class MachineReviewJobConflict(DomainError):
+CONFLICT_CODE = "machine_review_job_conflict"
+NOT_CANCELLABLE_CODE = "machine_review_job_not_cancellable"
+NOT_OWNED_CODE = "machine_review_job_not_owned"
+
+
+class MachineReviewJobConflict(MachineReviewJobError):
     """The submission already has a queued or running job; ``open_job`` is that job."""
 
-    code = "machine_review_job_conflict"
-
     def __init__(self, open_job: MachineReviewJob) -> None:
-        super().__init__("This submission already has a machine review queued or running.")
+        super().__init__(
+            "This submission already has a machine review queued or running.",
+            status=409,
+            code=CONFLICT_CODE,
+            context={
+                "open_job": {
+                    "status": open_job.status.value,
+                    "provider_key": open_job.provider_key.value,
+                    "step_count": open_job.step_count,
+                    "cancel_requested": open_job.cancel_requested,
+                    "created_at": open_job.created_at.isoformat(),
+                    "started_at": open_job.started_at.isoformat() if open_job.started_at else None,
+                }
+            },
+        )
         self.open_job = open_job
 
 
-class MachineReviewUnavailable(DomainError):
-    """A review cannot be requested; ``reason`` is the stable code."""
+_UNAVAILABLE: dict[str, tuple[int, str]] = {
+    "mode_off": (409, "machine_review_mode_off"),
+    "machine_review_disabled": (409, "machine_review_disabled"),
+    "curator_requests_disabled": (403, "machine_review_curator_requests_disabled"),
+    "not_allowed_for_user": (403, "machine_review_not_allowed_for_user"),
+    "provider_not_configured": (409, "machine_review_provider_not_configured"),
+    "remote_runner_unavailable": (409, "machine_review_remote_runner_unavailable"),
+}
 
-    code = "machine_review_unavailable"
-    REASONS = (
-        "mode_off",
-        "machine_review_disabled",
-        "curator_requests_disabled",
-        "not_allowed_for_user",
-        "provider_not_configured",
-        "remote_runner_unavailable",
-    )
+
+class MachineReviewUnavailable(MachineReviewJobError):
+    """A review cannot be requested; ``reason`` is a :class:`MachineReviewAvailability` value other than ``ok``."""
+
+    REASONS = tuple(a.value for a in MachineReviewAvailability if a is not MachineReviewAvailability.ok)
 
     def __init__(self, reason: str) -> None:
         if reason not in self.REASONS:
             raise ValueError(f"Unknown machine review unavailable reason: {reason!r}")
-        super().__init__(f"Machine review is unavailable: {reason}.")
+        status, code = _UNAVAILABLE[reason]
+        super().__init__(f"Machine review is unavailable: {reason}.", status=status, code=code)
         self.reason = reason
 
 
-class MachineReviewJobNotCancellable(DomainError):
+class MachineReviewJobNotCancellable(MachineReviewJobError):
     """The job has already ended."""
 
-    code = "machine_review_job_not_cancellable"
+    def __init__(self, message: str = "The machine review job has already ended.") -> None:
+        super().__init__(message, status=409, code=NOT_CANCELLABLE_CODE)
+
+
+class MachineReviewJobNotOwned(MachineReviewJobError):
+    """A curator tried to cancel a job another user requested."""
+
+    def __init__(self) -> None:
+        super().__init__("Only the requester or an admin may cancel this machine review job.", status=403, code=NOT_OWNED_CODE)
+
+
+def provider_availability(
+    session: Session,
+    requester: AppUser,
+    provider_key: MachineReviewProviderKey,
+    settings_obj: Any = app_settings,
+) -> MachineReviewAvailability:
+    """Whether ``requester`` may ask ``provider_key`` for a review now; :func:`create_job` refuses on the same answer."""
+    return _availability(read_machine_review_switches(session, settings_obj), requester, provider_key, settings_obj)
+
+
+def list_provider_availability(
+    session: Session, requester: AppUser, settings_obj: Any = app_settings
+) -> dict[MachineReviewProviderKey, MachineReviewAvailability]:
+    """The availability of every provider key for ``requester``, in enum order."""
+    switches = read_machine_review_switches(session, settings_obj)
+    return {key: _availability(switches, requester, key, settings_obj) for key in MachineReviewProviderKey}
+
+
+def curator_switch_refuses(switches: MachineReviewSwitches, requester: AppUser) -> bool:
+    """Whether the curator switch is off and ``requester`` is a curator; an admin is never refused by it."""
+    return requester.role is AppUserRole.curator and not switches.curator_requests_enabled
+
+
+def may_use_machine_review(requester: AppUser | None) -> bool:
+    """Whether ``requester`` is an active curator or admin."""
+    return requester is not None and requester.is_active and requester.role in (AppUserRole.curator, AppUserRole.admin)
+
+
+def requester_may_run(switches: MachineReviewSwitches, requester: AppUser | None) -> bool:
+    """Whether a queued job's requester may still have it run: present, active, curator or admin, and not switched off."""
+    return may_use_machine_review(requester) and not curator_switch_refuses(switches, requester)
+
+
+def _availability(
+    switches: MachineReviewSwitches,
+    requester: AppUser,
+    provider_key: MachineReviewProviderKey,
+    settings_obj: Any,
+) -> MachineReviewAvailability:
+    if switches.mode_off:
+        return MachineReviewAvailability.mode_off
+    if not may_use_machine_review(requester):
+        return MachineReviewAvailability.not_allowed_for_user
+    if not switches.machine_review_enabled:
+        return MachineReviewAvailability.machine_review_disabled
+    if curator_switch_refuses(switches, requester):
+        return MachineReviewAvailability.curator_requests_disabled
+    if provider_key in _REMOTE_KEYS:
+        if requester.role is not AppUserRole.admin:
+            return MachineReviewAvailability.not_allowed_for_user
+        return MachineReviewAvailability.remote_runner_unavailable
+    if settings_obj.ai_review_assistant_mode != MODE_FOR_KEY[provider_key] or (
+        provider_key is MachineReviewProviderKey.fake and settings_obj.deployment_mode != "local"
+    ):
+        return MachineReviewAvailability.provider_not_configured
+    return MachineReviewAvailability.ok
 
 
 def get_open_job(session: Session, submission_id: int) -> MachineReviewJob | None:
@@ -91,6 +178,40 @@ def get_open_job(session: Session, submission_id: int) -> MachineReviewJob | Non
         select(MachineReviewJob).where(
             MachineReviewJob.submission_id == submission_id,
             MachineReviewJob.status.in_(MachineReviewJobStatus.open_states()),
+        )
+    )
+
+
+def get_job(session: Session, job_id: int) -> MachineReviewJob:
+    """Return one job, or raise the coded not-found."""
+    job = session.get(MachineReviewJob, job_id)
+    if job is None:
+        raise NotFoundError("Machine review job not found.", code="machine_review_job_not_found")
+    return job
+
+
+def list_jobs(session: Session, submission_id: int, *, offset: int = 0, limit: int = 50) -> tuple[list[MachineReviewJob], int]:
+    """A submission's jobs, newest first, with the total; an open job is always first."""
+    total = session.scalar(
+        select(func.count()).select_from(MachineReviewJob).where(MachineReviewJob.submission_id == submission_id)
+    )
+    rows = session.scalars(
+        select(MachineReviewJob)
+        .where(MachineReviewJob.submission_id == submission_id)
+        .order_by(MachineReviewJob.created_at.desc(), MachineReviewJob.id.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return list(rows), int(total or 0)
+
+
+def list_events(session: Session, job_id: int, *, after_seq: int = 0) -> list[MachineReviewJobEvent]:
+    """A job's progress entries with ``seq`` greater than ``after_seq``, in order."""
+    return list(
+        session.scalars(
+            select(MachineReviewJobEvent)
+            .where(MachineReviewJobEvent.job_id == job_id, MachineReviewJobEvent.seq > after_seq)
+            .order_by(MachineReviewJobEvent.seq)
         )
     )
 
@@ -112,22 +233,9 @@ def create_job(
     if session.get(Submission, submission_id) is None:
         raise NotFoundError("Submission not found.")
 
-    switches = read_machine_review_switches(session, settings_obj)
-    if switches.mode_off:
-        raise MachineReviewUnavailable("mode_off")
-    if requester.role not in (AppUserRole.curator, AppUserRole.admin):
-        raise MachineReviewUnavailable("not_allowed_for_user")
-    if not switches.machine_review_enabled:
-        raise MachineReviewUnavailable("machine_review_disabled")
-    if requester.role is AppUserRole.curator and not switches.curator_requests_enabled:
-        raise MachineReviewUnavailable("curator_requests_disabled")
-
-    if provider_key in _REMOTE_KEYS:
-        raise MachineReviewUnavailable("remote_runner_unavailable")
-    if settings_obj.ai_review_assistant_mode != MODE_FOR_KEY[provider_key] or (
-        provider_key is MachineReviewProviderKey.fake and settings_obj.deployment_mode != "local"
-    ):
-        raise MachineReviewUnavailable("provider_not_configured")
+    availability = provider_availability(session, requester, provider_key, settings_obj)
+    if availability is not MachineReviewAvailability.ok:
+        raise MachineReviewUnavailable(availability.value)
 
     existing = get_open_job(session, submission_id)
     if existing is not None:
@@ -283,8 +391,11 @@ def reap_expired(session: Session, now: datetime | None = None) -> int:
     return len(jobs)
 
 
-def request_cancel(session: Session, job_id: int) -> MachineReviewJob:
-    """Cancel a queued job now, or ask a running job to stop at its next step."""
+def request_cancel(session: Session, job_id: int, *, actor: AppUser) -> MachineReviewJob:
+    """Cancel a queued job now, or ask a running job to stop at its next step.
+
+    A non-admin ``actor`` may cancel only a job they requested.
+    """
     job = session.scalar(
         select(MachineReviewJob)
         .where(MachineReviewJob.id == job_id)
@@ -292,7 +403,9 @@ def request_cancel(session: Session, job_id: int) -> MachineReviewJob:
         .execution_options(populate_existing=True)
     )
     if job is None:
-        raise NotFoundError("Machine review job not found.")
+        raise NotFoundError("Machine review job not found.", code="machine_review_job_not_found")
+    if actor.role is not AppUserRole.admin and job.requested_by != actor.id:
+        raise MachineReviewJobNotOwned()
     if job.status is MachineReviewJobStatus.queued:
         now = _utcnow()
         job.status = MachineReviewJobStatus.cancelled
@@ -304,7 +417,7 @@ def request_cancel(session: Session, job_id: int) -> MachineReviewJob:
         job.cancel_requested = True
         session.flush()
     else:
-        raise MachineReviewJobNotCancellable("The machine review job has already ended.")
+        raise MachineReviewJobNotCancellable()
     return job
 
 
@@ -364,15 +477,25 @@ __all__ = [
     "LEASE_DURATION",
     "MODE_FOR_KEY",
     "MachineReviewJobConflict",
+    "MachineReviewJobError",
     "MachineReviewJobNotCancellable",
+    "MachineReviewJobNotOwned",
     "MachineReviewUnavailable",
     "append_event",
     "claim_next_job",
     "create_job",
+    "curator_switch_refuses",
     "finish_job",
+    "get_job",
     "get_open_job",
     "heartbeat",
     "is_cancel_requested",
+    "list_events",
+    "list_jobs",
+    "list_provider_availability",
+    "may_use_machine_review",
+    "provider_availability",
     "reap_expired",
     "request_cancel",
+    "requester_may_run",
 ]

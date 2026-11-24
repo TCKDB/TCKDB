@@ -221,6 +221,16 @@ class RejectionCode(str, Enum):
     LIMIT_TOO_LARGE = "limit_too_large"
     LOWEST_ENERGY_ACROSS_LEVELS = "lowest_energy_across_levels"
     LOWEST_ENERGY_UNAVAILABLE = "lowest_energy_unavailable"
+    MACHINE_REVIEW_CURATOR_REQUESTS_DISABLED = "machine_review_curator_requests_disabled"
+    MACHINE_REVIEW_DISABLED = "machine_review_disabled"
+    MACHINE_REVIEW_JOB_CONFLICT = "machine_review_job_conflict"
+    MACHINE_REVIEW_JOB_NOT_CANCELLABLE = "machine_review_job_not_cancellable"
+    MACHINE_REVIEW_JOB_NOT_FOUND = "machine_review_job_not_found"
+    MACHINE_REVIEW_JOB_NOT_OWNED = "machine_review_job_not_owned"
+    MACHINE_REVIEW_MODE_OFF = "machine_review_mode_off"
+    MACHINE_REVIEW_NOT_ALLOWED_FOR_USER = "machine_review_not_allowed_for_user"
+    MACHINE_REVIEW_PROVIDER_NOT_CONFIGURED = "machine_review_provider_not_configured"
+    MACHINE_REVIEW_REMOTE_RUNNER_UNAVAILABLE = "machine_review_remote_runner_unavailable"
     MANIFEST_ALREADY_FROZEN = "manifest_already_frozen"
     MANIFEST_NOT_FROZEN = "manifest_not_frozen"
     MICRO_REACTION_KEY_UNDECLARED = "micro_reaction_key_undeclared"
@@ -796,6 +806,12 @@ CONFLICT_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.ENERGY_TRANSFER_SCOPE_COLUMNS_DISAGREE,
         RejectionCode.IDEMPOTENCY_CONFLICT,
         RejectionCode.LAST_ADMIN_DEMOTION,
+        RejectionCode.MACHINE_REVIEW_DISABLED,
+        RejectionCode.MACHINE_REVIEW_JOB_CONFLICT,
+        RejectionCode.MACHINE_REVIEW_JOB_NOT_CANCELLABLE,
+        RejectionCode.MACHINE_REVIEW_MODE_OFF,
+        RejectionCode.MACHINE_REVIEW_PROVIDER_NOT_CONFIGURED,
+        RejectionCode.MACHINE_REVIEW_REMOTE_RUNNER_UNAVAILABLE,
         RejectionCode.MANIFEST_ALREADY_FROZEN,
         RejectionCode.NETWORK_SOLVE_REPORTED_REQUIRES_LITERATURE,
         RejectionCode.RECORD_DELETION_CITED,
@@ -967,6 +983,16 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.LIMIT_TOO_LARGE: frozenset({422}),
     RejectionCode.LOWEST_ENERGY_ACROSS_LEVELS: frozenset({422}),
     RejectionCode.LOWEST_ENERGY_UNAVAILABLE: frozenset({422}),
+    RejectionCode.MACHINE_REVIEW_CURATOR_REQUESTS_DISABLED: frozenset({403}),
+    RejectionCode.MACHINE_REVIEW_DISABLED: frozenset({409}),
+    RejectionCode.MACHINE_REVIEW_JOB_CONFLICT: frozenset({409}),
+    RejectionCode.MACHINE_REVIEW_JOB_NOT_CANCELLABLE: frozenset({409}),
+    RejectionCode.MACHINE_REVIEW_JOB_NOT_FOUND: frozenset({404}),
+    RejectionCode.MACHINE_REVIEW_JOB_NOT_OWNED: frozenset({403}),
+    RejectionCode.MACHINE_REVIEW_MODE_OFF: frozenset({409}),
+    RejectionCode.MACHINE_REVIEW_NOT_ALLOWED_FOR_USER: frozenset({403}),
+    RejectionCode.MACHINE_REVIEW_PROVIDER_NOT_CONFIGURED: frozenset({409}),
+    RejectionCode.MACHINE_REVIEW_REMOTE_RUNNER_UNAVAILABLE: frozenset({409}),
     RejectionCode.MANIFEST_ALREADY_FROZEN: frozenset({409}),
     RejectionCode.MANIFEST_NOT_FROZEN: frozenset({404}),
     RejectionCode.MICRO_REACTION_KEY_UNDECLARED: frozenset({422}),

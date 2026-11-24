@@ -111,7 +111,7 @@ def test_an_empty_queue_does_nothing(db_session, factory):
 
 
 def test_cancel_between_steps_cancels_without_an_audit_event(ctx, factory):
-    session, _, submission, job = ctx
+    session, admin, submission, job = ctx
 
     class CancelAfterFirstStep(ScriptedFakeMachineReviewAgent):
         def run(self, context, *, on_step, cancelled):
@@ -119,7 +119,7 @@ def test_cancel_between_steps_cancels_without_an_audit_event(ctx, factory):
                 on_step(i)
                 if i == 1:
                     with factory() as other:
-                        jobs.request_cancel(other, job.id)
+                        jobs.request_cancel(other, job.id, actor=admin)
                         other.commit()
 
             return super().run(context, on_step=step, cancelled=cancelled)
@@ -150,6 +150,84 @@ def test_switch_on_twin_succeeds(ctx, factory):
     write_machine_review_switches(session, actor=admin, machine_review_enabled=True)
     _cycle(factory)
     assert _reload(session, job).status is S.succeeded
+
+
+def _queued_job_by(session, role, name):
+    user = make_user(session, name, role)
+    submission = make_submission(session, user.id)
+    job = jobs.create_job(
+        session,
+        submission_id=submission.id,
+        requester=user,
+        provider_key=MachineReviewProviderKey.fake,
+        settings_obj=FAKE_SETTINGS,
+    )
+    return user, submission, job
+
+
+def test_curator_switch_off_at_claim_cancels_a_curator_job(db_session, factory):
+    admin = make_user(db_session, "switch-admin", AppUserRole.admin)
+    _, submission, job = _queued_job_by(db_session, AppUserRole.curator, "claim-curator")
+    write_machine_review_switches(db_session, actor=admin, curator_requests_enabled=False)
+
+    assert _cycle(factory) is True
+
+    job = _reload(db_session, job)
+    assert (job.status, job.failure_code, job.audit_event_id) == (S.cancelled, MachineReviewJobFailure.machine_review_disabled, None)
+    assert _kinds(db_session, job) == [K.claimed, K.finished]
+    assert _audit_events(db_session, submission) == []
+
+
+def test_curator_switch_off_still_runs_an_admin_job(db_session, factory):
+    admin = make_user(db_session, "switch-admin", AppUserRole.admin)
+    _, _, job = _queued_job_by(db_session, AppUserRole.admin, "claim-admin")
+    write_machine_review_switches(db_session, actor=admin, curator_requests_enabled=False)
+
+    assert _cycle(factory) is True
+
+    assert _reload(db_session, job).status is S.succeeded
+
+
+def test_curator_switch_on_runs_a_curator_job(db_session, factory):
+    admin = make_user(db_session, "switch-admin", AppUserRole.admin)
+    _, _, job = _queued_job_by(db_session, AppUserRole.curator, "claim-curator")
+    write_machine_review_switches(db_session, actor=admin, curator_requests_enabled=True)
+
+    assert _cycle(factory) is True
+
+    assert _reload(db_session, job).status is S.succeeded
+
+
+def test_a_job_whose_requester_was_demoted_is_cancelled_at_claim(db_session, factory):
+    user, submission, job = _queued_job_by(db_session, AppUserRole.curator, "demoted-curator")
+    user.role = AppUserRole.user
+    db_session.flush()
+
+    assert _cycle(factory) is True
+
+    job = _reload(db_session, job)
+    assert (job.status, job.failure_code, job.audit_event_id) == (S.cancelled, MachineReviewJobFailure.machine_review_disabled, None)
+    assert _audit_events(db_session, submission) == []
+
+
+def test_a_job_whose_requester_is_inactive_is_cancelled_at_claim(db_session, factory):
+    user, submission, job = _queued_job_by(db_session, AppUserRole.curator, "inactive-curator")
+    user.is_active = False
+    db_session.flush()
+
+    assert _cycle(factory) is True
+
+    job = _reload(db_session, job)
+    assert (job.status, job.failure_code, job.audit_event_id) == (S.cancelled, MachineReviewJobFailure.machine_review_disabled, None)
+    assert _audit_events(db_session, submission) == []
+
+
+def test_an_active_curator_job_with_the_switch_on_runs_twin(db_session, factory):
+    _, _, job = _queued_job_by(db_session, AppUserRole.curator, "active-curator")
+
+    assert _cycle(factory) is True
+
+    assert _reload(db_session, job).status is S.succeeded
 
 
 def test_a_raising_provider_fails_with_internal_error_and_a_failed_audit_event(ctx, factory):
@@ -288,12 +366,12 @@ def test_cancel_flag_stops_a_single_shot_provider_before_it_is_called(ctx, facto
 
 
 def test_cancel_arriving_while_a_single_shot_provider_runs_records_no_review(ctx, factory):
-    session, _, submission, job = ctx
+    session, admin, submission, job = ctx
 
     class FlipsCancelWhileRunning:
         def review_submission(self, context):
             with factory() as other:
-                jobs.request_cancel(other, job.id)
+                jobs.request_cancel(other, job.id, actor=admin)
                 other.commit()
             return make_pass_result()
 

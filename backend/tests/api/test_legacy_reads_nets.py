@@ -56,6 +56,7 @@ EXEMPT_PREFIXES = {
     "/api/v1/bundles": "write surface",
     "/api/v1/submissions": "a depositor's own submissions, authenticated",
     "/api/v1/record-reviews": "curation, authenticated",
+    "/api/v1/machine-review": "curator machine-review jobs, authenticated",
     "/api/v1/curation": "curation, authenticated",
     "/api/v1/releases": "curator-gated release administration",
 }

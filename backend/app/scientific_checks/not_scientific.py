@@ -34,6 +34,7 @@ _R18 = 'A label or symbol outside a controlled vocabulary or not parseable (an e
 _R19 = "Bibliographic metadata disagreement between a deposit and the DOI's record; not chemistry."
 _R20 = 'Role and calculation-type compatibility (which role a calculation type may take); vocabulary, not chemistry.'
 _R21 = 'Admin record-deletion workflow state (approval, citations, release membership, deleted ref); not a check on a result.'
+_R22 = 'Machine-review job queue and switch state (who may request, whether review is on, job lifecycle); advisory tooling, not a check on a result.'
 
 NOT_SCIENTIFIC: dict[str, str] = {
     'ts_validation_source_calculation_owner_mismatch': 'A guard no request can trip: the request schemas refuse the same mistake earlier with calculation_key_undeclared.',
@@ -259,6 +260,16 @@ NOT_SCIENTIFIC: dict[str, str] = {
     'record_deletion_in_published_release': _R21,
     'record_deletion_not_approved': _R21,
     'record_deletion_type_not_supported': _R21,
+    'machine_review_curator_requests_disabled': _R22,
+    'machine_review_disabled': _R22,
+    'machine_review_job_conflict': _R22,
+    'machine_review_job_not_cancellable': _R22,
+    'machine_review_job_not_found': _R22,
+    'machine_review_job_not_owned': _R22,
+    'machine_review_mode_off': _R22,
+    'machine_review_not_allowed_for_user': _R22,
+    'machine_review_provider_not_configured': _R22,
+    'machine_review_remote_runner_unavailable': _R22,
     'record_has_no_subject': _R01,
     'record_not_approved': _R01,
     'record_ref_not_selectable': _R01,
