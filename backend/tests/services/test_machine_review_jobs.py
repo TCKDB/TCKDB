@@ -67,7 +67,7 @@ def test_second_open_job_for_a_submission_raises_and_leaves_one_row(ctx):
 def test_a_new_job_is_allowed_once_the_first_is_terminal(ctx):
     session, admin, _, _, submission = ctx
     first = _create(session, submission, admin)
-    jobs.request_cancel(session, first.id)
+    jobs.request_cancel(session, first.id, actor=admin)
 
     second = _create(session, submission, admin)
 
@@ -188,16 +188,16 @@ def test_remote_runner_job_is_not_claimed_in_process(ctx):
 def test_cancel_queued_running_and_terminal(ctx):
     session, admin, _, _, submission = ctx
     queued = _create(session, submission, admin)
-    assert jobs.request_cancel(session, queued.id).status is MachineReviewJobStatus.cancelled
+    assert jobs.request_cancel(session, queued.id, actor=admin).status is MachineReviewJobStatus.cancelled
 
     running = _create(session, submission, admin)
     jobs.claim_next_job(session, settings_obj=FAKE_SETTINGS)
-    after = jobs.request_cancel(session, running.id)
+    after = jobs.request_cancel(session, running.id, actor=admin)
     assert after.status is MachineReviewJobStatus.running and after.cancel_requested
     assert jobs.is_cancel_requested(session, running.id)
 
     with pytest.raises(jobs.MachineReviewJobNotCancellable):
-        jobs.request_cancel(session, queued.id)
+        jobs.request_cancel(session, queued.id, actor=admin)
 
 
 def test_reaper_requeues_once_then_fails_worker_lost(ctx):
@@ -228,7 +228,7 @@ def test_reaper_cancels_an_expired_job_with_a_cancel_request(ctx):
     job = _create(session, submission, admin)
     t0 = job.created_at
     jobs.claim_next_job(session, now=t0, settings_obj=FAKE_SETTINGS)
-    jobs.request_cancel(session, job.id)
+    jobs.request_cancel(session, job.id, actor=admin)
 
     assert jobs.reap_expired(session, t0 + jobs.LEASE_DURATION + timedelta(seconds=1)) == 1
     session.refresh(job)
@@ -351,7 +351,7 @@ def test_create_job_refuses_exactly_what_availability_reports(ctx, role, switche
         expected = _availability(session, user, key, settings_obj)
         if expected is Avail.ok:
             job = _create(session, submission, user, key, settings_obj)
-            jobs.request_cancel(session, job.id)
+            jobs.request_cancel(session, job.id, actor=admin)
         else:
             assert _reason(session, submission, user, key=key, settings_obj=settings_obj) == expected.value
 
@@ -386,16 +386,16 @@ def test_conflict_and_not_cancellable_carry_status_code_and_an_id_free_context(c
     open_job = raised.value.context["open_job"]
     assert set(open_job) == {"status", "provider_key", "step_count", "cancel_requested", "created_at", "started_at"}
     assert open_job["created_at"] == first.created_at.isoformat()
-    jobs.request_cancel(session, first.id)
+    jobs.request_cancel(session, first.id, actor=admin)
     with pytest.raises(jobs.MachineReviewJobNotCancellable) as raised:
-        jobs.request_cancel(session, first.id)
+        jobs.request_cancel(session, first.id, actor=admin)
     assert (raised.value.status, raised.value.code) == (409, "machine_review_job_not_cancellable")
 
 
 def test_get_list_and_events_read_back_in_order(ctx):
     session, admin, _, _, submission = ctx
     first = _create(session, submission, admin)
-    jobs.request_cancel(session, first.id)
+    jobs.request_cancel(session, first.id, actor=admin)
     second = _create(session, submission, admin)
     for _ in range(3):
         jobs.append_event(session, second, MachineReviewJobEventKind.model_turn, outcome="ok")

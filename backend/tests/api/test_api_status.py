@@ -1274,12 +1274,60 @@ def test_a_dead_review_worker_does_not_degrade_status(client, monkeypatch, healt
 
 
 def test_a_live_review_worker_raises_no_warning(client, monkeypatch, healthy_storage) -> None:
-    _review_mode(monkeypatch, "off")
+    _review_mode(monkeypatch, "test")
     monkeypatch.setattr(health, "_worker_status", lambda: {"healthy": True, "reason": None})
+    started, stop = threading.Event(), threading.Event()
 
-    body = client.get("/api/v1/status").json()
+    def _park() -> None:
+        started.set()
+        stop.wait(timeout=10)
 
-    assert [w for w in body["warnings"] if w["component"] == "machine_review_worker"] == []
+    worker = threading.Thread(target=_park, name="machine-review-worker", daemon=True)
+    worker.start()
+    started.wait(timeout=5)
+    try:
+        body = client.get("/api/v1/status").json()
+    finally:
+        stop.set()
+        worker.join(timeout=5)
+
+    assert body["components"]["machine_review_worker"]["warnings"] == []
+    assert body["degraded"] == []
+    assert body["status"] == "ok"
+
+
+def test_the_stalled_queue_warning_summary_does_not_change_with_the_age(monkeypatch, db_session, _api_admin_user) -> None:
+    from datetime import datetime, timedelta
+
+    from app.db.models.common import SubmissionKind
+    from app.db.models.machine_review_job import MachineReviewJob
+    from app.services.submission import create_submission
+
+    _review_mode(monkeypatch, "test", inline=False)
+    submission = create_submission(
+        db_session, created_by=_api_admin_user, submission_kind=SubmissionKind.thermo, title="t", summary="s"
+    )
+    db_session.flush()
+    job = MachineReviewJob(
+        submission_id=submission.id,
+        requested_by=_api_admin_user,
+        provider_key="fake",
+        executor="in_process",
+        created_at=datetime.utcnow() - timedelta(seconds=10_000),
+    )
+    db_session.add(job)
+    db_session.flush()
+    monkeypatch.setattr(health, "SessionLocal", lambda: _Borrowed(db_session))
+
+    first = health._machine_review_worker_status()
+    job.created_at = datetime.utcnow() - timedelta(seconds=20_000)
+    db_session.flush()
+    second = health._machine_review_worker_status()
+
+    (w1,), (w2,) = first["warnings"], second["warnings"]
+    assert w1["summary"] == w2["summary"]
+    assert w2["oldest_queued_age_seconds"] > w1["oldest_queued_age_seconds"]
+    assert first["reason"] != second["reason"]
 
 
 def test_review_worker_with_a_live_thread_is_healthy(monkeypatch, db_session) -> None:

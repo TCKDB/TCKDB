@@ -114,7 +114,7 @@ def process_one_cycle(
         submission_id, provider_key, job_model = job.submission_id, job.provider_key, job.model
         switches = read_machine_review_switches(session, settings_obj)
         requester = session.get(AppUser, job.requested_by)
-        if not switches.review_allowed or (requester is not None and jobs.curator_switch_refuses(switches, requester)):
+        if not switches.review_allowed or not jobs.requester_may_run(switches, requester):
             jobs.finish_job(
                 session,
                 job_id,

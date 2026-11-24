@@ -137,6 +137,16 @@ def curator_switch_refuses(switches: MachineReviewSwitches, requester: AppUser) 
     return requester.role is AppUserRole.curator and not switches.curator_requests_enabled
 
 
+def requester_may_run(switches: MachineReviewSwitches, requester: AppUser | None) -> bool:
+    """Whether a queued job's requester may still have it run: present, active, curator or admin, and not switched off."""
+    return (
+        requester is not None
+        and requester.is_active
+        and requester.role in (AppUserRole.curator, AppUserRole.admin)
+        and not curator_switch_refuses(switches, requester)
+    )
+
+
 def _availability(
     switches: MachineReviewSwitches,
     requester: AppUser,
@@ -381,10 +391,10 @@ def reap_expired(session: Session, now: datetime | None = None) -> int:
     return len(jobs)
 
 
-def request_cancel(session: Session, job_id: int, *, actor: AppUser | None = None) -> MachineReviewJob:
+def request_cancel(session: Session, job_id: int, *, actor: AppUser) -> MachineReviewJob:
     """Cancel a queued job now, or ask a running job to stop at its next step.
 
-    When ``actor`` is given, a non-admin may cancel only a job they requested.
+    A non-admin ``actor`` may cancel only a job they requested.
     """
     job = session.scalar(
         select(MachineReviewJob)
@@ -394,7 +404,7 @@ def request_cancel(session: Session, job_id: int, *, actor: AppUser | None = Non
     )
     if job is None:
         raise NotFoundError("Machine review job not found.", code="machine_review_job_not_found")
-    if actor is not None and actor.role is not AppUserRole.admin and job.requested_by != actor.id:
+    if actor.role is not AppUserRole.admin and job.requested_by != actor.id:
         raise MachineReviewJobNotOwned()
     if job.status is MachineReviewJobStatus.queued:
         now = _utcnow()
@@ -474,6 +484,7 @@ __all__ = [
     "append_event",
     "claim_next_job",
     "curator_switch_refuses",
+    "requester_may_run",
     "create_job",
     "finish_job",
     "get_job",

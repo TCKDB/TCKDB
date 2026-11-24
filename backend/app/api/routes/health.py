@@ -203,7 +203,13 @@ def _machine_review_worker_status() -> dict:
         status["reason"] = (
             f"oldest queued review job is {status['oldest_queued_age_seconds']}s old; nothing is claiming work"
         )
-        status["warnings"].append({"code": "machine_review_queue_stalled", "summary": status["reason"]})
+        status["warnings"].append(
+            {
+                "code": "machine_review_queue_stalled",
+                "summary": "queued machine-review jobs are not being claimed",
+                "oldest_queued_age_seconds": status["oldest_queued_age_seconds"],
+            }
+        )
     return status
 
 
@@ -742,14 +748,15 @@ def status():
     could not tell "the site is down" from "the site is up and telling me the
     worker died" -- which are different pages of the runbook.
 
-    Components: ``database``, ``worker``, ``machine_review_worker``, ``artifact_storage``. Each is a hard
-    dependency that can fail alone while the others stay green.
+    Components: ``database``, ``worker``, ``machine_review_worker``, ``artifact_storage``. Each can fail alone
+    while the others stay green; ``machine_review_worker`` is advisory and reports only through ``warnings``.
 
     Two verdict channels, and the difference is which one wakes somebody.
     ``degraded`` lists every component reporting ``healthy: false``; both
     alerters page on it. ``warnings`` is a separate array of things that are
-    true but not yet broken -- today, an object store whose remaining room
-    has fallen below the largest artifact TCKDB accepts. A warning never
+    true but not yet broken: an object store whose remaining room has fallen
+    below the largest artifact TCKDB accepts, or a machine-review worker that
+    is not running or not claiming its queue. A warning never
     appears in ``degraded``, never flips ``status``, and is delivered at low
     priority, because an alert that fires while everything still works is an
     alert that gets muted, and it takes the real ones with it.

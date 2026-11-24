@@ -193,7 +193,7 @@ def test_a_curator_cannot_cancel_another_curators_job(client, db_session, login_
     assert response.status_code == 403
     body = response.json()
     assert body["code"] == "machine_review_job_not_owned"
-    assert not {k for k in keys_anywhere(body.get("context", {})) if k == "id" or k.endswith("_id")}
+    assert not {k for k in keys_anywhere(body) if k == "id" or k.endswith("_id") or k.endswith("_pk")}
     row = db_session.get(MachineReviewJob, job["id"])
     db_session.refresh(row)
     assert (row.status, row.cancel_requested, row.finished_at) == (MachineReviewJobStatus.queued, False, None)
@@ -207,3 +207,27 @@ def test_an_admin_cancels_any_job(client, db_session, login_as, _api_curator_use
     response = client.post(f"{JOBS}/{job['id']}/cancel")
 
     assert (response.status_code, response.json()["status"]) == (200, "cancelled")
+
+
+def test_not_owned_is_refused_before_not_cancellable(client, db_session, login_as, _api_curator_user, submission):
+    other = _other_curator(db_session)
+    login_as(other)
+    job = _post(client, submission).json()
+    assert client.post(f"{JOBS}/{job['id']}/cancel").status_code == 200
+    login_as(_api_curator_user)
+
+    response = client.post(f"{JOBS}/{job['id']}/cancel")
+
+    assert (response.status_code, response.json()["code"]) == (403, "machine_review_job_not_owned")
+
+
+def test_a_curator_cannot_stop_another_curators_running_job(client, db_session, login_as, _api_curator_user, submission):
+    other = _other_curator(db_session)
+    running = _running_job_with_events(db_session, submission, other, n=0)
+    login_as(_api_curator_user)
+
+    response = client.post(f"{JOBS}/{running.id}/cancel")
+
+    assert (response.status_code, response.json()["code"]) == (403, "machine_review_job_not_owned")
+    db_session.refresh(running)
+    assert running.cancel_requested is False and running.status is MachineReviewJobStatus.running
