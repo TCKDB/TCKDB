@@ -1,9 +1,17 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { elapsedSeconds, parseApiInstant, progressAnnouncement, stepDuration, stepWords } from "./machineReviewJob"
 import * as fx from "../test/machineReviewFixtures"
 import { JobEventSchema, JobSchema } from "../types/machineReviewJob"
 
 describe("API timestamps", () => {
+    // Fixed to a zone east of UTC so reading a naive timestamp as local time would be 7200 s out, whatever runs the test.
+    beforeEach(() => {
+        vi.stubEnv("TZ", "Asia/Jerusalem")
+    })
+    afterEach(() => {
+        vi.unstubAllEnvs()
+    })
+
     it("reads a timestamp with no offset as UTC", () => {
         expect(parseApiInstant("2026-11-24T10:00:00")?.toISOString()).toBe("2026-11-24T10:00:00.000Z")
         expect(parseApiInstant("2026-11-24T10:00:00Z")?.toISOString()).toBe("2026-11-24T10:00:00.000Z")
@@ -12,7 +20,6 @@ describe("API timestamps", () => {
         expect(parseApiInstant("not a date")).toBeNull()
     })
 
-    // Also run under TZ=Asia/Jerusalem: read as local time, the result below would be 7200 s out.
     it("measures elapsed time from a naive timestamp without the timezone offset", () => {
         const job = JobSchema.parse(fx.job({ status: "running", created_at: "2026-11-24T10:00:00", started_at: "2026-11-24T10:00:05", finished_at: null }))
         const now = new Date("2026-11-24T10:00:35Z")

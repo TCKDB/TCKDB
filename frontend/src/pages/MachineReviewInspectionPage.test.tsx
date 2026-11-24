@@ -1106,6 +1106,26 @@ describe("requesting a machine review", () => {
         expect(await screen.findByText("Machine review did not finish: the reviewer took too long.")).toBeInTheDocument()
     })
 
+    it("gives the advice under the result heading of a finished review", async () => {
+        const user = renderWithTimers()
+        serveRequest()
+        serveJobScript([jobAt("succeeded", 4)])
+        server.use(http.get(INSPECTION, () => HttpResponse.json(fx.inspection({ submission_id: 7, runs: [fx.run({ status: "machine_screened_pass", audit_event_id: 7001 })] }))))
+        await pressRequest(user)
+        const heading = await screen.findByRole("heading", { level: 3, name: "Machine review finished" })
+        const result = heading.parentElement as HTMLElement
+        await waitFor(() => expect(result).toHaveTextContent("Machine reviewer recommends approval (advisory)"))
+    })
+
+    it("announces why a review did not finish, and gives the status region before its first sentence", async () => {
+        const user = renderWithTimers()
+        serveRequest()
+        serveJobScript([jobAt("failed", 1, { failure_code: "provider_timeout" })])
+        await pressRequest(user)
+        const region = await screen.findByRole("status", { name: "machine review progress" })
+        await waitFor(() => expect(region).toHaveTextContent("Machine review did not finish. The reviewer took too long."))
+    })
+
     it("moves focus to the result heading when the job ends, and refreshes the inspection", async () => {
         const user = renderWithTimers()
         serveRequest()
@@ -1178,6 +1198,16 @@ describe("requesting a machine review", () => {
         await pressRequest(user)
         await user.click(await screen.findByRole("button", { name: "Cancel this review" }))
         await waitFor(() => expect(cancelled).toBe(1))
+    })
+
+    it("links the Cancel button to the note that the review is stopping", async () => {
+        const user = renderWithTimers({ ...curator, id: 3 })
+        serveRequest()
+        serveJobScript([jobAt("running", 1, { cancel_requested: true })])
+        await pressRequest(user)
+        const cancel = await screen.findByRole("button", { name: "Cancel this review" })
+        expect(cancel).toHaveAttribute("aria-disabled", "true")
+        expect(cancel).toHaveAccessibleDescription("Stopping after this step.")
     })
 
     it("does not offer Cancel to a curator who did not ask for the review", async () => {
@@ -1275,6 +1305,27 @@ describe("the advice line", () => {
         advice([])
         await screen.findByRole("heading", { level: 2, name: "Machine review" })
         expect(screen.queryByTestId("recommendation")).toBeNull()
+    })
+})
+
+describe("a failed run", () => {
+    function failed(viewer: typeof curator, summary: string | null) {
+        serveHeaderRoutes()
+        server.use(http.get(JOBS, () => HttpResponse.json(fx.jobPage([fx.job({ audit_event_id: 7001, status: "failed", failure_code: "provider_timeout" })]))))
+        serveInspection(fx.inspection({ runs: [fx.run({ status: "machine_review_failed", audit_event_id: 7001, summary })] }))
+        renderPage("7", viewer)
+    }
+
+    it("says why in the archive's words when a curator gets no summary", async () => {
+        failed(curator, null)
+        const runs = (await screen.findByRole("heading", { level: 2, name: "Reviewer runs" })).parentElement as HTMLElement
+        await waitFor(() => expect(runs).toHaveTextContent("Did not finish: the reviewer took too long."))
+    })
+
+    it("labels the archive's own error text for an administrator, outside the reviewer's block", async () => {
+        failed(admin, "Machine review could not be configured: SomeError")
+        const text = await screen.findByText(/Error the archive recorded: Machine review could not be configured/)
+        expect(screen.queryAllByRole("group", { name: "Written by the machine reviewer" }).some((g) => g.contains(text))).toBe(false)
     })
 })
 

@@ -313,7 +313,8 @@ class AdminMachineReviewRunRead(BaseModel):
     """One stored reviewer run over the whole submission.
 
     ``summary`` is the reviewer's own text, or the redacted failure text on a
-    failed run. ``parsed`` is false when the stored payload could not be read;
+    failed run for an administrator. A curator gets ``null`` for a failed run's
+    summary and reads the job's ``failure_code`` instead. ``parsed`` is false when the stored payload could not be read;
     then ``status`` is ``null`` and ``parse_warnings`` says why.
     """
 

@@ -518,6 +518,7 @@ export default function ReviewQueuePage() {
     const [reproOpen, setReproOpen] = useState<ReadonlySet<number>>(new Set())
     // The reviewers on offer, read once and only when a row can be reviewed; `null` until read, `[]` if the read failed.
     const [providers, setProviders] = useState<Provider[] | null>(null)
+    const [providersFailed, setProvidersFailed] = useState(false)
     const [requesting, setRequesting] = useState<ReadonlySet<number>>(new Set())
     const providersRead = useRef(false)
     const navigate = useNavigate()
@@ -616,7 +617,7 @@ export default function ReviewQueuePage() {
     useEffect(() => {
         if (!canReview || !anyReviewable || providersRead.current) return
         providersRead.current = true
-        listProviders().then(setProviders, () => setProviders([]))
+        listProviders().then(setProviders, () => setProvidersFailed(true))
     }, [canReview, anyReviewable])
 
     if (state.status === "loading") {
@@ -765,10 +766,6 @@ export default function ReviewQueuePage() {
         }
     }
 
-    /**
-     * The record's latest machine review, in a line. Nothing for a record that was never reviewed. The curator task
-     * link goes to the admin-only queue, so a curator is told who handles them instead.
-     */
     function goToReview(submissionId: number) {
         void navigate(`/admin/machine-review-inspection?submission=${submissionId}`)
     }
@@ -801,10 +798,15 @@ export default function ReviewQueuePage() {
         const ok = providers === null ? [] : okProviders(providers)
         let reason: string | null = null
         if (row.submission_id === null) reason = "This record is not linked to a submission"
+        else if (providersFailed) reason = "The reviewers on offer could not be read"
         else if (providers === null) reason = null
         else if (ok.length === 0) {
             const why = blockingAvailability(providers)
-            reason = why === null ? "No reviewer is available" : wordsFor("availability", why).label
+            if (why === null) reason = "No reviewer is available"
+            else {
+                const label = wordsFor("availability", why).label
+                reason = label.charAt(0).toUpperCase() + label.slice(1)
+            }
         }
         if (row.submission_id !== null && ok.length > 1) {
             return (
@@ -837,6 +839,10 @@ export default function ReviewQueuePage() {
         )
     }
 
+    /**
+     * The record's latest machine review, in a line. Nothing for a record that was never reviewed. The curator task
+     * link goes to the admin-only queue, so a curator is told who handles them instead.
+     */
     function renderMachineFindings(row: ReviewQueueRecord) {
         const mf = row.machine_findings
         if (mf === null || mf.status === "not_run") return null

@@ -963,7 +963,7 @@
       },
       "AdminMachineReviewRunRead": {
         "additionalProperties": false,
-        "description": "One stored reviewer run over the whole submission.\n\n``summary`` is the reviewer's own text, or the redacted failure text on a\nfailed run. ``parsed`` is false when the stored payload could not be read;\nthen ``status`` is ``null`` and ``parse_warnings`` says why.",
+        "description": "One stored reviewer run over the whole submission.\n\n``summary`` is the reviewer's own text, or the redacted failure text on a\nfailed run for an administrator. A curator gets ``null`` for a failed run's\nsummary and reads the job's ``failure_code`` instead. ``parsed`` is false when the stored payload could not be read;\nthen ``status`` is ``null`` and ``parse_warnings`` says why.",
         "properties": {
           "audit_event_id": {
             "anyOf": [

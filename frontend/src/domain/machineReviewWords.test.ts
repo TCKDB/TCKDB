@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
     adminDate,
     adminDateTime,
@@ -65,6 +65,20 @@ describe("machine-review wording", () => {
         expect(adminDateTime("2026-09-14T09:05:59Z")).toBe("2026-09-14 09:05 UTC")
         expect(adminDateTime("2026-09-14T23:30:00-05:00")).toBe("2026-09-15 04:30 UTC")
         expect(adminDate(null)).toBe("")
+    })
+
+    describe("a timestamp with no offset, in a zone east of UTC", () => {
+            beforeEach(() => {
+            vi.stubEnv("TZ", "Asia/Jerusalem")
+        })
+        afterEach(() => {
+        vi.unstubAllEnvs()
+        })
+
+        it("is read as UTC, not as local time", () => {
+            expect(adminDateTime("2026-11-24T08:22:02.484672")).toBe("2026-11-24 08:22 UTC")
+            expect(adminDate("2026-11-24T23:30:00")).toBe("2026-11-24")
+        })
     })
 
     it("offers every record type as a filter option with a plain label", () => {

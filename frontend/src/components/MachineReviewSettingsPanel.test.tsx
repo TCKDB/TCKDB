@@ -45,7 +45,7 @@ describe("the machine-review switches", () => {
         serve(fx.settings({ machine_review_enabled: false }))
         render(<MachineReviewSettingsPanel />)
         const box = await screen.findByRole("checkbox", { name: "Curators may request reviews" })
-        expect(box).toBeDisabled()
+        expect(box).toHaveAttribute("aria-disabled", "true")
         expect(box).toHaveAccessibleDescription("Machine review is off, so this switch has nothing to decide.")
     })
 
@@ -57,6 +57,25 @@ describe("the machine-review switches", () => {
         serve(fx.settings({ review_allowed: false, curator_allowed: false, assistant_mode: "off" }))
         render(<MachineReviewSettingsPanel />)
         expect(await screen.findByText(/the deployment setting overrides it, so no review can be requested/)).toBeInTheDocument()
+    })
+
+    it("keeps focus on a switch while and after it saves", async () => {
+        serve()
+        let release: () => void = () => {}
+        const gate = new Promise<void>((resolve) => { release = resolve })
+        server.use(http.patch(SETTINGS, async () => { await gate; return HttpResponse.json(fx.settings({ machine_review_enabled: false })) }))
+        const user = userEvent.setup()
+        render(<MachineReviewSettingsPanel />)
+        const box = await screen.findByRole("checkbox", { name: "Machine review on" })
+        box.focus()
+        await user.keyboard(" ")
+        // Natively disabled, a focused control loses focus in a browser; it is only marked busy.
+        await waitFor(() => expect(box).toHaveAttribute("aria-disabled", "true"))
+        expect(box).not.toBeDisabled()
+        expect(box).toHaveFocus()
+        release()
+        await waitFor(() => expect(screen.getByRole("status", { name: "machine review settings saved" })).toHaveTextContent("Machine review is now off."))
+        expect(box).toHaveFocus()
     })
 
     it("reports a refused save", async () => {

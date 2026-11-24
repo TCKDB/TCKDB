@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { cancelJob, getJob, jobQueryKey, submissionJobsKey } from "../api/machineReviewJobsApi"
-import { inspectionQueryKey } from "../api/machineReviewInspection"
+import { fetchMachineReviewInspection, inspectionQueryKey } from "../api/machineReviewInspection"
 import {
     elapsedSeconds,
     formatElapsed,
@@ -9,7 +9,7 @@ import {
     stepDuration,
     stepWords,
 } from "../domain/machineReviewJob"
-import { wordLabel, wordsFor } from "../domain/machineReviewWords"
+import { recommendationFor, wordLabel, wordsFor } from "../domain/machineReviewWords"
 import { useAuth } from "../hooks/useAuth"
 import { isOpenStatus, type JobDetail, type JobEvent, type JobStatus } from "../types/machineReviewJob"
 
@@ -41,7 +41,7 @@ function terminalHeading(status: JobStatus): string {
 }
 
 function terminalText(job: JobDetail): string {
-    if (job.status === "succeeded") return "The recommendation and the findings are shown on this page."
+    if (job.status === "succeeded") return "The findings are shown on this page."
     if (job.status === "failed") {
         return job.failure_code === null
             ? "Machine review did not finish."
@@ -114,11 +114,30 @@ export function MachineReviewJobProgress({
         headingRef.current?.focus()
     }, [job, queryClient, submissionId])
 
+    // The advice the finished review leaves, read from the refreshed inspection and only once it holds this review.
+    const succeeded = job !== undefined && job.status === "succeeded"
+    const inspection = useQuery({
+        queryKey: inspectionQueryKey(submissionId),
+        queryFn: () => fetchMachineReviewInspection(submissionId),
+        enabled: succeeded,
+    })
+    const finishedRun =
+        succeeded && !inspection.isFetching && job.audit_event_id !== null
+            ? inspection.data?.runs.find((r) => r.audit_event_id === job.audit_event_id)
+            : undefined
+    const advice = finishedRun?.parsed && finishedRun.status ? recommendationFor(finishedRun.status) : null
+
     const last = job === undefined || job.events.length === 0 ? null : job.events[job.events.length - 1]
-    const announcement = job === undefined ? "" : progressAnnouncement(job, last)
+    const current = job === undefined ? "" : progressAnnouncement(job, last)
+    // The live region is on the page empty and given its text a moment later, so the first sentence is announced too.
+    const [announcement, setAnnouncement] = useState("")
+    useEffect(() => setAnnouncement(current), [current])
     const isRequester = state.status === "signed-in" && job !== undefined && state.user.id === job.requested_by
     const isAdmin = state.status === "signed-in" && state.user.role === "admin"
     const mayCancel = isRequester || isAdmin
+    const stoppingId = `cancel-stopping-${jobId}`
+    const cancelDescribedBy =
+        [!mayCancel ? "cancel-reason" : null, job?.cancel_requested ? stoppingId : null].filter(Boolean).join(" ") || undefined
     const seconds = job === undefined ? null : elapsedSeconds(job, now)
 
     return (
@@ -157,11 +176,11 @@ export function MachineReviewJobProgress({
 
                     {open && (
                         <>
-                            {job.cancel_requested && <p>Stopping after this step.</p>}
+                            {job.cancel_requested && <p id={stoppingId}>Stopping after this step.</p>}
                             <button
                                 type="button"
                                 aria-disabled={!mayCancel || job.cancel_requested || cancel.isPending ? "true" : undefined}
-                                aria-describedby={!mayCancel ? "cancel-reason" : undefined}
+                                aria-describedby={cancelDescribedBy}
                                 onClick={() => {
                                     if (mayCancel && !job.cancel_requested && !cancel.isPending) cancel.mutate()
                                 }}
@@ -182,6 +201,7 @@ export function MachineReviewJobProgress({
                     {ended && (
                         <div className="machine-review-result">
                             <h3 ref={headingRef} tabIndex={-1}>{terminalHeading(job.status)}</h3>
+                            {advice !== null && <p><strong>{advice}</strong></p>}
                             <p>{terminalText(job)}</p>
                         </div>
                     )}

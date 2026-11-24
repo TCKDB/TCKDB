@@ -288,7 +288,10 @@
 
 /* A paging button with nothing to page to. It stays focusable and says so in the
    accessibility tree through aria-disabled; this is what a sighted reader sees. */
-.admin-paging button[aria-disabled="true"] {
+.admin-paging button[aria-disabled="true"],
+.machine-review-request button[aria-disabled="true"],
+.machine-review-progress button[aria-disabled="true"],
+.review-record-row-right button[aria-disabled="true"] {
     color: var(--muted);
     cursor: not-allowed;
     opacity: 0.55;
@@ -597,6 +600,10 @@
     margin: 0 0 var(--s-1);
     color: var(--muted);
     font: var(--type-note-font);
+}
+
+.machine-reviewer-text blockquote {
+    margin: 0;
 }
 
 .machine-reviewer-text > :last-child {

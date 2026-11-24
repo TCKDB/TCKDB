@@ -2255,11 +2255,21 @@ describe("requesting a machine review from the queue", () => {
         const user = userEvent.setup()
         renderWithLocation()
         const button = await screen.findByRole("button", { name: "Request machine review" })
-        await waitFor(() => expect(button).toHaveAccessibleDescription(/curator requests are switched off/))
+        await waitFor(() => expect(button).toHaveAccessibleDescription(/Curator requests are switched off/))
         expect(button).toHaveAttribute("aria-disabled", "true")
         await user.click(button)
         expect(posts).toEqual([])
         expect(screen.getByTestId("where")).toHaveTextContent("/review-queue")
+    })
+
+    it("says the reviewers could not be read when the providers request fails", async () => {
+        meIs(curator)
+        queueIs([subject([record()])])
+        server.use(http.get(PROVIDERS, () => HttpResponse.json({ detail: "x" }, { status: 500 })))
+        renderWithLocation()
+        const button = await screen.findByRole("button", { name: "Request machine review" })
+        await waitFor(() => expect(button).toHaveAccessibleDescription(/The reviewers on offer could not be read/))
+        expect(button).toHaveAttribute("aria-disabled", "true")
     })
 
     it("an admin is not held by the curator switch", async () => {

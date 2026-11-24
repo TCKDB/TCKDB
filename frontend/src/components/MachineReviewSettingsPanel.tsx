@@ -39,6 +39,7 @@ export function MachineReviewSettingsPanel() {
     }, [])
 
     async function save(field: Field, value: boolean) {
+        if (saving !== null) return
         setSaving(field)
         setSaved("")
         setError("")
@@ -72,7 +73,7 @@ export function MachineReviewSettingsPanel() {
                             id={ids.review}
                             type="checkbox"
                             checked={settings.machine_review_enabled}
-                            disabled={saving !== null}
+                            aria-disabled={saving !== null ? "true" : undefined}
                             onChange={(e) => void save("machine_review_enabled", e.target.checked)}
                         />{" "}
                         <label htmlFor={ids.review}>Machine review on</label>
@@ -87,9 +88,11 @@ export function MachineReviewSettingsPanel() {
                             id={ids.curators}
                             type="checkbox"
                             checked={settings.curator_requests_enabled}
-                            disabled={saving !== null || !settings.machine_review_enabled}
+                            aria-disabled={saving !== null || !settings.machine_review_enabled ? "true" : undefined}
                             aria-describedby={!settings.machine_review_enabled ? `${ids.curators}-why` : undefined}
-                            onChange={(e) => void save("curator_requests_enabled", e.target.checked)}
+                            onChange={(e) => {
+                                if (settings.machine_review_enabled) void save("curator_requests_enabled", e.target.checked)
+                            }}
                         />{" "}
                         <label htmlFor={ids.curators}>Curators may request reviews</label>
                     </p>

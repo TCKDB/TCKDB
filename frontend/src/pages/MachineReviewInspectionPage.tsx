@@ -28,6 +28,7 @@ import {
     CuratorTaskResponseError,
 } from "../api/curatorTasksApi"
 import { listSubmissionJobs, submissionJobsKey } from "../api/machineReviewJobsApi"
+import type { Job } from "../types/machineReviewJob"
 import {
     findingsConsidered,
     severityClass,
@@ -562,7 +563,14 @@ function priorityWords(priority: string | null): string {
     return priority === null ? "none" : wordLabel("priority", priority)
 }
 
-function RunsSection({ runs }: { runs: AdminMachineReviewRun[] }) {
+/** Why a failed run did not finish, in the archive's words, from the job that recorded it. */
+function failedRunWords(run: AdminMachineReviewRun, jobs: readonly Job[] | undefined): string {
+    const code = jobs?.find((j) => j.audit_event_id !== null && j.audit_event_id === run.audit_event_id)?.failure_code ?? null
+    return code === null ? "Did not finish." : `Did not finish: ${wordLabel("jobFailure", code)}.`
+}
+
+function RunsSection({ runs, submissionId }: { runs: AdminMachineReviewRun[]; submissionId: number }) {
+    const jobs = useQuery({ queryKey: submissionJobsKey(submissionId), queryFn: () => listSubmissionJobs(submissionId) })
     const ordered = [...runs].sort((a, b) => (b.reviewed_at ?? "").localeCompare(a.reviewed_at ?? ""))
     return (
         <section aria-labelledby="runs-heading">
@@ -599,10 +607,19 @@ function RunsSection({ runs }: { runs: AdminMachineReviewRun[] }) {
                                             <span className="admin-absent">none</span>
                                         )}
                                     </p>
-                                    {run.summary && (
-                                        <MachineReviewerText>
-                                            <blockquote>{run.summary}</blockquote>
-                                        </MachineReviewerText>
+                                    {run.status === "machine_review_failed" ? (
+                                        <>
+                                            <p>{failedRunWords(run, jobs.data)}</p>
+                                            {run.summary && (
+                                                <p className="admin-hint">Error the archive recorded: {run.summary}</p>
+                                            )}
+                                        </>
+                                    ) : (
+                                        run.summary && (
+                                            <MachineReviewerText>
+                                                <blockquote>{run.summary}</blockquote>
+                                            </MachineReviewerText>
+                                        )
                                     )}
                                 </>
                             ) : (
@@ -830,7 +847,7 @@ function SubmissionInspection({ submissionId, isAdmin }: { submissionId: number;
                         <RequestMachineReview key={`run-${data.submission_id}`} submissionId={data.submission_id} />
                     </section>
 
-                    <RunsSection runs={data.runs} />
+                    <RunsSection runs={data.runs} submissionId={data.submission_id} />
 
                     <section aria-labelledby="records-heading">
                         <h2 id="records-heading">Records</h2>

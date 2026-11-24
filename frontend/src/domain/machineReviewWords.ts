@@ -234,11 +234,18 @@ export function statusClassName(token: string): string | null {
 
 const pad = (n: number) => String(n).padStart(2, "0")
 
-function parse(iso: string | null | undefined): Date | null {
+/**
+ * An API timestamp as a Date. The backend sends naive UTC (no offset); `new Date` would read that as local time and
+ * be off by the viewer's UTC offset, so a string with no offset is read as UTC.
+ */
+export function parseApiInstant(iso: string | null | undefined): Date | null {
     if (!iso) return null
-    const d = new Date(iso)
-    return Number.isNaN(d.getTime()) ? null : d
+    const hasOffset = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(iso)
+    const date = new Date(hasOffset ? iso : `${iso}Z`)
+    return Number.isNaN(date.getTime()) ? null : date
 }
+
+const parse = parseApiInstant
 
 /** `YYYY-MM-DD` in UTC, or an empty string for a missing or unreadable value. */
 export function adminDate(iso: string | null | undefined): string {

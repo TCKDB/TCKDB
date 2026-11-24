@@ -1,20 +1,9 @@
-import { wordLabel } from "./machineReviewWords"
+import { parseApiInstant, wordLabel } from "./machineReviewWords"
 import { isOpenStatus, type Job, type JobEvent } from "../types/machineReviewJob"
 
 /**
  * Wording and timing for a machine-review job's progress.
  */
-
-/**
- * An API timestamp as a Date. The backend sends naive UTC (no offset); `new Date` would read that as local time and
- * be off by the viewer's UTC offset, so a string with no offset is read as UTC.
- */
-export function parseApiInstant(iso: string | null | undefined): Date | null {
-    if (!iso) return null
-    const hasOffset = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(iso)
-    const date = new Date(hasOffset ? iso : `${iso}Z`)
-    return Number.isNaN(date.getTime()) ? null : date
-}
 
 /** Whole seconds from the job's start (its request while queued) to `now`, never negative. */
 export function elapsedSeconds(job: Pick<Job, "created_at" | "started_at" | "finished_at">, now: Date): number | null {
@@ -47,14 +36,22 @@ export function stepDuration(event: JobEvent): string | null {
  * The sentence the progress region announces. It is a function of the status and the last step seen only,
  * so it changes when a step lands and not on every poll.
  */
-export function progressAnnouncement(job: Pick<Job, "status" | "step_count" | "cancel_requested">, last: JobEvent | null): string {
+export function progressAnnouncement(
+    job: Pick<Job, "status" | "step_count" | "cancel_requested"> & { failure_code?: string | null },
+    last: JobEvent | null,
+): string {
     if (job.status === "queued") return "Machine review is queued."
     if (job.status === "running") {
         const stopping = job.cancel_requested ? " Stopping after this step." : ""
         if (last === null) return `Machine review is running.${stopping}`
         return `Machine review is running. Step ${last.seq}: ${stepWords(last)}.${stopping}`
     }
-    return `Machine review ${wordLabel("jobStatus", job.status)}.`
+    const base = `Machine review ${wordLabel("jobStatus", job.status)}.`
+    return job.status === "failed" && job.failure_code ? `${base} ${capitalise(wordLabel("jobFailure", job.failure_code))}.` : base
 }
 
-export { isOpenStatus }
+function capitalise(text: string): string {
+    return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
+export { isOpenStatus, parseApiInstant }
