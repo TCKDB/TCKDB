@@ -1,7 +1,7 @@
 """Build the context pack a machine reviewer reviews over, and cut it to a token budget.
 
 For each record linked to a submission the pack carries its own stored numbers (column names carry the units, and
-the few unit-bearing columns whose name does not are renamed or paired with their unit), the level of theory,
+the few unit-bearing columns whose name does not are renamed, paired with a short unit token, or left out), the level of theory,
 software and workflow tool it cites, TCKDB's own deterministic check findings, the deposit warnings as TCKDB words
 them, and the chemical subject TCKDB canonicalised (species SMILES and InChIKey, reaction equation). It carries no
 other string, text or JSON column, so a depositor's notes and labels cannot reach the model except through the title
@@ -17,6 +17,7 @@ then offered refs from the tail, and the pack says how many.
 from __future__ import annotations
 
 import math
+import re
 from collections import defaultdict
 from typing import Any
 
@@ -87,13 +88,19 @@ _CHILD_RELATIONSHIPS = frozenset(
     }
 )
 
-#: Text columns that qualify a number and are constrained by TCKDB, so they are shown with it.
+#: Free-text unit columns shown only when the value is a short unit token, so no depositor sentence passes.
 _UNIT_TEXT_COLUMNS = frozenset({("molecular_property_observation", "scalar_unit")})
+_UNIT_TOKEN = re.compile(r"[A-Za-z0-9/^*.\-]{1,16}")
+
+#: Columns with no documented unit, left out of the pack.
+_OMITTED_COLUMNS = frozenset({("calc_scf_stability", "lowest_eigenvalue")})
 
 #: Columns whose name carries no unit, and the key the pack shows them under.
 _RENAMED_COLUMNS = {
     ("calc_geometry_validation", "rmsd"): "rmsd_angstrom",
     ("calc_geometry_validation", "rmsd_warning_threshold"): "rmsd_warning_threshold_angstrom",
+    **{("thermo_nasa", name): f"{name}_k" for name in ("t_low", "t_mid", "t_high")},
+    **{("kinetics_falloff", name): f"{name}_k" for name in ("troe_t1", "troe_t2", "troe_t3", "sri_b", "sri_c")},
 }
 
 _SEVERITY_RANK = {"critical": 0, "warning": 1, "info": 2}
@@ -136,13 +143,18 @@ def _own_values(row: Any, *, prefix: str = "") -> dict[str, float | int | bool |
     for column in mapper.columns:
         if column.primary_key or column.foreign_keys:
             continue
+        if (table, column.key) in _OMITTED_COLUMNS:
+            continue
         is_unit_text = (table, column.key) in _UNIT_TEXT_COLUMNS
         if not (isinstance(column.type, _VALUE_TYPES) or is_unit_text):
             continue
         value = getattr(row, mapper.get_property_by_column(column).key)
         if value is None:
             continue
-        if is_unit_text or isinstance(value, bool):
+        if is_unit_text:
+            if not (isinstance(value, str) and _UNIT_TOKEN.fullmatch(value)):
+                continue
+        elif isinstance(value, bool):
             pass
         elif hasattr(value, "value") and not isinstance(value, (int, float)):
             value = value.value
