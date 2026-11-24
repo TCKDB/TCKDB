@@ -131,7 +131,10 @@ export function MachineReviewJobProgress({
     const current = job === undefined ? "" : progressAnnouncement(job, last)
     // The live region is on the page empty and given its text a moment later, so the first sentence is announced too.
     const [announcement, setAnnouncement] = useState("")
-    useEffect(() => setAnnouncement(current), [current])
+    useEffect(() => {
+        const timer = setTimeout(() => setAnnouncement(current), 0)
+        return () => clearTimeout(timer)
+    }, [current])
     const isRequester = state.status === "signed-in" && job !== undefined && state.user.id === job.requested_by
     const isAdmin = state.status === "signed-in" && state.user.role === "admin"
     const mayCancel = isRequester || isAdmin

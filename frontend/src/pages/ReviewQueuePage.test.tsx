@@ -2255,7 +2255,7 @@ describe("requesting a machine review from the queue", () => {
         const user = userEvent.setup()
         renderWithLocation()
         const button = await screen.findByRole("button", { name: "Request machine review" })
-        await waitFor(() => expect(button).toHaveAccessibleDescription(/Curator requests are switched off/))
+        await waitFor(() => expect(button).toHaveAccessibleDescription(/An administrator has switched off review requests from curators/))
         expect(button).toHaveAttribute("aria-disabled", "true")
         await user.click(button)
         expect(posts).toEqual([])

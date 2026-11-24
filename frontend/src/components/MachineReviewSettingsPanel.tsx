@@ -87,6 +87,7 @@ export function MachineReviewSettingsPanel() {
                         <input
                             id={ids.curators}
                             type="checkbox"
+                            className={!settings.machine_review_enabled ? "machine-review-switch-idle" : undefined}
                             checked={settings.curator_requests_enabled}
                             aria-disabled={saving !== null || !settings.machine_review_enabled ? "true" : undefined}
                             aria-describedby={!settings.machine_review_enabled ? `${ids.curators}-why` : undefined}

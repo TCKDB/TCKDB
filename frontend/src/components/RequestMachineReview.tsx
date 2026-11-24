@@ -49,7 +49,10 @@ export function RequestMachineReview({ submissionId }: { submissionId: number })
     let reason: string | null = null
     if (providers.isError) reason = "The reviewers on offer could not be read."
     else if (providers.data === undefined) reason = "Checking which reviewers are available…"
-    else if (blocked !== null) reason = wordsFor("availability", blocked).label
+    else if (blocked !== null) {
+        const words = wordsFor("availability", blocked)
+        reason = words.meaning !== "" ? words.meaning : words.label.charAt(0).toUpperCase() + words.label.slice(1) + "."
+    }
     const disabled = reason !== null || request.isPending
     const reasonId = `request-reason-${submissionId}`
 

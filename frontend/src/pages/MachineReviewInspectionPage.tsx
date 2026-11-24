@@ -611,7 +611,16 @@ function RunsSection({ runs, submissionId }: { runs: AdminMachineReviewRun[]; su
                                         <>
                                             <p>{failedRunWords(run, jobs.data)}</p>
                                             {run.summary && (
-                                                <p className="admin-hint">Error the archive recorded: {run.summary}</p>
+                                                <div
+                                                    role="group"
+                                                    aria-label="Error text recorded by the archive; it may quote the machine reviewer"
+                                                    className="machine-reviewer-text"
+                                                >
+                                                    <p className="machine-reviewer-label">
+                                                        Error text recorded by the archive; it may quote the machine reviewer
+                                                    </p>
+                                                    <blockquote>{run.summary}</blockquote>
+                                                </div>
                                             )}
                                         </>
                                     ) : (

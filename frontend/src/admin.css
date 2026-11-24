@@ -594,6 +594,7 @@
     border: 1px dashed var(--line-2);
     border-radius: 4px;
     background: var(--surface-sunken);
+    overflow-wrap: anywhere;
 }
 
 .machine-reviewer-label {
@@ -697,4 +698,10 @@
     margin-left: var(--s-2);
     padding-left: var(--s-3);
     border-left: 2px solid var(--control-border);
+}
+
+/* The curator switch while machine review is off: focusable, but it decides nothing. */
+.machine-review-switch-idle {
+    cursor: not-allowed;
+    opacity: 0.55;
 }

@@ -1228,7 +1228,7 @@ describe("requesting a machine review", () => {
         renderPage("7", curator)
         const button = await screen.findByRole("button", { name: REQUEST_BUTTON })
         await waitFor(() => expect(button).toHaveAttribute("aria-disabled", "true"))
-        await waitFor(() => expect(button).toHaveAccessibleDescription("curator requests are switched off"))
+        await waitFor(() => expect(button).toHaveAccessibleDescription("An administrator has switched off review requests from curators."))
         cleanup()
         server.resetHandlers()
         serveHeaderRoutes()
@@ -1322,10 +1322,12 @@ describe("a failed run", () => {
         await waitFor(() => expect(runs).toHaveTextContent("Did not finish: the reviewer took too long."))
     })
 
-    it("labels the archive's own error text for an administrator, outside the reviewer's block", async () => {
+    it("puts the recorded error text, which may quote the model, in its own labelled group", async () => {
         failed(admin, "Machine review could not be configured: SomeError")
-        const text = await screen.findByText(/Error the archive recorded: Machine review could not be configured/)
-        expect(screen.queryAllByRole("group", { name: "Written by the machine reviewer" }).some((g) => g.contains(text))).toBe(false)
+        const text = await screen.findByText(/Machine review could not be configured: SomeError/)
+        const group = text.closest('[role="group"]') as HTMLElement
+        expect(group).toHaveAccessibleName("Error text recorded by the archive; it may quote the machine reviewer")
+        expect(text.textContent).not.toMatch(/Error the archive recorded/)
     })
 })
 

@@ -516,7 +516,7 @@ export default function ReviewQueuePage() {
     const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
     // Rows whose reproducibility detail is open; several may be open at once, and each loads only when opened.
     const [reproOpen, setReproOpen] = useState<ReadonlySet<number>>(new Set())
-    // The reviewers on offer, read once and only when a row can be reviewed; `null` until read, `[]` if the read failed.
+    // The reviewers on offer, read once and only when a row can be reviewed; `null` until read; a failed read sets `providersFailed`.
     const [providers, setProviders] = useState<Provider[] | null>(null)
     const [providersFailed, setProvidersFailed] = useState(false)
     const [requesting, setRequesting] = useState<ReadonlySet<number>>(new Set())
@@ -804,8 +804,8 @@ export default function ReviewQueuePage() {
             const why = blockingAvailability(providers)
             if (why === null) reason = "No reviewer is available"
             else {
-                const label = wordsFor("availability", why).label
-                reason = label.charAt(0).toUpperCase() + label.slice(1)
+                const words = wordsFor("availability", why)
+                reason = words.meaning !== "" ? words.meaning : words.label.charAt(0).toUpperCase() + words.label.slice(1)
             }
         }
         if (row.submission_id !== null && ok.length > 1) {
