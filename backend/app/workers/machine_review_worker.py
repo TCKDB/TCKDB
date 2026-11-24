@@ -37,6 +37,7 @@ from app.db.models.submission import Submission
 from app.services.machine_review import jobs
 from app.services.machine_review.agent.loop import LoopResult, RunBudget
 from app.services.machine_review.agent.tools import ToolRegistry
+from app.services.machine_review.guidance_corpus import default_guidance_index, guidance_seed_codes
 from app.services.machine_review.offer import offer_violation, offered_refs_from_context
 from app.services.machine_review.providers.fake import ScriptedFakeMachineReviewAgent
 from app.services.machine_review.providers.interface import (
@@ -364,7 +365,12 @@ def _run_agent(
     job_id: int,
 ) -> _AgentRun:
     """Run the tool loop with one short transaction per event; no session is open during a model call."""
-    registry = ToolRegistry(offered=offered_refs_from_context(context), summaries=summaries)
+    registry = ToolRegistry(
+        offered=offered_refs_from_context(context),
+        summaries=summaries,
+        guidance=default_guidance_index(),
+        guidance_seed=guidance_seed_codes(context, summaries),
+    )
     budget = RunBudget.from_settings(settings_obj)
     seen = {"turns": 0}
 
@@ -419,18 +425,21 @@ def _run_agent(
             parse_failed=True,
             tokens=tokens,
         )
-    violation = _offer_violation(result, context)
+    violation = _offer_violation(result, context, registry.returned_sources)
     if violation is not None:
         return _AgentRun(reason=violation, parse_failed=True, tokens=tokens)
     return _AgentRun(result=result, tokens=tokens)
 
 
-def _offer_violation(result: MachineReviewProviderResult, context: MachineReviewContext) -> str | None:
-    """Why ``result`` cites something the run did not offer, as failure text; ``None`` if it does not.
-
-    No guidance search exists yet, so no retrieval source has been returned.
-    """
-    violation = offer_violation(result, offered_refs=offered_refs_from_context(context), returned_sources=frozenset())
+def _offer_violation(
+    result: MachineReviewProviderResult,
+    context: MachineReviewContext,
+    returned_sources: frozenset[str] = frozenset(),
+) -> str | None:
+    """Why ``result`` cites something the run did not offer or return, as failure text; ``None`` if it does not."""
+    violation = offer_violation(
+        result, offered_refs=offered_refs_from_context(context), returned_sources=returned_sources
+    )
     if violation is None:
         return None
     return _clip(f"Machine review output was invalid: {violation}", _MAX_FAILURE_TEXT_CHARS)
