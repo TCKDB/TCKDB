@@ -42,9 +42,9 @@ from app.services.machine_review.providers.interface import (
     parse_machine_review_payload,
 )
 from app.services.machine_review.run import (
-    MachineReviewCancelled,
     _MAX_FAILURE_TEXT_CHARS,
     _MAX_MODEL_CHARS,
+    MachineReviewCancelled,
     _clip,
     _failure_text,
     build_review_context,
