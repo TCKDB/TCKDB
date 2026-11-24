@@ -17,6 +17,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.db.models.common import (
+    MachineReviewJobStatus,
     MachineReviewSeverity,
     MachineReviewStatus,
     RightsBasisKind,
@@ -98,11 +99,23 @@ class SubmissionMachineReviewLatestRunRead(BaseModel):
     provider: str | None = None
 
 
+class SubmissionMachineReviewOpenJobRead(BaseModel):
+    """The queued or running machine-review job of a submission."""
+
+    id: int
+    status: MachineReviewJobStatus
+    step_count: int
+    cancel_requested: bool
+    created_at: datetime
+    started_at: datetime | None = None
+
+
 class SubmissionMachineReviewStateRead(BaseModel):
-    """Machine-review state of one submission: runs, latest run and curator tasks."""
+    """Machine-review state of one submission: runs, latest run, open job and curator tasks."""
 
     run_count: int
     latest_run: SubmissionMachineReviewLatestRunRead | None = None
+    open_job: SubmissionMachineReviewOpenJobRead | None = None
     open_task_count: int
     task_count: int
 

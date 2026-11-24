@@ -5,7 +5,7 @@ state: how many runs, the latest run, and how many curator tasks are still
 open. It exists beside ``/submissions/for-review`` because that route returns a
 bare list with no total and scopes to pre-approval statuses only.
 
-Reviews are seeded through the real run and build routes.
+Reviews are seeded through the real job route, one worker cycle and the build route.
 """
 
 from __future__ import annotations
@@ -139,7 +139,7 @@ def test_latest_run_is_the_newest_event_and_null_when_unreviewed(
     items = _by_id(client.get(_URL).json())
 
     assert items[unreviewed.id]["machine_review"] == {
-        "run_count": 0, "latest_run": None, "open_task_count": 0, "task_count": 0,
+        "run_count": 0, "latest_run": None, "open_job": None, "open_task_count": 0, "task_count": 0,
     }
     mr = items[submission.id]["machine_review"]
     assert mr["run_count"] == 2
@@ -210,12 +210,7 @@ def test_a_failed_run_shows_as_failed(
     login_as(_api_admin_user)
     submission = seed.new_submission(db_session, _api_admin_user)
 
-    class _Raising:
-        def review_submission(self, context):
-            raise RuntimeError("upstream endpoint unreachable")
-
-    seed.use_provider(monkeypatch, _Raising())
-    assert client.post(f"{seed.RUN_URL}/{submission.id}").status_code == 200
+    seed.run_review(client, monkeypatch, submission.id, expect="failed")
     login_as(_api_curator_user)
 
     run = _by_id(client.get(_URL).json())[submission.id]["machine_review"]["latest_run"]
@@ -325,3 +320,74 @@ def test_overview_writes_nothing(client, db_session, login_as, _api_admin_user, 
     db_session.refresh(sub)
     assert sub.status is before
     assert db_session.get(Submission, sub.id) is sub
+
+
+_OPEN_JOB_FIELDS = {"id", "status", "step_count", "cancel_requested", "created_at", "started_at"}
+
+
+def _queue(client, submission_id):
+    resp = client.post(seed.JOBS_URL, json={"submission_id": submission_id, "provider_key": "fake"})
+    assert resp.status_code == 202, resp.text
+    return resp.json()
+
+
+def test_a_queued_job_is_the_submissions_open_job(
+    client, db_session, login_as, _api_admin_user, _api_curator_user, monkeypatch
+):
+    monkeypatch.setattr("app.api.config.settings.ai_review_assistant_mode", "test")
+    monkeypatch.setattr("app.api.config.settings.deployment_mode", "local")
+    login_as(_api_curator_user)
+    queued = seed.new_submission(db_session, _api_admin_user, title="queued")
+    idle = seed.new_submission(db_session, _api_admin_user, title="idle")
+    job = _queue(client, queued.id)
+
+    items = _by_id(client.get(_URL).json())
+
+    open_job = items[queued.id]["machine_review"]["open_job"]
+    assert set(open_job) == _OPEN_JOB_FIELDS
+    assert open_job["id"] == job["id"]
+    assert open_job["status"] == "queued"
+    assert open_job["step_count"] == 0
+    assert open_job["started_at"] is None
+    assert items[idle.id]["machine_review"]["open_job"] is None
+
+
+def test_a_finished_job_is_no_longer_open(
+    client, db_session, login_as, _api_admin_user, _api_curator_user, monkeypatch
+):
+    login_as(_api_admin_user)
+    submission = seed.new_submission(db_session, _api_admin_user)
+    seed.run_review(client, monkeypatch, submission.id, seed.result())
+    login_as(_api_curator_user)
+
+    mr = _by_id(client.get(_URL).json())[submission.id]["machine_review"]
+
+    assert mr["open_job"] is None
+    assert mr["run_count"] == 1
+
+
+def test_open_jobs_do_not_cost_more_queries_for_a_longer_page(
+    client, db_session, login_as, _api_admin_user, _api_curator_user, monkeypatch
+):
+    monkeypatch.setattr("app.api.config.settings.ai_review_assistant_mode", "test")
+    monkeypatch.setattr("app.api.config.settings.deployment_mode", "local")
+    subs = [seed.new_submission(db_session, _api_admin_user, title=f"s{i}") for i in range(5)]
+    login_as(_api_curator_user)
+
+    def _count(limit: int) -> int:
+        statements = []
+        engine = db_session.connection().engine
+
+        def _before(conn, cursor, statement, parameters, context, executemany):
+            statements.append(statement)
+
+        event.listen(engine, "before_cursor_execute", _before)
+        try:
+            assert client.get(_URL, params={"limit": limit}).status_code == 200
+        finally:
+            event.remove(engine, "before_cursor_execute", _before)
+        return len(statements)
+
+    for sub in subs[:3]:
+        _queue(client, sub.id)
+    assert _count(1) == _count(5)

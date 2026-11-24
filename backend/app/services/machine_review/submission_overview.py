@@ -2,8 +2,8 @@
 
 One page of submissions, each with how many reviewer runs it has, its latest
 run, and how many curator tasks exist and are still open. A constant number of
-queries per page: the count, the page, the latest event of each submission and
-the grouped task counts.
+queries per page: the count, the page, the latest event of each submission, the
+open job of each and the grouped task counts.
 
 The latest run is the machine-review event with the highest
 ``(created_at, id)``; events written inside one transaction share a
@@ -25,11 +25,13 @@ from sqlalchemy.orm import Session
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     MachineReviewCuratorTaskStateGroup,
+    MachineReviewJobStatus,
     SubmissionActorKind,
     SubmissionAuditEventKind,
     SubmissionStatus,
 )
 from app.db.models.machine_review_curator_task import MachineReviewCuratorTask
+from app.db.models.machine_review_job import MachineReviewJob
 from app.db.models.submission import Submission, SubmissionAuditEvent
 from app.services.machine_review.audit_adapter import machine_review_result_from_audit_event
 from app.services.machine_review.read_model import highest_severity
@@ -54,11 +56,22 @@ class OverviewLatestRun:
 
 
 @dataclass(frozen=True)
+class OverviewOpenJob:
+    id: int
+    status: MachineReviewJobStatus
+    step_count: int
+    cancel_requested: bool
+    created_at: datetime
+    started_at: datetime | None
+
+
+@dataclass(frozen=True)
 class SubmissionOverviewRow:
     submission: Submission
     created_by_username: str | None
     run_count: int
     latest_run: OverviewLatestRun | None
+    open_job: OverviewOpenJob | None
     open_task_count: int
     task_count: int
 
@@ -147,6 +160,22 @@ def list_submission_machine_review_overview(
             .group_by(MachineReviewCuratorTask.submission_id)
         )
     }
+    open_jobs = {
+        job.submission_id: OverviewOpenJob(
+            id=job.id,
+            status=job.status,
+            step_count=job.step_count,
+            cancel_requested=job.cancel_requested,
+            created_at=job.created_at,
+            started_at=job.started_at,
+        )
+        for job in session.scalars(
+            select(MachineReviewJob).where(
+                MachineReviewJob.submission_id.in_(ids),
+                MachineReviewJob.status.in_(MachineReviewJobStatus.open_states()),
+            )
+        )
+    }
     rows = []
     for submission, username in page:
         n_all, n_open = task_counts.get(submission.id, (0, 0))
@@ -157,6 +186,7 @@ def list_submission_machine_review_overview(
                 created_by_username=username,
                 run_count=run_counts.get(submission.id, 0),
                 latest_run=None if latest is None else _latest_run(latest),
+                open_job=open_jobs.get(submission.id),
                 open_task_count=int(n_open or 0),
                 task_count=n_all,
             )

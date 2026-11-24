@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.213.0 - 2026-11-24
+
+The route ledger drops `POST /api/v1/admin/machine-review/run-for-submission/{submission_id}`, which the server no longer serves; a machine review is requested with `POST /api/v1/machine-review/jobs`. No client behaviour changed.
+
 ## 0.212.0 - 2026-11-24
 
 `RejectionCode` gains the machine-review job codes: `MACHINE_REVIEW_JOB_CONFLICT`, `MACHINE_REVIEW_JOB_NOT_CANCELLABLE`, `MACHINE_REVIEW_JOB_NOT_FOUND`, `MACHINE_REVIEW_JOB_NOT_OWNED`, `MACHINE_REVIEW_MODE_OFF`, `MACHINE_REVIEW_DISABLED`, `MACHINE_REVIEW_CURATOR_REQUESTS_DISABLED`, `MACHINE_REVIEW_NOT_ALLOWED_FOR_USER`, `MACHINE_REVIEW_PROVIDER_NOT_CONFIGURED` and `MACHINE_REVIEW_REMOTE_RUNNER_UNAVAILABLE`. The route ledger triages the five new curator routes under `/api/v1/machine-review` as curation workflow and the two admin switch routes under `/api/v1/admin/machine-review/settings` as admin only. No client behaviour changed.
