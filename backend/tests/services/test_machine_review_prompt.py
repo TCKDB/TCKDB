@@ -63,8 +63,10 @@ from app.services.machine_review.schemas import MACHINE_REVIEW_FORMAT, provider_
 #: A change to the prompt's answer format moves the context recipe version, which
 #: makes every review stored under the earlier words stale (see
 #: ``MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION``); the rule above holds without exception.
-_SCHEMA_SHA256 = "ef054bf1c53903e0e91c80d928577cbefbf613cbd8c354dd4ded326ed8dba69f"
 _PROMPT_SHA256 = "1fc876bbd9ed90aae176a2ffdf43c594b5f62363d7fe975982b202ebb2909173"
+
+#: SHA-256 of ``json.dumps(provider_output_json_schema(), sort_keys=True)``; it moves only with a prompt version bump.
+_SCHEMA_SHA256 = "ef054bf1c53903e0e91c80d928577cbefbf613cbd8c354dd4ded326ed8dba69f"
 
 
 def test_prompt_version_is_the_recipes_active_version() -> None:

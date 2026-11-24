@@ -124,7 +124,7 @@ def main(argv: list[str] | None = None) -> int:
     for ref, reason in report.refused.items():
         print(f"  refused ({reason}): {ref}")
 
-    if args.process and report.queued:
+    if args.process:
         from app.workers.machine_review_worker import process_one_cycle
 
         ran = 0

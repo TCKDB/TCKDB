@@ -43,7 +43,9 @@ def _event(session, submission, *, version: int, minutes: int = 0, actor=Submiss
 
 
 def _job_count(session, submission) -> int:
-    return session.scalar(select(func.count()).select_from(MachineReviewJob).where(MachineReviewJob.submission_id == submission.id))
+    return session.scalar(
+        select(func.count()).select_from(MachineReviewJob).where(MachineReviewJob.submission_id == submission.id)
+    )
 
 
 def _seed(db_session):
@@ -82,7 +84,12 @@ def test_queue_creates_one_job_per_stale_submission_and_skips_one_with_an_open_j
     assert report.queued == [a.public_ref]
     assert report.already_open == [d.public_ref]
     assert report.refused == {}
-    assert (_job_count(db_session, a), _job_count(db_session, b), _job_count(db_session, c), _job_count(db_session, d)) == (1, 0, 0, 1)
+    assert (
+        _job_count(db_session, a),
+        _job_count(db_session, b),
+        _job_count(db_session, c),
+        _job_count(db_session, d),
+    ) == (1, 0, 0, 1)
 
 
 def test_finding_alone_writes_no_job(db_session):
@@ -136,9 +143,7 @@ def _run_script_keep_mode(db_session, monkeypatch, capsys, *argv):
     return code, capsys.readouterr()
 
 
-def test_script_plan_writes_nothing_and_commit_queues_one_job_naming_no_primary_key(
-    db_session, monkeypatch, capsys
-):
+def test_script_plan_writes_nothing_and_commit_queues_one_job_naming_no_primary_key(db_session, monkeypatch, capsys):
     admin, a, b, c, d, _ = _seed(db_session)
 
     code, out = _run_script(db_session, monkeypatch, capsys, "--requested-by", admin.username)
@@ -184,3 +189,20 @@ def test_script_plan_lists_submissions_when_the_assistant_mode_is_off(db_session
     )
     assert code == 2
     assert _job_count(db_session, a) == 0
+
+
+def test_process_drains_jobs_left_queued_by_an_earlier_run(db_session, monkeypatch, capsys):
+    from app.workers import machine_review_worker
+
+    admin, a, *_ = _seed(db_session)
+    commit = ("--requested-by", admin.username, "--commit", "--i-know-this-is-deployed")
+    _run_script(db_session, monkeypatch, capsys, *commit)
+    assert _job_count(db_session, a) == 1
+
+    cycles = iter([True, True, False])
+    monkeypatch.setattr(machine_review_worker, "process_one_cycle", lambda: next(cycles))
+    code, out = _run_script(db_session, monkeypatch, capsys, *commit, "--process")
+
+    assert code == 0
+    assert "Queued 0 job(s)." in out.out
+    assert "Ran 2 job(s) in this process." in out.out
