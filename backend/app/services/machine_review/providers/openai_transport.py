@@ -85,6 +85,23 @@ class ModelRefusedError(ValueError):
     """
 
 
+class ToolsUnsupportedError(Exception):
+    """The server rejected a request because it carried ``tools``; a request without them may still work."""
+
+
+class ModelContextExceededError(Exception):
+    """The request did not fit the server's context window."""
+
+
+def _error_text(exc: Any) -> str:
+    """The server's error body as lower-case text, for matching only; never shown or stored."""
+    parts = [str(getattr(exc, "message", "") or "")]
+    body = getattr(exc, "body", None)
+    if body is not None:
+        parts.append(str(body))
+    return " ".join(parts).lower()
+
+
 class OpenAICompatibleClient:
     """Calls an OpenAI-compatible chat-completions endpoint and returns the text."""
 
@@ -131,9 +148,9 @@ class OpenAICompatibleClient:
         *,
         model: str,
         messages: list[dict[str, Any]],
-        response_format: dict[str, Any],
         max_output_tokens: int,
         timeout_seconds: float,
+        response_format: dict[str, Any] | None = None,
         extra_body: dict[str, Any] | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> "ChatTurn":
@@ -149,9 +166,10 @@ class OpenAICompatibleClient:
             "model": model,
             "messages": messages,
             "max_tokens": max_output_tokens,
-            "response_format": response_format,
             "timeout": openai.Timeout(timeout_seconds, connect=self._connect_timeout_seconds or timeout_seconds),
         }
+        if response_format is not None:
+            request["response_format"] = response_format
         if extra_body:
             request["extra_body"] = extra_body
         if tools:
@@ -173,6 +191,11 @@ class OpenAICompatibleClient:
                 raise MachineReviewProviderAuthError(
                     f"The model server refused the credentials (HTTP {exc.status_code})."
                 ) from exc
+            text = _error_text(exc)
+            if tools and exc.status_code in (400, 422, 500, 501) and "tool" in text:
+                raise ToolsUnsupportedError("The model server does not accept tools.") from exc
+            if exc.status_code == 400 and ("context size" in text or "exceed_context_size" in text):
+                raise ModelContextExceededError("The request did not fit the model's context window.") from exc
             if exc.status_code >= 500:
                 raise MachineReviewProviderUnavailableError(
                     f"The model server answered HTTP {exc.status_code}."
@@ -227,6 +250,37 @@ class ChatTurn:
     reasoning_content: str | None
     finish_reason: str | None
     usage: dict[str, Any] | None
+    tool_calls: tuple["ToolCall", ...] = ()
+
+
+@dataclass(frozen=True)
+class ToolCall:
+    """One tool call the model asked for; ``arguments`` is the raw JSON text it sent."""
+
+    id: str
+    name: str
+    arguments: str
+
+
+def _tool_calls(message: dict[str, Any]) -> tuple[ToolCall, ...]:
+    raw = message.get("tool_calls")
+    if not isinstance(raw, list):
+        return ()
+    calls: list[ToolCall] = []
+    for index, item in enumerate(raw, start=1):
+        function = item.get("function") if isinstance(item, dict) else None
+        if not isinstance(function, dict) or not isinstance(function.get("name"), str):
+            continue
+        arguments = function.get("arguments")
+        call_id = item.get("id")
+        calls.append(
+            ToolCall(
+                id=call_id if isinstance(call_id, str) and call_id else f"call_{index}",
+                name=function["name"],
+                arguments=arguments if isinstance(arguments, str) else "{}",
+            )
+        )
+    return tuple(calls)
 
 
 _LEADING_THINK = re.compile(r"\A\s*<think>(.*?)</think>", re.DOTALL)
@@ -310,7 +364,18 @@ def extract_turn(payload: Any) -> ChatTurn:
     reasoning = reasoning if isinstance(reasoning, str) and reasoning else None
     content = message.get("content")
     has_content = isinstance(content, str) and bool(content.strip())
+    tool_calls = _tool_calls(message)
     _check_complete(choice, message, thinking_note=not has_content and reasoning is not None)
+    if not has_content and tool_calls:
+        usage = payload.get("usage")
+        finish = choice.get("finish_reason")
+        return ChatTurn(
+            content="",
+            reasoning_content=reasoning,
+            finish_reason=finish if isinstance(finish, str) else None,
+            usage=usage if isinstance(usage, dict) else None,
+            tool_calls=tool_calls,
+        )
     if not has_content:
         raise ValueError(
             "Model response carried no message content; nothing to review with."
@@ -322,7 +387,7 @@ def extract_turn(payload: Any) -> ChatTurn:
         content = content[match.end():].lstrip()
     elif content.lstrip().startswith("<think>"):
         raise ValueError("Model response opened a <think> block that was never closed.")
-    if not content.strip():
+    if not content.strip() and not tool_calls:
         raise ValueError(
             "Model response carried no message content; nothing to review with."
         )
@@ -333,15 +398,19 @@ def extract_turn(payload: Any) -> ChatTurn:
         reasoning_content=reasoning,
         finish_reason=finish if isinstance(finish, str) else None,
         usage=usage if isinstance(usage, dict) else None,
+        tool_calls=tool_calls,
     )
 
 
 __all__ = [
     "DEFAULT_API_BASE_URL",
     "ChatTurn",
+    "ModelContextExceededError",
     "ModelOutputTruncatedError",
     "ModelRefusedError",
     "OpenAICompatibleClient",
+    "ToolCall",
+    "ToolsUnsupportedError",
     "extract_text",
     "extract_turn",
 ]
