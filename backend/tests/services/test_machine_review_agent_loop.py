@@ -84,8 +84,8 @@ class Events:
     def __init__(self):
         self.items = []
 
-    def __call__(self, kind, *, tool_name=None, status_code, started_at, duration_ms, detail):
-        self.items.append((kind, tool_name, status_code, detail))
+    def __call__(self, kind, *, tool_name=None, outcome, started_at, duration_ms, detail):
+        self.items.append((kind, tool_name, outcome, detail))
 
     @property
     def kinds(self):

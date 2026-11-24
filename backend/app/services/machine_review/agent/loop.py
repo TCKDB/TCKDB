@@ -23,6 +23,7 @@ from app.services.machine_review.agent.tools import ToolRegistry
 from app.services.machine_review.providers.interface import MachineReviewProviderTimeoutError
 from app.services.machine_review.providers.openai_transport import (
     ChatTurn,
+    ModelContextExceededError,
     ToolCall,
     ToolsUnsupportedError,
 )
@@ -45,6 +46,7 @@ FINAL_TURN_INSTRUCTION = (
 
 STATUS_OK = "ok"
 STATUS_FINAL = "final"
+STATUS_BUDGET_EXHAUSTED = "budget_exhausted"
 STATUS_TOOLS_UNSUPPORTED = "tools_unsupported"
 
 
@@ -166,7 +168,7 @@ def run_review_loop(
                 )
             emit(
                 Kind.model_turn,
-                status_code=code,
+                outcome=code,
                 started_at=started_at,
                 duration_ms=int((clock() - started) * 1000),
                 detail=_clip(detail),
@@ -181,7 +183,7 @@ def run_review_loop(
                 report(_failure_code_for(ToolsUnsupportedError()).value, None)
             raise
         except MachineReviewProviderTimeoutError as exc:
-            report(_failure_code_for(exc).value, None)
+            report(STATUS_BUDGET_EXHAUSTED if clipped else _failure_code_for(exc).value, None)
             if clipped:
                 raise ReviewBudgetExhausted("The review ran past its time limit.") from exc
             raise
@@ -198,6 +200,14 @@ def run_review_loop(
     def result(turn: ChatTurn) -> LoopResult:
         return LoopResult(turn.content, state["steps"], state["tokens_in"], state["tokens_out"])
 
+    try:
+        return _drive(call, result, history, budget, registry, emit, check_live, clock, state)
+    except (ReviewBudgetExhausted, ModelContextExceededError) as exc:
+        exc.tokens = (state["tokens_in"], state["tokens_out"])  # type: ignore[attr-defined]
+        raise
+
+
+def _drive(call, result, history, budget, registry, emit, check_live, clock, state) -> LoopResult:
     tool_calls_done = 0
     if budget.max_tool_calls > 0:
         while state["steps"] < budget.max_steps - 1:
@@ -218,24 +228,24 @@ def run_review_loop(
                 check_live()
                 emit(
                     Kind.tool_call,
-                    tool_name=tool_call.name,
-                    status_code=STATUS_OK,
+                    tool_name=registry.known_name(tool_call.name),
+                    outcome=STATUS_OK,
                     started_at=_now(),
                     duration_ms=0,
-                    detail=_clip({"arguments": tool_call.arguments}),
+                    detail=_clip({"name": tool_call.name, "arguments": tool_call.arguments}),
                 )
                 started_at, started = _now(), clock()
-                outcome = registry.execute(tool_call.name, tool_call.arguments)
+                result_outcome = registry.execute(tool_call.name, tool_call.arguments)
                 tool_calls_done += 1
                 emit(
                     Kind.tool_result,
-                    tool_name=tool_call.name,
-                    status_code=outcome.status_code,
+                    tool_name=registry.known_name(tool_call.name),
+                    outcome=result_outcome.status_code,
                     started_at=started_at,
                     duration_ms=int((clock() - started) * 1000),
-                    detail=_clip({"output": outcome.content}),
+                    detail=_clip({"name": tool_call.name, "output": result_outcome.content}),
                 )
-                history.append({"role": "tool", "tool_call_id": tool_call.id, "content": outcome.content})
+                history.append({"role": "tool", "tool_call_id": tool_call.id, "content": result_outcome.content})
             if tool_calls_done >= budget.max_tool_calls:
                 break
 

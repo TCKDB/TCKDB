@@ -69,25 +69,44 @@ def _fits(value: dict[str, Any]) -> bool:
     return len(_dump(value).encode()) <= TOOL_RESULT_MAX_BYTES
 
 
+def _value_group(key: str, keys: list[str]) -> str:
+    """The key a value belongs with: a unit or qualifier column (``a_units``) shares its number's group (``a``)."""
+    if key.startswith("scalar_"):
+        return "scalar"
+    roots = [other for other in keys if other != key and key.startswith(other + "_")]
+    return min(roots, key=len) if roots else key
+
+
 def _truncate(payload: dict[str, Any]) -> dict[str, Any]:
-    """Cut ``payload`` to the byte cap: trailing values first, then warnings, then findings."""
+    """Cut ``payload`` to the byte cap: warnings first, then values a group at a time, then findings.
+
+    A number is dropped together with its unit and qualifier columns, never apart from them.
+    """
     payload = dict(payload)
     payload["truncated"] = True
+    items = list(payload.get("deposit_warnings", []))
+    while items and not _fits({**payload, "deposit_warnings": items}):
+        items.pop()
+    if items:
+        payload["deposit_warnings"] = items
+    else:
+        payload.pop("deposit_warnings", None)
     values = dict(payload.get("values", {}))
+    keys = list(values)
     while values and not _fits({**payload, "values": values}):
-        values.popitem()
+        last = _value_group(next(reversed(values)), keys)
+        values = {k: v for k, v in values.items() if _value_group(k, keys) != last}
     if values:
         payload["values"] = values
     else:
         payload.pop("values", None)
-    for key in ("deposit_warnings", "deterministic_findings"):
-        items = list(payload.get(key, []))
-        while items and not _fits({**payload, key: items}):
-            items.pop()
-        if items:
-            payload[key] = items
-        else:
-            payload.pop(key, None)
+    items = list(payload.get("deterministic_findings", []))
+    while items and not _fits({**payload, "deterministic_findings": items}):
+        items.pop()
+    if items:
+        payload["deterministic_findings"] = items
+    else:
+        payload.pop("deterministic_findings", None)
     if not _fits(payload):
         payload = {k: payload[k] for k in ("record_type", "record_ref", "truncated") if k in payload}
     return payload
@@ -122,6 +141,11 @@ class ToolRegistry:
                 },
             }
         ]
+
+    @staticmethod
+    def known_name(name: str) -> str | None:
+        """``name`` if it is a registered tool, else ``None``; only this is safe to store as a name."""
+        return name if name == GET_RECORD else None
 
     def execute(self, name: str, arguments_text: str) -> ToolOutcome:
         if name != GET_RECORD:

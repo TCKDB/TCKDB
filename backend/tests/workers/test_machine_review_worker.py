@@ -870,3 +870,75 @@ def test_a_server_that_rejects_tools_gets_one_single_shot_request_instead(db_ses
     assert [e.status_code for e in events if e.kind is K.model_turn] == ["tools_unsupported"]
     assert not any(e.kind is K.tool_call for e in events)
     assert len(_audit_events(db_session, submission)) == 1
+
+
+def _tool_reply_named(name: str) -> dict:
+    reply = _tool_reply("calculation", "777")
+    reply["choices"][0]["message"]["tool_calls"][0]["function"]["name"] = name
+    return reply
+
+
+@pytest.mark.parametrize("name", ["MODELTEXT_rm", "MODELTEXT_" + "x" * 100])
+def test_an_invented_tool_name_is_never_stored_as_a_tool_name(db_session, factory, local_stub, name):
+    server, submission, job, settings_obj = _agent_job(
+        db_session,
+        local_stub,
+        [{"body": _tool_reply_named(name)}, {"body": _pass_reply("x")}, {"body": _pass_reply()}],
+    )
+    _local_cycle(factory, settings_obj)
+    job = _reload(db_session, job)
+    assert job.status is S.succeeded
+    events = _events(db_session, job)
+    steps = [(e.kind, e.tool_name, e.status_code) for e in events if e.kind in (K.tool_call, K.tool_result)]
+    assert steps == [(K.tool_call, None, "ok"), (K.tool_result, None, "unknown_tool")]
+    assert not any(e.tool_name and "MODELTEXT" in e.tool_name for e in events)
+
+
+def test_a_known_tool_keeps_its_name_on_the_events(db_session, factory, local_stub):
+    server, submission, job, settings_obj = _agent_job(
+        db_session, local_stub, [{"body": _tool_reply("calculation", "777")}, {"body": _pass_reply("x")}, {"body": _pass_reply()}]
+    )
+    _local_cycle(factory, settings_obj)
+    names = [e.tool_name for e in _events(db_session, _reload(db_session, job)) if e.kind in (K.tool_call, K.tool_result)]
+    assert names == ["get_record", "get_record"]
+
+
+def test_a_budget_exhausted_job_keeps_the_tokens_it_spent_and_the_event_agrees(db_session, factory, local_stub):
+    server, submission, job, settings_obj = _agent_job(
+        db_session,
+        local_stub,
+        [{"body": _tool_reply("calculation", "777")}, {"body": _pass_reply("x"), "delay": 1.5}, {"body": _pass_reply()}],
+        llm_precheck_run_wall_seconds=1,
+    )
+    _local_cycle(factory, settings_obj)
+    job = _reload(db_session, job)
+    assert (job.status, job.failure_code) == (S.failed, MachineReviewJobFailure.budget_exhausted)
+    assert (job.tokens_in, job.tokens_out) == (100, 20)
+    turns = [e.status_code for e in _events(db_session, job) if e.kind is K.model_turn]
+    assert turns == ["ok", "budget_exhausted"]
+
+
+def test_cancel_during_the_tool_phase_cancels_with_no_further_requests_and_no_audit_event(
+    db_session, factory, local_stub, monkeypatch
+):
+    from app.db.models.app_user import AppUser
+    from app.services.machine_review.agent.tools import ToolRegistry
+
+    server, submission, job, settings_obj = _agent_job(
+        db_session, local_stub, [{"body": _tool_reply("calculation", "777")}, {"body": _pass_reply()}]
+    )
+    actor = db_session.get(AppUser, submission.created_by)
+    real = ToolRegistry.execute
+
+    def execute(self, name, arguments_text):
+        with factory() as other:
+            jobs.request_cancel(other, job.id, actor=actor)
+            other.commit()
+        return real(self, name, arguments_text)
+
+    monkeypatch.setattr(ToolRegistry, "execute", execute)
+    _local_cycle(factory, settings_obj)
+    job = _reload(db_session, job)
+    assert job.status is S.cancelled and job.audit_event_id is None
+    assert len(server.requests) == 1
+    assert _audit_events(db_session, submission) == []

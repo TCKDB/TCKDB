@@ -110,3 +110,35 @@ def test_no_depositor_text_or_foreign_key_reaches_a_tool_result():
 def test_the_schema_lists_get_record_only():
     schemas = _registry().schemas()
     assert [s["function"]["name"] for s in schemas] == ["get_record"]
+
+
+def _kinetics_summary(qualifier_width: int) -> LLMRecordSummary:
+    return LLMRecordSummary(
+        record_type="kinetics",
+        record_ref="9",
+        values={
+            "a": 1.0e13,
+            "a_units": "cm3_mol_s",
+            "n": 0.5,
+            "t0_k": 298.0,
+            "ea_kj_mol": 12.0,
+            "a_uncertainty": 2.0,
+            "a_uncertainty_kind": "m" * qualifier_width,
+        },
+    )
+
+
+def test_truncation_never_leaves_a_number_without_its_unit_or_qualifier():
+    pairs = (("a", "a_units"), ("a_uncertainty", "a_uncertainty_kind"))
+    cut_seen = False
+    for width in range(TOOL_RESULT_MAX_BYTES - 200, TOOL_RESULT_MAX_BYTES + 60):
+        registry = ToolRegistry(
+            offered=frozenset({("kinetics", "9")}), summaries={("kinetics", "9"): _kinetics_summary(width)}
+        )
+        outcome = registry.execute("get_record", json.dumps({"record_type": "kinetics", "record_ref": "9"}))
+        assert len(outcome.content.encode()) <= TOOL_RESULT_MAX_BYTES
+        values = json.loads(outcome.content).get("values", {})
+        for number, unit in pairs:
+            assert (number in values) == (unit in values)
+        cut_seen = cut_seen or outcome.status_code == "truncated"
+    assert cut_seen

@@ -372,7 +372,7 @@ def _run_agent(
         kind: MachineReviewJobEventKind,
         *,
         tool_name: str | None = None,
-        status_code: str,
+        outcome: str,
         started_at: datetime,
         duration_ms: int,
         detail: dict[str, Any] | None,
@@ -387,7 +387,7 @@ def _run_agent(
                 job,
                 kind,
                 tool_name=tool_name,
-                outcome=status_code,
+                outcome=outcome,
                 started_at=started_at,
                 duration_ms=duration_ms,
                 detail=detail,
@@ -404,8 +404,8 @@ def _run_agent(
         )
     except MachineReviewCancelled:
         raise
-    except (ReviewBudgetExhausted, ModelContextExceededError):
-        return _AgentRun(budget_exhausted=True)
+    except (ReviewBudgetExhausted, ModelContextExceededError) as exc:
+        return _AgentRun(budget_exhausted=True, tokens=getattr(exc, "tokens", None))
     except Exception as exc:
         return _AgentRun(
             reason=_failure_text("Machine review failed to review", exc, settings_obj), code=_failure_code_for(exc)
