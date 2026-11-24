@@ -43,8 +43,9 @@ describe("steps", () => {
     it("announces by status and step, so an unchanged step gives the same sentence", () => {
         const last = JobEventSchema.parse(fx.jobEvent({ seq: 2, kind: "model_turn" }))
         const at2 = JobSchema.parse(fx.job({ status: "running", step_count: 2 }))
+        const last3 = JobEventSchema.parse(fx.jobEvent({ seq: 3, kind: "tool_call", tool_name: "get_record" }))
         expect(progressAnnouncement(at2, last)).toBe(progressAnnouncement({ ...at2 }, last))
-        expect(progressAnnouncement({ ...at2, step_count: 3 }, last)).not.toBe(progressAnnouncement(at2, last))
+        expect(progressAnnouncement(at2, last3)).not.toBe(progressAnnouncement(at2, last))
         expect(progressAnnouncement(JobSchema.parse(fx.job({ status: "queued", step_count: 0 })), null)).toBe("Machine review is queued.")
     })
 })

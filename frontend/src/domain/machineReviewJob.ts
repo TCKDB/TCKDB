@@ -44,15 +44,15 @@ export function stepDuration(event: JobEvent): string | null {
 }
 
 /**
- * The sentence the progress region announces. It is a function of the status, the step count and the last step only,
+ * The sentence the progress region announces. It is a function of the status and the last step seen only,
  * so it changes when a step lands and not on every poll.
  */
 export function progressAnnouncement(job: Pick<Job, "status" | "step_count" | "cancel_requested">, last: JobEvent | null): string {
     if (job.status === "queued") return "Machine review is queued."
     if (job.status === "running") {
         const stopping = job.cancel_requested ? " Stopping after this step." : ""
-        if (last === null || job.step_count === 0) return `Machine review is running.${stopping}`
-        return `Machine review is running. Step ${job.step_count}: ${stepWords(last)}.${stopping}`
+        if (last === null) return `Machine review is running.${stopping}`
+        return `Machine review is running. Step ${last.seq}: ${stepWords(last)}.${stopping}`
     }
     return `Machine review ${wordLabel("jobStatus", job.status)}.`
 }
