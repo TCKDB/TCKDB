@@ -105,6 +105,16 @@ def test_machine_review_switch_off_refuses_admin_and_curator(ctx):
     assert _create(session, submission, curator).requested_by == curator.id
 
 
+def test_inactive_curator_is_refused_and_active_twin_accepted(ctx):
+    session, _, curator, _, submission = ctx
+    curator.is_active = False
+    session.flush()
+    assert _reason(session, submission, curator) == "not_allowed_for_user"
+    curator.is_active = True
+    session.flush()
+    assert _create(session, submission, curator).status is MachineReviewJobStatus.queued
+
+
 def test_curator_switch_off_refuses_curator_but_not_admin(ctx):
     session, admin, curator, _, submission = ctx
     write_machine_review_switches(session, actor=admin, curator_requests_enabled=False)

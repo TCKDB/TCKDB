@@ -137,14 +137,14 @@ def curator_switch_refuses(switches: MachineReviewSwitches, requester: AppUser) 
     return requester.role is AppUserRole.curator and not switches.curator_requests_enabled
 
 
+def may_use_machine_review(requester: AppUser | None) -> bool:
+    """Whether ``requester`` is an active curator or admin."""
+    return requester is not None and requester.is_active and requester.role in (AppUserRole.curator, AppUserRole.admin)
+
+
 def requester_may_run(switches: MachineReviewSwitches, requester: AppUser | None) -> bool:
     """Whether a queued job's requester may still have it run: present, active, curator or admin, and not switched off."""
-    return (
-        requester is not None
-        and requester.is_active
-        and requester.role in (AppUserRole.curator, AppUserRole.admin)
-        and not curator_switch_refuses(switches, requester)
-    )
+    return may_use_machine_review(requester) and not curator_switch_refuses(switches, requester)
 
 
 def _availability(
@@ -155,7 +155,7 @@ def _availability(
 ) -> MachineReviewAvailability:
     if switches.mode_off:
         return MachineReviewAvailability.mode_off
-    if requester.role not in (AppUserRole.curator, AppUserRole.admin):
+    if not may_use_machine_review(requester):
         return MachineReviewAvailability.not_allowed_for_user
     if not switches.machine_review_enabled:
         return MachineReviewAvailability.machine_review_disabled
@@ -484,6 +484,7 @@ __all__ = [
     "append_event",
     "claim_next_job",
     "curator_switch_refuses",
+    "may_use_machine_review",
     "requester_may_run",
     "create_job",
     "finish_job",
