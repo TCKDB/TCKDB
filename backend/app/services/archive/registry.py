@@ -128,6 +128,8 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "literature",
         "literature_author",
         "machine_review_curator_task",
+        # Curator-written notes with their verification state: curation content, not deployment state.
+        "machine_review_lesson",
         # The method and basis-set catalogue: curated reference data the migration writes from the seed files,
         # with its links to literature. Preseeded (below), so a restore hands back the source's catalogue.
         "method_catalogue",
@@ -264,6 +266,9 @@ EXCLUDED_COLUMNS: Mapping[str, Mapping[str, str]] = {
     },
     "submission": {
         "upload_job_id": "references excluded ephemeral worker queue state",
+    },
+    "machine_review_lesson": {
+        "source_job_id": "references the excluded machine-review job queue",
     },
     "record_deletion": {
         "xact_id": "a transaction id of the source cluster; restored as NULL, which never permits a delete",

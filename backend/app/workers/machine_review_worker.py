@@ -35,6 +35,8 @@ from app.db.models.common import (
 from app.db.models.machine_review_job import MachineReviewJob
 from app.db.models.submission import Submission
 from app.services.machine_review import jobs
+from app.services.machine_review import lessons as lesson_store
+from app.services.machine_review.agent.guidance import GuidanceEntry, GuidanceIndex
 from app.services.machine_review.agent.loop import LoopResult, RunBudget
 from app.services.machine_review.agent.tools import ToolRegistry
 from app.services.machine_review.guidance_corpus import default_guidance_index, guidance_seed_codes
@@ -178,11 +180,15 @@ def _run_claimed_job(
     parse_failed = False
     provider_name: str | None = None
     summaries: dict[tuple[str, str], Any] = {}
+    lessons: list[GuidanceEntry] = []
     tokens: tuple[int, int] | None = None
 
     try:
         with session_factory() as session:
             context, summaries = build_review_context_with_records(session, submission_id, settings_obj)
+            lessons = lesson_store.verified_lesson_entries(
+                session, record_types={record_type for record_type, _ in offered_refs_from_context(context)}
+            )
             job = session.get_one(MachineReviewJob, job_id)
             job.context_hash = _context_hash(context)
             jobs.append_event(
@@ -207,7 +213,7 @@ def _run_claimed_job(
                         session_factory, settings_obj, selected, context, job_id
                     )
                 elif isinstance(selected, LocalMachineReviewProvider):
-                    agent = _run_agent(session_factory, settings_obj, selected, context, summaries, job_id)
+                    agent = _run_agent(session_factory, settings_obj, selected, context, summaries, job_id, lessons)
                     result, reason, parse_failed, tokens = agent.result, agent.reason, agent.parse_failed, agent.tokens
                     if agent.budget_exhausted:
                         with session_factory() as session:
@@ -363,6 +369,7 @@ def _run_agent(
     context: MachineReviewContext,
     summaries: dict[tuple[str, str], Any],
     job_id: int,
+    lessons: Sequence[GuidanceEntry] = (),
 ) -> _AgentRun:
     """Run the tool loop with one short transaction per event; no session is open during a model call."""
     registry = ToolRegistry(
@@ -370,6 +377,7 @@ def _run_agent(
         summaries=summaries,
         guidance=default_guidance_index(),
         guidance_seed=guidance_seed_codes(context, summaries),
+        lessons=GuidanceIndex(lessons) if lessons else None,
     )
     budget = RunBudget.from_settings(settings_obj)
     seen = {"turns": 0}

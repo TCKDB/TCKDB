@@ -4,8 +4,9 @@
 from its context. It refuses every other pair, and a result never holds more than a summary does: no depositor
 text and no id beyond ``record_type:record_ref``.
 
-``search_guidance`` searches the guidance index the caller passes in and returns at most five TCKDB-authored
-entries, each under a ``source_key``. The registry records every key it delivers; a review may cite only those.
+``search_guidance`` searches the guidance index the caller passes in and returns at most five entries, each under a
+``source_key``. Entries of kind ``lesson`` come from a second, per-job index and are notes written by curators, not
+TCKDB guidance. The registry records every key it delivers; a review may cite only those.
 
 ASCII only: the tool schemas are runtime strings under ``app/``.
 """
@@ -53,13 +54,19 @@ SEARCH_GUIDANCE = "search_guidance"
 #: Most results one search or one up-front guidance message returns.
 GUIDANCE_RESULT_LIMIT = 5
 
+#: Most lessons one unfiltered search returns, so TCKDB guidance keeps the remaining slots.
+LESSON_RESULT_LIMIT = 3
+
+LESSON_KIND = "lesson"
+
 #: Longest entry text kept in a result, in characters.
 GUIDANCE_TEXT_MAX_CHARS = 1000
 
 _SEARCH_GUIDANCE_DESCRIPTION = (
     "Search TCKDB's own guidance: the sentences it shows for deposit warnings, its scientific checks and their "
-    "thresholds. Returns up to 5 entries, each with a source_key. List a source_key in retrieval_sources only "
-    "if a search returned it."
+    "thresholds. Results with kind 'lesson' are notes written by curators, not TCKDB's own guidance; weigh them "
+    "as a colleague's advice. Returns up to 5 entries, each with a source_key. List a source_key in "
+    "retrieval_sources only if a search returned it."
 )
 
 GUIDANCE_PREAMBLE = (
@@ -75,11 +82,30 @@ class GetRecordArgs(BaseModel):
     record_ref: str = Field(min_length=1, max_length=256)
 
 
+#: Finding-category tokens; a test pins them to the review vocabulary.
+FINDING_CATEGORIES = (
+    "provenance",
+    "units",
+    "geometry",
+    "kinetics",
+    "thermo",
+    "statmech",
+    "transport",
+    "transition_state_validation",
+    "calculation_parameters",
+    "consistency",
+    "schema_gap",
+)
+
+FindingCategory = Literal[FINDING_CATEGORIES]
+
+
 class SearchGuidanceArgs(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     query: str = Field(min_length=1, max_length=200)
-    kind: Literal["deposit_warning", "check", "threshold"] | None = None
+    kind: Literal["deposit_warning", "check", "threshold", "lesson"] | None = None
+    category: FindingCategory | None = None
 
 
 @dataclass(frozen=True)
@@ -184,17 +210,23 @@ class ToolRegistry:
         *,
         guidance: GuidanceIndex | None = None,
         guidance_seed: tuple[str, ...] = (),
+        lessons: GuidanceIndex | None = None,
     ) -> None:
         self._offered = offered
         self._summaries = summaries
         self._guidance = guidance
         self._guidance_seed = guidance_seed
+        self._lessons = lessons
         self._returned: set[str] = set()
 
     @property
     def returned_sources(self) -> frozenset[str]:
         """The ``source_key`` values this run delivered to the model."""
         return frozenset(self._returned)
+
+    @property
+    def _searchable(self) -> bool:
+        return self._guidance is not None or self._lessons is not None
 
     def schemas(self) -> list[dict[str, Any]]:
         """The OpenAI ``tools`` list."""
@@ -216,7 +248,7 @@ class ToolRegistry:
                 },
             }
         ]
-        if self._guidance is not None:
+        if self._searchable:
             tools.append(
                 {
                     "type": "function",
@@ -227,7 +259,11 @@ class ToolRegistry:
                             "type": "object",
                             "properties": {
                                 "query": {"type": "string"},
-                                "kind": {"type": "string", "enum": ["deposit_warning", "check", "threshold"]},
+                                "kind": {
+                                    "type": "string",
+                                    "enum": ["deposit_warning", "check", "threshold", LESSON_KIND],
+                                },
+                                "category": {"type": "string", "enum": list(FINDING_CATEGORIES)},
                             },
                             "required": ["query"],
                             "additionalProperties": False,
@@ -239,11 +275,11 @@ class ToolRegistry:
 
     def known_name(self, name: str) -> str | None:
         """``name`` if this registry offers it, else ``None``; only this is safe to store as a name."""
-        offered = (GET_RECORD, SEARCH_GUIDANCE) if self._guidance is not None else (GET_RECORD,)
+        offered = (GET_RECORD, SEARCH_GUIDANCE) if self._searchable else (GET_RECORD,)
         return name if name in offered else None
 
     def execute(self, name: str, arguments_text: str) -> ToolOutcome:
-        if name == SEARCH_GUIDANCE and self._guidance is not None:
+        if name == SEARCH_GUIDANCE and self._searchable:
             return self._search_guidance(arguments_text)
         if name != GET_RECORD:
             return _fixed(STATUS_UNKNOWN_TOOL)
@@ -272,7 +308,20 @@ class ToolRegistry:
             args = SearchGuidanceArgs.model_validate_json(arguments_text)
         except (ValidationError, ValueError):
             return _fixed(STATUS_INVALID_ARGUMENTS)
-        return self._deliver(self._guidance.search(args.query, kind=args.kind, limit=GUIDANCE_RESULT_LIMIT))
+        limit = GUIDANCE_RESULT_LIMIT
+        lessons: list[GuidanceEntry] = []
+        if self._lessons is not None and args.kind in (None, LESSON_KIND):
+            lessons = self._lessons.search(
+                args.query,
+                limit=limit if args.kind == LESSON_KIND else LESSON_RESULT_LIMIT,
+                category=args.category,
+            )
+        guided: list[GuidanceEntry] = []
+        if self._guidance is not None and args.kind != LESSON_KIND:
+            guided = self._guidance.search(
+                args.query, kind=args.kind, limit=limit - len(lessons), category=args.category
+            )
+        return self._deliver([*lessons, *guided])
 
     def prefetch_guidance_message(self) -> dict[str, str] | None:
         """A user message with the guidance for the seeded warning codes, for a server that takes no tools."""
@@ -288,6 +337,8 @@ class ToolRegistry:
 __all__ = [
     "GET_RECORD",
     "GUIDANCE_PREAMBLE",
+    "LESSON_KIND",
+    "LESSON_RESULT_LIMIT",
     "SEARCH_GUIDANCE",
     "TOOL_RESULT_MAX_BYTES",
     "TOOL_STATUS_CODES",

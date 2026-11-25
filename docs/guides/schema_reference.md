@@ -100,6 +100,36 @@ the gap.
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `created_by` | BIGINT | yes | — | app_user.id | — | not documented |
 
+### `machine_review_lesson`
+
+**Role:** curation
+
+**Purpose:** One curator-written lesson and where it stands: proposed, verified or retired (curation).
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `updated_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+| `category` | MachineReviewCategory (enum) | yes | — | — | `provenance`, `units`, `geometry`, `kinetics`, `thermo`, `statmech`, `transport`, `transition_state_validation`, `calculation_parameters`, `consistency`, `schema_gap` | not documented |
+| `record_type` | SubmissionRecordType (enum) | yes | — | — | `species`, `species_entry`, `conformer_group`, `conformer_observation`, `reaction`, `reaction_entry`, `transition_state`, `transition_state_entry`, `calculation`, `statmech`, `thermo`, `kinetics`, `transport`, `network`, `network_solve`, `applied_energy_correction`, `artifact`, `molecular_property_observation` | not documented |
+| `scope_json` | JSONB | yes | — | — | — | not documented |
+| `signal` | MachineReviewLessonSignal (enum) | no | — | — | `curator_dismissed_finding`, `curator_flagged_missed_issue`, `curator_confirmed_finding` | not documented |
+| `text` | TEXT | no | — | — | — | not documented |
+| `status` | MachineReviewLessonStatus (enum) | no | proposed | — | `proposed`, `verified`, `retired` | not documented |
+| `source_job_id` | BIGINT | yes | — | machine_review_job.id | — | not documented |
+| `source_curator_task_id` | BIGINT | yes | — | machine_review_curator_task.id | — | not documented |
+| `created_by` | BIGINT | no | — | app_user.id | — | not documented |
+| `verified_by` | BIGINT | yes | — | app_user.id | — | not documented |
+| `verified_at` | TIMESTAMP WITHOUT TIME ZONE | yes | — | — | — | not documented |
+| `retired_by` | BIGINT | yes | — | app_user.id | — | not documented |
+| `retired_at` | TIMESTAMP WITHOUT TIME ZONE | yes | — | — | — | not documented |
+| `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_machine_review_lesson_status_stamps`: `(status = 'proposed' AND verified_by IS NULL AND verified_at IS NULL AND retired_by IS NULL AND retired_at IS NULL) OR (status = 'verified' AND verified_by IS NOT NULL AND verified_at IS NOT NULL AND retired_by IS NULL AND retired_at IS NULL) OR (status = 'retired' AND retired_by IS NOT NULL AND retired_at IS NOT NULL)`
+- `ck_machine_review_lesson_text_length`: `char_length(btrim(text, E' \t\r\n')) BETWEEN 1 AND 500`
+
 ### `method_catalogue`
 
 **Role:** curation

@@ -10,9 +10,10 @@ trust.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from sqlalchemy import case, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -824,6 +825,8 @@ class AdminCuratorTaskResolveRequest(BaseModel):
 
     resolution_state: MachineReviewCuratorTaskState
     resolution_note: str
+    #: A note for the machine reviewer, proposed as a lesson; only with ``dismissed_machine_finding``.
+    lesson_text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)] | None = None
 
 
 class AdminCuratorTaskReopenRequest(BaseModel):
@@ -1142,6 +1145,7 @@ def resolve_curator_task_endpoint(
         resolution=request.resolution_state,
         resolved_by=_admin.id,
         resolution_note=request.resolution_note,
+        lesson_text=request.lesson_text,
     )
     return _curator_task_response(session, task)
 

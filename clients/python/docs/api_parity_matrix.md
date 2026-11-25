@@ -13,8 +13,8 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 |---|---|
 | typed | 132 |
 | raw_only | 109 |
-| not_applicable | 58 |
-| **total** | **299** |
+| not_applicable | 63 |
+| **total** | **304** |
 
 ## Typed coverage
 
@@ -366,6 +366,10 @@ Admin, auth, and curator-internal surface that a producer/consumer client is not
 | `POST /api/v1/admin/machine-review/curator-tasks/{task_id}/reopen` | yes | — | — | — | — |
 | `POST /api/v1/admin/machine-review/curator-tasks/{task_id}/resolve` | yes | — | — | — | — |
 | `POST /api/v1/admin/machine-review/curator-tasks/{task_id}/start-review` | yes | — | — | — | — |
+| `GET /api/v1/admin/machine-review/lessons` | yes | — | — | — | — |
+| `PATCH /api/v1/admin/machine-review/lessons/{lesson_id}` | yes | — | — | — | — |
+| `POST /api/v1/admin/machine-review/lessons/{lesson_id}/retire` | yes | — | — | — | — |
+| `POST /api/v1/admin/machine-review/lessons/{lesson_id}/verify` | yes | — | — | — | — |
 | `POST /api/v1/admin/machine-review/records/{record_type}/{record_id}/run-fake` | yes | — | — | — | — |
 | `GET /api/v1/admin/machine-review/settings` | yes | — | — | — | — |
 | `PATCH /api/v1/admin/machine-review/settings` | yes | — | — | — | — |
@@ -392,6 +396,7 @@ Admin, auth, and curator-internal surface that a producer/consumer client is not
 | `POST /api/v1/machine-review/jobs` | yes | — | — | — | — |
 | `GET /api/v1/machine-review/jobs/{job_id}` | yes | — | — | — | — |
 | `POST /api/v1/machine-review/jobs/{job_id}/cancel` | yes | — | — | — | — |
+| `POST /api/v1/machine-review/lessons` | yes | — | — | — | — |
 | `GET /api/v1/machine-review/providers` | yes | — | — | — | — |
 | `GET /api/v1/record-reviews` | yes | — | — | — | — |
 | `GET /api/v1/record-reviews/queue` | yes | — | — | — | — |
