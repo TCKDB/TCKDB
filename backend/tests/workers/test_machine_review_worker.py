@@ -1078,3 +1078,106 @@ def test_the_no_tools_fallback_without_a_warning_has_no_guidance_and_the_key_is_
     status, code, failed, job = _outcome(db_session, factory, job, submission, settings_obj)
     assert (status, code, failed) == (S.failed, MachineReviewJobFailure.invalid_output, 1)
     assert WARNING_KEY not in json.dumps(server.requests[1].body["messages"])
+
+
+# --- curator lessons ------------------------------------------------------------------------------
+
+LESSON_PHRASE = "zzlesson multiplicity"
+
+
+def _lesson_job(db_session, local_stub, lesson):
+    key = f"lesson:{lesson.id}"
+    return _warned_job(
+        db_session,
+        local_stub,
+        [_search_reply(LESSON_PHRASE), _pass_reply("x"), _sources_reply(key)],
+        with_warning=False,
+    )
+
+
+def test_a_lesson_is_citable_only_while_verified_and_the_next_job_sees_each_change(db_session, factory, local_stub):
+    from app.db.models.common import MachineReviewCategory, MachineReviewLessonSignal
+    from app.services.machine_review import lessons
+
+    admin = make_user(db_session, "lesson-flow-admin", AppUserRole.admin)
+    lesson = lessons.propose_lesson(
+        db_session,
+        author_id=admin.id,
+        text=f"Always check the {LESSON_PHRASE} before trusting an energy.",
+        signal=MachineReviewLessonSignal.curator_flagged_missed_issue,
+        category=MachineReviewCategory.thermo,
+    )
+    db_session.flush()
+    key = f"lesson:{lesson.id}"
+
+    outcomes = {}
+    for label, change in (
+        ("proposed", None),
+        ("verified", lambda: lessons.verify_lesson(db_session, lesson.id, actor_id=admin.id)),
+        ("retired", lambda: lessons.retire_lesson(db_session, lesson.id, actor_id=admin.id)),
+    ):
+        if change is not None:
+            change()
+            db_session.flush()
+        server, submission, job, settings_obj = _lesson_job(db_session, local_stub, lesson)
+        status, code, failed, job = _outcome(db_session, factory, job, submission, settings_obj)
+        outcomes[label] = (status, code, failed)
+        if label == "verified":
+            audit = db_session.get(SubmissionAuditEvent, job.audit_event_id)
+            assert audit.details_json["retrieval_sources"] == [key]
+            tool_messages = [m for m in server.requests[1].body["messages"] if m.get("role") == "tool"]
+            assert len(tool_messages) == 1
+            assert '"author":"curator"' in tool_messages[0]["content"] and key in tool_messages[0]["content"]
+        else:
+            tool_messages = [m for m in server.requests[1].body["messages"] if m.get("role") == "tool"]
+            assert key not in json.dumps(tool_messages)
+
+    assert outcomes == {
+        "proposed": (S.failed, MachineReviewJobFailure.invalid_output, 1),
+        "verified": (S.succeeded, None, 0),
+        "retired": (S.failed, MachineReviewJobFailure.invalid_output, 1),
+    }
+
+
+def test_a_lesson_typed_to_the_offered_record_is_citable_and_one_typed_to_another_is_not(
+    db_session, factory, local_stub
+):
+    from app.db.models.common import MachineReviewCategory, MachineReviewLessonSignal
+    from app.services.machine_review import lessons
+
+    admin = make_user(db_session, "lesson-typed-admin", AppUserRole.admin)
+    results = {}
+    for label, record_type in (("match", SubmissionRecordType.thermo), ("other", SubmissionRecordType.kinetics)):
+        lesson = lessons.propose_lesson(
+            db_session,
+            author_id=admin.id,
+            text=f"Always check the {LESSON_PHRASE} before trusting an energy.",
+            signal=MachineReviewLessonSignal.curator_flagged_missed_issue,
+            category=MachineReviewCategory.thermo,
+            record_type=record_type,
+        )
+        lessons.verify_lesson(db_session, lesson.id, actor_id=admin.id)
+        db_session.flush()
+        server, submission, job, settings_obj = _lesson_job(db_session, local_stub, lesson)
+        results[label] = _outcome(db_session, factory, job, submission, settings_obj)[:3]
+        lessons.retire_lesson(db_session, lesson.id, actor_id=admin.id)
+        db_session.flush()
+    assert results["match"] == (S.succeeded, None, 0)
+    assert results["other"] == (S.failed, MachineReviewJobFailure.invalid_output, 1)
+
+
+def test_a_full_review_job_writes_no_lesson(db_session, factory, local_stub):
+    from sqlalchemy import func
+
+    from app.db.models.machine_review_lesson import MachineReviewLesson
+
+    server, submission, job, settings_obj = _warned_job(
+        db_session, local_stub, [_search_reply(LESSON_PHRASE), _pass_reply("x"), _sources_reply()], with_warning=False
+    )
+
+    def count() -> int:
+        return db_session.scalar(select(func.count()).select_from(MachineReviewLesson))
+
+    assert count() == 0
+    assert _outcome(db_session, factory, job, submission, settings_obj)[0] is S.succeeded
+    assert count() == 0

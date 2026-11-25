@@ -28,6 +28,7 @@ from app.api.routes import (
     literature,
     lookup,
     machine_review_jobs,
+    machine_review_lessons,
     meta,
     networks,
     reactions,
@@ -80,9 +81,18 @@ api_router.include_router(
     tags=["admin"],
     dependencies=_write_compat_dependency,
 )
+api_router.include_router(
+    machine_review_lessons.admin_router,
+    prefix="/admin/machine-review",
+    tags=["admin"],
+    dependencies=_write_compat_dependency,
+)
 # The job routes attach the compat dep to the POST handlers only, so an old client can still poll.
 api_router.include_router(
     machine_review_jobs.router, prefix="/machine-review", tags=["machine-review"]
+)
+api_router.include_router(
+    machine_review_lessons.router, prefix="/machine-review", tags=["machine-review"]
 )
 # jobs has both POST (enqueue) and GET (poll) — the per-route
 # decorators in routes/jobs.py attach the compat dep to the POST

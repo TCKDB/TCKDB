@@ -505,8 +505,8 @@ HISTORY_LINKS: tuple[HistoryLink, ...] = (
 
 #: Tables with a ``SubmissionRecordType`` column that are not deleted with the record. Release selections refuse while
 #: standing in a draft or published release and are otherwise kept as release history; ``record_deletion`` is this
-#: audit.
-POLYMORPHIC_NOT_DELETED: frozenset[str] = frozenset({"release_selection", "record_deletion"})
+#: audit. A lesson's ``record_type`` only says which kind of review it applies to; it names no record.
+POLYMORPHIC_NOT_DELETED: frozenset[str] = frozenset({"release_selection", "record_deletion", "machine_review_lesson"})
 
 
 #: The code a read or a repeated deletion of a deleted record answers with (410).

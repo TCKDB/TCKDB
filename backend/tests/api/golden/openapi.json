@@ -412,6 +412,19 @@
       "AdminCuratorTaskResolveRequest": {
         "additionalProperties": false,
         "properties": {
+          "lesson_text": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lesson Text"
+          },
           "resolution_note": {
             "title": "Resolution Note",
             "type": "string"
@@ -29882,6 +29895,53 @@
         "title": "LegacyCompositeShape",
         "type": "string"
       },
+      "LessonScope": {
+        "additionalProperties": false,
+        "description": "What a lesson is about, beyond category and record type; every key is optional.",
+        "properties": {
+          "check_code": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check Code"
+          },
+          "method_family": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method Family"
+          },
+          "software": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software"
+          }
+        },
+        "title": "LessonScope",
+        "type": "object"
+      },
       "LevelOfTheoryCalculationUsageSummary": {
         "description": "One calculation attributing this level of theory.\n\nBounded, ordered-by-id projection -- the same shape and limit\ndiscipline as ``EnergyCorrectionSchemeUsageSummary`` /\n``FrequencyScaleFactorUsageSummary``. A caller wanting the full,\npaginated set should use\n``/scientific/calculations/search?lot_ref=...`` instead; this section\nexists so the LOT detail page does not need a second round trip for a\nfirst look.",
         "properties": {
@@ -32687,6 +32747,285 @@
         ],
         "title": "MachineReviewJobStatus",
         "type": "string"
+      },
+      "MachineReviewLessonCreateRequest": {
+        "additionalProperties": false,
+        "description": "A curator's note on what the machine reviewer got wrong.",
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/MachineReviewCategory"
+          },
+          "record_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubmissionRecordType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LessonScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "signal": {
+            "$ref": "#/components/schemas/MachineReviewLessonSignal",
+            "default": "curator_flagged_missed_issue"
+          },
+          "source_job_id": {
+            "anyOf": [
+              {
+                "maximum": 9.223372036854776e+18,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Job Id"
+          },
+          "text": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "category"
+        ],
+        "title": "MachineReviewLessonCreateRequest",
+        "type": "object"
+      },
+      "MachineReviewLessonRead": {
+        "description": "One lesson as an admin or its author sees it.",
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MachineReviewCategory"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "integer"
+          },
+          "created_by_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Username"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "record_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubmissionRecordType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retired_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retired At"
+          },
+          "retired_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retired By"
+          },
+          "scope_json": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Json"
+          },
+          "signal": {
+            "$ref": "#/components/schemas/MachineReviewLessonSignal"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MachineReviewLessonStatus"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "verified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified At"
+          },
+          "verified_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified By"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "signal",
+          "category",
+          "record_type",
+          "scope_json",
+          "text",
+          "created_by",
+          "created_at",
+          "updated_at",
+          "verified_by",
+          "verified_at",
+          "retired_by",
+          "retired_at"
+        ],
+        "title": "MachineReviewLessonRead",
+        "type": "object"
+      },
+      "MachineReviewLessonSignal": {
+        "description": "What the curator did that the lesson records.",
+        "enum": [
+          "curator_dismissed_finding",
+          "curator_flagged_missed_issue",
+          "curator_confirmed_finding"
+        ],
+        "title": "MachineReviewLessonSignal",
+        "type": "string"
+      },
+      "MachineReviewLessonStatus": {
+        "description": "Whether a curator-written lesson may reach the machine reviewer; only ``verified`` may.",
+        "enum": [
+          "proposed",
+          "verified",
+          "retired"
+        ],
+        "title": "MachineReviewLessonStatus",
+        "type": "string"
+      },
+      "MachineReviewLessonUpdate": {
+        "additionalProperties": false,
+        "description": "Fields to change on a lesson; an omitted field stays as it is.",
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MachineReviewCategory"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "record_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubmissionRecordType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LessonScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "signal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MachineReviewLessonSignal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "text": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          }
+        },
+        "title": "MachineReviewLessonUpdate",
+        "type": "object"
       },
       "MachineReviewOrchestrationStatus": {
         "description": "Private outcome of an explicitly invoked machine-review orchestration run.\n\n``skipped_current`` — the plan (or the executor's idempotency guard) found\nthe record already current; nothing was appended. ``appended`` — exactly one\nrow was appended. ``failed_to_produce_review`` — a re-review was required but\nthe producer could not produce a review (it raised\n:class:`~app.services.machine_review.producer.MachineReviewProductionError`\nor returned invalid output); nothing was appended. This is a driver-side\nproduction failure, never a record verdict.",
@@ -43684,6 +44023,37 @@
           "limit"
         ],
         "title": "PaginatedResponse[MachineReviewJobRead]",
+        "type": "object"
+      },
+      "PaginatedResponse_MachineReviewLessonRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MachineReviewLessonRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "skip": {
+            "title": "Skip",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "skip",
+          "limit"
+        ],
+        "title": "PaginatedResponse[MachineReviewLessonRead]",
         "type": "object"
       },
       "PaginatedResponse_RecordDeletionSummary_": {
@@ -81474,6 +81844,480 @@
         ]
       }
     },
+    "/api/v1/admin/machine-review/lessons": {
+      "get": {
+        "description": "Lessons newest first, optionally of one status (admin only).",
+        "operationId": "list_lessons_api_v1_admin_machine_review_lessons_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MachineReviewLessonStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_MachineReviewLessonRead_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Lessons",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/machine-review/lessons/{lesson_id}": {
+      "patch": {
+        "description": "Change the fields that are sent on a proposed or verified lesson (admin only); 409 once retired.",
+        "operationId": "edit_lesson_api_v1_admin_machine_review_lessons__lesson_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lesson_id",
+            "required": true,
+            "schema": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
+              "title": "Lesson Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MachineReviewLessonUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachineReviewLessonRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Edit Lesson",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/machine-review/lessons/{lesson_id}/retire": {
+      "post": {
+        "description": "Take a lesson out of the machine reviewer's reach for good (admin only).",
+        "operationId": "retire_lesson_api_v1_admin_machine_review_lessons__lesson_id__retire_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lesson_id",
+            "required": true,
+            "schema": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
+              "title": "Lesson Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachineReviewLessonRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retire Lesson",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/machine-review/lessons/{lesson_id}/verify": {
+      "post": {
+        "description": "Make a proposed lesson searchable by the machine reviewer (admin only); 409 once retired.",
+        "operationId": "verify_lesson_api_v1_admin_machine_review_lessons__lesson_id__verify_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lesson_id",
+            "required": true,
+            "schema": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
+              "title": "Lesson Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachineReviewLessonRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Verify Lesson",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/machine-review/records/{record_type}/{record_id}/run-fake": {
       "post": {
         "description": "Explicitly run fake machine review for one record (admin only).\n\nValidates ``record_type`` (400 if unsupported), loads the record (404 if\nmissing), builds its live deterministic trust/evidence fragment, looks up\nthe active prompt/rubric recipe, and runs the private fake machine-review\nloop. A ``record_machine_review`` row is appended only for\n``run_not_reviewed`` / ``run_stale``; an already-current record is skipped,\nso re-running an unchanged recipe is idempotent. Uses the fake producer\nonly; mutates nothing outside ``record_machine_review``.",
@@ -92745,6 +93589,114 @@
           }
         },
         "summary": "Cancel Job",
+        "tags": [
+          "machine-review"
+        ]
+      }
+    },
+    "/api/v1/machine-review/lessons": {
+      "post": {
+        "description": "Propose a lesson for the machine reviewer (curator/admin). It stays inert until an admin verifies it.",
+        "operationId": "create_lesson_api_v1_machine_review_lessons_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MachineReviewLessonCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachineReviewLessonRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Lesson",
         "tags": [
           "machine-review"
         ]

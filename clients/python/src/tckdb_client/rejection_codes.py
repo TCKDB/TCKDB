@@ -227,6 +227,9 @@ class RejectionCode(str, Enum):
     MACHINE_REVIEW_JOB_NOT_CANCELLABLE = "machine_review_job_not_cancellable"
     MACHINE_REVIEW_JOB_NOT_FOUND = "machine_review_job_not_found"
     MACHINE_REVIEW_JOB_NOT_OWNED = "machine_review_job_not_owned"
+    MACHINE_REVIEW_LESSON_NOT_FOUND = "machine_review_lesson_not_found"
+    MACHINE_REVIEW_LESSON_RETIRED = "machine_review_lesson_retired"
+    MACHINE_REVIEW_LESSON_UNKNOWN_CHECK_CODE = "machine_review_lesson_unknown_check_code"
     MACHINE_REVIEW_MODE_OFF = "machine_review_mode_off"
     MACHINE_REVIEW_NOT_ALLOWED_FOR_USER = "machine_review_not_allowed_for_user"
     MACHINE_REVIEW_PROVIDER_NOT_CONFIGURED = "machine_review_provider_not_configured"
@@ -597,6 +600,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.LIMIT_TOO_LARGE,
         RejectionCode.LOWEST_ENERGY_ACROSS_LEVELS,
         RejectionCode.LOWEST_ENERGY_UNAVAILABLE,
+        RejectionCode.MACHINE_REVIEW_LESSON_UNKNOWN_CHECK_CODE,
         RejectionCode.MICRO_REACTION_KEY_UNDECLARED,
         RejectionCode.MISSING_FILTER,
         RejectionCode.MISSING_IDENTIFIER,
@@ -809,6 +813,7 @@ CONFLICT_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.MACHINE_REVIEW_DISABLED,
         RejectionCode.MACHINE_REVIEW_JOB_CONFLICT,
         RejectionCode.MACHINE_REVIEW_JOB_NOT_CANCELLABLE,
+        RejectionCode.MACHINE_REVIEW_LESSON_RETIRED,
         RejectionCode.MACHINE_REVIEW_MODE_OFF,
         RejectionCode.MACHINE_REVIEW_PROVIDER_NOT_CONFIGURED,
         RejectionCode.MACHINE_REVIEW_REMOTE_RUNNER_UNAVAILABLE,
@@ -989,6 +994,9 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.MACHINE_REVIEW_JOB_NOT_CANCELLABLE: frozenset({409}),
     RejectionCode.MACHINE_REVIEW_JOB_NOT_FOUND: frozenset({404}),
     RejectionCode.MACHINE_REVIEW_JOB_NOT_OWNED: frozenset({403}),
+    RejectionCode.MACHINE_REVIEW_LESSON_NOT_FOUND: frozenset({404}),
+    RejectionCode.MACHINE_REVIEW_LESSON_RETIRED: frozenset({409}),
+    RejectionCode.MACHINE_REVIEW_LESSON_UNKNOWN_CHECK_CODE: frozenset({422}),
     RejectionCode.MACHINE_REVIEW_MODE_OFF: frozenset({409}),
     RejectionCode.MACHINE_REVIEW_NOT_ALLOWED_FOR_USER: frozenset({403}),
     RejectionCode.MACHINE_REVIEW_PROVIDER_NOT_CONFIGURED: frozenset({409}),

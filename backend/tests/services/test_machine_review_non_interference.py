@@ -557,6 +557,17 @@ def test_worker_path_leaves_records_and_status_unchanged(db_session, _api_admin_
         record_id=calc.id,
         role="primary",
     )
+    from app.db.models.common import MachineReviewLessonSignal
+    from app.db.models.machine_review_lesson import MachineReviewLesson
+
+    db_session.add(
+        MachineReviewLesson(
+            text="A seeded lesson.", signal=MachineReviewLessonSignal.curator_flagged_missed_issue, created_by=admin.id
+        )
+    )
+    db_session.flush()
+    lessons_before = db_session.scalar(select(func.count()).select_from(MachineReviewLesson))
+    assert lessons_before == 1
     scientific_before = _scientific_record_snapshot(db_session, calc.id)
     deterministic_before = _deterministic_snapshot(db_session, calc.id)
     status_before = submission.status
@@ -580,3 +591,4 @@ def test_worker_path_leaves_records_and_status_unchanged(db_session, _api_admin_
     assert len(_precheck_events(db_session, submission.id)) == events_before + 1
     assert db_session.scalar(select(func.count()).select_from(MachineReviewJob)) == 1
     assert db_session.scalar(select(func.count()).select_from(MachineReviewJobEvent)) == 7
+    assert db_session.scalar(select(func.count()).select_from(MachineReviewLesson)) == lessons_before

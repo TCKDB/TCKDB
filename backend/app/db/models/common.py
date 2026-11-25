@@ -2225,6 +2225,44 @@ class MachineReviewJobEventKind(str, Enum):
     finished = "finished"
 
 
+class MachineReviewCategory(str, Enum):
+    """DB-layer mirror of the machine-review finding category vocabulary.
+
+    The authoritative vocabulary lives in the service layer as
+    :class:`app.services.machine_review.schemas.MachineReviewCategory`; DB models
+    must not import it, so the tokens are mirrored here for
+    ``machine_review_lesson.category``. A drift-guard test keeps the two equal.
+    """
+
+    provenance = "provenance"
+    units = "units"
+    geometry = "geometry"
+    kinetics = "kinetics"
+    thermo = "thermo"
+    statmech = "statmech"
+    transport = "transport"
+    transition_state_validation = "transition_state_validation"
+    calculation_parameters = "calculation_parameters"
+    consistency = "consistency"
+    schema_gap = "schema_gap"
+
+
+class MachineReviewLessonStatus(str, Enum):
+    """Whether a curator-written lesson may reach the machine reviewer; only ``verified`` may."""
+
+    proposed = "proposed"
+    verified = "verified"
+    retired = "retired"
+
+
+class MachineReviewLessonSignal(str, Enum):
+    """What the curator did that the lesson records."""
+
+    curator_dismissed_finding = "curator_dismissed_finding"
+    curator_flagged_missed_issue = "curator_flagged_missed_issue"
+    curator_confirmed_finding = "curator_confirmed_finding"
+
+
 class CuratorTaskInclude(str, Enum):
     """Optional expansions of a curator-task list item (query-side only)."""
 

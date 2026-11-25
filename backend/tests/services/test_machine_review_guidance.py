@@ -165,3 +165,19 @@ def test_cut_text_does_not_end_mid_word():
     text = "alpha " * 300
     stem = _cut_text(text)[:-3]
     assert stem.endswith("alpha")
+
+
+def _typed(key, category=None):
+    return GuidanceEntry(
+        source_key=key, kind="lesson", title="t", text="spin note", fields={"category": category} if category else {}
+    )
+
+
+def test_search_by_category_drops_another_category_and_keeps_entries_with_none():
+    index = GuidanceIndex([_typed("lesson:1", "thermo"), _typed("lesson:2", "kinetics"), _typed("lesson:3")])
+    assert [e.source_key for e in index.search("spin", category="thermo")] == ["lesson:1", "lesson:3"]
+    assert {e.source_key for e in index.search("spin")} == {"lesson:1", "lesson:2", "lesson:3"}
+
+
+def test_the_cached_corpus_holds_no_lesson():
+    assert [e for e in default_guidance_index().entries if e.kind == "lesson"] == []

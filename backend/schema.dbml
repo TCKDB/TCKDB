@@ -410,6 +410,20 @@ enum LiteratureTitleSource {
   depositor_supplied
 }
 
+enum MachineReviewCategory {
+  provenance
+  units
+  geometry
+  kinetics
+  thermo
+  statmech
+  transport
+  transition_state_validation
+  calculation_parameters
+  consistency
+  schema_gap
+}
+
 enum MachineReviewCuratorTaskState {
   untriaged
   needs_curator_review
@@ -455,6 +469,18 @@ enum MachineReviewJobStatus {
   succeeded
   failed
   cancelled
+}
+
+enum MachineReviewLessonSignal {
+  curator_dismissed_finding
+  curator_flagged_missed_issue
+  curator_confirmed_finding
+}
+
+enum MachineReviewLessonStatus {
+  proposed
+  verified
+  retired
 }
 
 enum MachineReviewProviderKey {
@@ -3031,6 +3057,37 @@ Table machine_review_job_event {
   }
 
   Note: 'One progress entry of a machine-review job, numbered in order.'
+}
+
+Table machine_review_lesson {
+  id bigint [pk, not null]
+  updated_at timestamp [not null, default: 'now']
+  category MachineReviewCategory
+  record_type SubmissionRecordType
+  scope_json jsonb
+  signal MachineReviewLessonSignal [not null]
+  text text [not null]
+  status MachineReviewLessonStatus [not null, default: 'proposed']
+  source_job_id bigint [ref: > machine_review_job.id]
+  source_curator_task_id bigint [ref: > machine_review_curator_task.id]
+  created_by bigint [not null, ref: > app_user.id]
+  verified_by bigint [ref: > app_user.id]
+  verified_at timestamp
+  retired_by bigint [ref: > app_user.id]
+  retired_at timestamp
+  created_at timestamp [not null, default: 'now']
+
+  indexes {
+    (status, created_at) [name: 'ix_machine_review_lesson_status_created_at']
+    (status, verified_at) [name: 'ix_machine_review_lesson_status_verified_at']
+  }
+
+  checks {
+    `(status = 'proposed' AND verified_by IS NULL AND verified_at IS NULL AND retired_by IS NULL AND retired_at IS NULL) OR (status = 'verified' AND verified_by IS NOT NULL AND verified_at IS NOT NULL AND retired_by IS NULL AND retired_at IS NULL) OR (status = 'retired' AND retired_by IS NOT NULL AND retired_at IS NOT NULL)` [name: 'ck_machine_review_lesson_status_stamps']
+    `char_length(btrim(text, E' \t\r\n')) BETWEEN 1 AND 500` [name: 'ck_machine_review_lesson_text_length']
+  }
+
+  Note: 'One curator-written lesson and where it stands: proposed, verified or retired (curation).'
 }
 
 Table machine_review_settings {

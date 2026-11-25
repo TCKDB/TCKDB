@@ -38,6 +38,7 @@ EXCLUDED: dict[tuple[str, str], str] = {
     ("GET", f"{API}/export/ml/reactions.ndjson"): "a streamed export: the body is NDJSON and has no envelope to carry a cursor",
     ("GET", f"{API}/export/ml/species.ndjson"): "a streamed export: the body is NDJSON and has no envelope to carry a cursor",
     ("GET", "/api/v1/admin/machine-review/curator-tasks"): "an authenticated operations queue, not the browse surface",
+    ("GET", "/api/v1/admin/machine-review/lessons"): "an authenticated administrative listing, not the browse surface",
     ("GET", "/api/v1/admin/record-deletions"): "an authenticated administrative listing, not the browse surface",
     ("GET", "/api/v1/admin/users"): "an authenticated administrative listing, not the browse surface",
     ("GET", "/api/v1/submissions/for-review"): "an authenticated per-user work queue, not the browse surface",

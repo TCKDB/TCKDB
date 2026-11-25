@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 123 | 28 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 46 | `backend/app/services/public_refs.py` |
 | Trust check names | 174 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 389 | `backend/app/api/code_catalogue.py` |
-| **total** | **732** | |
+| Refusal codes a caller can receive | 392 | `backend/app/api/code_catalogue.py` |
+| **total** | **735** | |
 
 ## How a record is named
 
@@ -743,7 +743,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `submission_self_approval` | a relationship — read `context` |
 | `submission_supersede_not_owner` | a thing |
 
-### HTTP 404 (30 codes)
+### HTTP 404 (31 codes)
 
 | Code | Names |
 | --- | --- |
@@ -752,6 +752,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `hessian_not_found` | a thing |
 | `irc_result_not_found` | a thing |
 | `machine_review_job_not_found` | a thing |
+| `machine_review_lesson_not_found` | a thing |
 | `manifest_not_frozen` | a thing |
 | `owner_missing` | a thing |
 | `path_search_result_not_found` | a thing |
@@ -778,7 +779,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unknown_structure_member_ref` | a thing |
 | `unknown_transition_state_entry_ref` | a thing |
 
-### HTTP 409 (37 codes)
+### HTTP 409 (38 codes)
 
 | Code | Names |
 | --- | --- |
@@ -798,6 +799,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `machine_review_disabled` | a thing |
 | `machine_review_job_conflict` | a relationship — read `context` |
 | `machine_review_job_not_cancellable` | a thing |
+| `machine_review_lesson_retired` | a thing |
 | `machine_review_mode_off` | a thing |
 | `machine_review_provider_not_configured` | a thing |
 | `machine_review_remote_runner_unavailable` | a thing |
@@ -835,7 +837,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `network_export_body_too_large` | a relationship — read `context` |
 | `request_body_too_large` | a relationship — read `context` |
 
-### HTTP 422 (304 codes)
+### HTTP 422 (305 codes)
 
 | Code | Names |
 | --- | --- |
@@ -959,6 +961,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `limit_too_large` | a relationship — read `context` |
 | `lowest_energy_across_levels` | a relationship — read `context` |
 | `lowest_energy_unavailable` | a thing |
+| `machine_review_lesson_unknown_check_code` | a thing |
 | `micro_reaction_key_undeclared` | a thing |
 | `missing_filter` | a thing |
 | `missing_identifier` | a thing |

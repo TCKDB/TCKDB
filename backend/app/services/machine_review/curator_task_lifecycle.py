@@ -41,6 +41,7 @@ from sqlalchemy.orm import Session
 from app.api.errors import DomainError, not_found
 from app.db.models.common import MachineReviewCuratorTaskState
 from app.db.models.machine_review_curator_task import MachineReviewCuratorTask
+from app.services.machine_review.lessons import propose_lesson_from_task
 
 # Open states a reopen is allowed to move a terminal task *back to*. All three
 # open states are valid landing spots; the default is needs_curator_review.
@@ -154,8 +155,12 @@ def resolve_curator_task(
     resolution: MachineReviewCuratorTaskState,
     resolved_by: int,
     resolution_note: str,
+    lesson_text: str | None = None,
 ) -> MachineReviewCuratorTask:
     """Resolve a task into one of the terminal states.
+
+    ``lesson_text`` is allowed only with ``dismissed_machine_finding``; it proposes a lesson for the machine
+    reviewer when the task actually moves to that state, and writes nothing on an idempotent return.
 
     Requires ``resolution`` to be a terminal state, a non-empty
     ``resolution_note``, and a ``resolved_by`` user id; ``resolved_at`` is
@@ -177,6 +182,9 @@ def resolve_curator_task(
     if not note:
         raise DomainError("resolution_note is required and must be non-empty.")
 
+    if lesson_text is not None and resolution is not MachineReviewCuratorTaskState.dismissed_machine_finding:
+        raise DomainError("lesson_text is allowed only when resolving as dismissed_machine_finding.")
+
     task = get_curator_task_or_404(session, task_id)
 
     if task.workflow_state.is_terminal:
@@ -195,6 +203,8 @@ def resolve_curator_task(
     task.resolved_at = _now_naive_utc()
     task.resolution_note = note
     session.flush()
+    if lesson_text is not None:
+        propose_lesson_from_task(session, task, lesson_text, resolved_by)
     return task
 
 

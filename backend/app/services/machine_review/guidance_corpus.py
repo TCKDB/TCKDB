@@ -80,6 +80,12 @@ def default_guidance_index() -> GuidanceIndex:
     return GuidanceIndex(build_guidance_entries())
 
 
+@lru_cache(maxsize=1)
+def known_check_codes() -> frozenset[str]:
+    """Every warning and check code the corpus names."""
+    return frozenset(code for entry in build_guidance_entries() for code in entry.codes)
+
+
 def guidance_seed_codes(context: Any, summaries: Mapping[Any, Any]) -> tuple[str, ...]:
     """The sorted deposit-warning codes on the submission and on every record the review was given."""
     codes: set[str] = set()
@@ -93,4 +99,4 @@ def guidance_seed_codes(context: Any, summaries: Mapping[Any, Any]) -> tuple[str
     return tuple(sorted(codes))
 
 
-__all__ = ["build_guidance_entries", "default_guidance_index", "guidance_seed_codes"]
+__all__ = ["build_guidance_entries", "default_guidance_index", "guidance_seed_codes", "known_check_codes"]
