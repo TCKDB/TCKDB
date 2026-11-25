@@ -6,6 +6,7 @@ import type {
 import { baseLabel, inlineQualifiers, inlineText, levelKey } from "./levelLabel"
 import { transitionStateWords } from "./recordWords"
 import { hiddenByDefaultNote } from "./paging"
+import { words } from "./provenanceFormat"
 
 const MINUS = "−"
 
@@ -68,17 +69,39 @@ export function transitionStateNamer(read: Parameters<typeof transitionStateOrde
     return (ref) => transitionStateWords(order.length > 1 ? order.indexOf(ref) + 1 : undefined)
 }
 
+const pointSpins = (profile: EnergyProfileRecord): Set<string> =>
+    new Set([...profile.reactants, ...profile.products].flatMap((point) => (point.level_of_theory?.spin_treatment ? [point.level_of_theory.spin_treatment] : [])))
+
+/**
+ * For profiles that share a transition-state entry, level and program (one per open-shell spin reference), the spin
+ * treatments of each one's points that the others in its group do not all share; empty for every other profile.
+ */
+function spinReferences(profiles: readonly EnergyProfileRecord[]): string[][] {
+    const groupOf = (profile: EnergyProfileRecord) => [profile.transition_state_entry_ref, levelKey(profile.level_of_theory), profile.program].join("\u0000")
+    const groups = new Map<string, Set<string>[]>()
+    const spins = profiles.map(pointSpins)
+    profiles.forEach((profile, index) => groups.set(groupOf(profile), [...(groups.get(groupOf(profile)) ?? []), spins[index]]))
+    return profiles.map((profile, index) => {
+        const group = groups.get(groupOf(profile)) ?? []
+        if (group.length < 2) return []
+        return [...spins[index]].filter((spin) => !group.every((other) => other.has(spin))).sort()
+    })
+}
+
 /**
  * Picker labels for every profile: the transition state (by position) only when there is more than one, then
- * level and program. Two levels that share a label but differ in a qualifier carry that qualifier.
+ * level and program. Two levels that share a label but differ in a qualifier carry that qualifier, and profiles at
+ * one transition state, level and program name the spin treatment their radicals ran with.
  */
 export function profileLabels(profiles: readonly EnergyProfileRecord[], read: Parameters<typeof transitionStateOrder>[0] = { profiles }): string[] {
     const name = transitionStateNamer(read)
     const withEntry = new Set(profiles.map((profile) => profile.transition_state_entry_ref)).size > 1
     const inline = inlineQualifiers(profiles.map((profile) => profile.level_of_theory))
-    return profiles.map((profile) => {
+    const references = spinReferences(profiles)
+    return profiles.map((profile, index) => {
         const level = [baseLabel(profile.level_of_theory), ...(inline.get(levelKey(profile.level_of_theory)) ?? []).map(inlineText)].join(" · ")
-        return `${withEntry ? `${name(profile.transition_state_entry_ref)}, ` : ""}${level}, ${profile.program}`
+        const spin = references[index].length > 0 ? `, ${references[index].map((value) => words(value)).join(" and ")} radicals` : ""
+        return `${withEntry ? `${name(profile.transition_state_entry_ref)}, ` : ""}${level}, ${profile.program}${spin}`
     })
 }
 

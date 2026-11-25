@@ -1724,7 +1724,7 @@ describe("TransitionStateEntryPage -- the redesigned page", () => {
         page()
         const picker = await screen.findByLabelText("Profile")
         expect(within(picker).getAllByRole("option")).toHaveLength(2)
-        expect(screen.getByText(/By level, then program\./)).toBeVisible()
+        expect(screen.getByText(/By level, then program, then the radicals' spin treatment\./)).toBeVisible()
         expect(screen.queryByText(/approved first/)).toBeNull()
         await user.selectOptions(picker, "1")
         expect(screen.getByRole("group", { name: /Energy relative to the reactants/ })).toHaveTextContent("+40.0 kJ/mol")

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { EnergyProfileRecord } from "../api/reactionEnergyProfileApi"
-import { MIN_SPAN_KJ_MOL, mixesSpin, profileScale, spinGroups } from "./energyProfile"
+import { MIN_SPAN_KJ_MOL, mixesSpin, profileLabels, profileScale, spinGroups } from "./energyProfile"
 
 describe("profileScale", () => {
     it("is at least the minimum span tall however small the spread, and keeps zero on the axis", () => {
@@ -48,5 +48,33 @@ describe("spinGroups", () => {
     it("is empty for a profile with one spin treatment", () => {
         expect(mixesSpin(profile(["unrestricted"]))).toBe(false)
         expect(spinGroups(profile(["unrestricted"]), (ref) => ref, "TS")).toEqual([])
+    })
+})
+
+describe("profileLabels", () => {
+    const level = { level_of_theory_ref: "lot_x", method: "wb97xd", basis: "def2tzvp", spin_treatment: null }
+    const point = (ref: string, spin: string) => ({ species_entry_ref: ref, level_of_theory: { ...level, level_of_theory_ref: `lot_${spin}`, spin_treatment: spin } })
+    const profile = (radicalSpin: string, extra: Partial<EnergyProfileRecord> = {}) =>
+        ({
+            transition_state_entry_ref: "tse_one",
+            level_of_theory: level,
+            program: "orca",
+            reactants: [point("closed", "restricted"), point("radical", radicalSpin)],
+            transition_state: { level_of_theory: level },
+            products: [point("radical_p", radicalSpin)],
+            ...extra,
+        }) as unknown as EnergyProfileRecord
+
+    it("names the radicals' spin treatment when profiles share transition state, level and program", () => {
+        const labels = profileLabels([profile("restricted_open"), profile("unrestricted")])
+        expect(labels).toEqual([
+            "wb97xd/def2tzvp, orca, restricted open radicals",
+            "wb97xd/def2tzvp, orca, unrestricted radicals",
+        ])
+    })
+
+    it("leaves a profile that is the only one at its level and program as it was", () => {
+        const labels = profileLabels([profile("unrestricted"), profile("restricted_open", { program: "gaussian" })])
+        expect(labels).toEqual(["wb97xd/def2tzvp, orca", "wb97xd/def2tzvp, gaussian"])
     })
 })

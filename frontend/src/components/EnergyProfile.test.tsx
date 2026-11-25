@@ -179,7 +179,7 @@ describe("EnergyProfile", () => {
         mount(read())
         await loaded()
         expect(screen.getByRole("group", { name: /Each profile has its own axis/ })).toBeInTheDocument()
-        expect(screen.getByText(/By TS entry, then level and program\./)).toBeInTheDocument()
+        expect(screen.getByText(/By TS entry, then level, program and the radicals' spin treatment\./)).toBeInTheDocument()
     })
 
     it("adds the differing qualifier, never a ref, to picker options that would otherwise read the same", async () => {

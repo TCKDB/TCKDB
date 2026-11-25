@@ -397,8 +397,8 @@ export function Profiles({ read, labels, markPeak = false, showLevel = true }: {
                         {read.profiles.length} profiles. The first is shown until you pick another.
                     </p>
                     <OrderNote order={markPeak
-                        ? "By level, then program."
-                        : "By TS entry, then level and program."} />
+                        ? "By level, then program, then the radicals' spin treatment."
+                        : "By TS entry, then level, program and the radicals' spin treatment."} />
                 </div>
             )}
             {chosen && <ProfileView profile={chosen} labels={labels} several={read.profiles.length > 1} markPeak={markPeak} tsWords={tsWords} showLevel={showLevel} />}
