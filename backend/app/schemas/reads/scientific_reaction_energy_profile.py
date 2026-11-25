@@ -1,8 +1,9 @@
 """Read schema for ``GET /scientific/reaction-entries/{ref}/energy-profile``.
 
-Electronic-energy profiles (reactants, transition state, products) of one reaction entry. One profile per transition-state
-entry, level of theory and program; every point of a profile comes from that one program and agrees on every level
-identity field but spin treatment (each point states the level it ran at).
+Electronic-energy profiles (reactants, transition state, products) of one reaction entry. One profile per
+transition-state entry, level of theory and program, and per open-shell spin reference when the transition-state point
+is closed-shell. Every point of a profile comes from that one program and agrees on every level identity field but spin
+treatment (each point states the level it ran at).
 """
 
 from __future__ import annotations
@@ -91,12 +92,12 @@ class EnergyProfileValues(BaseModel):
 
 
 class ReactionEnergyProfile(BaseModel):
-    """One complete profile: reactants, transition state and products from one program, at one level up to spin treatment."""
+    """One complete profile from one program: reactants, transition state and products at one level, spin aside."""
 
     transition_state_entry_ref: str
     transition_state_entry_review_status: RecordReviewStatus
-    #: The transition-state point's level. Every point agrees with it on every identity field but spin treatment, and an
-    #: open-shell point on spin treatment as well.
+    #: The transition-state point's level. Every point agrees with it on every identity field but spin treatment. The
+    #: open-shell points share one spin treatment, which is the transition state's when its point is open-shell.
     level_of_theory: LevelOfTheorySummary
     program: str
     #: The spin treatments the points ran with (``None`` last), so a restricted/unrestricted mix is stated, not hidden.
