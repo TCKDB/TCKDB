@@ -95,7 +95,7 @@ describe("every map node opens something", () => {
             levelOfTheory: { ref: null, label: "x" },
         })
         expect(lot[0]).toMatchObject({ to: null, found: "no page yet" })
-        const ts = transitionStateEntryNodes({ reactionEntryRef: null, reactants: [p("a"), p("b")], products: [], calculationCount: 0 })
+        const ts = transitionStateEntryNodes({ reactionEntryRef: null, reactants: [p("a"), p("b"), p("c"), p("d")], products: [], calculationCount: 0 })
         expect(ts.find((node) => node.id === "participants-more")).toMatchObject({ to: null, found: "not listed yet" })
     })
 

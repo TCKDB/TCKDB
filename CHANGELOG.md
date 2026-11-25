@@ -25,6 +25,10 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Record map lists every reaction participant (Unreleased)
+
+- The "Where this record sits" map on transition-state and reaction pages lists up to three molecule versions per side, so a bimolecular reaction shows both reactants and both products; a fourth or later is folded into the "N more" row as before.
+
 ## Local machine review and the review context pack (Unreleased)
 
 - **Behaviour:** `AI_REVIEW_ASSISTANT_MODE=local` now makes one call to the OpenAI-compatible server at `LLM_PRECHECK_BASE_URL` (llama.cpp, Ollama, vLLM), asking for JSON that matches the format 2 schema. Reasoning stays on, capped per request by `thinking_budget_tokens`, and `max_tokens` is `LLM_PRECHECK_MAX_OUTPUT_TOKENS` plus twice the thinking budget. A leading `<think>` block in the answer is stripped. No key is needed; `LLM_PRECHECK_API_KEY_ENV`, when set, must name a non-empty variable.
