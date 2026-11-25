@@ -22,6 +22,7 @@ const moleculePointSchema = z.object({
     species_entry_ref: z.string(),
     count: z.number(),
     calculation_ref: z.string(),
+    level_of_theory: levelOfTheorySchema.nullish(),
     energy_type: energyType,
     electronic_energy_hartree: z.number(),
     software: softwareSchema,
@@ -32,6 +33,7 @@ const moleculePointSchema = z.object({
 const transitionStatePointSchema = z.object({
     transition_state_entry_ref: z.string(),
     calculation_ref: z.string(),
+    level_of_theory: levelOfTheorySchema.nullish(),
     energy_type: energyType,
     electronic_energy_hartree: z.number(),
     software: softwareSchema,
@@ -50,6 +52,7 @@ const profileSchema = z.object({
     transition_state_entry_review_status: z.string(),
     level_of_theory: levelOfTheorySchema,
     program: z.string(),
+    spin_treatments: z.array(z.string().nullable()).default([]),
     energy_types: z.array(energyType),
     versions: z.array(z.string().nullable()),
     energy_kind: z.string(),

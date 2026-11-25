@@ -118,6 +118,29 @@ export function isMixed(profile: EnergyProfileRecord): boolean {
     return profile.energy_types.length > 1 || profile.versions.length > 1
 }
 
+/** True when the profile's points ran with more than one spin treatment (a closed-shell point restricted, the rest unrestricted). */
+export function mixesSpin(profile: EnergyProfileRecord): boolean {
+    return profile.spin_treatments.length > 1
+}
+
+/** Which points used which spin treatment, in the order the profile lists them; empty unless the profile mixes spin. */
+export function spinGroups(
+    profile: EnergyProfileRecord,
+    labelOf: (speciesEntryRef: string) => string,
+    transitionStateLabel: string,
+): { spin: string; points: string[] }[] {
+    if (!mixesSpin(profile)) return []
+    const points = [
+        ...profile.reactants.map((point) => ({ spin: point.level_of_theory?.spin_treatment, label: labelOf(point.species_entry_ref) })),
+        { spin: profile.transition_state.level_of_theory?.spin_treatment, label: transitionStateLabel },
+        ...profile.products.map((point) => ({ spin: point.level_of_theory?.spin_treatment, label: labelOf(point.species_entry_ref) })),
+    ]
+    return profile.spin_treatments.map((spin) => ({
+        spin: spin ?? "not recorded",
+        points: points.filter((point) => (point.spin ?? null) === spin).map((point) => point.label),
+    }))
+}
+
 /** The profile's points as drawn: three levels, each with its kJ/mol relative to the reactants. */
 export function levelsOf(profile: EnergyProfileRecord): { key: "reactants" | "transition_state" | "products"; label: string; kj: number }[] {
     return [
