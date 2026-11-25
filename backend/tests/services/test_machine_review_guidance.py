@@ -133,9 +133,35 @@ def test_a_multi_code_check_is_delivered_with_every_code_and_a_neutral_title(ent
     assert multi.title == multi.source_key.replace(":", " ")
 
 
-def test_no_delivered_text_ends_mid_word(entries):
-    from app.services.machine_review.agent.tools import _guidance_item
+def test_every_corpus_text_fits_the_delivery_cap(entries):
+    from app.services.machine_review.agent.tools import GUIDANCE_TEXT_MAX_CHARS
 
-    for entry in entries:
-        text = _guidance_item(entry)["text"]
-        assert text == entry.text or text.endswith((".", "..."))
+    assert max(len(entry.text) for entry in entries) <= GUIDANCE_TEXT_MAX_CHARS
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "First sentence holds 0.02 e.g. here. " * 60,
+        "word " * 400,
+        "a" * 1200,
+        "Hi. " + "b" * 1200,
+    ],
+)
+def test_cut_text_stays_under_the_cap_and_is_marked(text):
+    from app.services.machine_review.agent.tools import GUIDANCE_TEXT_MAX_CHARS, _cut_text
+
+    cut = _cut_text(text)
+    assert len(text) > GUIDANCE_TEXT_MAX_CHARS
+    assert len(cut) <= GUIDANCE_TEXT_MAX_CHARS
+    assert cut.endswith("...")
+    assert text.startswith(cut[:-3])
+    assert len(cut) > GUIDANCE_TEXT_MAX_CHARS // 2
+
+
+def test_cut_text_does_not_end_mid_word():
+    from app.services.machine_review.agent.tools import _cut_text
+
+    text = "alpha " * 300
+    stem = _cut_text(text)[:-3]
+    assert stem.endswith("alpha")

@@ -144,12 +144,12 @@ def _truncate(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _cut_text(text: str) -> str:
-    """The text cut at the last sentence end, or the last space, within the cap."""
-    head = text[:GUIDANCE_TEXT_MAX_CHARS]
-    end = max(head.rfind(". "), head.rfind(".\n"))
-    if end > 0:
-        return head[: end + 1]
-    return head[: head.rfind(" ")].rstrip(",;:") + "..." if " " in head else head
+    """The text cut at the last space within the cap (or hard when that keeps under half), marked with '...'."""
+    head = text[: GUIDANCE_TEXT_MAX_CHARS - 3]
+    space = head.rfind(" ")
+    if space > len(head) // 2:
+        head = head[:space].rstrip(",;:.")
+    return head + "..."
 
 
 def _guidance_item(entry: GuidanceEntry) -> dict[str, Any]:
