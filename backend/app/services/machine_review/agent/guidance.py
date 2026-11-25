@@ -1,4 +1,4 @@
-"""An in-memory guidance index: TCKDB-authored entries, each under a unique ``source_key``, searched with BM25.
+"""An in-memory guidance index: caller-built entries, labelled by kind, each under a unique ``source_key``, searched with BM25.
 
 The index is built by the caller from its own text and holds no database or TCKDB imports.
 
@@ -71,13 +71,20 @@ class GuidanceIndex:
     def entries(self) -> tuple[GuidanceEntry, ...]:
         return self._entries
 
-    def search(self, query: str, kind: str | None = None, limit: int = 5) -> list[GuidanceEntry]:
-        """Up to ``limit`` entries, best first. An exact key or code match ranks first; zero scores are left out."""
+    def search(
+        self, query: str, kind: str | None = None, limit: int = 5, category: str | None = None
+    ) -> list[GuidanceEntry]:
+        """Up to ``limit`` entries, best first. An exact key or code match ranks first; zero scores are left out.
+
+        With ``category``, an entry that declares a different ``category`` field is skipped; one with none passes.
+        """
         terms = _tokens(query)
         needle = query.strip().lower()
         scored: list[tuple[float, int]] = []
         for position, entry in enumerate(self._entries):
             if kind is not None and entry.kind != kind:
+                continue
+            if category is not None and entry.fields.get("category", category) != category:
                 continue
             score = self._bm25(terms, position)
             key = entry.source_key.lower()

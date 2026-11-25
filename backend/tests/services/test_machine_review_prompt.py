@@ -185,7 +185,7 @@ def test_user_message_carries_records_warnings_and_the_omission_note():
 
 
 #: SHA-256 of the tool schemas, the guidance preamble and the final-turn instruction, the words the agent loop adds to a review.
-_AGENT_WORDS_SHA256 = "435db9970ade81c77efb43d496fe8dc25fe2f3f64dc671423c0d8586c3453d40"
+_AGENT_WORDS_SHA256 = "db0377efacb34321996ed9330ab2c9f83c3948b67f6584a548b0de0f25107432"
 
 
 def test_the_agent_words_are_pinned_and_ascii():

@@ -201,7 +201,7 @@ def test_an_oversized_result_is_truncated_and_dropped_keys_are_not_returned():
 
 @pytest.mark.parametrize(
     "args",
-    [{"query": ""}, {"query": "x" * 201}, {"query": "spin", "extra": 1}, {"query": "spin", "kind": "lesson"}],
+    [{"query": ""}, {"query": "x" * 201}, {"query": "spin", "extra": 1}, {"query": "spin", "kind": "lessons"}],
 )
 def test_bad_search_arguments_are_invalid_and_add_no_source(args):
     registry = _guided(guidance=_guidance())
@@ -242,3 +242,66 @@ def test_without_a_seed_or_an_index_there_is_no_prefetch_message():
     registry = _guided(guidance=_guidance())
     registry.prefetch_guidance_message()
     assert registry.returned_sources == frozenset()
+
+
+# --- lessons -------------------------------------------------------------------------------------------
+
+
+def _lessons(n: int = 4, category: str | None = None, prefix: str = "spin") -> GuidanceIndex:
+    return GuidanceIndex(
+        [
+            GuidanceEntry(
+                source_key=f"lesson:{i}",
+                kind="lesson",
+                title="Lesson written by a curator",
+                text=f"{prefix} note {i}",
+                fields={"author": "curator", **({"category": category} if category else {})},
+            )
+            for i in range(1, n + 1)
+        ]
+    )
+
+
+def test_lesson_hits_come_first_at_most_three_and_corpus_entries_fill_to_five():
+    registry = _guided(guidance=_guidance(), lessons=_lessons(4))
+    body = json.loads(_search(registry).content)
+    kinds = [r["kind"] for r in body["results"]]
+    assert kinds == ["lesson"] * 3 + ["deposit_warning"] * 2
+    assert all(r["fields"]["author"] == "curator" for r in body["results"] if r["kind"] == "lesson")
+    assert registry.returned_sources == {r["source_key"] for r in body["results"]}
+    assert {"lesson:1", "lesson:2", "lesson:3"} <= registry.returned_sources
+
+
+def test_kind_lesson_returns_only_lessons_and_another_kind_returns_none():
+    registry = _guided(guidance=_guidance(), lessons=_lessons(2))
+    only = json.loads(_search(registry, kind="lesson").content)
+    assert [r["kind"] for r in only["results"]] == ["lesson", "lesson"]
+    other = json.loads(_search(registry, kind="deposit_warning").content)
+    assert other["results"] and all(r["kind"] == "deposit_warning" for r in other["results"])
+    assert "lesson" not in json.dumps(json.loads(_search(registry, kind="check").content))
+
+
+def test_a_registry_without_lessons_answers_a_lesson_search_with_nothing():
+    registry = _guided(guidance=_guidance())
+    outcome = _search(registry, kind="lesson")
+    assert outcome.status_code == "ok" and json.loads(outcome.content) == {"results": []}
+    assert registry.returned_sources == frozenset()
+    assert json.loads(_search(registry).content)["results"]
+
+
+def test_a_category_filter_drops_a_lesson_of_another_category_and_keeps_the_matching_one():
+    registry = _guided(lessons=GuidanceIndex([*_lessons(1, "thermo").entries, *_lessons(2, "kinetics").entries[1:]]))
+    wrong = json.loads(_search(registry, kind="lesson", category="geometry").content)
+    assert wrong["results"] == []
+    right = json.loads(_search(registry, kind="lesson", category="kinetics").content)
+    assert [r["source_key"] for r in right["results"]] == ["lesson:2"]
+    assert registry.returned_sources == {"lesson:2"}
+
+
+def test_the_search_tool_is_offered_for_lessons_alone_and_lists_the_lesson_kind():
+    registry = _guided(lessons=_lessons(1))
+    (tool,) = [s for s in registry.schemas() if s["function"]["name"] == "search_guidance"]
+    properties = tool["function"]["parameters"]["properties"]
+    assert "lesson" in properties["kind"]["enum"] and "category" in properties
+    assert "written by curators" in tool["function"]["description"]
+    assert registry.known_name("search_guidance") == "search_guidance"
