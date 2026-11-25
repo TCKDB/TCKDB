@@ -1,7 +1,8 @@
 """Read schema for ``GET /scientific/reaction-entries/{ref}/energy-profile``.
 
 Electronic-energy profiles (reactants, transition state, products) of one reaction entry. One profile per transition-state
-entry, level of theory and program; every point of a profile comes from that one level and that one program.
+entry, level of theory and program; every point of a profile comes from that one program and agrees on every level
+identity field but spin treatment (each point states the level it ran at).
 """
 
 from __future__ import annotations
@@ -11,13 +12,13 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.db.models.common import RecordReviewStatus
+from app.db.models.common import RecordReviewStatus, SpinTreatment
 from app.schemas.reads.scientific_common import LevelOfTheorySummary, ProfiledRequestEcho, ScientificResponse
 
 ENERGY_KIND: Literal["electronic"] = "electronic"
 
 PROFILE_DEFINITION = (
-    "Each molecule's energy at this level from this program: its lowest single-point energy, or, only when it has no "
+    "Each molecule's energy at this level (up to spin treatment) from this program: its lowest single-point energy, or, only when it has no "
     "single point at that level and program, its lowest optimisation final energy (an optimisation recorded as not "
     "converged is not used). Electronic energy, no zero-point correction. Reactant and product energies are summed "
     "over the entry's participants, each counted once per occurrence."
@@ -60,6 +61,8 @@ class EnergyProfileMolecule(BaseModel):
     species_entry_ref: str
     count: int
     calculation_ref: str
+    #: The level this point ran at; it may differ from the profile's in spin treatment only.
+    level_of_theory: LevelOfTheorySummary
     energy_type: Literal["single_point", "optimization"]
     electronic_energy_hartree: float
     software: EnergyProfileSoftware
@@ -72,6 +75,7 @@ class EnergyProfileMolecule(BaseModel):
 class EnergyProfileTransitionState(BaseModel):
     transition_state_entry_ref: str
     calculation_ref: str
+    level_of_theory: LevelOfTheorySummary
     energy_type: Literal["single_point", "optimization"]
     electronic_energy_hartree: float
     software: EnergyProfileSoftware
@@ -90,8 +94,12 @@ class ReactionEnergyProfile(BaseModel):
 
     transition_state_entry_ref: str
     transition_state_entry_review_status: RecordReviewStatus
+    #: The transition-state point's level. Every point agrees with it on every identity field but spin treatment, and an
+    #: open-shell point on spin treatment as well.
     level_of_theory: LevelOfTheorySummary
     program: str
+    #: The spin treatments the points ran with (``None`` last), so a restricted/unrestricted mix is stated, not hidden.
+    spin_treatments: list[SpinTreatment | None]
     #: The kinds of energy the points use and the program versions they come from, so mixing is stated, not hidden.
     energy_types: list[Literal["single_point", "optimization"]]
     versions: list[str | None]

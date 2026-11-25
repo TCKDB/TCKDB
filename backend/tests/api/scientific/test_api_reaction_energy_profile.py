@@ -14,6 +14,7 @@ from app.db.models.common import (
     KineticsCalculationRole,
     PnoTruncation,
     RecordReviewStatus,
+    SpinTreatment,
     SubmissionRecordType,
 )
 from app.db.models.kinetics import KineticsSourceCalculation
@@ -513,6 +514,156 @@ def test_statement_count_is_flat_in_the_number_of_levels(client, db_session):
     large, large_profiles = count(build(6))
     assert (small_profiles, large_profiles) == (1, 6)
     assert large <= small, f"{small} statements for 1 level, {large} for 6"
+
+
+def _open_entry(db_session, tag, multiplicity):
+    return make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key(tag), multiplicity=multiplicity))
+
+
+@pytest.fixture
+def hab_world(db_session):
+    """Closed-shell + radical -> radical + closed-shell, closed-shell ones restricted, the rest unrestricted."""
+    restricted = make_lot(db_session, method="wb97xd", basis="def2tzvp", spin_treatment=SpinTreatment.restricted)
+    unrestricted = make_lot(db_session, method="wb97xd", basis="def2tzvp", spin_treatment=SpinTreatment.unrestricted)
+    orca = make_software_release(db_session, name="orca", version="6.0")
+    gaussian = make_software_release(db_session, name="gaussian", version="16")
+    closed_r, radical_r = _open_entry(db_session, "HBA", 1), _open_entry(db_session, "HBB", 2)
+    closed_p, radical_p = _open_entry(db_session, "HBC", 1), _open_entry(db_session, "HBD", 2)
+    rxn = _reaction(db_session, "HB", reactants=[closed_r, radical_r], products=[radical_p, closed_p])
+    tse = _ts(db_session, rxn)
+    return {
+        "restricted": restricted,
+        "unrestricted": unrestricted,
+        "orca": orca,
+        "gaussian": gaussian,
+        "closed_r": closed_r,
+        "radical_r": radical_r,
+        "closed_p": closed_p,
+        "radical_p": radical_p,
+        "rxn": rxn,
+        "tse": tse,
+    }
+
+
+def _hab_energies(db_session, w, *, skip=(), release_for=None, lot_for=None):
+    energies = {"closed_r": -40.0, "radical_r": -75.0, "closed_p": -40.5, "radical_p": -74.4, "tse": -114.8}
+    lots = {"closed_r": w["restricted"], "closed_p": w["restricted"]}
+    lots.update(lot_for or {})
+    for key, energy in energies.items():
+        if key in skip:
+            continue
+        release = (release_for or {}).get(key, w["orca"])
+        _sp(db_session, owner=w[key], lot=lots.get(key, w["unrestricted"]), release=release, energy=energy)
+
+
+def test_a_closed_shell_restricted_point_joins_an_unrestricted_profile(client, db_session, hab_world):
+    w = hab_world
+    _hab_energies(db_session, w)
+    body = client.get(url(w["rxn"])).json()
+    (profile,) = body["profiles"]
+    assert body["unavailable"] == []
+    assert profile["level_of_theory"]["level_of_theory_ref"] == w["unrestricted"].public_ref
+    e_react, e_prod = -40.0 + -75.0, -40.5 + -74.4
+    assert profile["relative_kj_mol"]["transition_state"] == pytest.approx((-114.8 - e_react) * HARTREE_TO_KJ_MOL)
+    assert profile["relative_kj_mol"]["products"] == pytest.approx((e_prod - e_react) * HARTREE_TO_KJ_MOL)
+
+
+def test_each_point_names_its_own_level_and_the_profile_lists_spin_treatments(client, db_session, hab_world):
+    w = hab_world
+    _hab_energies(db_session, w)
+    (profile,) = client.get(url(w["rxn"])).json()["profiles"]
+    by_ref = {m["species_entry_ref"]: m for m in profile["reactants"] + profile["products"]}
+    assert by_ref[w["closed_r"].public_ref]["level_of_theory"]["level_of_theory_ref"] == w["restricted"].public_ref
+    assert by_ref[w["radical_r"].public_ref]["level_of_theory"]["level_of_theory_ref"] == w["unrestricted"].public_ref
+    assert by_ref[w["closed_p"].public_ref]["level_of_theory"]["level_of_theory_ref"] == w["restricted"].public_ref
+    ts_level = profile["transition_state"]["level_of_theory"]
+    assert ts_level["level_of_theory_ref"] == w["unrestricted"].public_ref
+    assert profile["spin_treatments"] == ["restricted", "unrestricted"]
+
+
+def test_a_different_basis_on_one_participant_gives_no_profile(client, db_session, hab_world):
+    w = hab_world
+    other = make_lot(db_session, method="wb97xd", basis="cc-pvtz", spin_treatment=SpinTreatment.unrestricted)
+    _hab_energies(db_session, w, lot_for={"radical_p": other})
+    body = client.get(url(w["rxn"])).json()
+    assert body["profiles"] == []
+    (item,) = body["unavailable"]
+    assert item["code"] == "no_product_energy_at_level"
+
+
+def test_a_spin_variant_from_another_program_is_still_refused(client, db_session, hab_world):
+    w = hab_world
+    _hab_energies(db_session, w, release_for={"closed_r": w["gaussian"]})
+    body = client.get(url(w["rxn"])).json()
+    assert body["profiles"] == []
+    (item,) = body["unavailable"]
+    assert item["code"] == "points_from_different_programs" and item["program"] == "orca"
+
+
+def test_missing_products_report_the_product_code_once_reactants_match_modulo_spin(client, db_session, hab_world):
+    w = hab_world
+    _hab_energies(db_session, w, skip=("closed_p", "radical_p"))
+    body = client.get(url(w["rxn"])).json()
+    assert body["profiles"] == []
+    (item,) = body["unavailable"]
+    assert item["code"] == "no_product_energy_at_level"
+
+
+def test_open_shell_points_must_share_one_reference(client, db_session, hab_world):
+    """Holds before and after the spin match: open-shell points never mix unrestricted with restricted-open."""
+    w = hab_world
+    restricted_open = make_lot(db_session, method="wb97xd", basis="def2tzvp", spin_treatment=SpinTreatment.restricted_open)
+    _hab_energies(db_session, w, lot_for={"radical_p": restricted_open})
+    body = client.get(url(w["rxn"])).json()
+    assert body["profiles"] == []
+    (item,) = body["unavailable"]
+    assert item["code"] == "no_product_energy_at_level"
+
+
+def test_a_closed_shell_point_at_another_method_is_not_matched(client, db_session, hab_world):
+    """A closed-shell point at a different level row (different method) never joins, whatever its spin."""
+    w = hab_world
+    other = make_lot(db_session, method="b3lyp", basis="def2tzvp", spin_treatment=SpinTreatment.restricted)
+    _hab_energies(db_session, w, lot_for={"closed_p": other})
+    body = client.get(url(w["rxn"])).json()
+    assert body["profiles"] == []
+    assert [u["code"] for u in body["unavailable"]] == ["no_product_energy_at_level"]
+
+
+def test_statement_count_is_flat_with_spin_variant_levels(client, db_session):
+    orca = make_software_release(db_session, name="orca", version="6.0")
+
+    def build(n_levels):
+        a, c = _open_entry(db_session, "SL", 1), _open_entry(db_session, "SLP", 2)
+        rxn = _reaction(db_session, "SL", reactants=[a], products=[c])
+        tse = _ts(db_session, rxn)
+        for i in range(n_levels):
+            restricted = make_lot(db_session, method=f"s{i}", basis="b", spin_treatment=SpinTreatment.restricted)
+            unrestricted = make_lot(db_session, method=f"s{i}", basis="b", spin_treatment=SpinTreatment.unrestricted)
+            _sp(db_session, owner=a, lot=restricted, release=orca, energy=-10.0 - i)
+            _sp(db_session, owner=c, lot=unrestricted, release=orca, energy=-10.0 - i)
+            _sp(db_session, owner=tse, lot=unrestricted, release=orca, energy=-10.0 - i)
+        return rxn
+
+    def count(rxn):
+        engine = db_session.connection().engine
+        seen = []
+
+        def _before(conn, cursor, statement, parameters, context, executemany):
+            seen.append(statement)
+
+        event.listen(engine, "before_cursor_execute", _before)
+        try:
+            response = client.get(url(rxn))
+        finally:
+            event.remove(engine, "before_cursor_execute", _before)
+        assert response.status_code == 200
+        return len(seen), len(response.json()["profiles"])
+
+    small, small_profiles = count(build(1))
+    large, large_profiles = count(build(5))
+    assert (small_profiles, large_profiles) == (1, 5)
+    assert large <= small
 
 
 def test_get_under_scientific_is_anon_read():

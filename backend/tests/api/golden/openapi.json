@@ -19792,6 +19792,9 @@
             "title": "Energy Type",
             "type": "string"
           },
+          "level_of_theory": {
+            "$ref": "#/components/schemas/LevelOfTheorySummary"
+          },
           "review_status": {
             "$ref": "#/components/schemas/RecordReviewStatus"
           },
@@ -19807,6 +19810,7 @@
           "species_entry_ref",
           "count",
           "calculation_ref",
+          "level_of_theory",
           "energy_type",
           "electronic_energy_hartree",
           "software",
@@ -19963,6 +19967,9 @@
             "title": "Energy Type",
             "type": "string"
           },
+          "level_of_theory": {
+            "$ref": "#/components/schemas/LevelOfTheorySummary"
+          },
           "review_status": {
             "$ref": "#/components/schemas/RecordReviewStatus"
           },
@@ -19977,6 +19984,7 @@
         "required": [
           "transition_state_entry_ref",
           "calculation_ref",
+          "level_of_theory",
           "energy_type",
           "electronic_energy_hartree",
           "software",
@@ -45476,7 +45484,7 @@
         "description": "One complete profile: reactants, transition state and products at one level and one program.",
         "properties": {
           "definition": {
-            "default": "Each molecule's energy at this level from this program: its lowest single-point energy, or, only when it has no single point at that level and program, its lowest optimisation final energy (an optimisation recorded as not converged is not used). Electronic energy, no zero-point correction. Reactant and product energies are summed over the entry's participants, each counted once per occurrence.",
+            "default": "Each molecule's energy at this level (up to spin treatment) from this program: its lowest single-point energy, or, only when it has no single point at that level and program, its lowest optimisation final energy (an optimisation recorded as not converged is not used). Electronic energy, no zero-point correction. Reactant and product energies are summed over the entry's participants, each counted once per occurrence.",
             "title": "Definition",
             "type": "string"
           },
@@ -45524,6 +45532,20 @@
           "relative_kj_mol": {
             "$ref": "#/components/schemas/EnergyProfileValues"
           },
+          "spin_treatments": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/SpinTreatment-Output"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Spin Treatments",
+            "type": "array"
+          },
           "transition_state": {
             "$ref": "#/components/schemas/EnergyProfileTransitionState"
           },
@@ -45554,6 +45576,7 @@
           "transition_state_entry_review_status",
           "level_of_theory",
           "program",
+          "spin_treatments",
           "energy_types",
           "versions",
           "reactants",
