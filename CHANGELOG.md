@@ -25,6 +25,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Energy profiles match levels of theory apart from spin treatment (Unreleased)
+
+- **Behaviour:** `GET /api/v1/scientific/reaction-entries/{ref}/energy-profile` now builds a profile when its points agree on every level-of-theory identity field except spin treatment, with the rule the kinetics energy-level check uses. A closed-shell participant run restricted joins an unrestricted radical transition state; open-shell points must still share one spin treatment, and points still come from one program. A reaction whose reactants match but whose products have no energy now reports `no_product_energy_at_level`.
+- **Read contract (additive):** each molecule point and the transition-state point carry their own `level_of_theory`; a profile gains `spin_treatments`. When the transition-state point is closed-shell there is one profile per open-shell spin reference, and references that pick the same points give one profile.
+- **Site:** the energy-hill picker names the radicals' spin treatment when two profiles share a level and program.
+- **Migration:** none. No new environment variable.
+
 ## Curators write lessons for the machine reviewer (Unreleased)
 
 - **Behaviour:** `POST /api/v1/machine-review/lessons` (curator or admin; 201) stores a short note, at most 500 characters, on what the machine reviewer got wrong. It starts `proposed` and reaches no review until an admin verifies it. `GET /api/v1/admin/machine-review/lessons?status=` lists lessons, `PATCH /api/v1/admin/machine-review/lessons/{lesson_id}` edits one, and `POST .../verify` and `POST .../retire` change its status (admin only). A retired lesson is refused with 409 `machine_review_lesson_retired`; an unknown one is 404 `machine_review_lesson_not_found`, and a `scope.check_code` that is not a known warning or check code is 422 `machine_review_lesson_unknown_check_code`.
