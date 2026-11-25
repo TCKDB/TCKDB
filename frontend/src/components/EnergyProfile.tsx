@@ -27,6 +27,7 @@ import {
     UNAVAILABLE_WORDS,
 } from "../domain/energyProfile"
 import { recordWords } from "../domain/recordWords"
+import { words } from "../domain/provenanceFormat"
 import { useOverflows } from "../hooks/useOverflows"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 import { Disclosure } from "./Disclosure"
@@ -138,7 +139,7 @@ function PointCells({ point, showSpin = false }: { point: PointShape; showSpin?:
             </td>
             <td data-label="Program">
                 {programText(point.software)}
-                {showSpin && <> · <span className="t-preserve-case">{point.level_of_theory?.spin_treatment ?? "spin not recorded"}</span></>}
+                {showSpin && <> · <span className="t-preserve-case">{words(point.level_of_theory?.spin_treatment) ?? "spin not recorded"}</span></>}
             </td>
             <td data-label="Review"><ReviewChip status={point.review_status} explain={false} /></td>
         </>
@@ -267,7 +268,7 @@ function ProfileView({ profile, labels, several, markPeak, tsWords, showLevel }:
                 <p className="note energy-profile-mixed">
                     The points ran with different spin treatments of the same level of theory:{" "}
                     {spinGroups(profile, (ref) => labels.get(ref) ?? "species", markPeak ? "this transition state" : tsWords(profile.transition_state_entry_ref)).map((group, index) => (
-                        <Fragment key={group.spin}>{index > 0 && "; "}<span className="t-preserve-case">{group.spin}</span>: <span className="t-preserve-case">{group.points.join(", ")}</span></Fragment>
+                        <Fragment key={group.spin}>{index > 0 && "; "}<span className="t-preserve-case">{words(group.spin)}</span>: <span className="t-preserve-case">{group.points.join(", ")}</span></Fragment>
                     ))}.
                 </p>
             )}

@@ -22,6 +22,7 @@ from app.db.models.record_review import RecordReview
 from tests.services.scientific_read._factories import (
     attach_opt_result,
     attach_sp_result,
+    attach_spin_diagnostic,
     make_calculation,
     make_chem_reaction,
     make_kinetics,
@@ -610,7 +611,7 @@ def test_missing_products_report_the_product_code_once_reactants_match_modulo_sp
 
 
 def test_open_shell_points_must_share_one_reference(client, db_session, hab_world):
-    """Holds before and after the spin match: open-shell points never mix unrestricted with restricted-open."""
+    """Open-shell points never mix unrestricted with restricted-open."""
     w = hab_world
     restricted_open = make_lot(db_session, method="wb97xd", basis="def2tzvp", spin_treatment=SpinTreatment.restricted_open)
     _hab_energies(db_session, w, lot_for={"radical_p": restricted_open})
@@ -628,6 +629,119 @@ def test_a_closed_shell_point_at_another_method_is_not_matched(client, db_sessio
     body = client.get(url(w["rxn"])).json()
     assert body["profiles"] == []
     assert [u["code"] for u in body["unavailable"]] == ["no_product_energy_at_level"]
+
+
+def _hab_with_ts(db_session, w, ts_multiplicity):
+    """The hab_world reaction with its transition-state entry set to the given multiplicity."""
+    w["tse"].multiplicity = ts_multiplicity
+    db_session.flush()
+    return w
+
+
+def test_a_closed_shell_ts_takes_the_one_open_shell_reference_that_completes_both_sides(client, db_session, hab_world):
+    """A radical with both unrestricted and restricted-open points does not block a consistent unrestricted profile."""
+    w = _hab_with_ts(db_session, hab_world, 1)
+    restricted_open = make_lot(db_session, method="wb97xd", basis="def2tzvp", spin_treatment=SpinTreatment.restricted_open)
+    _hab_energies(db_session, w, lot_for={"tse": w["restricted"]})
+    _sp(db_session, owner=w["radical_r"], lot=restricted_open, release=w["orca"], energy=-75.2)
+    body = client.get(url(w["rxn"])).json()
+    assert body["unavailable"] == []
+    (profile,) = body["profiles"]
+    by_ref = {m["species_entry_ref"]: m for m in profile["reactants"] + profile["products"]}
+    assert by_ref[w["radical_r"].public_ref]["level_of_theory"]["level_of_theory_ref"] == w["unrestricted"].public_ref
+    assert by_ref[w["radical_p"].public_ref]["level_of_theory"]["level_of_theory_ref"] == w["unrestricted"].public_ref
+
+
+def test_a_closed_shell_ts_refuses_when_no_single_open_shell_reference_covers_both_sides(client, db_session, hab_world):
+    w = _hab_with_ts(db_session, hab_world, 1)
+    restricted_open = make_lot(db_session, method="wb97xd", basis="def2tzvp", spin_treatment=SpinTreatment.restricted_open)
+    _hab_energies(db_session, w, lot_for={"tse": w["restricted"], "radical_p": restricted_open})
+    body = client.get(url(w["rxn"])).json()
+    assert body["profiles"] == []
+    assert [u["code"] for u in body["unavailable"]] == ["no_product_energy_at_level"]
+
+
+def test_a_declared_composite_scheme_level_matches_only_itself(client, db_session, hab_world):
+    from app.db.models.common import CompositeBindingSource, CompositeSchemeKind
+    from app.db.models.composite_scheme import CompositeScheme, LevelOfTheoryComposite
+    from app.db.models.level_of_theory import LevelOfTheory
+
+    w = hab_world
+    scheme = CompositeScheme(kind=CompositeSchemeKind.extrapolation, name="cbs-x", definition_hash="a" * 64)
+    scheme_level = LevelOfTheory(method="wb97xd", lot_hash="b" * 64)
+    db_session.add_all([scheme, scheme_level])
+    db_session.flush()
+    db_session.add(
+        LevelOfTheoryComposite(
+            level_of_theory_id=scheme_level.id, scheme_id=scheme.id, binding_source=CompositeBindingSource.declared
+        )
+    )
+    db_session.flush()
+    _hab_energies(db_session, w, lot_for={"tse": scheme_level})
+    response = client.get(url(w["rxn"]))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["profiles"] == []
+    assert [u["code"] for u in body["unavailable"]] == ["no_reactant_energy_at_level"]
+
+
+def test_a_point_at_the_ts_level_is_used_before_a_lower_spin_variant(client, db_session, hab_world):
+    w = hab_world
+    _hab_energies(db_session, w, lot_for={"closed_r": w["unrestricted"]})
+    _sp(db_session, owner=w["closed_r"], lot=w["restricted"], release=w["orca"], energy=-41.0)
+    (profile,) = client.get(url(w["rxn"])).json()["profiles"]
+    closed = next(m for m in profile["reactants"] if m["species_entry_ref"] == w["closed_r"].public_ref)
+    assert closed["electronic_energy_hartree"] == pytest.approx(-40.0)
+    assert closed["level_of_theory"]["level_of_theory_ref"] == w["unrestricted"].public_ref
+
+
+def test_a_ts_level_optimisation_energy_is_used_before_a_spin_variant_single_point(client, db_session, hab_world):
+    w = hab_world
+    _hab_energies(db_session, w, lot_for={"closed_r": w["unrestricted"]}, skip=("closed_r",))
+    opt = make_calculation(
+        db_session,
+        type=CalculationType.opt,
+        lot_id=w["unrestricted"].id,
+        software_release_id=w["orca"].id,
+        species_entry_id=w["closed_r"].id,
+    )
+    attach_opt_result(db_session, calculation=opt, final_energy_hartree=-39.9, converged=True)
+    _sp(db_session, owner=w["closed_r"], lot=w["restricted"], release=w["orca"], energy=-40.0)
+    (profile,) = client.get(url(w["rxn"])).json()["profiles"]
+    closed = next(m for m in profile["reactants"] if m["species_entry_ref"] == w["closed_r"].public_ref)
+    assert (closed["energy_type"], closed["electronic_energy_hartree"]) == ("optimization", pytest.approx(-39.9))
+
+
+def _ro_world(db_session, w):
+    restricted_open = make_lot(db_session, method="wb97xd", basis="def2tzvp", spin_treatment=SpinTreatment.restricted_open)
+    _hab_energies(
+        db_session,
+        w,
+        lot_for={"tse": restricted_open, "radical_r": restricted_open, "radical_p": restricted_open, "closed_r": w["unrestricted"]},
+    )
+    return w["rxn"]
+
+
+def test_a_collapsed_unrestricted_singlet_joins_a_restricted_open_profile(client, db_session, hab_world):
+    w = hab_world
+    rxn = _ro_world(db_session, w)
+    from sqlalchemy import select
+
+    from app.db.models.calculation import Calculation
+
+    calc = db_session.scalars(select(Calculation).where(Calculation.species_entry_id == w["closed_r"].id)).one()
+    attach_spin_diagnostic(db_session, calculation=calc, s_squared=0.0, s_squared_expected=0.0, s_squared_annihilated=None)
+    body = client.get(url(rxn)).json()
+    assert body["unavailable"] == []
+    assert len(body["profiles"]) == 1
+
+
+def test_an_unrestricted_singlet_without_s_squared_is_not_exempt(client, db_session, hab_world):
+    w = hab_world
+    rxn = _ro_world(db_session, w)
+    body = client.get(url(rxn)).json()
+    assert body["profiles"] == []
+    assert [u["code"] for u in body["unavailable"]] == ["no_reactant_energy_at_level"]
 
 
 def test_statement_count_is_flat_with_spin_variant_levels(client, db_session):

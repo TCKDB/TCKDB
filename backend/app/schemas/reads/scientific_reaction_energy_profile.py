@@ -18,8 +18,9 @@ from app.schemas.reads.scientific_common import LevelOfTheorySummary, ProfiledRe
 ENERGY_KIND: Literal["electronic"] = "electronic"
 
 PROFILE_DEFINITION = (
-    "Each molecule's energy at this level (up to spin treatment) from this program: its lowest single-point energy, or, only when it has no "
-    "single point at that level and program, its lowest optimisation final energy (an optimisation recorded as not "
+    "Each molecule's energy at this level (up to spin treatment) from this program: points at the transition state's own "
+    "level are used first, then its spin variants; within that set, its lowest single-point energy, or, only when it has "
+    "no single point there, its lowest optimisation final energy (an optimisation recorded as not "
     "converged is not used). Electronic energy, no zero-point correction. Reactant and product energies are summed "
     "over the entry's participants, each counted once per occurrence."
 )
@@ -90,7 +91,7 @@ class EnergyProfileValues(BaseModel):
 
 
 class ReactionEnergyProfile(BaseModel):
-    """One complete profile: reactants, transition state and products at one level and one program."""
+    """One complete profile: reactants, transition state and products from one program, at one level up to spin treatment."""
 
     transition_state_entry_ref: str
     transition_state_entry_review_status: RecordReviewStatus

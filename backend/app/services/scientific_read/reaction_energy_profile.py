@@ -433,37 +433,40 @@ def build_energy_profiles(
             return None
         return spin
 
-    def level_filter(ts_best: _Point, program: str) -> Callable[[_Point], bool]:
-        """Whether a participant point is at the transition-state point's level, up to spin treatment.
+    def level_filters(ts_best: _Point, program: str) -> list[Callable[[_Point], bool]]:
+        """One point filter per feasible open-shell reference, for points at the transition-state point's level.
 
         Every identity field but spin must agree (:func:`kinetics_level_fields_match`); open-shell points must share
-        one spin reference, the transition state's when it is open-shell.
+        one spin reference, the transition state's when it is open-shell, else each spin among the candidates.
         """
         ts_lot = lot_rows[ts_best.lot_id]
 
         def fields_ok(p: _Point) -> bool:
             return kinetics_level_fields_match(ts_lot, lot_rows[p.lot_id], scheme_ids=scheme_ids)
 
-        reference = open_shell_spin(ts_best)
-        unusable = False
-        if reference is None:
-            spins = {
-                open_shell_spin(p)
+        def with_reference(reference: str | None) -> Callable[[_Point], bool]:
+            def at_level(p: _Point) -> bool:
+                if not fields_ok(p):
+                    return False
+                spin = open_shell_spin(p)
+                return spin is None or reference is None or spin == reference
+
+            return at_level
+
+        ts_reference = open_shell_spin(ts_best)
+        if ts_reference is not None:
+            return [with_reference(ts_reference)]
+        spins = sorted(
+            {
+                spin
                 for se_id in all_participants
                 for p in by_species.get(se_id, [])
                 if p.program == program and fields_ok(p)
-            } - {None}
-            if len(spins) == 1:
-                (reference,) = spins
-            unusable = len(spins) > 1
-
-        def at_level(p: _Point) -> bool:
-            if not fields_ok(p):
-                return False
-            spin = open_shell_spin(p)
-            return spin is None or (not unusable and (reference is None or spin == reference))
-
-        return at_level
+                for spin in [open_shell_spin(p)]
+                if spin is not None
+            }
+        )
+        return [with_reference(spin) for spin in spins] or [with_reference(None)]
 
     def molecule(
         se_id: int, ref: str, count: int, lot_id: int, program: str, at_level: Callable[[_Point], bool]
@@ -520,10 +523,15 @@ def build_energy_profiles(
         for lot_id, program in sorted({(p.lot_id, p.program) for p in programmed}):
             ts_best = _lowest([p for p in programmed if p.lot_id == lot_id and p.program == program])
             assert ts_best.software is not None  # programmed points only
-            at_level = level_filter(ts_best, program)
-            reactant_parts = [molecule(s, r, n, lot_id, program, at_level) for s, r, n in reactants]
-            product_parts = [molecule(s, r, n, lot_id, program, at_level) for s, r, n in products]
-            if reactants and products and None not in reactant_parts and None not in product_parts:
+            filters = level_filters(ts_best, program)
+            for at_level in filters:
+                reactant_parts = [molecule(s, r, n, lot_id, program, at_level) for s, r, n in reactants]
+                product_parts = [molecule(s, r, n, lot_id, program, at_level) for s, r, n in products]
+                if reactants and products and None not in reactant_parts and None not in product_parts:
+                    break
+            else:
+                reactant_parts = product_parts = []
+            if reactant_parts and product_parts and None not in reactant_parts and None not in product_parts:
                 found_reactants = [m for m in reactant_parts if m is not None]
                 found_products = [m for m in product_parts if m is not None]
                 e_react = sum(m.electronic_energy_hartree * m.count for m in found_reactants)
@@ -570,8 +578,14 @@ def build_energy_profiles(
                     )
                 )
                 continue
-            reactant_kind = "none" if not reactants else _missing_kind(reactants, by_species, at_level, program)
-            product_kind = "none" if not products else _missing_kind(products, by_species, at_level, program)
+            kinds = [
+                (
+                    "none" if not reactants else _missing_kind(reactants, by_species, f, program),
+                    "none" if not products else _missing_kind(products, by_species, f, program),
+                )
+                for f in filters
+            ]
+            reactant_kind, product_kind = min(kinds, key=lambda k: (k[0] == "none", k[1] == "none"))
             if reactant_kind == "none":
                 code = EnergyProfileUnavailableCode.no_reactant_energy_at_level
             elif product_kind == "none":
