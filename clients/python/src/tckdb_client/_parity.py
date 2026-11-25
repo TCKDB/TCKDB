@@ -923,6 +923,10 @@ _NOT_APPLICABLE: tuple[tuple[str, str, str], ...] = tuple(
             "/api/v1/admin/energy-correction-schemes/{ref}/provenance",
         ),
         ("GET", "/api/v1/admin/machine-review/settings"),
+        ("GET", "/api/v1/admin/machine-review/lessons"),
+        ("PATCH", "/api/v1/admin/machine-review/lessons/{lesson_id}"),
+        ("POST", "/api/v1/admin/machine-review/lessons/{lesson_id}/verify"),
+        ("POST", "/api/v1/admin/machine-review/lessons/{lesson_id}/retire"),
         ("PATCH", "/api/v1/admin/machine-review/settings"),
         ("GET", "/api/v1/admin/machine-review/curator-tasks"),
         (
@@ -995,6 +999,7 @@ _NOT_APPLICABLE: tuple[tuple[str, str, str], ...] = tuple(
         ("GET", "/api/v1/machine-review/jobs/{job_id}"),
         ("POST", "/api/v1/machine-review/jobs/{job_id}/cancel"),
         ("GET", "/api/v1/machine-review/providers"),
+        ("POST", "/api/v1/machine-review/lessons"),
         ("POST", "/api/v1/submissions/{submission_id}/approve"),
         ("POST", "/api/v1/submissions/{submission_ref}/rights-attestations"),
         ("POST", "/api/v1/submissions/{submission_id}/reject"),

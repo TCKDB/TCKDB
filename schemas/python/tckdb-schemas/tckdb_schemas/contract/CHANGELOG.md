@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.177.6 - 2026-11-25
+
+No schema changed. The producer contract lists the machine-review lesson write routes, and the refusal-code list gains `machine_review_lesson_not_found` (404) and `machine_review_lesson_retired` (409).
+
 ## 0.177.5 - 2026-11-24
 
 No schema changed. The producer contract no longer lists the removed `POST /api/v1/admin/machine-review/run-for-submission/{submission_id}` route.

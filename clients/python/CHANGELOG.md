@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.214.0 - 2026-11-25
+
+`RejectionCode` gains `MACHINE_REVIEW_LESSON_NOT_FOUND` and `MACHINE_REVIEW_LESSON_RETIRED`. The route ledger triages `POST /api/v1/machine-review/lessons` as curation workflow and the four lesson routes under `/api/v1/admin/machine-review/lessons` as admin only. No client behaviour changed.
+
 ## 0.213.0 - 2026-11-24
 
 The route ledger drops `POST /api/v1/admin/machine-review/run-for-submission/{submission_id}`, which the server no longer serves; a machine review is requested with `POST /api/v1/machine-review/jobs`. No client behaviour changed.
