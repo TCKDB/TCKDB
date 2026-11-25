@@ -15,6 +15,8 @@ import {
     hartreeText,
     hiddenNotes,
     isMixed,
+    mixesSpin,
+    spinGroups,
     levelsOf,
     profileLabels,
     profileScale,
@@ -25,6 +27,7 @@ import {
     UNAVAILABLE_WORDS,
 } from "../domain/energyProfile"
 import { recordWords } from "../domain/recordWords"
+import { words } from "../domain/provenanceFormat"
 import { useOverflows } from "../hooks/useOverflows"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 import { Disclosure } from "./Disclosure"
@@ -35,7 +38,7 @@ import { SectionHeading } from "./PageSections"
 import { ReviewChip } from "./ReviewChip"
 import { ValueLink } from "./ValueLink"
 
-const INTRO = "kJ/mol relative to the reactants. One level and program each; none is chosen for you."
+const INTRO = "kJ/mol relative to the reactants. One level and program each, spin aside; none is chosen."
 
 const HILL_NOTE = "TCKDB's comparison at one level and program; the depositor's check may use other energies."
 
@@ -119,9 +122,10 @@ type PointShape = {
     software: { program: string; version?: string | null }
     review_status: string
     convergence_unrecorded: boolean
+    level_of_theory?: { spin_treatment?: string | null } | null
 }
 
-function PointCells({ point }: { point: PointShape }) {
+function PointCells({ point, showSpin = false }: { point: PointShape; showSpin?: boolean }) {
     return (
         <>
             <td data-label="Electronic energy">
@@ -133,7 +137,10 @@ function PointCells({ point }: { point: PointShape }) {
                     <span className="energy-profile-flag"><span aria-hidden="true">† </span>convergence not recorded</span>
                 )}
             </td>
-            <td data-label="Program">{programText(point.software)}</td>
+            <td data-label="Program">
+                {programText(point.software)}
+                {showSpin && <> · <span className="t-preserve-case">{words(point.level_of_theory?.spin_treatment) ?? "spin not recorded"}</span></>}
+            </td>
             <td data-label="Review"><ReviewChip status={point.review_status} explain={false} /></td>
         </>
     )
@@ -147,8 +154,9 @@ function RelativeCell({ kj, note }: { kj: number | null; note?: string }) {
     )
 }
 
-function GroupRows({ title, points, sum, kj, labels }: {
+function GroupRows({ title, points, sum, kj, labels, showSpin }: {
     title: string
+    showSpin: boolean
     points: EnergyProfileMoleculePoint[]
     sum: number
     kj: number
@@ -159,7 +167,7 @@ function GroupRows({ title, points, sum, kj, labels }: {
         return (
             <tr>
                 <th scope="row">{title}: <SpeciesCell point={point} labels={labels} /></th>
-                <PointCells point={point} />
+                <PointCells point={point} showSpin={showSpin} />
                 <RelativeCell kj={kj} />
             </tr>
         )
@@ -175,7 +183,7 @@ function GroupRows({ title, points, sum, kj, labels }: {
             {points.map((point) => (
                 <tr key={point.species_entry_ref}>
                     <th scope="row" className="energy-profile-member">{title}: <SpeciesCell point={point} labels={labels} /></th>
-                    <PointCells point={point} />
+                    <PointCells point={point} showSpin={showSpin} />
                     <RelativeCell kj={null} note={`part of the ${title === "Reactants" ? "reactant" : "product"} sum above`} />
                 </tr>
             ))}
@@ -200,17 +208,17 @@ function ProfileTable({ profile, labels, single, tsWords }: { profile: EnergyPro
                     </tr>
                 </thead>
                 <tbody>
-                    <GroupRows title="Reactants" points={profile.reactants} sum={profile.energy_hartree.reactants} kj={profile.relative_kj_mol.reactants} labels={labels} />
+                    <GroupRows title="Reactants" points={profile.reactants} sum={profile.energy_hartree.reactants} kj={profile.relative_kj_mol.reactants} labels={labels} showSpin={mixesSpin(profile)} />
                     <tr>
                         <th scope="row">
                             {single
                                 ? "This transition state"
                                 : <RecordLink kind="transition-state" to={`/transition-state-entries/${ts.transition_state_entry_ref}`} label={tsWords(ts.transition_state_entry_ref)} />}
                         </th>
-                        <PointCells point={ts} />
+                        <PointCells point={ts} showSpin={mixesSpin(profile)} />
                         <RelativeCell kj={profile.relative_kj_mol.transition_state} />
                     </tr>
-                    <GroupRows title="Products" points={profile.products} sum={profile.energy_hartree.products} kj={profile.relative_kj_mol.products} labels={labels} />
+                    <GroupRows title="Products" points={profile.products} sum={profile.energy_hartree.products} kj={profile.relative_kj_mol.products} labels={labels} showSpin={mixesSpin(profile)} />
                 </tbody>
             </table>
         </div>
@@ -228,7 +236,7 @@ function ProfileView({ profile, labels, several, markPeak, tsWords, showLevel }:
         <div className="energy-profile-view">
             <dl className="kv-list energy-profile-facts">
                 {!markPeak && <div><dt>Transition-state entry</dt><dd><RecordLink kind="transition-state" to={`/transition-state-entries/${profile.transition_state_entry_ref}`} label={tsWords(profile.transition_state_entry_ref)} /> <ReviewChip status={profile.transition_state_entry_review_status} explain={false} /></dd></div>}
-                {showLevel && <div><dt>Level of theory</dt><dd><LevelLabel levelOfTheory={profile.level_of_theory} program={profile.program} /></dd></div>}
+                {showLevel && <div><dt>{mixesSpin(profile) ? "Level of theory (transition state)" : "Level of theory"}</dt><dd><LevelLabel levelOfTheory={profile.level_of_theory} program={profile.program} /></dd></div>}
             </dl>
             <figure className="energy-profile-figure">
                 {overflows && <p className="energy-profile-hint">Scroll sideways inside the box to see the whole picture. The table below has the same numbers.</p>}
@@ -254,6 +262,14 @@ function ProfileView({ profile, labels, several, markPeak, tsWords, showLevel }:
             {isMixed(profile) && (
                 <p className="note energy-profile-mixed">
                     This profile mixes kinds of energy or program versions. Kinds of energy: {kinds}. Program versions: {versions}.
+                </p>
+            )}
+            {mixesSpin(profile) && (
+                <p className="note energy-profile-mixed">
+                    The points ran with different spin treatments of the same level of theory:{" "}
+                    {spinGroups(profile, (ref) => labels.get(ref) ?? "species", markPeak ? "this transition state" : tsWords(profile.transition_state_entry_ref)).map((group, index) => (
+                        <Fragment key={group.spin}>{index > 0 && "; "}<span className="t-preserve-case">{words(group.spin)}</span>: <span className="t-preserve-case">{group.points.join(", ")}</span></Fragment>
+                    ))}.
                 </p>
             )}
             <ProfileTable profile={profile} labels={labels} single={markPeak} tsWords={tsWords} />
@@ -381,8 +397,8 @@ export function Profiles({ read, labels, markPeak = false, showLevel = true }: {
                         {read.profiles.length} profiles. The first is shown until you pick another.
                     </p>
                     <OrderNote order={markPeak
-                        ? "By level, then program."
-                        : "By TS entry, then level and program."} />
+                        ? "By level, then program, then the radicals' spin treatment."
+                        : "By TS entry, then level, program and the radicals' spin treatment."} />
                 </div>
             )}
             {chosen && <ProfileView profile={chosen} labels={labels} several={read.profiles.length > 1} markPeak={markPeak} tsWords={tsWords} showLevel={showLevel} />}

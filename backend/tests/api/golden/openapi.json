@@ -19792,6 +19792,9 @@
             "title": "Energy Type",
             "type": "string"
           },
+          "level_of_theory": {
+            "$ref": "#/components/schemas/LevelOfTheorySummary"
+          },
           "review_status": {
             "$ref": "#/components/schemas/RecordReviewStatus"
           },
@@ -19807,6 +19810,7 @@
           "species_entry_ref",
           "count",
           "calculation_ref",
+          "level_of_theory",
           "energy_type",
           "electronic_energy_hartree",
           "software",
@@ -19963,6 +19967,9 @@
             "title": "Energy Type",
             "type": "string"
           },
+          "level_of_theory": {
+            "$ref": "#/components/schemas/LevelOfTheorySummary"
+          },
           "review_status": {
             "$ref": "#/components/schemas/RecordReviewStatus"
           },
@@ -19977,6 +19984,7 @@
         "required": [
           "transition_state_entry_ref",
           "calculation_ref",
+          "level_of_theory",
           "energy_type",
           "electronic_energy_hartree",
           "software",
@@ -45473,10 +45481,10 @@
         "type": "string"
       },
       "ReactionEnergyProfile": {
-        "description": "One complete profile: reactants, transition state and products at one level and one program.",
+        "description": "One complete profile from one program: reactants, transition state and products at one level, spin aside.",
         "properties": {
           "definition": {
-            "default": "Each molecule's energy at this level from this program: its lowest single-point energy, or, only when it has no single point at that level and program, its lowest optimisation final energy (an optimisation recorded as not converged is not used). Electronic energy, no zero-point correction. Reactant and product energies are summed over the entry's participants, each counted once per occurrence.",
+            "default": "Each molecule's energy at this level (up to spin treatment) from this program: points at the transition state's own level are used first, then its spin variants; within that set, its lowest single-point energy, or, only when it has no single point there, its lowest optimisation final energy (an optimisation recorded as not converged is not used). Electronic energy, no zero-point correction. Reactant and product energies are summed over the entry's participants, each counted once per occurrence.",
             "title": "Definition",
             "type": "string"
           },
@@ -45524,6 +45532,20 @@
           "relative_kj_mol": {
             "$ref": "#/components/schemas/EnergyProfileValues"
           },
+          "spin_treatments": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/SpinTreatment-Output"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Spin Treatments",
+            "type": "array"
+          },
           "transition_state": {
             "$ref": "#/components/schemas/EnergyProfileTransitionState"
           },
@@ -45554,6 +45576,7 @@
           "transition_state_entry_review_status",
           "level_of_theory",
           "program",
+          "spin_treatments",
           "energy_types",
           "versions",
           "reactants",
@@ -110614,7 +110637,7 @@
     },
     "/api/v1/scientific/reaction-entries/{reaction_entry_ref}/energy-profile": {
       "get": {
-        "description": "One profile per transition-state entry, level of theory and program: reactants, transition state, products.\n\nEvery point of a profile comes from this reaction entry's own participants and transition-state entries, at one level\nfrom one program; programs are never mixed. A transition-state entry with no complete profile is listed under\n``unavailable`` with a code. Nothing is ranked or chosen between profiles. ``cited_by_kinetics`` lists, per kinetics\nrecord, the energy calculations the record cites, apart from the profiles. Transition-state entries and kinetics records\nfollow the list rules (``include_rejected``, ``include_deprecated``, ``min_review_status``, the curated floor; hidden ones\nare counted in ``request.hidden_by_default``, split by kind in ``request.hidden_by_default_by_scope``).\n``min_review_status`` also narrows the calculations a point may come from. The calculations behind each point are evidence: rejected and deprecated\nones are never used, and each point carries its review badge.",
+        "description": "One profile per transition-state entry, level of theory and program, and per open-shell spin reference when the\ntransition-state point is closed-shell: reactants, transition state, products.\n\nEvery point of a profile comes from this reaction entry's own participants and transition-state entries, at one\nlevel (up to spin treatment; each point names its own level) from one program; programs are never mixed. A\ntransition-state entry with no complete profile is listed under ``unavailable`` with a code. Nothing is ranked or\nchosen between profiles. ``cited_by_kinetics`` lists, per kinetics record, the energy calculations the record cites,\napart from the profiles. Transition-state entries and kinetics records follow the list rules (``include_rejected``,\n``include_deprecated``, ``min_review_status``, the curated floor; hidden ones are counted in\n``request.hidden_by_default``, split by kind in ``request.hidden_by_default_by_scope``). ``min_review_status`` also\nnarrows the calculations a point may come from. The calculations behind each point are evidence: rejected and\ndeprecated ones are never used, and each point carries its review badge.",
         "operationId": "reaction_entry_energy_profile_api_v1_scientific_reaction_entries__reaction_entry_ref__energy_profile_get",
         "parameters": [
           {
@@ -110716,7 +110739,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Electronic-energy profiles of a reaction entry, one level of theory and one program each",
+        "summary": "Electronic-energy profiles of a reaction entry, one level of theory (up to spin treatment) and one program each",
         "tags": [
           "scientific"
         ]

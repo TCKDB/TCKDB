@@ -1,17 +1,18 @@
 """Reaction energy profiles, and the energy lookups behind the ML export's electronic barrier.
 
 Two separate definitions live here. The ML barrier lookups (:func:`species_entry_energy_at_lot`,
-:func:`ts_calculation_energies`, :func:`ts_entries`, :func:`ml_energy_row_floor`) pick the lowest energy at a level across
-every program, under the ML export's approved-only calculation floor, and are unchanged. The profile read
-(:func:`build_energy_profiles`) picks per level AND program, treats calculations as evidence (rejected and
-deprecated never used, the rest badged), skips optimisations recorded as not converged, and lists a transition-state entry
-with no complete profile under ``unavailable`` with a code. The two share only the ranking idea (single points before
-optimisation energies, lowest wins, ties by calculation ref).
+:func:`ts_calculation_energies`, :func:`ts_entries`, :func:`ml_energy_row_floor`) pick the lowest energy at a level
+across every program, under the ML export's approved-only calculation floor, and are unchanged. The profile read
+(:func:`build_energy_profiles`) picks per level (up to spin treatment) AND program, treats calculations as evidence
+(rejected and deprecated never used, the rest badged), skips optimisations recorded as not converged, and lists a
+transition-state entry with no complete profile under ``unavailable`` with a code. The two share only the ranking idea
+(single points before optimisation energies, lowest wins, ties by calculation ref).
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -41,6 +42,13 @@ from app.schemas.reads.scientific_reaction_energy_profile import (
     KineticsCitedEnergies,
     ReactionEnergyProfile,
     ReactionEnergyProfileResponse,
+)
+from app.services.calculation_levels import (
+    declared_scheme_level_ids,
+    kinetics_closed_shell_exempt,
+    kinetics_level_fields_match,
+    kinetics_spin_facts,
+    level_spin_value,
 )
 from app.services.scientific_read.common import (
     evidence_usable_statuses,
@@ -151,9 +159,7 @@ def ts_calculation_energies(
     return [(e, "single_point", c) for e, c in sp_rows] + [(e, "optimization", c) for e, c in opt_rows]
 
 
-def ts_entries(
-    session: Session, reaction_entry_id: int, profile: ResolvedReadProfile
-) -> list[TransitionStateEntry]:
+def ts_entries(session: Session, reaction_entry_id: int, profile: ResolvedReadProfile) -> list[TransitionStateEntry]:
     """EVERY transition-state entry of a reaction entry that the profile shows, in DISPLAY order.
 
     Review rank, then deposition time newest first, then id descending: a listing
@@ -191,6 +197,7 @@ def ts_entries(
 
 @dataclass(frozen=True)
 class _Point:
+    calculation_id: int
     energy: float
     energy_type: str
     calculation_ref: str
@@ -230,7 +237,9 @@ def _owner_points(
     converged is left out; one with no convergence record is used and marked.
     """
     usable = evidence_usable_statuses(min_review_status)
-    owner = Calculation.species_entry_id.in_(species_entry_ids) | Calculation.transition_state_entry_id.in_(ts_entry_ids)
+    owner = Calculation.species_entry_id.in_(species_entry_ids) | Calculation.transition_state_entry_id.in_(
+        ts_entry_ids
+    )
     raw: list[tuple] = []
     for energy_type, result_model, energy_column in (
         ("single_point", CalculationSPResult, CalculationSPResult.electronic_energy_hartree),
@@ -269,6 +278,7 @@ def _owner_points(
         if status not in usable:
             continue
         point = _Point(
+            calc_id,
             energy,
             energy_type,
             ref,
@@ -346,11 +356,19 @@ def _label(lot: LevelOfTheorySummary) -> tuple[str, str, str]:
     return (lot.method, lot.basis or "", lot.level_of_theory_ref)
 
 
-def _missing_kind(side: list[tuple[int, str, int]], by_species: dict[int, list[_Point]], lot_id: int, program: str) -> str:
-    """Why a side has no complete set at ``(lot_id, program)``: ``none``, ``no_program``, ``other_program`` or ``complete``."""
+def _missing_kind(
+    side: list[tuple[int, str, int]],
+    by_species: dict[int, list[_Point]],
+    at_level_of: Callable[[_Point], bool],
+    program: str,
+) -> str:
+    """Why a side has no complete set at a level and ``program``: ``none``, ``no_program``, ``other_program``, ``complete``.
+
+    ``at_level_of`` says whether a point is at the level (up to spin treatment, open-shell reference respected).
+    """
     kinds: set[str] = set()
     for se_id, _ref, _n in side:
-        at_level = [p for p in by_species.get(se_id, []) if p.lot_id == lot_id]
+        at_level = [p for p in by_species.get(se_id, []) if at_level_of(p)]
         if any(p.program == program for p in at_level):
             continue
         if not at_level:
@@ -396,16 +414,76 @@ def build_energy_profiles(
         {p.lot_id for points in (*by_species.values(), *by_ts.values()) for p in points},
     )
 
-    def molecule(se_id: int, ref: str, count: int, lot_id: int, program: str) -> EnergyProfileMolecule | None:
-        at_key = [p for p in by_species.get(se_id, []) if p.lot_id == lot_id and p.program == program]
+    lot_rows = {
+        row.id: row
+        for row in session.scalars(
+            select(LevelOfTheory).where(
+                LevelOfTheory.id.in_({p.lot_id for points in (*by_species.values(), *by_ts.values()) for p in points})
+            )
+        )
+    }
+    scheme_ids = declared_scheme_level_ids(session, lot_rows)
+    facts = kinetics_spin_facts(
+        session, [p.calculation_id for points in (*by_species.values(), *by_ts.values()) for p in points]
+    )
+    all_participants = [se_id for se_id, _r, _n in reactants + products]
+
+    def open_shell_spin(p: _Point) -> str | None:
+        """The point's spin treatment when it constrains the open-shell reference, else ``None``."""
+        spin = level_spin_value(lot_rows[p.lot_id])
+        multiplicity, s_squared = facts.get(p.calculation_id, (None, None))
+        if spin is None or multiplicity is None or kinetics_closed_shell_exempt(multiplicity, spin, s_squared):
+            return None
+        return spin
+
+    def level_filters(ts_best: _Point, program: str) -> list[tuple[str | None, Callable[[_Point], bool]]]:
+        """``(open-shell reference, point filter)`` per feasible reference, at the transition-state point's level.
+
+        Every identity field but spin must agree (:func:`kinetics_level_fields_match`); open-shell points must share
+        one spin reference, the transition state's when it is open-shell, else each spin among the candidates.
+        """
+        ts_lot = lot_rows[ts_best.lot_id]
+
+        def fields_ok(p: _Point) -> bool:
+            return kinetics_level_fields_match(ts_lot, lot_rows[p.lot_id], scheme_ids=scheme_ids)
+
+        def with_reference(reference: str | None) -> Callable[[_Point], bool]:
+            def at_level(p: _Point) -> bool:
+                if not fields_ok(p):
+                    return False
+                spin = open_shell_spin(p)
+                return spin is None or reference is None or spin == reference
+
+            return at_level
+
+        ts_reference = open_shell_spin(ts_best)
+        if ts_reference is not None:
+            return [(ts_reference, with_reference(ts_reference))]
+        spins = sorted(
+            {
+                spin
+                for se_id in all_participants
+                for p in by_species.get(se_id, [])
+                if p.program == program and fields_ok(p)
+                for spin in [open_shell_spin(p)]
+                if spin is not None
+            }
+        )
+        return [(spin, with_reference(spin)) for spin in spins] or [(None, with_reference(None))]
+
+    def molecule(
+        se_id: int, ref: str, count: int, lot_id: int, program: str, at_level: Callable[[_Point], bool]
+    ) -> EnergyProfileMolecule | None:
+        at_key = [p for p in by_species.get(se_id, []) if p.program == program and at_level(p)]
         if not at_key:
             return None
-        best = _lowest(at_key)
+        best = _lowest([p for p in at_key if p.lot_id == lot_id] or at_key)
         assert best.software is not None  # a program was matched
         return EnergyProfileMolecule(
             species_entry_ref=ref,
             count=count,
             calculation_ref=best.calculation_ref,
+            level_of_theory=levels[best.lot_id],
             energy_type=best.energy_type,
             electronic_energy_hartree=best.energy,
             software=best.software,
@@ -418,7 +496,7 @@ def build_energy_profiles(
     for entry, entry_status in entries:
         ts_points = by_ts.get(entry.id, [])
         programmed = [p for p in ts_points if p.program is not None]
-        entry_profiles: list[ReactionEnergyProfile] = []
+        entry_profiles: list[tuple[str, ReactionEnergyProfile]] = []
         entry_unavailable: list[EnergyProfileUnavailable] = []
 
         def refuse(
@@ -448,46 +526,72 @@ def build_energy_profiles(
         for lot_id, program in sorted({(p.lot_id, p.program) for p in programmed}):
             ts_best = _lowest([p for p in programmed if p.lot_id == lot_id and p.program == program])
             assert ts_best.software is not None  # programmed points only
-            reactant_parts = [molecule(s, r, n, lot_id, program) for s, r, n in reactants]
-            product_parts = [molecule(s, r, n, lot_id, program) for s, r, n in products]
-            if reactants and products and None not in reactant_parts and None not in product_parts:
-                found_reactants = [m for m in reactant_parts if m is not None]
-                found_products = [m for m in product_parts if m is not None]
+            filters = level_filters(ts_best, program)
+            # Keyed by the chosen calculations: references that pick the same points give one profile.
+            complete: dict[tuple[str, ...], tuple[str, list[EnergyProfileMolecule], list[EnergyProfileMolecule]]] = {}
+            for reference, at_level in filters:
+                reactant_parts = [molecule(s, r, n, lot_id, program, at_level) for s, r, n in reactants]
+                product_parts = [molecule(s, r, n, lot_id, program, at_level) for s, r, n in products]
+                if reactants and products and None not in reactant_parts and None not in product_parts:
+                    found_r = [m for m in reactant_parts if m is not None]
+                    found_p = [m for m in product_parts if m is not None]
+                    chosen = tuple(m.calculation_ref for m in (*found_r, *found_p))
+                    complete.setdefault(chosen, (reference or "", found_r, found_p))
+            for reference, found_reactants, found_products in complete.values():
                 e_react = sum(m.electronic_energy_hartree * m.count for m in found_reactants)
                 e_prod = sum(m.electronic_energy_hartree * m.count for m in found_products)
                 used = [*found_reactants, *found_products, ts_best]
-                entry_profiles.append(
-                    ReactionEnergyProfile(
+                profile = ReactionEnergyProfile(
+                    transition_state_entry_ref=entry.public_ref,
+                    transition_state_entry_review_status=entry_status,
+                    level_of_theory=levels[lot_id],
+                    program=program,
+                    spin_treatments=sorted(
+                        {
+                            lot.spin_treatment
+                            for lot in (
+                                levels[lot_id],
+                                *(m.level_of_theory for m in (*found_reactants, *found_products)),
+                            )
+                        },
+                        key=lambda v: (v is None, v.value if v is not None else ""),
+                    ),
+                    energy_types=sorted({u.energy_type for u in used}),
+                    versions=sorted(
+                        {u.software.version for u in used if u.software}, key=lambda v: (v is None, v or "")
+                    ),
+                    reactants=found_reactants,
+                    transition_state=EnergyProfileTransitionState(
                         transition_state_entry_ref=entry.public_ref,
-                        transition_state_entry_review_status=entry_status,
-                        level_of_theory=levels[lot_id],
-                        program=program,
-                        energy_types=sorted({u.energy_type for u in used}),
-                        versions=sorted({u.software.version for u in used if u.software}, key=lambda v: (v is None, v or "")),
-                        reactants=found_reactants,
-                        transition_state=EnergyProfileTransitionState(
-                            transition_state_entry_ref=entry.public_ref,
-                            calculation_ref=ts_best.calculation_ref,
-                            energy_type=ts_best.energy_type,
-                            electronic_energy_hartree=ts_best.energy,
-                            software=ts_best.software,
-                            review_status=ts_best.review_status,
-                            convergence_unrecorded=ts_best.convergence_unrecorded,
-                        ),
-                        products=found_products,
-                        energy_hartree=EnergyProfileValues(
-                            reactants=e_react, transition_state=ts_best.energy, products=e_prod
-                        ),
-                        relative_kj_mol=EnergyProfileValues(
-                            reactants=0.0,
-                            transition_state=(ts_best.energy - e_react) * HARTREE_TO_KJ_MOL,
-                            products=(e_prod - e_react) * HARTREE_TO_KJ_MOL,
-                        ),
-                    )
+                        calculation_ref=ts_best.calculation_ref,
+                        level_of_theory=levels[ts_best.lot_id],
+                        energy_type=ts_best.energy_type,
+                        electronic_energy_hartree=ts_best.energy,
+                        software=ts_best.software,
+                        review_status=ts_best.review_status,
+                        convergence_unrecorded=ts_best.convergence_unrecorded,
+                    ),
+                    products=found_products,
+                    energy_hartree=EnergyProfileValues(
+                        reactants=e_react, transition_state=ts_best.energy, products=e_prod
+                    ),
+                    relative_kj_mol=EnergyProfileValues(
+                        reactants=0.0,
+                        transition_state=(ts_best.energy - e_react) * HARTREE_TO_KJ_MOL,
+                        products=(e_prod - e_react) * HARTREE_TO_KJ_MOL,
+                    ),
                 )
+                entry_profiles.append((reference, profile))
+            if complete:
                 continue
-            reactant_kind = "none" if not reactants else _missing_kind(reactants, by_species, lot_id, program)
-            product_kind = "none" if not products else _missing_kind(products, by_species, lot_id, program)
+            kinds = [
+                (
+                    "none" if not reactants else _missing_kind(reactants, by_species, f, program),
+                    "none" if not products else _missing_kind(products, by_species, f, program),
+                )
+                for _reference, f in filters
+            ]
+            reactant_kind, product_kind = min(kinds, key=lambda k: (k[0] == "none", k[1] == "none"))
             if reactant_kind == "none":
                 code = EnergyProfileUnavailableCode.no_reactant_energy_at_level
             elif product_kind == "none":
@@ -497,11 +601,12 @@ def build_energy_profiles(
             else:
                 code = EnergyProfileUnavailableCode.points_from_different_programs
             refuse(code, lot_id, program)
-        entry_profiles.sort(key=lambda p: (_label(p.level_of_theory), p.program))
+        # The open-shell reference breaks ties between profiles at one level and program.
+        entry_profiles.sort(key=lambda rp: (_label(rp[1].level_of_theory), rp[1].program, rp[0]))
         entry_unavailable.sort(
             key=lambda u: (_label(u.level_of_theory) if u.level_of_theory else ("", "", ""), u.program or "")
         )
-        profiles.extend(entry_profiles)
+        profiles.extend(profile for _reference, profile in entry_profiles)
         unavailable.extend(entry_unavailable)
     return profiles, unavailable
 

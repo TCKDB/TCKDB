@@ -1,7 +1,7 @@
 """GET /api/v1/scientific/reaction-entries/{reaction_entry_ref}/energy-profile.
 
-Electronic-energy profiles (reactants, transition state, products) of one reaction entry, one level of theory and one
-program at a time. Public ref only; read in a snapshot.
+Electronic-energy profiles (reactants, transition state, products) of one reaction entry, one level of theory (up to
+spin treatment) and one program at a time. Public ref only; read in a snapshot.
 """
 
 from __future__ import annotations
@@ -24,7 +24,10 @@ router = APIRouter(route_class=ServerFaultRoute, prefix="/reaction-entries")
 @router.get(
     "/{reaction_entry_ref}/energy-profile",
     response_model=ReactionEnergyProfileResponse,
-    summary="Electronic-energy profiles of a reaction entry, one level of theory and one program each",
+    summary=(
+        "Electronic-energy profiles of a reaction entry, one level of theory (up to spin treatment) "
+        "and one program each"
+    ),
 )
 def reaction_entry_energy_profile(
     reaction_entry_ref: str = Path(..., min_length=1, max_length=64),
@@ -33,16 +36,18 @@ def reaction_entry_energy_profile(
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
 ) -> ReactionEnergyProfileResponse:
-    """One profile per transition-state entry, level of theory and program: reactants, transition state, products.
+    """One profile per transition-state entry, level of theory and program, and per open-shell spin reference when the
+    transition-state point is closed-shell: reactants, transition state, products.
 
-    Every point of a profile comes from this reaction entry's own participants and transition-state entries, at one level
-    from one program; programs are never mixed. A transition-state entry with no complete profile is listed under
-    ``unavailable`` with a code. Nothing is ranked or chosen between profiles. ``cited_by_kinetics`` lists, per kinetics
-    record, the energy calculations the record cites, apart from the profiles. Transition-state entries and kinetics records
-    follow the list rules (``include_rejected``, ``include_deprecated``, ``min_review_status``, the curated floor; hidden ones
-    are counted in ``request.hidden_by_default``, split by kind in ``request.hidden_by_default_by_scope``).
-    ``min_review_status`` also narrows the calculations a point may come from. The calculations behind each point are evidence: rejected and deprecated
-    ones are never used, and each point carries its review badge.
+    Every point of a profile comes from this reaction entry's own participants and transition-state entries, at one
+    level (up to spin treatment; each point names its own level) from one program; programs are never mixed. A
+    transition-state entry with no complete profile is listed under ``unavailable`` with a code. Nothing is ranked or
+    chosen between profiles. ``cited_by_kinetics`` lists, per kinetics record, the energy calculations the record cites,
+    apart from the profiles. Transition-state entries and kinetics records follow the list rules (``include_rejected``,
+    ``include_deprecated``, ``min_review_status``, the curated floor; hidden ones are counted in
+    ``request.hidden_by_default``, split by kind in ``request.hidden_by_default_by_scope``). ``min_review_status`` also
+    narrows the calculations a point may come from. The calculations behind each point are evidence: rejected and
+    deprecated ones are never used, and each point carries its review badge.
     """
     if not is_ref_handle(reaction_entry_ref):
         raise ValueError(f"invalid_handle: {reaction_entry_ref!r} is not a <prefix>_<body> public ref")

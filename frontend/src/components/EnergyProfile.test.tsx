@@ -103,6 +103,54 @@ describe("EnergyProfile", () => {
         expect(table).toHaveTextContent("single-point energy")
     })
 
+    it("names which points used which spin treatment when a profile mixes them, and says nothing otherwise", async () => {
+        const spin = (name: string) => ({ ...lot("lot_u", "wb97xd"), spin_treatment: name })
+        const mixed = profile("tse_one", spin("unrestricted"), "Gaussian", [0, 84.31, -12.04], {
+            spin_treatments: ["restricted", "unrestricted"],
+            reactants: [
+                { species_entry_ref: "spe_a", count: 1, ...point("calc_ra", -40.1, { level_of_theory: { ...lot("lot_r", "wb97xd"), spin_treatment: "restricted" } }) },
+                { species_entry_ref: "spe_b", count: 1, ...point("calc_rb", -75.2, { level_of_theory: spin("unrestricted") }) },
+            ],
+            transition_state: { transition_state_entry_ref: "tse_one", ...point("calc_ts", -115.2, { level_of_theory: spin("unrestricted") }) },
+            products: [{ species_entry_ref: "spe_c", count: 1, ...point("calc_pc", -57.6, { level_of_theory: spin("unrestricted") }) }],
+        })
+        mount(read({ profiles: [mixed] }))
+        await loaded()
+        const note = screen.getByText(/different spin treatments of the same level of theory/)
+        expect(note).toHaveTextContent("restricted: CH4")
+        expect(note).toHaveTextContent("unrestricted: OH, Transition state, H2O")
+        expect(screen.getByText("Level of theory (transition state)")).toBeInTheDocument()
+        const table = screen.getByRole("table", { name: /Every point of the selected profile/ })
+        expect(table).toHaveTextContent("Gaussian 16 · restricted")
+    })
+
+    it("writes a restricted-open spin treatment as words, not the raw token", async () => {
+        const spin = (name: string) => ({ ...lot("lot_u", "wb97xd"), spin_treatment: name })
+        const mixed = profile("tse_one", spin("unrestricted"), "Gaussian", [0, 84.31, -12.04], {
+            spin_treatments: ["restricted_open", "unrestricted"],
+            reactants: [
+                { species_entry_ref: "spe_a", count: 1, ...point("calc_ra", -40.1, { level_of_theory: spin("restricted_open") }) },
+                { species_entry_ref: "spe_b", count: 1, ...point("calc_rb", -75.2, { level_of_theory: spin("unrestricted") }) },
+            ],
+            transition_state: { transition_state_entry_ref: "tse_one", ...point("calc_ts", -115.2, { level_of_theory: spin("unrestricted") }) },
+            products: [{ species_entry_ref: "spe_c", count: 1, ...point("calc_pc", -57.6, { level_of_theory: spin("unrestricted") }) }],
+        })
+        mount(read({ profiles: [mixed] }))
+        await loaded()
+        expect(screen.getByText(/different spin treatments of the same level of theory/)).toHaveTextContent("restricted open: CH4")
+        const table = screen.getByRole("table", { name: /Every point of the selected profile/ })
+        expect(table).toHaveTextContent("Gaussian 16 · restricted open")
+        expect(table).not.toHaveTextContent("restricted_open")
+    })
+
+    it("adds no spin note or spin text to a profile with one spin treatment", async () => {
+        mount(read({ profiles: [{ ...FIRST, spin_treatments: ["unrestricted"] }] }))
+        await loaded()
+        expect(screen.queryByText(/different spin treatments/)).toBeNull()
+        expect(screen.getByText("Level of theory")).toBeInTheDocument()
+        expect(screen.getByRole("table", { name: /Every point of the selected profile/ })).not.toHaveTextContent("unrestricted")
+    })
+
     it("states the server's definition, which carries electronic energy and no zero-point correction, once", async () => {
         mount(read())
         await loaded()
@@ -131,7 +179,7 @@ describe("EnergyProfile", () => {
         mount(read())
         await loaded()
         expect(screen.getByRole("group", { name: /Each profile has its own axis/ })).toBeInTheDocument()
-        expect(screen.getByText(/By TS entry, then level and program\./)).toBeInTheDocument()
+        expect(screen.getByText(/By TS entry, then level, program and the radicals' spin treatment\./)).toBeInTheDocument()
     })
 
     it("adds the differing qualifier, never a ref, to picker options that would otherwise read the same", async () => {
