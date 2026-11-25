@@ -1078,4 +1078,3 @@ def test_the_no_tools_fallback_without_a_warning_has_no_guidance_and_the_key_is_
     status, code, failed, job = _outcome(db_session, factory, job, submission, settings_obj)
     assert (status, code, failed) == (S.failed, MachineReviewJobFailure.invalid_output, 1)
     assert WARNING_KEY not in json.dumps(server.requests[1].body["messages"])
-

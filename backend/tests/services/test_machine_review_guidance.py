@@ -122,3 +122,20 @@ def test_seed_codes_are_sorted_and_unique():
     context = NS(precheck_context=NS(record_summaries=(NS(deposit_warnings=(w("a"),)),), submission_warnings=(w("c"),)))
     assert guidance_seed_codes(context, summaries) == ("a", "b", "c")
     assert guidance_seed_codes(NS(precheck_context=None), {}) == ()
+
+
+def test_a_multi_code_check_is_delivered_with_every_code_and_a_neutral_title(entries):
+    from app.services.machine_review.agent.tools import _guidance_item
+
+    multi = next(e for e in entries if e.kind == "check" and len(e.codes) > 1)
+    item = _guidance_item(multi)
+    assert item["codes"] == list(multi.codes)
+    assert multi.title == multi.source_key.replace(":", " ")
+
+
+def test_no_delivered_text_ends_mid_word(entries):
+    from app.services.machine_review.agent.tools import _guidance_item
+
+    for entry in entries:
+        text = _guidance_item(entry)["text"]
+        assert text == entry.text or text.endswith((".", "..."))

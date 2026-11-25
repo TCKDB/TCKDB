@@ -60,7 +60,7 @@ def build_guidance_entries() -> list[GuidanceEntry]:
             GuidanceEntry(
                 source_key=f"check:{number}",
                 kind=CHECK,
-                title=_humanise(codes[0]) if codes else f"check {number}",
+                title=f"check {number}",
                 text=check.asserts,
                 fields=fields,
                 codes=codes,

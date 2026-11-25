@@ -54,7 +54,7 @@ SEARCH_GUIDANCE = "search_guidance"
 GUIDANCE_RESULT_LIMIT = 5
 
 #: Longest entry text kept in a result, in characters.
-GUIDANCE_TEXT_MAX_CHARS = 600
+GUIDANCE_TEXT_MAX_CHARS = 1000
 
 _SEARCH_GUIDANCE_DESCRIPTION = (
     "Search TCKDB's own guidance: the sentences it shows for deposit warnings, its scientific checks and their "
@@ -143,11 +143,22 @@ def _truncate(payload: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def _cut_text(text: str) -> str:
+    """The text cut at the last sentence end, or the last space, within the cap."""
+    head = text[:GUIDANCE_TEXT_MAX_CHARS]
+    end = max(head.rfind(". "), head.rfind(".\n"))
+    if end > 0:
+        return head[: end + 1]
+    return head[: head.rfind(" ")].rstrip(",;:") + "..." if " " in head else head
+
+
 def _guidance_item(entry: GuidanceEntry) -> dict[str, Any]:
     text = entry.text
     if len(text) > GUIDANCE_TEXT_MAX_CHARS:
-        text = text[: GUIDANCE_TEXT_MAX_CHARS - 3] + "..."
+        text = _cut_text(text)
     item: dict[str, Any] = {"source_key": entry.source_key, "kind": entry.kind, "title": entry.title, "text": text}
+    if entry.codes:
+        item["codes"] = list(entry.codes)
     if entry.fields:
         item["fields"] = dict(entry.fields)
     return item
