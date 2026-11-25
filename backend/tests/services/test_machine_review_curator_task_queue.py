@@ -142,6 +142,10 @@ def test_db_enums_mirror_service_layer_vocabulary():
     assert {e.value for e in DBMachineReviewSeverity} == {
         e.value for e in MachineReviewSeverity
     }
+    from app.db.models.common import MachineReviewCategory as DBMachineReviewCategory
+    from app.services.machine_review.schemas import MachineReviewCategory
+
+    assert [e.value for e in DBMachineReviewCategory] == [e.value for e in MachineReviewCategory]
 
 
 def test_terminal_states_partition():
