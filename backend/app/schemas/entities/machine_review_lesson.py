@@ -12,10 +12,8 @@ from app.db.models.common import (
     MachineReviewLessonStatus,
     SubmissionRecordType,
 )
+from app.db.models.machine_review_lesson import LESSON_TEXT_MAX_CHARS
 from app.services.machine_review.schemas import MachineReviewCategory
-
-#: Longest lesson text, in characters.
-LESSON_TEXT_MAX_CHARS = 500
 
 _ScopeWord = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)]
 

@@ -24,14 +24,15 @@ from app.db.models.common import (
     SubmissionRecordType,
 )
 from app.db.models.machine_review_job import MachineReviewJob
-from app.db.models.machine_review_lesson import MachineReviewLesson
-from app.schemas.entities.machine_review_lesson import LESSON_TEXT_MAX_CHARS, LessonScope
+from app.db.models.machine_review_lesson import LESSON_TEXT_MAX_CHARS, MachineReviewLesson
+from app.schemas.entities.machine_review_lesson import LessonScope
 from app.services.machine_review.agent.guidance import GuidanceEntry
+from app.services.machine_review.agent.tools import LESSON_KIND
+from app.services.machine_review.guidance_corpus import known_check_codes
 
 if TYPE_CHECKING:
     from app.db.models.machine_review_curator_task import MachineReviewCuratorTask
 
-LESSON_KIND = "lesson"
 LESSON_TITLE = "Lesson written by a curator"
 LESSON_AUTHOR = "curator"
 
@@ -68,6 +69,14 @@ def _clean_text(text: str) -> str:
     return cleaned
 
 
+def _check_scope(scope: LessonScope | None) -> None:
+    code = scope.check_code if scope is not None else None
+    if code is not None and code not in known_check_codes():
+        raise MachineReviewLessonError(
+            "scope.check_code is not a known warning or check code.", status=422, code="lesson_unknown_check_code"
+        )
+
+
 def get_lesson(session: Session, lesson_id: int) -> MachineReviewLesson:
     """One lesson, or the coded not-found."""
     lesson = session.get(MachineReviewLesson, lesson_id)
@@ -91,6 +100,7 @@ def propose_lesson(
     """Store a ``proposed`` lesson; it reaches no review until an admin verifies it."""
     if source_job_id is not None and session.get(MachineReviewJob, source_job_id) is None:
         raise NotFoundError("Machine review job not found.", code="machine_review_job_not_found")
+    _check_scope(scope)
     lesson = MachineReviewLesson(
         text=_clean_text(text),
         signal=signal,
@@ -141,6 +151,8 @@ def edit_lesson(
     lesson = get_lesson(session, lesson_id)
     if lesson.status is MachineReviewLessonStatus.retired:
         raise _retired()
+    if scope is not _UNSET:
+        _check_scope(scope)
     if text is not _UNSET:
         lesson.text = _clean_text(text)
     if signal is not _UNSET:

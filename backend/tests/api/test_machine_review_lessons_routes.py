@@ -114,3 +114,12 @@ def test_the_request_refuses_fields_the_server_owns(client, login_as, _api_curat
     login_as(_api_curator_user)
     assert client.post(CURATOR, json=_body(**extra)).status_code == 422
     assert client.post(CURATOR, json=_body()).status_code == 201
+
+
+def test_resolve_lesson_text_is_stripped_before_the_cap_like_the_create_route():
+    from app.api.routes.admin import AdminCuratorTaskResolveRequest
+
+    body = AdminCuratorTaskResolveRequest(
+        resolution_state="dismissed_machine_finding", resolution_note="n", lesson_text="x" * 500 + " "
+    )
+    assert body.lesson_text == "x" * 500

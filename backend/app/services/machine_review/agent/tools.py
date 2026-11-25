@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -82,12 +82,30 @@ class GetRecordArgs(BaseModel):
     record_ref: str = Field(min_length=1, max_length=256)
 
 
+#: Finding-category tokens; a test pins them to the review vocabulary.
+FindingCategory = Literal[
+    "provenance",
+    "units",
+    "geometry",
+    "kinetics",
+    "thermo",
+    "statmech",
+    "transport",
+    "transition_state_validation",
+    "calculation_parameters",
+    "consistency",
+    "schema_gap",
+]
+
+FINDING_CATEGORIES = get_args(FindingCategory)
+
+
 class SearchGuidanceArgs(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     query: str = Field(min_length=1, max_length=200)
     kind: Literal["deposit_warning", "check", "threshold", "lesson"] | None = None
-    category: str | None = Field(default=None, min_length=1, max_length=64)
+    category: FindingCategory | None = None
 
 
 @dataclass(frozen=True)
@@ -245,7 +263,7 @@ class ToolRegistry:
                                     "type": "string",
                                     "enum": ["deposit_warning", "check", "threshold", LESSON_KIND],
                                 },
-                                "category": {"type": "string"},
+                                "category": {"type": "string", "enum": list(FINDING_CATEGORIES)},
                             },
                             "required": ["query"],
                             "additionalProperties": False,

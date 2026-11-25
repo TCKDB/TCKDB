@@ -13,7 +13,7 @@ from app.db.models.common import (
     MachineReviewLessonSignal,
     MachineReviewLessonStatus,
 )
-from tests.db._migration_chain import current_head, script_directory
+from tests.db._migration_chain import script_directory
 
 REPO_BACKEND = Path(__file__).resolve().parents[2]
 REVISION = "e7a3c9d1b5f2"
@@ -91,10 +91,9 @@ def _state(engine) -> dict[str, object]:
     return {"tables": tables, "labels": labels, "indexes": indexes, "columns": columns}
 
 
-def test_the_revision_sits_on_the_previous_head_and_is_the_only_head():
+def test_the_revision_sits_on_the_previous_head_and_the_chain_has_one_head():
     assert script_directory().get_revision(REVISION).down_revision == PREVIOUS
-    assert current_head() == REVISION
-    assert script_directory().get_heads() == [REVISION]
+    assert len(script_directory().get_heads()) == 1
 
 
 def test_upgrade_downgrade_upgrade_round_trips(scratch_db):

@@ -305,3 +305,15 @@ def test_the_search_tool_is_offered_for_lessons_alone_and_lists_the_lesson_kind(
     assert "lesson" in properties["kind"]["enum"] and "category" in properties
     assert "written by curators" in tool["function"]["description"]
     assert registry.known_name("search_guidance") == "search_guidance"
+
+
+def test_an_unknown_category_is_invalid_arguments_and_the_vocabulary_matches_the_review_categories():
+    from app.services.machine_review.agent.tools import FINDING_CATEGORIES
+    from app.services.machine_review.schemas import MachineReviewCategory
+
+    assert set(FINDING_CATEGORIES) == {c.value for c in MachineReviewCategory}
+    registry = _guided(lessons=_lessons(1, "thermo"))
+    for bad in ("thermochemistry", "Thermo"):
+        assert _search(registry, category=bad).status_code == "invalid_arguments"
+    (tool,) = [s for s in registry.schemas() if s["function"]["name"] == "search_guidance"]
+    assert tool["function"]["parameters"]["properties"]["category"]["enum"] == list(FINDING_CATEGORIES)

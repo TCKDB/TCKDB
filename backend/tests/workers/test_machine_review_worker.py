@@ -1139,6 +1139,33 @@ def test_a_lesson_is_citable_only_while_verified_and_the_next_job_sees_each_chan
     }
 
 
+def test_a_lesson_typed_to_the_offered_record_is_citable_and_one_typed_to_another_is_not(
+    db_session, factory, local_stub
+):
+    from app.db.models.common import MachineReviewCategory, MachineReviewLessonSignal
+    from app.services.machine_review import lessons
+
+    admin = make_user(db_session, "lesson-typed-admin", AppUserRole.admin)
+    results = {}
+    for label, record_type in (("match", SubmissionRecordType.thermo), ("other", SubmissionRecordType.kinetics)):
+        lesson = lessons.propose_lesson(
+            db_session,
+            author_id=admin.id,
+            text=f"Always check the {LESSON_PHRASE} before trusting an energy.",
+            signal=MachineReviewLessonSignal.curator_flagged_missed_issue,
+            category=MachineReviewCategory.thermo,
+            record_type=record_type,
+        )
+        lessons.verify_lesson(db_session, lesson.id, actor_id=admin.id)
+        db_session.flush()
+        server, submission, job, settings_obj = _lesson_job(db_session, local_stub, lesson)
+        results[label] = _outcome(db_session, factory, job, submission, settings_obj)[:3]
+        lessons.retire_lesson(db_session, lesson.id, actor_id=admin.id)
+        db_session.flush()
+    assert results["match"] == (S.succeeded, None, 0)
+    assert results["other"] == (S.failed, MachineReviewJobFailure.invalid_output, 1)
+
+
 def test_a_full_review_job_writes_no_lesson(db_session, factory, local_stub):
     from sqlalchemy import func
 

@@ -10,9 +10,10 @@ trust.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from sqlalchemy import case, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -825,17 +826,7 @@ class AdminCuratorTaskResolveRequest(BaseModel):
     resolution_state: MachineReviewCuratorTaskState
     resolution_note: str
     #: A note for the machine reviewer, proposed as a lesson; only with ``dismissed_machine_finding``.
-    lesson_text: str | None = Field(default=None, min_length=1, max_length=500)
-
-    @field_validator("lesson_text")
-    @classmethod
-    def _strip_lesson_text(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        value = value.strip()
-        if not value:
-            raise ValueError("lesson_text must not be blank.")
-        return value
+    lesson_text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)] | None = None
 
 
 class AdminCuratorTaskReopenRequest(BaseModel):

@@ -19,6 +19,7 @@ from app.services.machine_review import lessons
 from tests.services._machine_review_job_support import make_user
 
 S = MachineReviewLessonStatus
+CODE = "atom_map_atoms_unaccounted_for"
 SIGNAL = MachineReviewLessonSignal.curator_flagged_missed_issue
 
 
@@ -137,10 +138,10 @@ def test_the_load_is_newest_first_and_capped(db_session, people):
 
 def test_scope_keys_reach_the_entry(db_session, people):
     curator, admin = people
-    lesson = _propose(db_session, curator, scope=LessonScope(software="orca", check_code="spin_contamination"))
+    lesson = _propose(db_session, curator, scope=LessonScope(software="orca", check_code=CODE))
     lessons.verify_lesson(db_session, lesson.id, actor_id=admin.id)
     (entry,) = lessons.verified_lesson_entries(db_session, record_types={"thermo"})
-    assert entry.fields["software"] == "orca" and entry.codes == ("spin_contamination",)
+    assert entry.fields["software"] == "orca" and entry.codes == (CODE,)
     assert entry.fields["category"] == "thermo"
 
 
@@ -179,3 +180,25 @@ def test_a_lesson_from_a_task_whose_finding_cannot_be_recovered_has_no_category(
     assert lesson.record_type is SubmissionRecordType.kinetics
     assert lesson.signal is MachineReviewLessonSignal.curator_dismissed_finding
     assert lesson.source_curator_task_id == task.id and lesson.status is S.proposed
+
+
+def test_an_unknown_check_code_is_refused_on_propose_and_edit_and_a_known_one_ranks_first(db_session, people):
+    from app.api.errors import MachineReviewJobError
+    from app.services.machine_review.agent.guidance import GuidanceIndex
+
+    curator, admin = people
+    with pytest.raises(MachineReviewJobError) as refused:
+        _propose(db_session, curator, scope=LessonScope(check_code="no_such_check_code"))
+    assert (refused.value.status, refused.value.code) == (422, "lesson_unknown_check_code")
+
+    plain = _propose(db_session, curator, text="atom map unaccounted note")
+    with pytest.raises(MachineReviewJobError) as edit_refused:
+        lessons.edit_lesson(db_session, plain.id, actor_id=admin.id, scope=LessonScope(check_code="nope"))
+    assert edit_refused.value.code == "lesson_unknown_check_code"
+
+    scoped = _propose(db_session, curator, text="atom map unaccounted note", scope=LessonScope(check_code=CODE))
+    for lesson in (plain, scoped):
+        lessons.verify_lesson(db_session, lesson.id, actor_id=admin.id)
+    entries = lessons.verified_lesson_entries(db_session, record_types={"thermo"})
+    ranked = GuidanceIndex(entries).search(CODE, limit=5)
+    assert ranked[0].source_key == f"lesson:{scoped.id}"
