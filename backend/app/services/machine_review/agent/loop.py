@@ -3,7 +3,8 @@
 The model may read records through the registry's tools. Each model call and tool call is reported through
 ``emit`` so the job shows progress. The loop ends with one call that has no tools and carries the response format;
 its text is returned for the caller to parse, so a tool-phase reply is never taken as the answer. Reasoning is kept
-out of the history sent back to the model. A server that rejects ``tools`` gets one single-shot structured call.
+out of the history sent back to the model. A server that rejects ``tools`` gets one single-shot structured call,
+preceded by the registry's up-front guidance message when it has one.
 
 Steps, tool calls and wall time are all bounded; running out raises :class:`ReviewBudgetExhausted`.
 
@@ -216,7 +217,10 @@ def _drive(call, result, history, budget, registry, emit, check_live, clock, sta
             except ToolsUnsupportedError:
                 if state["steps"] > 0:
                     raise
-                # The server takes no tools: one structured call on the original messages.
+                # The server takes no tools: one structured call on the original messages plus any guidance.
+                guidance = registry.prefetch_guidance_message()
+                if guidance is not None:
+                    history.append(guidance)
                 return result(call(tools=False, final=True, status=STATUS_TOOLS_UNSUPPORTED))
             if not turn.tool_calls:
                 if turn.content:

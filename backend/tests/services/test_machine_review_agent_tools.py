@@ -142,3 +142,103 @@ def test_truncation_never_leaves_a_number_without_its_unit_or_qualifier():
             assert (number in values) == (unit in values)
         cut_seen = cut_seen or outcome.status_code == "truncated"
     assert cut_seen
+
+
+# --- search_guidance ---------------------------------------------------------------------------------
+
+from app.services.machine_review.agent.guidance import GuidanceEntry, GuidanceIndex
+
+
+def _guidance(n: int = 8, text_chars: int = 40, field_chars: int = 0) -> GuidanceIndex:
+    return GuidanceIndex(
+        [
+            GuidanceEntry(
+                source_key=f"warning:code_{i}",
+                kind="deposit_warning",
+                title=f"code {i}",
+                text="spin " + "x" * text_chars,
+                fields={"note": "y" * field_chars} if field_chars else {},
+                codes=(f"code_{i}",),
+            )
+            for i in range(n)
+        ]
+    )
+
+
+def _search(registry, **args):
+    return registry.execute("search_guidance", json.dumps({"query": "spin", **args}))
+
+
+def _guided(**kw):
+    return ToolRegistry(offered=frozenset(), summaries={}, **kw)
+
+
+def test_search_guidance_is_listed_only_when_an_index_is_given():
+    assert [s["function"]["name"] for s in _registry().schemas()] == ["get_record"]
+    names = [s["function"]["name"] for s in _guided(guidance=_guidance()).schemas()]
+    assert names == ["get_record", "search_guidance"]
+
+
+def test_a_search_returns_at_most_five_results_and_records_what_it_delivered():
+    registry = _guided(guidance=_guidance())
+    assert registry.returned_sources == frozenset()
+    outcome = _search(registry)
+    body = json.loads(outcome.content)
+    assert outcome.status_code == "ok"
+    assert len(body["results"]) == 5 and len(outcome.content.encode()) <= TOOL_RESULT_MAX_BYTES
+    assert registry.returned_sources == {r["source_key"] for r in body["results"]}
+
+
+def test_an_oversized_result_is_truncated_and_dropped_keys_are_not_returned():
+    registry = _guided(guidance=_guidance(text_chars=3000, field_chars=1500))
+    outcome = _search(registry)
+    body = json.loads(outcome.content)
+    assert outcome.status_code == "truncated"
+    assert len(outcome.content.encode()) <= TOOL_RESULT_MAX_BYTES
+    delivered = {r["source_key"] for r in body["results"]}
+    assert 0 < len(delivered) < 5 and registry.returned_sources == delivered
+
+
+@pytest.mark.parametrize(
+    "args",
+    [{"query": ""}, {"query": "x" * 201}, {"query": "spin", "extra": 1}, {"query": "spin", "kind": "lesson"}],
+)
+def test_bad_search_arguments_are_invalid_and_add_no_source(args):
+    registry = _guided(guidance=_guidance())
+    assert registry.execute("search_guidance", json.dumps(args)).status_code == "invalid_arguments"
+    assert registry.returned_sources == frozenset()
+    assert _search(registry).status_code == "ok"
+
+
+def test_a_search_with_no_match_is_ok_and_empty():
+    registry = _guided(guidance=_guidance())
+    outcome = _search(registry, query="qqqq")
+    assert outcome.status_code == "ok" and json.loads(outcome.content) == {"results": []}
+    assert registry.returned_sources == frozenset()
+
+
+def test_search_guidance_without_an_index_is_unknown_and_known_name_follows_the_registry():
+    plain, guided = _registry(), _guided(guidance=_guidance())
+    assert plain.execute("search_guidance", json.dumps({"query": "spin"})).status_code == "unknown_tool"
+    assert plain.known_name("search_guidance") is None and plain.known_name("get_record") == "get_record"
+    assert guided.known_name("search_guidance") == "search_guidance" and guided.known_name("rm") is None
+
+
+def test_the_prefetch_message_holds_the_seeded_entries_and_counts_them_as_returned():
+    registry = _guided(guidance=_guidance(), guidance_seed=("code_2", "code_1"))
+    message = registry.prefetch_guidance_message()
+    assert message["role"] == "user"
+    assert [m for m in ("warning:code_2", "warning:code_1") if m in message["content"]] == [
+        "warning:code_2",
+        "warning:code_1",
+    ]
+    assert message["content"].index("warning:code_2") < message["content"].index("warning:code_1")
+    assert registry.returned_sources == {"warning:code_2", "warning:code_1"}
+
+
+def test_without_a_seed_or_an_index_there_is_no_prefetch_message():
+    assert _guided(guidance=_guidance()).prefetch_guidance_message() is None
+    assert _guided(guidance_seed=("code_1",)).prefetch_guidance_message() is None
+    registry = _guided(guidance=_guidance())
+    registry.prefetch_guidance_message()
+    assert registry.returned_sources == frozenset()

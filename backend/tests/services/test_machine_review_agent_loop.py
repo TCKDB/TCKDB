@@ -206,3 +206,58 @@ def test_event_detail_carries_the_turn_and_never_leaks_into_later_requests():
     assert first["reasoning_content"] == "REASONING-SENTINEL" and first["tool_calls"][0]["name"] == "get_record"
     assert [m["role"] for m in first["messages"]] == ["system", "user"]
     assert events.items[1][3]["arguments"]
+
+
+# --- guidance ---------------------------------------------------------------------------------------
+
+from app.services.machine_review.agent.guidance import GuidanceEntry, GuidanceIndex
+
+
+def _guided_registry(seed=("code_1",)):
+    index = GuidanceIndex(
+        [
+            GuidanceEntry(source_key="warning:code_1", kind="deposit_warning", title="t", text="spin text", codes=("code_1",)),
+            GuidanceEntry(source_key="warning:code_2", kind="deposit_warning", title="t", text="spin more", codes=("code_2",)),
+        ]
+    )
+    return ToolRegistry(offered=frozenset(), summaries={}, guidance=index, guidance_seed=seed)
+
+
+def _run_with(registry, client):
+    events = Events()
+    result = run_review_loop(
+        client,
+        model="m",
+        messages=[{"role": "system", "content": "S"}, {"role": "user", "content": "U"}],
+        registry=registry,
+        budget=budget(),
+        response_format=RESPONSE_FORMAT,
+        emit=events,
+        cancelled=lambda: False,
+    )
+    return result, events
+
+
+def test_the_no_tools_fallback_carries_the_seeded_guidance_and_the_unseeded_twin_does_not():
+    seeded = _guided_registry()
+    client = FakeClient([ToolsUnsupportedError("no tools"), answer_turn()])
+    _run_with(seeded, client)
+    messages = client.requests[1]["messages"]
+    assert len(messages) == 3 and "warning:code_1" in messages[-1]["content"]
+    assert seeded.returned_sources == {"warning:code_1"}
+
+    bare = _guided_registry(seed=())
+    client = FakeClient([ToolsUnsupportedError("no tools"), answer_turn()])
+    _run_with(bare, client)
+    assert client.requests[1]["messages"] == [{"role": "system", "content": "S"}, {"role": "user", "content": "U"}]
+    assert bare.returned_sources == frozenset()
+
+
+def test_a_scripted_guidance_search_is_reported_under_its_own_tool_name():
+    call = ToolCall(id="c1", name="search_guidance", arguments=json.dumps({"query": "spin"}))
+    turn = ChatTurn("", "R", "tool_calls", {"prompt_tokens": 1, "completion_tokens": 1}, (call,))
+    registry = _guided_registry(seed=())
+    _, events = _run_with(registry, FakeClient([turn, answer_turn(), answer_turn()]))
+    steps = [(k, name, outcome) for k, name, outcome, _ in events.items if k in ("tool_call", "tool_result")]
+    assert steps == [("tool_call", "search_guidance", "ok"), ("tool_result", "search_guidance", "ok")]
+    assert registry.returned_sources == {"warning:code_1", "warning:code_2"}

@@ -7,6 +7,7 @@ to it and nothing is committed past the test.
 
 from __future__ import annotations
 
+import json
 import threading
 from datetime import timedelta
 
@@ -942,3 +943,138 @@ def test_cancel_during_the_tool_phase_cancels_with_no_further_requests_and_no_au
     assert job.status is S.cancelled and job.audit_event_id is None
     assert len(server.requests) == 1
     assert _audit_events(db_session, submission) == []
+
+
+# --- guidance search and the retrieval_sources check ---------------------------------------------
+
+WARNING_CODE = "n_imag_contradicts_minimum"
+WARNING_KEY = f"warning:{WARNING_CODE}"
+
+
+def _search_reply(query: str) -> dict:
+    reply = _tool_reply("calculation", "777")
+    function = reply["choices"][0]["message"]["tool_calls"][0]["function"]
+    function["name"], function["arguments"] = "search_guidance", json.dumps({"query": query})
+    return reply
+
+
+def _sources_reply(*keys: str) -> dict:
+    return _pass_reply(
+        json.dumps(
+            {
+                "format": {"name": "machine_review", "version": 2},
+                "status": "machine_screened_pass",
+                "curator_priority": None,
+                "summary": "Nothing needs a curator.",
+                "findings": [],
+                "retrieval_sources": list(keys),
+            }
+        )
+    )
+
+
+def _warned_job(db_session, local_stub, script, *, with_warning=True):
+    from app.db.models.deposit_warning import DepositWarning
+    from app.services.deposit_warnings import content_hash
+    from tests.services._llm_stub_server import StubResponse
+    from tests.services.scientific_read._factories import make_species, make_species_entry, make_thermo_scalar
+
+    server = local_stub(*[StubResponse(body=body) for body in script])
+    settings_obj = _local_settings(server.base_url)
+    submission, job = _local_job(db_session, settings_obj, username=f"guide-admin-{next(_AGENT_USERS)}")
+    thermo = make_thermo_scalar(
+        db_session, species_entry=make_species_entry(db_session, make_species(db_session)), h298_kj_mol=-1.0
+    )
+    if with_warning:
+        db_session.add(
+            DepositWarning(
+                submission_id=submission.id,
+                record_type=SubmissionRecordType.thermo,
+                record_id=thermo.id,
+                written_by_user_id=submission.created_by,
+                code=WARNING_CODE,
+                field="f",
+                message="DEPOSITOR-TEXT",
+                content_hash=content_hash(WARNING_CODE, "f", "DEPOSITOR-TEXT", None),
+                check_version=1,
+            )
+        )
+    link_record(
+        db_session, submission=submission, record_type=SubmissionRecordType.thermo, record_id=thermo.id, role="primary"
+    )
+    db_session.flush()
+    return server, submission, job, settings_obj
+
+
+def _outcome(db_session, factory, job, submission, settings_obj):
+    _local_cycle(factory, settings_obj)
+    job = _reload(db_session, job)
+    return job.status, job.failure_code, len(_failed_audit_events(db_session, submission)), job
+
+
+def test_citing_a_key_this_job_searched_succeeds_and_is_stored(db_session, factory, local_stub):
+    server, submission, job, settings_obj = _warned_job(
+        db_session, local_stub, [_search_reply(WARNING_CODE), _pass_reply("x"), _sources_reply(WARNING_KEY)]
+    )
+    status, code, failed, job = _outcome(db_session, factory, job, submission, settings_obj)
+    assert (status, code, failed) == (S.succeeded, None, 0)
+    audit = db_session.get(SubmissionAuditEvent, job.audit_event_id)
+    assert audit.details_json["retrieval_sources"] == [WARNING_KEY]
+    assert _tool_steps(db_session, job) == [(K.tool_call, "ok"), (K.tool_result, "ok")]
+    assert {e.tool_name for e in _events(db_session, job) if e.kind in (K.tool_call, K.tool_result)} == {
+        "search_guidance"
+    }
+    assert any(t["function"]["name"] == "search_guidance" for t in server.requests[0].body["tools"])
+
+
+def test_citing_a_real_key_the_job_did_not_receive_fails_as_invalid_output(db_session, factory, local_stub):
+    from app.services.machine_review.guidance_corpus import default_guidance_index
+
+    index = default_guidance_index()
+    shown = {e.source_key for e in index.search(WARNING_CODE, limit=5)}
+    other = next(e.source_key for e in index.entries if e.source_key not in shown)
+    server, submission, job, settings_obj = _warned_job(
+        db_session, local_stub, [_search_reply(WARNING_CODE), _pass_reply("x"), _sources_reply(other)]
+    )
+    status, code, failed, job = _outcome(db_session, factory, job, submission, settings_obj)
+    assert (status, code, failed) == (S.failed, MachineReviewJobFailure.invalid_output, 1)
+    assert K.parse_failed in _kinds(db_session, job)
+
+
+def test_the_returned_set_is_per_job_so_a_key_a_neighbour_searched_is_not_citable(db_session, factory, local_stub):
+    results = {}
+    for label, script in (
+        ("searched", [_search_reply(WARNING_CODE), _pass_reply("x"), _sources_reply(WARNING_KEY)]),
+        ("not_searched", [_pass_reply("x"), _sources_reply(WARNING_KEY)]),
+    ):
+        server, submission, job, settings_obj = _warned_job(db_session, local_stub, script, with_warning=False)
+        results[label] = _outcome(db_session, factory, job, submission, settings_obj)[:3]
+    assert results["searched"] == (S.succeeded, None, 0)
+    assert results["not_searched"] == (S.failed, MachineReviewJobFailure.invalid_output, 1)
+
+
+def _tools_rejected():
+    return {"error": {"message": "tools param requires --jinja flag"}}
+
+
+def test_the_no_tools_fallback_shows_the_warning_guidance_and_it_is_citable(db_session, factory, local_stub):
+    from tests.services._llm_stub_server import StubResponse
+
+    server, submission, job, settings_obj = _warned_job(db_session, local_stub, [{}])
+    server.script[:] = [StubResponse(body=_tools_rejected(), status=500), StubResponse(body=_sources_reply(WARNING_KEY))]
+    status, code, failed, job = _outcome(db_session, factory, job, submission, settings_obj)
+    assert (status, code, failed) == (S.succeeded, None, 0)
+    assert len(server.requests) == 2 and "tools" not in server.requests[1].body
+    assert WARNING_KEY in server.requests[1].body["messages"][-1]["content"]
+
+
+def test_the_no_tools_fallback_without_a_warning_has_no_guidance_and_the_key_is_not_citable(
+    db_session, factory, local_stub
+):
+    from tests.services._llm_stub_server import StubResponse
+
+    server, submission, job, settings_obj = _warned_job(db_session, local_stub, [{}], with_warning=False)
+    server.script[:] = [StubResponse(body=_tools_rejected(), status=500), StubResponse(body=_sources_reply(WARNING_KEY))]
+    status, code, failed, job = _outcome(db_session, factory, job, submission, settings_obj)
+    assert (status, code, failed) == (S.failed, MachineReviewJobFailure.invalid_output, 1)
+    assert WARNING_KEY not in json.dumps(server.requests[1].body["messages"])

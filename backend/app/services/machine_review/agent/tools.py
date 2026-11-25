@@ -4,6 +4,9 @@
 from its context. It refuses every other pair, and a result never holds more than a summary does: no depositor
 text and no id beyond ``record_type:record_ref``.
 
+``search_guidance`` searches the guidance index the caller passes in and returns at most five TCKDB-authored
+entries, each under a ``source_key``. The registry records every key it delivers; a review may cite only those.
+
 ASCII only: the tool schemas are runtime strings under ``app/``.
 """
 
@@ -11,11 +14,12 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.services.llm_precheck.schemas import LLMRecordSummary
+from app.services.machine_review.agent.guidance import GuidanceEntry, GuidanceIndex
 from app.services.machine_review.providers.prompt import compact
 
 #: Largest tool result, in bytes of JSON text.
@@ -44,11 +48,38 @@ _GET_RECORD_DESCRIPTION = (
 )
 
 
+SEARCH_GUIDANCE = "search_guidance"
+
+#: Most results one search or one up-front guidance message returns.
+GUIDANCE_RESULT_LIMIT = 5
+
+#: Longest entry text kept in a result, in characters.
+GUIDANCE_TEXT_MAX_CHARS = 1000
+
+_SEARCH_GUIDANCE_DESCRIPTION = (
+    "Search TCKDB's own guidance: the sentences it shows for deposit warnings, its scientific checks and their "
+    "thresholds. Returns up to 5 entries, each with a source_key. List a source_key in retrieval_sources only "
+    "if a search returned it."
+)
+
+GUIDANCE_PREAMBLE = (
+    "TCKDB guidance for the deposit warnings on this submission. List a source_key in retrieval_sources only if "
+    "it appears here or in a later search result."
+)
+
+
 class GetRecordArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     record_type: str = Field(min_length=1, max_length=64)
     record_ref: str = Field(min_length=1, max_length=256)
+
+
+class SearchGuidanceArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    query: str = Field(min_length=1, max_length=200)
+    kind: Literal["deposit_warning", "check", "threshold"] | None = None
 
 
 @dataclass(frozen=True)
@@ -112,18 +143,62 @@ def _truncate(payload: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def _cut_text(text: str) -> str:
+    """The text cut at the last space within the cap (or hard when that keeps under half), marked with '...'."""
+    head = text[: GUIDANCE_TEXT_MAX_CHARS - 3]
+    space = head.rfind(" ")
+    if space > len(head) // 2:
+        head = head[:space].rstrip(",;:.")
+    return head + "..."
+
+
+def _guidance_item(entry: GuidanceEntry) -> dict[str, Any]:
+    text = entry.text
+    if len(text) > GUIDANCE_TEXT_MAX_CHARS:
+        text = _cut_text(text)
+    item: dict[str, Any] = {"source_key": entry.source_key, "kind": entry.kind, "title": entry.title, "text": text}
+    if entry.codes:
+        item["codes"] = list(entry.codes)
+    if entry.fields:
+        item["fields"] = dict(entry.fields)
+    return item
+
+
+def _guidance_payload(entries: list[GuidanceEntry]) -> tuple[dict[str, Any], bool]:
+    """The entries as a result that fits the byte cap, and whether any text or entry was cut to fit."""
+    items = [_guidance_item(entry) for entry in entries]
+    cut = any(len(entry.text) > GUIDANCE_TEXT_MAX_CHARS for entry in entries)
+    while items and not _fits({"results": items}):
+        items.pop()
+        cut = True
+    return {"results": items}, cut
+
+
 class ToolRegistry:
-    """The tools of one run, bound to the refs it offered and the summaries of its records."""
+    """The tools of one run, bound to the refs it offered, the summaries of its records and its guidance index."""
 
     def __init__(
-        self, offered: frozenset[tuple[str, str]], summaries: dict[tuple[str, str], LLMRecordSummary]
+        self,
+        offered: frozenset[tuple[str, str]],
+        summaries: dict[tuple[str, str], LLMRecordSummary],
+        *,
+        guidance: GuidanceIndex | None = None,
+        guidance_seed: tuple[str, ...] = (),
     ) -> None:
         self._offered = offered
         self._summaries = summaries
+        self._guidance = guidance
+        self._guidance_seed = guidance_seed
+        self._returned: set[str] = set()
+
+    @property
+    def returned_sources(self) -> frozenset[str]:
+        """The ``source_key`` values this run delivered to the model."""
+        return frozenset(self._returned)
 
     def schemas(self) -> list[dict[str, Any]]:
         """The OpenAI ``tools`` list."""
-        return [
+        tools = [
             {
                 "type": "function",
                 "function": {
@@ -141,13 +216,35 @@ class ToolRegistry:
                 },
             }
         ]
+        if self._guidance is not None:
+            tools.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": SEARCH_GUIDANCE,
+                        "description": _SEARCH_GUIDANCE_DESCRIPTION,
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "query": {"type": "string"},
+                                "kind": {"type": "string", "enum": ["deposit_warning", "check", "threshold"]},
+                            },
+                            "required": ["query"],
+                            "additionalProperties": False,
+                        },
+                    },
+                }
+            )
+        return tools
 
-    @staticmethod
-    def known_name(name: str) -> str | None:
-        """``name`` if it is a registered tool, else ``None``; only this is safe to store as a name."""
-        return name if name == GET_RECORD else None
+    def known_name(self, name: str) -> str | None:
+        """``name`` if this registry offers it, else ``None``; only this is safe to store as a name."""
+        offered = (GET_RECORD, SEARCH_GUIDANCE) if self._guidance is not None else (GET_RECORD,)
+        return name if name in offered else None
 
     def execute(self, name: str, arguments_text: str) -> ToolOutcome:
+        if name == SEARCH_GUIDANCE and self._guidance is not None:
+            return self._search_guidance(arguments_text)
         if name != GET_RECORD:
             return _fixed(STATUS_UNKNOWN_TOOL)
         try:
@@ -165,12 +262,37 @@ class ToolRegistry:
             return ToolOutcome(STATUS_OK, _dump(payload))
         return ToolOutcome(STATUS_TRUNCATED, _dump(_truncate(payload)))
 
+    def _deliver(self, entries: list[GuidanceEntry]) -> ToolOutcome:
+        payload, cut = _guidance_payload(entries)
+        self._returned.update(item["source_key"] for item in payload["results"])
+        return ToolOutcome(STATUS_TRUNCATED if cut else STATUS_OK, _dump(payload))
+
+    def _search_guidance(self, arguments_text: str) -> ToolOutcome:
+        try:
+            args = SearchGuidanceArgs.model_validate_json(arguments_text)
+        except (ValidationError, ValueError):
+            return _fixed(STATUS_INVALID_ARGUMENTS)
+        return self._deliver(self._guidance.search(args.query, kind=args.kind, limit=GUIDANCE_RESULT_LIMIT))
+
+    def prefetch_guidance_message(self) -> dict[str, str] | None:
+        """A user message with the guidance for the seeded warning codes, for a server that takes no tools."""
+        if self._guidance is None or not self._guidance_seed:
+            return None
+        entries = self._guidance.entries_for_codes(self._guidance_seed, GUIDANCE_RESULT_LIMIT)
+        if not entries:
+            return None
+        outcome = self._deliver(entries)
+        return {"role": "user", "content": f"{GUIDANCE_PREAMBLE}\n{outcome.content}"}
+
 
 __all__ = [
     "GET_RECORD",
+    "GUIDANCE_PREAMBLE",
+    "SEARCH_GUIDANCE",
     "TOOL_RESULT_MAX_BYTES",
     "TOOL_STATUS_CODES",
     "GetRecordArgs",
+    "SearchGuidanceArgs",
     "ToolOutcome",
     "ToolRegistry",
 ]
