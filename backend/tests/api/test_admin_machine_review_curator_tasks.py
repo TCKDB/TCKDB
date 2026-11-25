@@ -1242,3 +1242,95 @@ def test_include_findings_does_not_cost_more_queries_for_a_longer_page(
     ten_q, ten_n = _count()
     assert (two_n, ten_n) == (2, 10)
     assert ten_q == two_q, f"include=findings cost {two_q} statements for 2 tasks and {ten_q} for 10"
+
+
+# --------------------------------------------------------------------------- #
+# lesson_text on resolve
+# --------------------------------------------------------------------------- #
+
+
+def _lessons(db_session):
+    from app.db.models.machine_review_lesson import MachineReviewLesson
+
+    db_session.expire_all()
+    return list(db_session.scalars(select(MachineReviewLesson).order_by(MachineReviewLesson.id)))
+
+
+def _resolve(client, task_id, state="dismissed_machine_finding", **extra):
+    return client.post(
+        f"{_BASE}/{task_id}/resolve", json={"resolution_state": state, "resolution_note": "Reviewed.", **extra}
+    )
+
+
+def test_dismissing_with_lesson_text_proposes_one_lesson_in_the_findings_category(
+    client, db_session, login_as, _api_admin_user, monkeypatch
+):
+    login_as(_api_admin_user)
+    _submission, _species, task_ids = _seed_two_findings(client, db_session, monkeypatch, _api_admin_user)
+    by_message = {client.get(f"{_BASE}/{t}").json()["finding"]["message"]: t for t in task_ids}
+    task_id = by_message["Second concern."]
+
+    resolved = _resolve(client, task_id, lesson_text="  Geometry flags need the frequency check.  ")
+    assert resolved.status_code == 200, resolved.text
+    (lesson,) = _lessons(db_session)
+    assert lesson.status.value == "proposed" and lesson.signal.value == "curator_dismissed_finding"
+    assert lesson.source_curator_task_id == task_id and lesson.created_by == _api_admin_user
+    assert lesson.category.value == "geometry" and lesson.record_type is SubmissionRecordType.species
+    assert lesson.text == "Geometry flags need the frequency check."
+
+    again = _resolve(client, task_id, lesson_text="A second note.")
+    assert again.status_code == 200
+    assert len(_lessons(db_session)) == 1
+
+
+def test_lesson_text_with_another_resolution_is_a_400_and_the_task_stays_open(
+    client, db_session, login_as, _api_admin_user
+):
+    login_as(_api_admin_user)
+    task = _make_task(db_session, _new_submission(db_session, _api_admin_user).id)
+    refused = _resolve(client, task.id, state="resolved_no_action", lesson_text="Not allowed here.")
+    assert refused.status_code == 400
+    db_session.expire_all()
+    assert db_session.get(MachineReviewCuratorTask, task.id).workflow_state is _STATE.needs_curator_review
+    assert _lessons(db_session) == []
+    assert _resolve(client, task.id, state="resolved_no_action").status_code == 200
+
+
+def test_lesson_text_of_501_characters_is_a_422_and_500_is_accepted(client, db_session, login_as, _api_admin_user):
+    login_as(_api_admin_user)
+    task = _make_task(db_session, _new_submission(db_session, _api_admin_user).id)
+    assert _resolve(client, task.id, lesson_text="x" * 501).status_code == 422
+    db_session.expire_all()
+    assert db_session.get(MachineReviewCuratorTask, task.id).workflow_state is _STATE.needs_curator_review
+    assert _lessons(db_session) == []
+    assert _resolve(client, task.id, lesson_text="x" * 500).status_code == 200
+    (lesson,) = _lessons(db_session)
+    assert lesson.category is None  # a seeded task's finding cannot be recovered
+
+
+def test_resolving_without_lesson_text_writes_no_lesson_and_leaves_the_task_as_before(
+    client, db_session, login_as, _api_admin_user
+):
+    login_as(_api_admin_user)
+    task = _make_task(db_session, _new_submission(db_session, _api_admin_user).id, assigned_to=_api_admin_user)
+    before = {
+        c: getattr(task, c)
+        for c in ("machine_review_status", "highest_severity", "findings_count", "source_audit_event_id")
+    }
+    assert before == {
+        "machine_review_status": DBStatus.machine_screened_warning,
+        "highest_severity": DBSeverity.warning,
+        "findings_count": 1,
+        "source_audit_event_id": None,
+    }
+    assert _resolve(client, task.id).status_code == 200
+    db_session.expire_all()
+    row = db_session.get(MachineReviewCuratorTask, task.id)
+    assert {c: getattr(row, c) for c in before} == before
+    assert (row.workflow_state, row.resolved_by, row.resolution_note, row.assigned_to) == (
+        _STATE.dismissed_machine_finding,
+        _api_admin_user,
+        "Reviewed.",
+        _api_admin_user,
+    )
+    assert _lessons(db_session) == []
