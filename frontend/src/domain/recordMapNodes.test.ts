@@ -153,15 +153,22 @@ describe("geometryNodes", () => {
 })
 
 describe("transitionStateEntryNodes", () => {
-    it("lists the reaction version, one molecule version per side, how many more, and the calculation count", () => {
+    it("lists the reaction version, every molecule version on both sides, and the calculation count", () => {
         const nodes = transitionStateEntryNodes({
-            reactionEntryRef: "rxe_1", reactants: [participant("spe_a", "CH4"), participant("spe_b", "OH")], products: [participant("spe_c", "CH3")],
+            reactionEntryRef: "rxe_1", reactants: [participant("spe_a", "CH4"), participant("spe_b", "OH")], products: [participant("spe_c", "CH3"), participant("spe_d", "H2O")],
             calculationCount: 5,
         })
-        expect(ids(nodes)).toEqual(["reaction-entry", "reactant-0", "product-0", "participants-more", "calculations"])
-        expect(byId(nodes, "participants-more")).toMatchObject({ label: "1 more molecule version", to: "/reaction-entries/rxe_1" })
+        expect(ids(nodes)).toEqual(["reaction-entry", "reactant-0", "reactant-1", "product-0", "product-1", "calculations"])
+        expect(nodes.map((n) => n.label)).toEqual(["Reaction version", "CH4", "OH", "CH3", "H2O", "Calculations"])
         expect(byId(nodes, "calculations")).toMatchObject({ label: "Calculations", found: "5 found", to: "#calc-ledger" })
         expect(byId(transitionStateEntryNodes({ reactionEntryRef: null, reactants: [], products: [], calculationCount: 1 }), "calculations")?.label).toBe("Calculation")
+    })
+
+    it("lists three molecule versions per side and one row for the rest", () => {
+        const four = ["a", "b", "c", "d"].map((r) => participant(r))
+        const nodes = transitionStateEntryNodes({ reactionEntryRef: "rxe_1", reactants: four, products: [participant("e")], calculationCount: 0 })
+        expect(ids(nodes)).toEqual(["reaction-entry", "reactant-0", "reactant-1", "reactant-2", "product-0", "participants-more"])
+        expect(byId(nodes, "participants-more")).toMatchObject({ label: "1 more molecule version", to: "/reaction-entries/rxe_1" })
     })
 
     it("leaves out the reaction version and its links when the entry names none", () => {
@@ -197,12 +204,19 @@ describe("reactionOverviewNodes", () => {
         expect(ids(nodes)).toEqual(["rxe_1"])
     })
 
-    it("keeps one molecule version per side and one row for the rest, at most six nodes", () => {
+    it("shows every molecule version of a reaction with up to three per side", () => {
         const nodes = reactionOverviewNodes({
             entries: [{ ref: "rxe_1", position: 1 }, { ref: "rxe_2", position: 2 }], total: 9, reactants: [participant("a"), participant("b"), participant("c")], products: [participant("d"), participant("e")],
         })
-        expect(byId(nodes, "participants-more")).toMatchObject({ label: "3 more molecule versions", relation: "Listed on Version 1", to: "/reaction-entries/rxe_1" })
-        expect(nodes.length).toBeLessThanOrEqual(6)
+        expect(ids(nodes).filter((id) => /^(reactant|product)-/.test(id))).toEqual(["reactant-0", "reactant-1", "reactant-2", "product-0", "product-1"])
+        expect(byId(nodes, "participants-more")).toBeUndefined()
+    })
+
+    it("folds a fourth molecule version on one side into a row on the first version", () => {
+        const nodes = reactionOverviewNodes({
+            entries: [{ ref: "rxe_1", position: 1 }], total: 1, reactants: ["a", "b", "c", "d"].map((r) => participant(r)), products: [participant("e")],
+        })
+        expect(byId(nodes, "participants-more")).toMatchObject({ label: "1 more molecule version", relation: "Listed on Version 1", to: "/reaction-entries/rxe_1" })
     })
 })
 

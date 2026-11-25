@@ -270,7 +270,7 @@ export function geometryNodes(input: {
     return nodes
 }
 
-const TS_PARTICIPANTS_PER_SIDE = 1
+const TS_PARTICIPANTS_PER_SIDE = 3
 
 /** Transition-state entry page: its reaction entry, the molecule versions on either side and its calculations. */
 export function transitionStateEntryNodes(input: {
@@ -297,7 +297,7 @@ export function transitionStateEntryNodes(input: {
 }
 
 const OVERVIEW_ENTRIES = 2
-const OVERVIEW_PARTICIPANTS_PER_SIDE = 1
+const OVERVIEW_PARTICIPANTS_PER_SIDE = 3
 
 /** Reaction page: some of its reaction entries ("N more" when there are others), then the molecule versions of the first. */
 export function reactionOverviewNodes(input: {
