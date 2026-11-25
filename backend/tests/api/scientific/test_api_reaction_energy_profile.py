@@ -721,9 +721,28 @@ def test_a_closed_shell_ts_gets_one_profile_per_open_shell_reference_that_comple
         }
         for p in body["profiles"]
     ]
-    assert sorted(spins, key=sorted) == sorted(
-        [{w["unrestricted"].public_ref}, {restricted_open.public_ref}], key=sorted
+    # Same level and program: ordered by open-shell reference.
+    assert spins == [{restricted_open.public_ref}, {w["unrestricted"].public_ref}]
+
+
+def test_spin_references_that_pick_the_same_points_give_one_profile(client, db_session, hab_world):
+    """A no-spin TS level, every participant at it, and U and RO variants on the radicals: one profile, not two."""
+    w = hab_world
+    no_spin = make_lot(db_session, method="wb97xd", basis="def2tzvp")
+    restricted_open = make_lot(
+        db_session, method="wb97xd", basis="def2tzvp", spin_treatment=SpinTreatment.restricted_open
     )
+    _hab_energies(
+        db_session, w, lot_for=dict.fromkeys(("closed_r", "radical_r", "closed_p", "radical_p", "tse"), no_spin)
+    )
+    for key, energy in (("radical_r", -75.2), ("radical_p", -74.6)):
+        _sp(db_session, owner=w[key], lot=w["unrestricted"], release=w["orca"], energy=energy)
+        _sp(db_session, owner=w[key], lot=restricted_open, release=w["orca"], energy=energy - 0.1)
+    body = client.get(url(w["rxn"])).json()
+    assert body["unavailable"] == []
+    (profile,) = body["profiles"]
+    levels = {m["level_of_theory"]["level_of_theory_ref"] for m in profile["reactants"] + profile["products"]}
+    assert levels == {no_spin.public_ref}
 
 
 def test_a_closed_shell_ts_refuses_when_no_single_open_shell_reference_covers_both_sides(client, db_session, hab_world):
