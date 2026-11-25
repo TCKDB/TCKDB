@@ -268,6 +268,7 @@ NOT_SCIENTIFIC: dict[str, str] = {
     'machine_review_job_not_owned': _R22,
     'machine_review_lesson_not_found': _R22,
     'machine_review_lesson_retired': _R22,
+    'machine_review_lesson_unknown_check_code': _R22,
     'machine_review_mode_off': _R22,
     'machine_review_not_allowed_for_user': _R22,
     'machine_review_provider_not_configured': _R22,

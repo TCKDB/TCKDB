@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Literal, get_args
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -83,7 +83,7 @@ class GetRecordArgs(BaseModel):
 
 
 #: Finding-category tokens; a test pins them to the review vocabulary.
-FindingCategory = Literal[
+FINDING_CATEGORIES = (
     "provenance",
     "units",
     "geometry",
@@ -95,9 +95,9 @@ FindingCategory = Literal[
     "calculation_parameters",
     "consistency",
     "schema_gap",
-]
+)
 
-FINDING_CATEGORIES = get_args(FindingCategory)
+FindingCategory = Literal[FINDING_CATEGORIES]
 
 
 class SearchGuidanceArgs(BaseModel):

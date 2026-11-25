@@ -189,12 +189,12 @@ def test_an_unknown_check_code_is_refused_on_propose_and_edit_and_a_known_one_ra
     curator, admin = people
     with pytest.raises(MachineReviewJobError) as refused:
         _propose(db_session, curator, scope=LessonScope(check_code="no_such_check_code"))
-    assert (refused.value.status, refused.value.code) == (422, "lesson_unknown_check_code")
+    assert (refused.value.status, refused.value.code) == (422, "machine_review_lesson_unknown_check_code")
 
     plain = _propose(db_session, curator, text="atom map unaccounted note")
     with pytest.raises(MachineReviewJobError) as edit_refused:
         lessons.edit_lesson(db_session, plain.id, actor_id=admin.id, scope=LessonScope(check_code="nope"))
-    assert edit_refused.value.code == "lesson_unknown_check_code"
+    assert edit_refused.value.code == "machine_review_lesson_unknown_check_code"
 
     scoped = _propose(db_session, curator, text="atom map unaccounted note", scope=LessonScope(check_code=CODE))
     for lesson in (plain, scoped):

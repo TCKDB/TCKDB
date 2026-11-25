@@ -2,7 +2,7 @@
 
 ## 0.214.0 - 2026-11-25
 
-`RejectionCode` gains `MACHINE_REVIEW_LESSON_NOT_FOUND` and `MACHINE_REVIEW_LESSON_RETIRED`. The route ledger triages `POST /api/v1/machine-review/lessons` as curation workflow and the four lesson routes under `/api/v1/admin/machine-review/lessons` as admin only. No client behaviour changed.
+`RejectionCode` gains `MACHINE_REVIEW_LESSON_NOT_FOUND`, `MACHINE_REVIEW_LESSON_RETIRED` and `MACHINE_REVIEW_LESSON_UNKNOWN_CHECK_CODE`. The route ledger triages `POST /api/v1/machine-review/lessons` as curation workflow and the four lesson routes under `/api/v1/admin/machine-review/lessons` as admin only. No client behaviour changed.
 
 ## 0.213.0 - 2026-11-24
 

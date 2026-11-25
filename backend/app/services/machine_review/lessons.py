@@ -41,6 +41,7 @@ LESSON_LOAD_LIMIT = 200
 
 NOT_FOUND_CODE = "machine_review_lesson_not_found"
 RETIRED_CODE = "machine_review_lesson_retired"
+UNKNOWN_CHECK_CODE = "machine_review_lesson_unknown_check_code"
 
 _UNSET: Any = object()
 
@@ -73,7 +74,7 @@ def _check_scope(scope: LessonScope | None) -> None:
     code = scope.check_code if scope is not None else None
     if code is not None and code not in known_check_codes():
         raise MachineReviewLessonError(
-            "scope.check_code is not a known warning or check code.", status=422, code="lesson_unknown_check_code"
+            "scope.check_code is not a known warning or check code.", status=422, code=UNKNOWN_CHECK_CODE
         )
 
 

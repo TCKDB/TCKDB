@@ -1789,6 +1789,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/machine_review/lessons.py"),
     ApiCode("machine_review_lesson_retired", 409, Surface.coded_exception,
             "backend/app/services/machine_review/lessons.py"),
+    ApiCode("machine_review_lesson_unknown_check_code", 422, Surface.coded_exception,
+            "backend/app/services/machine_review/lessons.py"),
     ApiCode("machine_review_mode_off", 409, Surface.coded_exception,
             "backend/app/services/machine_review/jobs.py"),
     ApiCode("machine_review_not_allowed_for_user", 403, Surface.coded_exception,

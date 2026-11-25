@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 123 | 28 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 46 | `backend/app/services/public_refs.py` |
 | Trust check names | 174 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 391 | `backend/app/api/code_catalogue.py` |
-| **total** | **734** | |
+| Refusal codes a caller can receive | 392 | `backend/app/api/code_catalogue.py` |
+| **total** | **735** | |
 
 ## How a record is named
 
@@ -837,7 +837,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `network_export_body_too_large` | a relationship — read `context` |
 | `request_body_too_large` | a relationship — read `context` |
 
-### HTTP 422 (304 codes)
+### HTTP 422 (305 codes)
 
 | Code | Names |
 | --- | --- |
@@ -961,6 +961,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `limit_too_large` | a relationship — read `context` |
 | `lowest_energy_across_levels` | a relationship — read `context` |
 | `lowest_energy_unavailable` | a thing |
+| `machine_review_lesson_unknown_check_code` | a thing |
 | `micro_reaction_key_undeclared` | a thing |
 | `missing_filter` | a thing |
 | `missing_identifier` | a thing |

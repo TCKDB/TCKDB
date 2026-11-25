@@ -123,3 +123,17 @@ def test_resolve_lesson_text_is_stripped_before_the_cap_like_the_create_route():
         resolution_state="dismissed_machine_finding", resolution_note="n", lesson_text="x" * 500 + " "
     )
     assert body.lesson_text == "x" * 500
+
+
+def test_an_unknown_check_code_is_refused_with_its_code_and_a_known_one_is_created(
+    client, db_session, login_as, _api_curator_user
+):
+    login_as(_api_curator_user)
+    refused = client.post(CURATOR, json=_body(scope={"check_code": "no_such_check_code"}))
+    assert refused.status_code == 422
+    assert refused.json()["code"] == "machine_review_lesson_unknown_check_code"
+    assert _count(db_session) == 0
+
+    created = client.post(CURATOR, json=_body(scope={"check_code": "atom_map_atoms_unaccounted_for"}))
+    assert created.status_code == 201, created.text
+    assert _count(db_session) == 1
