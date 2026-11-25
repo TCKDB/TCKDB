@@ -159,9 +159,7 @@ def ts_calculation_energies(
     return [(e, "single_point", c) for e, c in sp_rows] + [(e, "optimization", c) for e, c in opt_rows]
 
 
-def ts_entries(
-    session: Session, reaction_entry_id: int, profile: ResolvedReadProfile
-) -> list[TransitionStateEntry]:
+def ts_entries(session: Session, reaction_entry_id: int, profile: ResolvedReadProfile) -> list[TransitionStateEntry]:
     """EVERY transition-state entry of a reaction entry that the profile shows, in DISPLAY order.
 
     Review rank, then deposition time newest first, then id descending: a listing
@@ -239,7 +237,9 @@ def _owner_points(
     converged is left out; one with no convergence record is used and marked.
     """
     usable = evidence_usable_statuses(min_review_status)
-    owner = Calculation.species_entry_id.in_(species_entry_ids) | Calculation.transition_state_entry_id.in_(ts_entry_ids)
+    owner = Calculation.species_entry_id.in_(species_entry_ids) | Calculation.transition_state_entry_id.in_(
+        ts_entry_ids
+    )
     raw: list[tuple] = []
     for energy_type, result_model, energy_column in (
         ("single_point", CalculationSPResult, CalculationSPResult.electronic_energy_hartree),
@@ -357,7 +357,10 @@ def _label(lot: LevelOfTheorySummary) -> tuple[str, str, str]:
 
 
 def _missing_kind(
-    side: list[tuple[int, str, int]], by_species: dict[int, list[_Point]], at_level_of: Callable[[_Point], bool], program: str
+    side: list[tuple[int, str, int]],
+    by_species: dict[int, list[_Point]],
+    at_level_of: Callable[[_Point], bool],
+    program: str,
 ) -> str:
     """Why a side has no complete set at a level and ``program``: ``none``, ``no_program``, ``other_program`` or ``complete``.
 
@@ -524,16 +527,15 @@ def build_energy_profiles(
             ts_best = _lowest([p for p in programmed if p.lot_id == lot_id and p.program == program])
             assert ts_best.software is not None  # programmed points only
             filters = level_filters(ts_best, program)
+            complete: list[tuple[list[EnergyProfileMolecule], list[EnergyProfileMolecule]]] = []
             for at_level in filters:
                 reactant_parts = [molecule(s, r, n, lot_id, program, at_level) for s, r, n in reactants]
                 product_parts = [molecule(s, r, n, lot_id, program, at_level) for s, r, n in products]
                 if reactants and products and None not in reactant_parts and None not in product_parts:
-                    break
-            else:
-                reactant_parts = product_parts = []
-            if reactant_parts and product_parts and None not in reactant_parts and None not in product_parts:
-                found_reactants = [m for m in reactant_parts if m is not None]
-                found_products = [m for m in product_parts if m is not None]
+                    complete.append(
+                        ([m for m in reactant_parts if m is not None], [m for m in product_parts if m is not None])
+                    )
+            for found_reactants, found_products in complete:
                 e_react = sum(m.electronic_energy_hartree * m.count for m in found_reactants)
                 e_prod = sum(m.electronic_energy_hartree * m.count for m in found_products)
                 used = [*found_reactants, *found_products, ts_best]
@@ -554,7 +556,9 @@ def build_energy_profiles(
                             key=lambda v: (v is None, v.value if v is not None else ""),
                         ),
                         energy_types=sorted({u.energy_type for u in used}),
-                        versions=sorted({u.software.version for u in used if u.software}, key=lambda v: (v is None, v or "")),
+                        versions=sorted(
+                            {u.software.version for u in used if u.software}, key=lambda v: (v is None, v or "")
+                        ),
                         reactants=found_reactants,
                         transition_state=EnergyProfileTransitionState(
                             transition_state_entry_ref=entry.public_ref,
@@ -577,6 +581,7 @@ def build_energy_profiles(
                         ),
                     )
                 )
+            if complete:
                 continue
             kinds = [
                 (

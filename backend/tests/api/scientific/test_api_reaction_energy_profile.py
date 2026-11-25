@@ -50,7 +50,9 @@ def _entry(db_session, tag):
 
 def _sp(db_session, *, owner, lot, release, energy):
     kwargs = {"species_entry_id": owner.id} if hasattr(owner, "species_id") else {"transition_state_entry_id": owner.id}
-    calc = make_calculation(db_session, type=CalculationType.sp, lot_id=lot.id, software_release_id=release.id, **kwargs)
+    calc = make_calculation(
+        db_session, type=CalculationType.sp, lot_id=lot.id, software_release_id=release.id, **kwargs
+    )
     attach_sp_result(db_session, calculation=calc, electronic_energy_hartree=energy)
     return calc
 
@@ -66,7 +68,9 @@ def _reaction(db_session, tag, *, reactants, products):
 
 
 def _ts(db_session, rxn):
-    return make_transition_state_entry(db_session, transition_state=make_transition_state(db_session, reaction_entry=rxn))
+    return make_transition_state_entry(
+        db_session, transition_state=make_transition_state(db_session, reaction_entry=rxn)
+    )
 
 
 @pytest.fixture
@@ -102,8 +106,12 @@ def test_single_level_profile(client, db_session, world):
     assert profile["transition_state"]["calculation_ref"] == ts_calc.public_ref
     assert profile["transition_state"]["software"]["version"] == "6.0"
     assert {m["species_entry_ref"] for m in profile["reactants"]} == {world["a"].public_ref, world["b"].public_ref}
-    assert all(m["energy_type"] == "single_point" and m["count"] == 1 for m in profile["reactants"] + profile["products"])
-    assert profile["energy_hartree"] == pytest.approx({"reactants": -115.0, "transition_state": -114.9, "products": -115.1})
+    assert all(
+        m["energy_type"] == "single_point" and m["count"] == 1 for m in profile["reactants"] + profile["products"]
+    )
+    assert profile["energy_hartree"] == pytest.approx(
+        {"reactants": -115.0, "transition_state": -114.9, "products": -115.1}
+    )
     assert profile["relative_kj_mol"]["reactants"] == 0.0
     assert profile["relative_kj_mol"]["transition_state"] == pytest.approx(0.1 * HARTREE_TO_KJ_MOL)
     assert profile["relative_kj_mol"]["products"] == pytest.approx(-0.1 * HARTREE_TO_KJ_MOL)
@@ -205,7 +213,9 @@ def test_lowest_single_point_wins_and_optimisation_is_the_fallback(client, db_se
     lot, orca = world["lot"], world["orca"]
     for energy in (-40.0, -40.2):
         _sp(db_session, owner=world["a"], lot=lot, release=orca, energy=energy)
-    opt = make_calculation(db_session, type=CalculationType.opt, species_entry_id=world["b"].id, lot_id=lot.id, software_release_id=orca.id)
+    opt = make_calculation(
+        db_session, type=CalculationType.opt, species_entry_id=world["b"].id, lot_id=lot.id, software_release_id=orca.id
+    )
     attach_opt_result(db_session, calculation=opt, final_energy_hartree=-75.0)
     _sp(db_session, owner=world["c"], lot=lot, release=orca, energy=-115.1)
     _sp(db_session, owner=world["tse"], lot=lot, release=orca, energy=-114.9)
@@ -246,22 +256,33 @@ def test_kinetics_citations_are_their_own_block(client, db_session, world):
     kinetics = make_kinetics(db_session, reaction_entry=world["rxn"])
     other_kinetics = make_kinetics(db_session, reaction_entry=world["rxn"])
     db_session.add(
-        KineticsSourceCalculation(kinetics_id=kinetics.id, calculation_id=cited.id, role=KineticsCalculationRole.reactant_energy)
+        KineticsSourceCalculation(
+            kinetics_id=kinetics.id, calculation_id=cited.id, role=KineticsCalculationRole.reactant_energy
+        )
     )
     freq = make_calculation(db_session, type=CalculationType.freq, species_entry_id=world["a"].id)
-    db_session.add(KineticsSourceCalculation(kinetics_id=kinetics.id, calculation_id=freq.id, role=KineticsCalculationRole.freq))
-    set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=cited.id, status=RecordReviewStatus.rejected)
+    db_session.add(
+        KineticsSourceCalculation(kinetics_id=kinetics.id, calculation_id=freq.id, role=KineticsCalculationRole.freq)
+    )
+    set_review(
+        db_session, record_type=SubmissionRecordType.calculation, record_id=cited.id, status=RecordReviewStatus.rejected
+    )
     db_session.flush()
     body = client.get(url(world["rxn"])).json()
     (block,) = body["cited_by_kinetics"]
     assert block["calculations"][0]["review_status"] == "rejected"
-    assert block["kinetics_ref"] == kinetics.public_ref and other_kinetics.public_ref not in str(body["cited_by_kinetics"])
+    assert block["kinetics_ref"] == kinetics.public_ref and other_kinetics.public_ref not in str(
+        body["cited_by_kinetics"]
+    )
     (calc,) = block["calculations"]
     assert calc["role"] == "reactant_energy" and calc["calculation_ref"] == cited.public_ref
     assert calc["electronic_energy_hartree"] == -39.0 and calc["software"]["program"] == "gaussian"
     assert calc["level_of_theory"]["level_of_theory_ref"] == calc["level_of_theory_ref"] == world["lot"].public_ref
     assert calc["level_of_theory"]["method"] == "wb97xd" and calc["level_of_theory"]["basis"] == "def2tzvp"
-    assert calc["level_of_theory"]["core_treatment"] == "frozen_core" and calc["level_of_theory"]["pno_truncation"] == "tight"
+    assert (
+        calc["level_of_theory"]["core_treatment"] == "frozen_core"
+        and calc["level_of_theory"]["pno_truncation"] == "tight"
+    )
     assert calc["species_entry_ref"] == world["a"].public_ref
     # The profiles stay as they were: the cited energy is not merged in.
     assert body["profiles"][0]["energy_hartree"]["reactants"] == pytest.approx(-115.0)
@@ -271,9 +292,13 @@ def test_rejected_kinetics_are_hidden_by_default_and_counted(client, db_session,
     rejected = make_kinetics(db_session, reaction_entry=world["rxn"])
     cited = _sp(db_session, owner=world["a"], lot=world["lot"], release=world["orca"], energy=-39.0)
     db_session.add(
-        KineticsSourceCalculation(kinetics_id=rejected.id, calculation_id=cited.id, role=KineticsCalculationRole.reactant_energy)
+        KineticsSourceCalculation(
+            kinetics_id=rejected.id, calculation_id=cited.id, role=KineticsCalculationRole.reactant_energy
+        )
     )
-    set_review(db_session, record_type=SubmissionRecordType.kinetics, record_id=rejected.id, status=RecordReviewStatus.rejected)
+    set_review(
+        db_session, record_type=SubmissionRecordType.kinetics, record_id=rejected.id, status=RecordReviewStatus.rejected
+    )
     body = client.get(url(world["rxn"])).json()
     assert body["cited_by_kinetics"] == []
     assert body["request"]["hidden_by_default"]["counts"]["rejected"] == 1
@@ -291,7 +316,12 @@ def test_curated_floors_the_ts_entry_and_badges_its_evidence(client, db_session,
     assert hidden.json()["profiles"] == [] and hidden.json()["unavailable"] == []
     assert world["tse"].public_ref not in hidden.text
     # Approving the record shows the profile; its calculations are evidence, shown with their (unreviewed) badge.
-    set_review(db_session, record_type=SubmissionRecordType.transition_state_entry, record_id=world["tse"].id, status=RecordReviewStatus.approved)
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.transition_state_entry,
+        record_id=world["tse"].id,
+        status=RecordReviewStatus.approved,
+    )
     (profile,) = client.get(url(world["rxn"]), params=curated).json()["profiles"]
     assert profile["transition_state_entry_review_status"] == "approved"
     assert profile["transition_state"]["calculation_ref"] == ts_calc.public_ref
@@ -303,7 +333,12 @@ def test_a_rejected_calculation_is_never_used(client, db_session, world):
     lot, orca = world["lot"], world["orca"]
     _complete(db_session, world)
     better = _sp(db_session, owner=world["a"], lot=lot, release=orca, energy=-41.0)
-    set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=better.id, status=RecordReviewStatus.rejected)
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.calculation,
+        record_id=better.id,
+        status=RecordReviewStatus.rejected,
+    )
     for params in ({}, {"include_rejected": "true"}, {"min_review_status": "not_reviewed"}):
         body = client.get(url(world["rxn"]), params=params).json()
         assert body["profiles"] and better.public_ref not in str(body["profiles"])
@@ -311,9 +346,9 @@ def test_a_rejected_calculation_is_never_used(client, db_session, world):
             by_ref = {m["species_entry_ref"]: m for m in profile["reactants"]}
             assert by_ref[world["a"].public_ref]["electronic_energy_hartree"] == -40.0
     # A usable lower one is used, and badged.
-    db_session.query(RecordReview).filter_by(record_type=SubmissionRecordType.calculation, record_id=better.id).one().status = (
-        RecordReviewStatus.under_review
-    )
+    db_session.query(RecordReview).filter_by(
+        record_type=SubmissionRecordType.calculation, record_id=better.id
+    ).one().status = RecordReviewStatus.under_review
     db_session.flush()
     (profile,) = client.get(url(world["rxn"])).json()["profiles"]
     used = {m["species_entry_ref"]: m for m in profile["reactants"]}[world["a"].public_ref]
@@ -322,7 +357,12 @@ def test_a_rejected_calculation_is_never_used(client, db_session, world):
 
 def test_a_rejected_ts_entry_is_hidden_by_default_and_counted(client, db_session, world):
     _complete(db_session, world)
-    set_review(db_session, record_type=SubmissionRecordType.transition_state_entry, record_id=world["tse"].id, status=RecordReviewStatus.rejected)
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.transition_state_entry,
+        record_id=world["tse"].id,
+        status=RecordReviewStatus.rejected,
+    )
     body = client.get(url(world["rxn"])).json()
     assert body["profiles"] == [] and body["unavailable"] == []
     assert body["request"]["hidden_by_default"]["counts"]["rejected"] == 1
@@ -422,7 +462,9 @@ def test_no_internal_ids_in_the_response(client, db_session, world):
     kinetics = make_kinetics(db_session, reaction_entry=world["rxn"])
     cited = _sp(db_session, owner=world["a"], lot=world["lot"], release=world["orca"], energy=-39.0)
     db_session.add(
-        KineticsSourceCalculation(kinetics_id=kinetics.id, calculation_id=cited.id, role=KineticsCalculationRole.reactant_energy)
+        KineticsSourceCalculation(
+            kinetics_id=kinetics.id, calculation_id=cited.id, role=KineticsCalculationRole.reactant_energy
+        )
     )
     db_session.flush()
 
@@ -518,7 +560,9 @@ def test_statement_count_is_flat_in_the_number_of_levels(client, db_session):
 
 
 def _open_entry(db_session, tag, multiplicity):
-    return make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key(tag), multiplicity=multiplicity))
+    return make_species_entry(
+        db_session, make_species(db_session, inchi_key=next_inchi_key(tag), multiplicity=multiplicity)
+    )
 
 
 @pytest.fixture
@@ -613,7 +657,9 @@ def test_missing_products_report_the_product_code_once_reactants_match_modulo_sp
 def test_open_shell_points_must_share_one_reference(client, db_session, hab_world):
     """Open-shell points never mix unrestricted with restricted-open."""
     w = hab_world
-    restricted_open = make_lot(db_session, method="wb97xd", basis="def2tzvp", spin_treatment=SpinTreatment.restricted_open)
+    restricted_open = make_lot(
+        db_session, method="wb97xd", basis="def2tzvp", spin_treatment=SpinTreatment.restricted_open
+    )
     _hab_energies(db_session, w, lot_for={"radical_p": restricted_open})
     body = client.get(url(w["rxn"])).json()
     assert body["profiles"] == []
@@ -641,7 +687,9 @@ def _hab_with_ts(db_session, w, ts_multiplicity):
 def test_a_closed_shell_ts_takes_the_one_open_shell_reference_that_completes_both_sides(client, db_session, hab_world):
     """A radical with both unrestricted and restricted-open points does not block a consistent unrestricted profile."""
     w = _hab_with_ts(db_session, hab_world, 1)
-    restricted_open = make_lot(db_session, method="wb97xd", basis="def2tzvp", spin_treatment=SpinTreatment.restricted_open)
+    restricted_open = make_lot(
+        db_session, method="wb97xd", basis="def2tzvp", spin_treatment=SpinTreatment.restricted_open
+    )
     _hab_energies(db_session, w, lot_for={"tse": w["restricted"]})
     _sp(db_session, owner=w["radical_r"], lot=restricted_open, release=w["orca"], energy=-75.2)
     body = client.get(url(w["rxn"])).json()
@@ -652,9 +700,37 @@ def test_a_closed_shell_ts_takes_the_one_open_shell_reference_that_completes_bot
     assert by_ref[w["radical_p"].public_ref]["level_of_theory"]["level_of_theory_ref"] == w["unrestricted"].public_ref
 
 
+def test_a_closed_shell_ts_gets_one_profile_per_open_shell_reference_that_completes_both_sides(
+    client, db_session, hab_world
+):
+    w = _hab_with_ts(db_session, hab_world, 1)
+    restricted_open = make_lot(
+        db_session, method="wb97xd", basis="def2tzvp", spin_treatment=SpinTreatment.restricted_open
+    )
+    _hab_energies(db_session, w, lot_for={"tse": w["restricted"]})
+    _sp(db_session, owner=w["radical_r"], lot=restricted_open, release=w["orca"], energy=-75.2)
+    _sp(db_session, owner=w["radical_p"], lot=restricted_open, release=w["orca"], energy=-74.6)
+    body = client.get(url(w["rxn"])).json()
+    assert body["unavailable"] == []
+    assert len(body["profiles"]) == 2
+    spins = [
+        {
+            m["level_of_theory"]["level_of_theory_ref"]
+            for m in p["reactants"] + p["products"]
+            if m["species_entry_ref"] in (w["radical_r"].public_ref, w["radical_p"].public_ref)
+        }
+        for p in body["profiles"]
+    ]
+    assert sorted(spins, key=sorted) == sorted(
+        [{w["unrestricted"].public_ref}, {restricted_open.public_ref}], key=sorted
+    )
+
+
 def test_a_closed_shell_ts_refuses_when_no_single_open_shell_reference_covers_both_sides(client, db_session, hab_world):
     w = _hab_with_ts(db_session, hab_world, 1)
-    restricted_open = make_lot(db_session, method="wb97xd", basis="def2tzvp", spin_treatment=SpinTreatment.restricted_open)
+    restricted_open = make_lot(
+        db_session, method="wb97xd", basis="def2tzvp", spin_treatment=SpinTreatment.restricted_open
+    )
     _hab_energies(db_session, w, lot_for={"tse": w["restricted"], "radical_p": restricted_open})
     body = client.get(url(w["rxn"])).json()
     assert body["profiles"] == []
@@ -668,7 +744,9 @@ def test_a_declared_composite_scheme_level_matches_only_itself(client, db_sessio
 
     w = hab_world
     scheme = CompositeScheme(kind=CompositeSchemeKind.extrapolation, name="cbs-x", definition_hash="a" * 64)
-    scheme_level = LevelOfTheory(method="wb97xd", lot_hash="b" * 64)
+    scheme_level = LevelOfTheory(
+        method="wb97xd", basis="def2tzvp", spin_treatment=SpinTreatment.unrestricted, lot_hash="b" * 64
+    )
     db_session.add_all([scheme, scheme_level])
     db_session.flush()
     db_session.add(
@@ -713,11 +791,18 @@ def test_a_ts_level_optimisation_energy_is_used_before_a_spin_variant_single_poi
 
 
 def _ro_world(db_session, w):
-    restricted_open = make_lot(db_session, method="wb97xd", basis="def2tzvp", spin_treatment=SpinTreatment.restricted_open)
+    restricted_open = make_lot(
+        db_session, method="wb97xd", basis="def2tzvp", spin_treatment=SpinTreatment.restricted_open
+    )
     _hab_energies(
         db_session,
         w,
-        lot_for={"tse": restricted_open, "radical_r": restricted_open, "radical_p": restricted_open, "closed_r": w["unrestricted"]},
+        lot_for={
+            "tse": restricted_open,
+            "radical_r": restricted_open,
+            "radical_p": restricted_open,
+            "closed_r": w["unrestricted"],
+        },
     )
     return w["rxn"]
 
@@ -730,7 +815,9 @@ def test_a_collapsed_unrestricted_singlet_joins_a_restricted_open_profile(client
     from app.db.models.calculation import Calculation
 
     calc = db_session.scalars(select(Calculation).where(Calculation.species_entry_id == w["closed_r"].id)).one()
-    attach_spin_diagnostic(db_session, calculation=calc, s_squared=0.0, s_squared_expected=0.0, s_squared_annihilated=None)
+    attach_spin_diagnostic(
+        db_session, calculation=calc, s_squared=0.0, s_squared_expected=0.0, s_squared_annihilated=None
+    )
     body = client.get(url(rxn)).json()
     assert body["unavailable"] == []
     assert len(body["profiles"]) == 1
